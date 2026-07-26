@@ -336,13 +336,17 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	parent.add_child(holder)
 
 	var frame := Panel.new()
-	frame.add_theme_stylebox_override("panel", Icons.card_style(card.rarity, 0.16))
+	# painted frame if the kit has one for this rarity, else the flat rarity border
+	var painted_frame := Icons.card_frame(card.rarity)
+	frame.add_theme_stylebox_override("panel",
+		painted_frame if painted_frame != null else Icons.card_style(card.rarity, 0.16))
 	frame.set_anchors_preset(Control.PRESET_FULL_RECT)
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(frame)
 
 	# illustration: behind the text, faint, deaf to the mouse
-	var art := PixelArt.card_art(card.id)
+	# id first, then the card's effect family — see PixelArt.painted_card_art
+	var art := PixelArt.card_art(card.id, Icons.card_family(card))
 	if art != null:
 		var pic := TextureRect.new()
 		pic.texture = art

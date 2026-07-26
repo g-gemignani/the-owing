@@ -83,6 +83,37 @@ const PANEL_SLICE := {"l": 38, "r": 19, "t": 49, "b": 57}
 ## invisible — so text on a framed button is near-black, at 18:1.
 const INK := Color(0.13, 0.09, 0.07)
 
+## The painted frame kit ART.md specifies, wired so dropping a file in turns it on.
+##
+## Only `ui_button.png` and `ui_panel.png` had code behind them; the other 22 files
+## in the kit would have sat on disk doing nothing. Each of these is "use it if it
+## exists, otherwise keep exactly what ships today", so the kit can arrive one file
+## at a time instead of as a single all-or-nothing swap.
+## A nine-slice from the kit, or null if nobody has drawn it yet.
+func kit_frame(name: String, l: int, r: int, top: int, bot: int,
+		pad_x: float = 12.0, pad_y: float = 8.0) -> StyleBox:
+	var tex := PixelArt.ui_kit(name)
+	if tex == null:
+		return null
+	var sb := StyleBoxTexture.new()
+	sb.texture = tex
+	sb.texture_margin_left = l
+	sb.texture_margin_right = r
+	sb.texture_margin_top = top
+	sb.texture_margin_bottom = bot
+	sb.content_margin_left = pad_x
+	sb.content_margin_right = pad_x
+	sb.content_margin_top = pad_y
+	sb.content_margin_bottom = pad_y
+	return sb
+
+## A button state: its own painted file if one exists, else today's tinted frame.
+func _button_state(state: String, tint: Color, pad_x: float, pad_y: float) -> StyleBox:
+	var painted := kit_frame("frame_button" + state, 32, 32, 28, 28, pad_x, pad_y)
+	if painted != null:
+		return painted
+	return _frame(BUTTON_ART, BUTTON_SLICE, tint, pad_x, pad_y)
+
 func _frame(path: String, slice: Dictionary, tint: Color,
 		pad_x: float, pad_y: float) -> StyleBox:
 	var tex := load(path) as Texture2D
@@ -111,17 +142,17 @@ func _frame(path: String, slice: Dictionary, tint: Color,
 ## Also enforces a height that fits the carved border. The border is drawn 1:1 at
 ## 40px, and four screens had 31px inline buttons that would have squashed it.
 func style_button(b: Button) -> void:
-	var art := _frame(BUTTON_ART, BUTTON_SLICE, Color(1, 1, 1),
-		float(BUTTON_SLICE["l"]) + 4.0, 10.0)
+	var pad_x := float(BUTTON_SLICE["l"]) + 4.0
+	var art := _button_state("", Color(1, 1, 1), pad_x, 10.0)
 	if art == null:
 		return
 	b.add_theme_stylebox_override("normal", art)
-	b.add_theme_stylebox_override("hover", _frame(BUTTON_ART, BUTTON_SLICE,
-		Color(1.18, 1.14, 1.20), float(BUTTON_SLICE["l"]) + 4.0, 10.0))
-	b.add_theme_stylebox_override("pressed", _frame(BUTTON_ART, BUTTON_SLICE,
-		Color(0.82, 0.80, 0.86), float(BUTTON_SLICE["l"]) + 4.0, 10.0))
-	b.add_theme_stylebox_override("disabled", _frame(BUTTON_ART, BUTTON_SLICE,
-		Color(0.55, 0.55, 0.60, 0.75), float(BUTTON_SLICE["l"]) + 4.0, 10.0))
+	b.add_theme_stylebox_override("hover",
+		_button_state("_hover", Color(1.18, 1.14, 1.20), pad_x, 10.0))
+	b.add_theme_stylebox_override("pressed",
+		_button_state("_pressed", Color(0.82, 0.80, 0.86), pad_x, 10.0))
+	b.add_theme_stylebox_override("disabled",
+		_button_state("_disabled", Color(0.55, 0.55, 0.60, 0.75), pad_x, 10.0))
 	b.add_theme_color_override("font_color", INK)
 	b.add_theme_color_override("font_hover_color", INK)
 	b.add_theme_color_override("font_pressed_color", INK)
@@ -187,7 +218,41 @@ func _rebuild_theme() -> void:
 		disabled.border_color = Color(0.24, 0.24, 0.28)
 		theme.set_stylebox("disabled", "Button", disabled)
 
-	var panel_art := _frame(PANEL_ART, PANEL_SLICE, Color(1, 1, 1), 18.0, 14.0)
+	# --- the rest of the kit: each one silently on the moment its file exists ---
+	var dropdown := kit_frame("dropdown", 32, 32, 28, 28, 14.0, 10.0)
+	if dropdown != null:
+		for state in ["normal", "hover", "pressed", "disabled", "focus"]:
+			theme.set_stylebox(state, "OptionButton", dropdown)
+		theme.set_color("font_color", "OptionButton", INK)
+	var arrow := PixelArt.ui_kit("dropdown_arrow")
+	if arrow != null:
+		theme.set_icon("arrow", "OptionButton", arrow)
+	var track := kit_frame("slider_track", 8, 8, 8, 8, 0.0, 0.0)
+	if track != null:
+		theme.set_stylebox("slider", "HSlider", track)
+	var grabber := PixelArt.ui_kit("slider_grabber")
+	if grabber != null:
+		theme.set_icon("grabber", "HSlider", grabber)
+		theme.set_icon("grabber_highlight", "HSlider", grabber)
+	var bar := kit_frame("scrollbar_track", 8, 8, 8, 8, 0.0, 0.0)
+	if bar != null:
+		theme.set_stylebox("scroll", "VScrollBar", bar)
+	var thumb := kit_frame("scrollbar_grabber", 8, 8, 8, 8, 0.0, 0.0)
+	if thumb != null:
+		theme.set_stylebox("grabber", "VScrollBar", thumb)
+		theme.set_stylebox("grabber_highlight", "VScrollBar", thumb)
+	var checked := PixelArt.ui_kit("checkbox_on")
+	var unchecked := PixelArt.ui_kit("checkbox_off")
+	if checked != null and unchecked != null:
+		theme.set_icon("checked", "CheckBox", checked)
+		theme.set_icon("unchecked", "CheckBox", unchecked)
+	var tip := kit_frame("frame_tooltip", 24, 24, 24, 24, 10.0, 8.0)
+	if tip != null:
+		theme.set_stylebox("panel", "TooltipPanel", tip)
+
+	var panel_art := kit_frame("frame_panel", 64, 64, 64, 64, 18.0, 14.0)
+	if panel_art == null:
+		panel_art = _frame(PANEL_ART, PANEL_SLICE, Color(1, 1, 1), 18.0, 14.0)
 	if panel_art != null:
 		theme.set_stylebox("panel", "PanelContainer", panel_art)
 	else:

@@ -237,7 +237,7 @@ func _cards() -> void:
 		var c := load("res://resources/cards/%s.tres" % cid) as CardData
 		if c == null:
 			continue
-		var f := _family(c)
+		var f := Icons.card_family(c)
 		if not fams.has(f):
 			fams[f] = []
 		(fams[f] as Array).append(c.name)
@@ -249,36 +249,9 @@ func _cards() -> void:
 	for f in keys:
 		var names: Array = fams[f]
 		var sample: Array = names.slice(0, mini(4, names.size()))
-		_add("cards/family_%s.png" % f, "320x240",
+		_add("cards/%s.png" % f, "320x240",
 			"%d cards: %s%s" % [names.size(), ", ".join(sample),
 				", ..." if names.size() > sample.size() else ""])
-
-func _family(c: CardData) -> String:
-	if c.apply_poison > 0:
-		return "poison"
-	if c.gain_thorns > 0:
-		return "thorns"
-	if c.damage > 0 or c.hits > 1 or c.damage_from_block or c.strength_mult > 0:
-		if c.aoe:
-			return "attack_aoe"
-		return "attack_multi" if c.hits > 1 else "attack"
-	if c.block > 0 or c.double_block or c.retain_block:
-		return "block"
-	if c.heal > 0:
-		return "heal"
-	if c.gain_strength > 0:
-		return "strength"
-	if c.gain_dexterity > 0:
-		return "dexterity"
-	if c.draw > 0:
-		return "draw"
-	if c.energy_gain > 0:
-		return "energy"
-	if c.apply_vulnerable > 0:
-		return "vulnerable"
-	if c.apply_weak > 0:
-		return "weak"
-	return "utility"
 
 func _map_and_traversal() -> void:
 	_section("Tier 4 — map and traversal",

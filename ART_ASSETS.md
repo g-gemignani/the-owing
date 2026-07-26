@@ -170,18 +170,18 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-|   | `cards/family_attack.png` | 320x240 | 28 cards: Bash, Bite, Blood Price, Bludgeon, ... |
-|   | `cards/family_attack_aoe.png` | 320x240 | 5 cards: Black Tide, Cleave, Massacre, Riptide, ... |
-|   | `cards/family_attack_multi.png` | 320x240 | 5 cards: Cull, Pressure, Pummel, Sword Dance, ... |
-|   | `cards/family_block.png` | 320x240 | 19 cards: Anvil Stance, Barricade, Brace, Bulwark, ... |
-|   | `cards/family_dexterity.png` | 320x240 | 2 cards: Footwork, Stone Skin |
-|   | `cards/family_draw.png` | 320x240 | 5 cards: Abyssal Gift, Adrenaline, Battle Trance, Focus, ... |
-|   | `cards/family_heal.png` | 320x240 | 5 cards: Bandage, Bloodlust, Deep Breath, Second Heart, ... |
-|   | `cards/family_poison.png` | 320x240 | 12 cards: Blight Bloom, Creeping Death, Noxious Cloud, Pandemic, ... |
-|   | `cards/family_strength.png` | 320x240 | 5 cards: Berserker Rage, Demon Form, Inflame, Smith's Fury, ... |
-|   | `cards/family_thorns.png` | 320x240 | 8 cards: Bramble Armour, Caltrops, Iron Will, Juggernaut, ... |
-|   | `cards/family_vulnerable.png` | 320x240 | 3 cards: Hex, Stumble, Wither |
-|   | `cards/family_weak.png` | 320x240 | 3 cards: Cold Read, Smoke Bomb, Terrify |
+|   | `cards/attack.png` | 320x240 | 28 cards: Bash, Bite, Blood Price, Bludgeon, ... |
+|   | `cards/attack_aoe.png` | 320x240 | 5 cards: Black Tide, Cleave, Massacre, Riptide, ... |
+|   | `cards/attack_multi.png` | 320x240 | 5 cards: Cull, Pressure, Pummel, Sword Dance, ... |
+|   | `cards/block.png` | 320x240 | 19 cards: Anvil Stance, Barricade, Brace, Bulwark, ... |
+|   | `cards/dexterity.png` | 320x240 | 2 cards: Footwork, Stone Skin |
+|   | `cards/draw.png` | 320x240 | 5 cards: Abyssal Gift, Adrenaline, Battle Trance, Focus, ... |
+|   | `cards/heal.png` | 320x240 | 5 cards: Bandage, Bloodlust, Deep Breath, Second Heart, ... |
+|   | `cards/poison.png` | 320x240 | 12 cards: Blight Bloom, Creeping Death, Noxious Cloud, Pandemic, ... |
+|   | `cards/strength.png` | 320x240 | 5 cards: Berserker Rage, Demon Form, Inflame, Smith's Fury, ... |
+|   | `cards/thorns.png` | 320x240 | 8 cards: Bramble Armour, Caltrops, Iron Will, Juggernaut, ... |
+|   | `cards/vulnerable.png` | 320x240 | 3 cards: Hex, Stumble, Wither |
+|   | `cards/weak.png` | 320x240 | 3 cards: Cold Read, Smoke Bomb, Terrify |
 
 ## Tier 4 — map and traversal
 

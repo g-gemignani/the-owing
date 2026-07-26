@@ -106,8 +106,73 @@ func _init() -> void:
 	print("  (info: %.1f shops and %.1f rests per map)" % [
 		float(shops) / trials, float(rests) / trials])
 
+	# --- prices are quoted in FIGHTS, so a shop is usable at every depth (D70) ---
+	#
+	# They were flat gold at every depth while income scales with GOLD_DEPTH_EXP:
+	# measured over 400 generated Crypt maps, a first-run player reached the merchant
+	# holding a median of 20 gold against a cheapest item of 40 and could buy NOTHING
+	# on 74% of visits, while the same 40g common was under one fight's takings in the
+	# Maw. What is pinned is the RATIO to income, not the gold, because the gold is
+	# supposed to move with depth.
+	var deepest_d := 1
+	var shallowest_d := 99
+	for did2 in Balance.DUNGEONS:
+		var dd2 := Balance.dungeon(did2)
+		if dd2 != null:
+			deepest_d = maxi(deepest_d, dd2.difficulty)
+			shallowest_d = mini(shallowest_d, dd2.difficulty)
+	for d in [shallowest_d, deepest_d]:
+		var fight: int = Balance.fight_income(d)
+		var cheapest: int = mini(Balance.card_price(0, d),
+			mini(Balance.heal_price(Balance.BASE_MAX_HP, d), Balance.removal_price(0, d)))
+		# "reachable" = within a few fights of arriving, at any depth
+		if cheapest > fight * 4:
+			fails += 1
+			print("FAIL d%d: cheapest item %dg is %.1f fights of income — the merchant sells nothing" % [
+				d, cheapest, float(cheapest) / float(fight)])
+		# ...and never so cheap it stops being a decision
+		if cheapest < fight:
+			fails += 1
+			print("FAIL d%d: cheapest item %dg is under one fight — the shop is not a gold sink" % [
+				d, cheapest])
+	# prices must actually MOVE with depth, or this is flat pricing again
+	if Balance.card_price(0, deepest_d) <= Balance.card_price(0, shallowest_d):
+		fails += 1
+		print("FAIL card price does not rise with depth (d%d %dg vs d%d %dg)" % [
+			deepest_d, Balance.card_price(0, deepest_d),
+			shallowest_d, Balance.card_price(0, shallowest_d)])
+	print("  (info: common %dg at d%d, %dg at d%d; one fight pays %dg / %dg)" % [
+		Balance.card_price(0, shallowest_d), shallowest_d,
+		Balance.card_price(0, deepest_d), deepest_d,
+		Balance.fight_income(shallowest_d), Balance.fight_income(deepest_d)])
+
+	# --- fusion must NOT have been repriced by any of that ---
+	#
+	# `fuse_gold_cost` shares `rarity_price_mult` with the shop but takes no depth,
+	# because fusion happens between runs. If it ever grows a difficulty argument,
+	# every existing player's upgrade costs move silently.
+	for r2 in range(0, 5):
+		if Balance.fuse_gold_cost(r2, 1) != [20, 32, 52, 89, 200][r2]:
+			fails += 1
+			print("FAIL fusion price moved at rarity %d: %d (expected %d)" % [
+				r2, Balance.fuse_gold_cost(r2, 1), [20, 32, 52, 89, 200][r2]])
+
+	# --- one copy of the rarity multiplier, not three ---
+	#
+	# `card_price` and `fuse_gold_cost` each carried their own `sqrt(common/weight)`,
+	# which is the D34 restated-table shape and is what made pricing by depth risk
+	# repricing fusion. Derive, don't restate.
+	var bal := FileAccess.open("res://scripts/balance.gd", FileAccess.READ)
+	if bal != null:
+		var text := bal.get_as_text()
+		bal.close()
+		var copies := text.count("sqrt(float(w[0])")
+		if copies > 1:
+			fails += 1
+			print("FAIL %d copies of the rarity-multiplier formula; use rarity_price_mult()" % copies)
+
 	if fails == 0:
-		print("SHOP TEST: PASS (pricing by rarity, spend guards, persistence, node gen)")
+		print("SHOP TEST: PASS (pricing by rarity AND depth, spend guards, persistence, node gen)")
 	else:
 		print("SHOP TEST: FAIL (%d)" % fails)
 	_cleanup_sandbox()

@@ -67,14 +67,13 @@ const FUSE_GOLD_EXP := 1.35
 static func fuse_copy_cost(level: int) -> int:
 	return FUSE_BASE_COPIES + int(floor(float(maxi(1, level) - 1) / float(FUSE_COPIES_STEP)))
 
-## Gold burned for that same step. The rarity multiplier is the shop's, so levelling
-## a card is priced against buying one.
+## Gold burned for that same step. Shares `rarity_price_mult` with the shop, so
+## levelling a card is priced against buying one — but takes NO difficulty, because
+## fusion happens between runs. That separation is what let shop prices start
+## scaling with depth (D70) without quietly repricing every fusion in the game.
 static func fuse_gold_cost(rarity: int, level: int) -> int:
-	var w: Array = WEIGHTS[Tier.NORMAL]
-	var weight: float = float(w[clampi(rarity, 0, w.size() - 1)])
-	var mult := sqrt(float(w[0]) / maxf(1.0, weight))
 	var growth := pow(float(maxi(1, level)), FUSE_GOLD_EXP)
-	return int(round(FUSE_BASE_GOLD * mult * growth))
+	return int(round(FUSE_BASE_GOLD * rarity_price_mult(rarity) * growth))
 
 ## Copies needed to take a card from level 1 to `level`, walking the cost curve.
 static func copies_to_reach(level: int) -> int:
@@ -704,20 +703,74 @@ const NODE_CHANCE_TREASURE := 8
 ## drops W/100 as often as a common costs sqrt(100/W) times as much. sqrt rather
 ## than linear on purpose — linear would price a legendary at ~4000g, roughly 20
 ## runs of income, which reads as unobtainable rather than aspirational.
-const SHOP_BASE_PRICE := 40
 const SHOP_CARD_OFFERS := 3
-## Healing sold as a fraction of max HP, priced per point of HP restored.
+## Healing sold as a fraction of max HP.
 const SHOP_HEAL_FRAC := 0.35
-const SHOP_HEAL_GOLD_PER_HP := 2
 
-static func card_price(rarity: int) -> int:
+## Shop prices are quoted in FIGHTS, not in gold (D70).
+##
+## They used to be flat numbers — a common was 40 gold in the Crypt and 40 gold in
+## the Maw — while income scales with `GOLD_DEPTH_EXP`. Measured over 400 generated
+## Crypt maps, a first-run player reached the merchant holding a median of 20 gold
+## against a cheapest item of 40, and could buy NOTHING on 74% of visits. At d8 the
+## same 40 was less than one fight's takings. Pricing in fights makes a purchase
+## cost the same amount of *play* at every depth, and cannot drift from the income
+## curve because it is computed from it.
+const SHOP_COMMON_IN_FIGHTS := 2.0
+const SHOP_HEAL_IN_FIGHTS := 2.5
+const SHOP_REMOVAL_IN_FIGHTS := 3.0
+const SHOP_REMOVAL_STEP_IN_FIGHTS := 2.0
+## The roll that stands for an average fight when pricing. `gold_reward` takes a
+## 0-5 roll; the midpoint is what a price should be measured against.
+const GOLD_AVG_ROLL := 2
+
+## What one average fight pays at this depth. The unit every shop price is quoted in.
+static func fight_income(difficulty: int) -> int:
+	return gold_reward(maxi(1, difficulty), Tier.NORMAL, GOLD_AVG_ROLL)
+
+## How much rarer, and therefore pricier, `rarity` is than a common.
+##
+## ONE copy of this. `card_price` and `fuse_gold_cost` each carried their own
+## `sqrt(common / weight)`, with a comment on the second saying it was deliberately
+## the same as the first — which is the D34 restated-table shape, and it is what
+## made pricing cards by depth risk silently repricing fusion. Now depth is an
+## argument to the shop price and fusion simply does not take one.
+static func rarity_price_mult(rarity: int) -> float:
 	var w: Array = WEIGHTS[Tier.NORMAL]
 	var weight: float = float(w[clampi(rarity, 0, w.size() - 1)])
-	var common: float = float(w[0])
-	return int(round(SHOP_BASE_PRICE * sqrt(common / maxf(1.0, weight))))
+	return sqrt(float(w[0]) / maxf(1.0, weight))
 
-static func heal_price(max_hp: int) -> int:
-	return int(round(max_hp * SHOP_HEAL_FRAC * SHOP_HEAL_GOLD_PER_HP))
+## Middle of the difficulty range, derived from the dungeons that exist.
+##
+## The reference depth for anything bought OUTSIDE a dungeon (powers), which has no
+## run to take a difficulty from. `tests/test_shop.gd` already reasoned this way —
+## it measures legendary affordability at mid depth, noting that pricing the rarest
+## card against the poorest floor calls every legendary unobtainable. That was the
+## right instinct applied to the test instead of to the price.
+static func mid_difficulty() -> int:
+	var deepest := 1
+	for did in DUNGEONS:
+		var dd := dungeon(did)
+		if dd != null:
+			deepest = maxi(deepest, dd.difficulty)
+	return maxi(1, deepest / 2)
+
+## Gold for a card at the depth it is being sold at.
+##
+## `difficulty <= 0` means "no dungeon context" and prices at mid depth, so a
+## caller that legitimately has no run (the powers screen) is not silently given
+## first-dungeon prices.
+static func card_price(rarity: int, difficulty: int = 0) -> int:
+	var d: int = difficulty if difficulty > 0 else mid_difficulty()
+	return int(round(rarity_price_mult(rarity) * SHOP_COMMON_IN_FIGHTS
+		* float(fight_income(d))))
+
+static func heal_price(max_hp: int, difficulty: int = 0) -> int:
+	var d: int = difficulty if difficulty > 0 else mid_difficulty()
+	# Priced per point restored, so a bigger pool still costs more to top up: at
+	# BASE_MAX_HP a full salve costs SHOP_HEAL_IN_FIGHTS fights exactly.
+	var per_hp := SHOP_HEAL_IN_FIGHTS * float(fight_income(d)) / float(heal_amount(BASE_MAX_HP))
+	return int(round(float(heal_amount(max_hp)) * per_hp))
 
 static func heal_amount(max_hp: int) -> int:
 	return int(round(max_hp * SHOP_HEAL_FRAC))
@@ -729,11 +782,14 @@ static func heal_amount(max_hp: int) -> int:
 ##
 ## The price rises per removal within a run: the first cut is the obvious one, and
 ## each after it should be a harder call than the last.
-const REMOVAL_BASE_PRICE := 55
-const REMOVAL_PRICE_STEP := 40
-
-static func removal_price(already_removed: int) -> int:
-	return REMOVAL_BASE_PRICE + REMOVAL_PRICE_STEP * maxi(0, already_removed)
+## Quoted in fights like everything else the merchant sells (D70), so thinning
+## stays a real choice against a card and a heal at every depth instead of being
+## unaffordable in the Crypt and loose change in the Maw.
+static func removal_price(already_removed: int, difficulty: int = 0) -> int:
+	var d: int = difficulty if difficulty > 0 else mid_difficulty()
+	var fights := SHOP_REMOVAL_IN_FIGHTS \
+		+ SHOP_REMOVAL_STEP_IN_FIGHTS * float(maxi(0, already_removed))
+	return int(round(fights * float(fight_income(d))))
 
 ## How often a deck of this size shows you any particular card, in turns.
 ##
@@ -760,6 +816,27 @@ const GOLD_DEPTH_EXP := 1.8
 static func gold_reward(dungeon: int, tier: int, roll: int) -> int:
 	var base := 4.0 + pow(float(maxi(1, dungeon)), GOLD_DEPTH_EXP) + float(roll)
 	return int(round(base)) * int(TIER_GOLD_MULT[tier])
+
+## What a dungeon still pays once you have already cleared it.
+##
+## The measured problem was not that the middle of the game was too easy — the D36
+## ratchet MEANS to let you outgrow a place. It was that outgrowing one was
+## rewarded: re-clearing a dungeon you beat at 100% was the safest income in the
+## game, so the rational play was to farm the flat middle instead of risking the
+## next depth. A playthrough read 92% / 68% / 100% / 28% / 100% x5 / 8% / 8% / 16%
+## — a wall, a five-dungeon plateau, then a wall.
+##
+## Depth is left alone. What changes is the payout for ground already taken: the
+## first clear pays in full, and repeats fall away fast. Going back is still
+## allowed (a build's cards live in specific places, and you may need one), it is
+## simply no longer the efficient way to get stronger.
+const REPEAT_REWARD_FLOOR := 0.25
+const REPEAT_REWARD_STEP := 0.45
+
+static func repeat_reward_mult(times_cleared: int) -> float:
+	if times_cleared <= 0:
+		return 1.0
+	return maxf(REPEAT_REWARD_FLOOR, pow(REPEAT_REWARD_STEP, float(times_cleared)))
 
 ## Reward rarity weights by tier (index = CardData.Rarity).
 const WEIGHTS := {

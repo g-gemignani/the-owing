@@ -77,14 +77,14 @@ func _refresh() -> void:
 		var card := load(MetaState.CATALOG[entry["id"]]) as CardData
 		if card == null:
 			continue
-		var price: int = Balance.card_price(card.rarity)
+		var price: int = Balance.card_price(card.rarity, GameState.dungeon)
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", UITheme.sep(10))
 		stock_box.add_child(row)
 
 		# illustration first, then the symbol that actually states what it does
 		var art := TextureRect.new()
-		art.texture = PixelArt.card_art(card.id)
+		art.texture = PixelArt.card_art(card.id, Icons.card_family(card))
 		art.custom_minimum_size = Vector2(UITheme.px(28), UITheme.px(28))
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -111,8 +111,14 @@ func _refresh() -> void:
 			buy.text = "SOLD"
 			buy.disabled = true
 		elif GameState.available_gold() < price:
-			buy.text = "%d g" % price
+			# A greyed button showing a bare price does not say WHY, and the merchant
+			# was unaffordable on most first visits (D70) — so the one screen that had
+			# to explain itself was the one that explained nothing. Same shape as
+			# `combat.gd:_refresh_power()`, which states the shortfall.
+			buy.text = "%d g  (short %d)" % [price, price - GameState.available_gold()]
 			buy.disabled = true
+			UI.hoverable(buy, "Costs %d gold. You have %d." % [
+				price, GameState.available_gold()])
 		else:
 			buy.text = "Buy  %d g" % price
 			buy.pressed.connect(_on_buy_card.bind(i, price))
@@ -120,7 +126,7 @@ func _refresh() -> void:
 
 	# --- healing ---
 	var heal := Balance.heal_amount(GameState.max_hp)
-	var hprice := Balance.heal_price(GameState.max_hp)
+	var hprice := Balance.heal_price(GameState.max_hp, GameState.dungeon)
 	var hrow := HBoxContainer.new()
 	hrow.add_theme_constant_override("separation", UITheme.sep(10))
 	stock_box.add_child(hrow)
@@ -134,8 +140,10 @@ func _refresh() -> void:
 		hbtn.text = "Already full"
 		hbtn.disabled = true
 	elif GameState.available_gold() < hprice:
-		hbtn.text = "%d g" % hprice
+		hbtn.text = "%d g  (short %d)" % [hprice, hprice - GameState.available_gold()]
 		hbtn.disabled = true
+		UI.hoverable(hbtn, "Costs %d gold. You have %d." % [
+			hprice, GameState.available_gold()])
 	else:
 		hbtn.text = "Buy  %d g" % hprice
 		hbtn.pressed.connect(_on_buy_heal.bind(hprice, heal))
@@ -146,7 +154,7 @@ func _refresh() -> void:
 ## Thinning is the other direction of deck building, and it belongs next to the
 ## things it competes with for the same gold.
 func _add_removal_service(root: Node) -> void:
-	var price := Balance.removal_price(GameState.run_removals)
+	var price := Balance.removal_price(GameState.run_removals, GameState.dungeon)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", UITheme.sep(10))
 	root.add_child(row)
@@ -160,8 +168,14 @@ func _add_removal_service(root: Node) -> void:
 	UITheme.style_button(btn)
 	btn.text = "Remove  (%dg)" % price
 	btn.disabled = GameState.available_gold() < price or not GameState.can_remove_from_run_deck()
+	# Two different reasons this can be refused, and they were both silent.
 	if not GameState.can_remove_from_run_deck():
 		btn.text = "Remove  (deck at minimum)"
+		UI.hoverable(btn, "A run deck may not go below %d cards." % Balance.MIN_DECK_SIZE)
+	elif GameState.available_gold() < price:
+		btn.text = "Remove  %dg  (short %d)" % [price, price - GameState.available_gold()]
+		UI.hoverable(btn, "Costs %d gold. You have %d." % [
+			price, GameState.available_gold()])
 	btn.pressed.connect(_on_remove.bind(price))
 	row.add_child(btn)
 

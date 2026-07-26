@@ -861,6 +861,11 @@ func _win() -> void:
 	# relic: gold percentage bonus
 	var g := Balance.gold_reward(GameState.dungeon, tier, randi() % 6)
 	g += int(round(g * MetaState.relic_bonus("gold_percent") / 100.0))
+	# ground already taken pays less (D69): the first clear is worth full price, a
+	# fourth run through a dungeon you beat at 100% is not income, it is a treadmill
+	var repeats := MetaState.times_cleared(GameState.dungeon_id)
+	if repeats > 0:
+		g = maxi(1, int(round(float(g) * Balance.repeat_reward_mult(repeats))))
 	GameState.earn_gold(g)   # at risk until the boss falls (D20)
 	end_btn.disabled = true
 	_seal_exit()
@@ -873,9 +878,20 @@ func _win() -> void:
 	Audio.play("boss_cleared" if tier == Balance.Tier.BOSS else "reward")
 	if MetaState.hint_once("first_reward"):
 		_log("Rewards are AT RISK until you beat this dungeon's boss — or leave with an Escape Rope.")
+	# An elite was a harder fight for more gold, which is a stat check rather than a
+	# decision. It drops a relic now — held at risk with everything else, so taking
+	# the fight and then dying still costs you it.
+	var relic_line := ""
+	if tier == Balance.Tier.ELITE:
+		var won_relic := MetaState.pick_relic(Balance.Tier.ELITE)
+		if won_relic != "":
+			GameState.earn_relic(won_relic)
+			var rd := load(MetaState.RELIC_CATALOG[won_relic]) as RelicData
+			relic_line = "  Took %s (at risk)." % (rd.name if rd != null else won_relic)
+			Audio.play("treasure")
 	var healed := "  Healed %d." % relic_heal if relic_heal > 0 else ""
-	status_label.text = "Encounter cleared. +%d gold (%d at risk).%s Choose a reward:" % [
-		g, GameState.escrow_gold, healed]
+	status_label.text = "Encounter cleared. +%d gold (%d at risk).%s%s Choose a reward:" % [
+		g, GameState.escrow_gold, healed, relic_line]
 	for c in reward_box.get_children():
 		c.queue_free()
 
@@ -914,7 +930,10 @@ func _roll_rewards(n: int) -> Array[CardData]:
 	if pool.is_empty():
 		pool = DEFAULT_POOL.duplicate()
 	pool = pool.filter(func(id): return MetaState.CATALOG.has(id))
-	var wtbl: Array = Balance.reward_weights(tier, GameState.dungeon)
+	# rarity tilts back toward commons on ground already taken, for the same reason
+	var wtbl: Array = Balance.reward_weights(tier,
+		GameState.dungeon if MetaState.times_cleared(GameState.dungeon_id) == 0
+		else maxi(1, GameState.dungeon - 2))
 	for i in n:
 		if pool.is_empty():
 			break
@@ -948,7 +967,8 @@ func _on_reward_picked(card) -> void:
 		# dungeon cleared -> mark it, grant a relic, then back to dungeon select (D6)
 		# the boss is the commit point: banked earnings become permanent here
 		var banked := GameState.commit_escrow()
-		GameState.last_haul = "Secured %d cards and %d gold." % [banked["cards"], banked["gold"]]
+		GameState.last_haul = "Secured %d cards, %d gold and %d relic(s)." % [
+			banked["cards"], banked["gold"], banked["relics"]]
 		MetaState.mark_cleared(GameState.dungeon_id)
 		var got := MetaState.grant_relic(Balance.Tier.BOSS)
 		if got != "":

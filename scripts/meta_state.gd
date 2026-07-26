@@ -61,7 +61,7 @@ static func delete_slot(s: int) -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 ## Bump when the save shape changes, and add a step to _migrate().
 ## Saves written before versioning existed have no "version" key and read as 0.
-const SAVE_VERSION := 5
+const SAVE_VERSION := 6
 ## The run lives in its own file beside the meta save. They change at wildly
 ## different rates — meta only when the player gains something permanent, the run
 ## on every card played — so writing them together meant rewriting the whole
@@ -322,6 +322,9 @@ var seen_hints: Array = []
 ## New Game+ level: raises difficulty globally once the world has been cleared.
 var ascension: int = 0
 var cleared_dungeons: Array = []
+## How many times each dungeon has been cleared, for the diminishing repeat payout
+## (D69). The set above answers "is it unlocked"; this answers "how well trodden".
+var clear_counts: Dictionary = {}
 var highest_dungeon: int = 1
 var gold: int = 0  # persistent currency; earned in combat, partly lost on death
 
@@ -350,6 +353,7 @@ func new_save(kit: String = "blade") -> void:
 	powers = {"bulwark": 1}
 	equipped_power = "bulwark"
 	cleared_dungeons = []
+	clear_counts = {}
 	highest_dungeon = 1
 	gold = 0
 	save_game()
@@ -461,7 +465,12 @@ func use_item(id: String) -> bool:
 func has_cleared(id: String) -> bool:
 	return id in cleared_dungeons
 
+## How many times this dungeon has been beaten before the run being paid out.
+func times_cleared(id: String) -> int:
+	return int(clear_counts.get(id, 0))
+
 func mark_cleared(id: String) -> void:
+	clear_counts[id] = int(clear_counts.get(id, 0)) + 1
 	if id != "" and not has_cleared(id):
 		cleared_dungeons.append(id)
 	save_game()
@@ -502,6 +511,28 @@ func unowned_relics() -> Array:
 	return out
 
 ## Grant a random unowned relic, rarity-weighted by encounter tier. "" if none left.
+## Roll a relic WITHOUT taking it. Split out so an elite's drop can go into escrow
+## (D68) — granting it immediately would let a player kill the elite, die on
+## purpose and keep it, which is the D20 abandon exploit with a different noun.
+func pick_relic(tier: int) -> String:
+	var pool: Array = unowned_relics()
+	if pool.is_empty():
+		return ""
+	var wtbl: Array = Balance.WEIGHTS[tier]
+	var weights: Array = []
+	var total := 0
+	for id in pool:
+		var r := load(RELIC_CATALOG[id]) as RelicData
+		var w: int = wtbl[clampi(r.rarity if r else 0, 0, wtbl.size() - 1)]
+		weights.append(w)
+		total += w
+	var roll := randi() % maxi(1, total)
+	for i in pool.size():
+		roll -= int(weights[i])
+		if roll < 0:
+			return pool[i]
+	return pool[0]
+
 func grant_relic(tier: int) -> String:
 	var pool: Array = unowned_relics()
 	if pool.is_empty():
@@ -778,7 +809,7 @@ func _write_meta() -> void:
 		"collection": collection, "decks": decks, "relics": relics,
 		"consumables": consumables, "powers": powers, "equipped_power": equipped_power,
 		"starter_kit": starter_kit, "seen_hints": seen_hints, "ascension": ascension,
-		"cleared_dungeons": cleared_dungeons,
+		"cleared_dungeons": cleared_dungeons, "clear_counts": clear_counts,
 		"highest_dungeon": highest_dungeon, "gold": gold,
 	}
 	var f := FileAccess.open(save_file(), FileAccess.WRITE)
@@ -842,6 +873,15 @@ func _backup_save(text: String, from_version: int) -> void:
 ## idempotent: missing keys get defaults, unknown ids are dropped on apply.
 func _migrate(data: Dictionary, from_version: int) -> Dictionary:
 	var d := data.duplicate(true)
+	if from_version < 6:
+		# v5 knew only WHETHER a dungeon was cleared. The repeat payout (D69) needs
+		# how often, and an existing player should not be charged for history the
+		# save never recorded: every cleared dungeon counts as cleared exactly once,
+		# so their next visit is the first repeat rather than the fifth.
+		var counts := {}
+		for did in d.get("cleared_dungeons", []):
+			counts[String(did)] = 1
+		d["clear_counts"] = counts
 	if from_version < 5:
 		# v4 predates powers. Grant the same starter every new save gets, so an
 		# existing player is not worse off than someone starting today.
@@ -918,6 +958,12 @@ func _apply(parsed: Dictionary) -> void:
 	for id in parsed.get("cleared_dungeons", []):
 		if id in Balance.DUNGEONS and not id in cleared_dungeons:
 			cleared_dungeons.append(id)
+	# unknown ids dropped here rather than in migration, so renaming a dungeon can
+	# never corrupt a save (D15)
+	clear_counts = {}
+	for id in parsed.get("clear_counts", {}):
+		if id in Balance.DUNGEONS:
+			clear_counts[id] = maxi(0, int(parsed["clear_counts"][id]))
 
 	highest_dungeon = int(parsed.get("highest_dungeon", 1))
 	gold = maxi(0, int(parsed.get("gold", 0)))

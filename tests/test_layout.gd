@@ -102,6 +102,33 @@ func _init() -> void:
 					continue
 				t.clear_pending()
 
+	# --- the classes a headless test loads must not touch an autoload -----------
+	#
+	# An autoload referenced at compile time makes every script that touches it
+	# unloadable in a `--script` run, and the symptom is not a failure — the test
+	# HANGS, because the parse error skips the quit(). It has now happened four
+	# times (settings_state in D19, and Icons reaching for UITheme.kit while wiring
+	# the art hooks). These four classes are the ones the headless suite loads.
+	const AUTOLOADS := ["UITheme", "SettingsState", "Audio", "MetaState", "GameState"]
+	for path in ["res://scripts/icons.gd", "res://scripts/pixel_art.gd",
+			"res://scripts/card_data.gd", "res://scripts/balance.gd"]:
+		var fh := FileAccess.open(path, FileAccess.READ)
+		if fh == null:
+			continue
+		var body := fh.get_as_text()
+		fh.close()
+		for line in body.split("\n"):
+			var code: String = line
+			var hash_at := code.find("#")
+			if hash_at >= 0:
+				code = code.substr(0, hash_at)   # a comment may name one freely
+			for auto in AUTOLOADS:
+				# a bare `Autoload.` call; get_node_or_null("/root/X") is the safe form
+				if code.find(auto + ".") != -1:
+					fails += 1
+					print("FAIL %s calls the %s autoload — it will HANG every --script test" % [
+						path, auto])
+
 	# --- no screen may keep its own copy of a shared lookup table ---
 	#
 	# This is the bug that made the Crypt unplayable. map.gd carried a private

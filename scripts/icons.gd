@@ -45,6 +45,58 @@ static func rarity_colour(rarity: int) -> Color:
 	return RARITY_COLOURS[clampi(rarity, 0, RARITY_COLOURS.size() - 1)]
 
 ## A card-shaped panel tinted by rarity, for use as a Button stylebox.
+## Which family of card art this card wants.
+##
+## The ART manifest had its OWN copy of this classification — twelve families there,
+## seven here, and filenames that did not even match (`cards/family_x.png` against
+## the `cards/x.png` the loader looks for). A generated document exists so it cannot
+## drift from the code; a generator with a private lookup table is the D34 bug with
+## better manners. This is the one function, and `tools/art_manifest.gd` calls it.
+static func card_family(c: CardData) -> String:
+	if c == null:
+		return "utility"
+	if c.apply_poison > 0:
+		return "poison"
+	if c.gain_thorns > 0:
+		return "thorns"
+	if c.damage > 0 or c.hits > 1 or c.damage_from_block or c.strength_mult > 0:
+		if c.aoe:
+			return "attack_aoe"
+		return "attack_multi" if c.hits > 1 else "attack"
+	if c.block > 0 or c.double_block or c.retain_block:
+		return "block"
+	if c.heal > 0:
+		return "heal"
+	if c.gain_strength > 0:
+		return "strength"
+	if c.gain_dexterity > 0:
+		return "dexterity"
+	if c.draw > 0:
+		return "draw"
+	if c.energy_gain > 0:
+		return "energy"
+	if c.apply_vulnerable > 0:
+		return "vulnerable"
+	if c.apply_weak > 0:
+		return "weak"
+	return "utility"
+
+## The painted card frame if one exists — per rarity first, then the shared one.
+## Returns null when nobody has drawn them, and `card_style` below is what ships.
+static func card_frame(rarity: int) -> StyleBox:
+	for name in ["frame_card_rarity_%d" % clampi(rarity, 0, 4), "frame_card"]:
+		var tex := PixelArt.ui_kit(name)
+		if tex == null:
+			continue
+		var sb := StyleBoxTexture.new()
+		sb.texture = tex
+		sb.texture_margin_left = 40
+		sb.texture_margin_right = 40
+		sb.texture_margin_top = 48
+		sb.texture_margin_bottom = 56
+		return sb
+	return null
+
 static func card_style(rarity: int, emphasis: float = 0.16) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	var c := rarity_colour(rarity)

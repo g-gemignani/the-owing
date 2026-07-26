@@ -139,6 +139,62 @@ func _init() -> void:
 	if m5.gold != 10:
 		fails += 1; print("FAIL v1 migration lost gold")
 
+	# --- an elite's relic is held at risk like everything else (D68) ------------
+	#
+	# Granting it straight to MetaState would reopen the hole escrow exists to close,
+	# with a different noun: kill the elite, die on purpose, keep the relic. The
+	# whole point of D20 is that a run's winnings are provisional until the boss.
+	var G2 = load("res://scripts/game_state.gd").new()
+	var M2 = load("res://scripts/meta_state.gd").new()
+	M2.path_prefix = "t_escrow_relic_"
+	M2.slot = 0
+	M2.new_save()
+	var owned_before: int = M2.relics.size()
+	var rid: String = M2.pick_relic(Balance.Tier.ELITE)
+	if rid == "":
+		fails += 1; print("FAIL no relic could be rolled for an elite")
+	elif M2.relics.size() != owned_before:
+		fails += 1; print("FAIL pick_relic granted the relic instead of only rolling it")
+	G2.earn_relic(rid)
+	if G2.escrow_relics.size() != 1:
+		fails += 1; print("FAIL an elite's relic did not go into escrow")
+	var dropped: Dictionary = G2.forfeit_escrow()
+	if int(dropped.get("relics", 0)) != 1 or not G2.escrow_relics.is_empty():
+		fails += 1; print("FAIL dying did not forfeit the elite's relic")
+	# ...and it must survive being quit out of, or the escrow is a lie on reload
+	G2.earn_relic(rid)
+	var blob := {"escrow_relics": G2.escrow_relics.duplicate()}
+	if not (rid in blob["escrow_relics"]):
+		fails += 1; print("FAIL escrowed relics are not serialized with the run")
+	M2.writes_disabled = true
+
+	# --- repeat clears must pay less than first ones (D69) ----------------------
+	#
+	# The measured plateau was not a difficulty problem: re-clearing a dungeon you
+	# had beaten at 100% was the safest income in the game, so farming the middle
+	# beat risking the next depth.
+	if Balance.repeat_reward_mult(0) != 1.0:
+		fails += 1; print("FAIL a first clear does not pay full price")
+	# It falls, then flattens at the floor — the floor is deliberate, so a dungeon
+	# you farmed early still pays enough to be worth returning to for its cards.
+	var prev := 1.0
+	for n in [1, 2, 3, 4]:
+		var mult: float = Balance.repeat_reward_mult(n)
+		if mult > prev + 0.001:
+			fails += 1
+			print("FAIL clear %d pays MORE than the one before (%.2f vs %.2f)" % [n, mult, prev])
+		prev = mult
+	if Balance.repeat_reward_mult(1) >= 1.0:
+		fails += 1; print("FAIL the second clear of a dungeon pays full price")
+	if Balance.repeat_reward_mult(2) >= Balance.repeat_reward_mult(1):
+		fails += 1; print("FAIL the payout does not keep falling before it flattens")
+	if Balance.repeat_reward_mult(9) < Balance.REPEAT_REWARD_FLOOR - 0.001:
+		fails += 1; print("FAIL repeat payout falls through its floor")
+	# a farmed dungeon must still be worth *something*, or a build's exclusive card
+	# becomes unobtainable to anyone who cleared its dungeon early
+	if Balance.repeat_reward_mult(9) <= 0.0:
+		fails += 1; print("FAIL a re-cleared dungeon pays nothing at all")
+
 	if fails == 0:
 		print("ESCROW TEST: PASS (earnings held/forfeited/committed; ropes are the only paid exit)")
 	else:

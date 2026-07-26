@@ -238,7 +238,7 @@ func _refresh() -> void:
 
 		# illustration first, then the symbol that actually states what it does
 		var art := TextureRect.new()
-		art.texture = PixelArt.card_art(card.id)
+		art.texture = PixelArt.card_art(card.id, Icons.card_family(card))
 		art.custom_minimum_size = Vector2(UITheme.px(28), UITheme.px(28))
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

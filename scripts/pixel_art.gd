@@ -434,11 +434,48 @@ static func card_ids() -> Array:
 ## unlabelled, so semantics need a human eye — add entries here to correct one.
 const CARD_ART_OVERRIDES := {}
 
+## Painted card illustrations, checked before the CC0 atlas below.
+##
+## Two paths, both keyed by NAME rather than by position: `cards/<card_id>.png` for
+## a card somebody drew specifically, then `cards/<family>.png` for the effect
+## family it belongs to (attack, block, poison, ...), which is what ART_ASSETS asks
+## for first — twelve family paintings shared by a hundred cards, unique art for
+## the most-played later. The atlas slice underneath is assigned by POSITION in a
+## sorted list, which is why the painted paths cannot share its directory: a
+## correctly-named file dropped in there would be handed to whichever card the sort
+## order reached.
+const CARD_ART_DIR := "res://assets/art/cards/"
+## The painted UI kit. Lives HERE rather than on UITheme because UITheme is an
+## autoload, and an autoload referenced at compile time makes every script that
+## touches it unloadable in a headless `--script` test — which does not fail, it
+## HANGS, because the error skips the quit(). Fourth time; see D19.
+const UI_KIT_DIR := "res://assets/art/ui/"
+
+static func ui_kit(name: String) -> Texture2D:
+	var p := UI_KIT_DIR + name + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
+static func painted_card_art(card_id: String, family: String = "") -> Texture2D:
+	var own := CARD_ART_DIR + card_id + ".png"
+	if ResourceLoader.exists(own):
+		return load(own) as Texture2D
+	if family != "":
+		var fam := CARD_ART_DIR + family + ".png"
+		if ResourceLoader.exists(fam):
+			return load(fam) as Texture2D
+	return null
+
 ## A 16x16 slice of the sheet for this card, or null if the sheet is missing.
-static func card_art(card_id: String) -> Texture2D:
-	var key := "art_" + card_id
+static func card_art(card_id: String, family: String = "") -> Texture2D:
+	var key := "art_" + card_id + ":" + family
 	if _cache.has(key):
 		return _cache[key]
+	var painted := painted_card_art(card_id, family)
+	if painted != null:
+		_cache[key] = painted
+		return painted
 	if not ResourceLoader.exists(CARD_SHEET) or CARD_TILES.is_empty():
 		return null
 	var sheet := load(CARD_SHEET) as Texture2D

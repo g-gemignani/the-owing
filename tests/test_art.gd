@@ -339,6 +339,38 @@ func _init() -> void:
 		fails += 1
 		print("FAIL painted enemy art is not looked up by archetype id")
 
+	# --- the art the game does not have yet must still have somewhere to land ----
+	#
+	# Two whole paths in ART_ASSETS had no code behind them: the twelve card-family
+	# illustrations, and 22 of the 24 frame-kit files. Files dropped in would have
+	# sat on disk doing nothing, which is the worst kind of gap — it looks like an
+	# art problem. These assert the HOOK, not the file.
+	if not _source_has("res://scripts/pixel_art.gd", "CARD_ART_DIR + card_id"):
+		fails += 1; print("FAIL card illustrations are not looked up by card id")
+	if not _source_has("res://scripts/pixel_art.gd", "CARD_ART_DIR + family"):
+		fails += 1; print("FAIL card illustrations are not looked up by effect family")
+	for hook in ["frame_button", "frame_panel", "frame_tooltip", "dropdown",
+			"slider_track", "slider_grabber", "scrollbar_track", "scrollbar_grabber",
+			"checkbox_on", "checkbox_off"]:
+		if not _source_has("res://scripts/ui_theme.gd", hook):
+			fails += 1
+			print("FAIL nothing loads ui/%s.png — the file would do nothing" % hook)
+	for cardhook in ["frame_card_rarity_%d", "frame_card"]:
+		if not _source_has("res://scripts/icons.gd", cardhook):
+			fails += 1
+			print("FAIL nothing loads ui/%s.png" % cardhook)
+	# The family a card resolves to must come from ONE function. The manifest used to
+	# carry its own copy: twelve families there, seven in the code, and filenames
+	# that did not match — so five of the paintings it asked for could never have
+	# been loaded and the other seven would have been looked for under other names.
+	var fams := {}
+	for cid2 in m.CATALOG:
+		fams[Icons.card_family(load(m.CATALOG[cid2]) as CardData)] = true
+	print("  (info: %d card families to paint: %s)" % [fams.size(), fams.keys()])
+	if _source_has("res://tools/art_manifest.gd", "func _family("):
+		fails += 1
+		print("FAIL the art manifest keeps its own card-family table; use Icons.card_family")
+
 	# --- music -----------------------------------------------------------------
 	#
 	# The Music bus and its slider existed for a long time with nothing routed to

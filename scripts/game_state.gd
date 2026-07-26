@@ -40,6 +40,14 @@ var pending: Dictionary = {}     # node the player selected, handed to Combat/Sh
 ## strategy, and a dominant strategy is a broken option.
 var escrow_cards: Array = []   # card ids
 var escrow_gold: int = 0
+## Relics found in this run, held on the same terms as everything else.
+##
+## An elite drops one (D68). Granting it straight into MetaState would reopen the
+## exact hole escrow was built to close: kill the elite, die on purpose, keep the
+## relic — the D20 abandon exploit with a different noun. Relics are still never
+## LOST once banked; they are simply not banked until the boss falls or a rope is
+## spent.
+var escrow_relics: Array = []  # relic ids
 
 ## Rolled shop inventory for the node being visited, so re-entering cannot reroll
 ## it. Cleared on leaving the shop and on run reset.
@@ -120,22 +128,33 @@ func spend_gold(n: int) -> bool:
 ## Boss cleared: everything earned this run becomes permanent.
 func commit_escrow() -> Dictionary:
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
-	var result := {"cards": escrow_cards.size(), "gold": escrow_gold}
+	var result := {"cards": escrow_cards.size(), "gold": escrow_gold,
+		"relics": escrow_relics.size()}
 	if meta != null:
 		for id in escrow_cards:
 			meta.add_card(id)
 		if escrow_gold > 0:
 			meta.add_gold(escrow_gold)
+		for rid in escrow_relics:
+			meta.add_relic(rid)
 	escrow_cards = []
 	escrow_gold = 0
+	escrow_relics = []
 	return result
 
 ## Died or walked away: the run's earnings are lost.
 func forfeit_escrow() -> Dictionary:
-	var result := {"cards": escrow_cards.size(), "gold": escrow_gold}
+	var result := {"cards": escrow_cards.size(), "gold": escrow_gold,
+		"relics": escrow_relics.size()}
 	escrow_cards = []
 	escrow_gold = 0
+	escrow_relics = []
 	return result
+
+## An elite yielded a relic. Held at risk until the boss falls.
+func earn_relic(id: String) -> void:
+	if id != "" and not (id in escrow_relics):
+		escrow_relics.append(id)
 
 # --- run persistence (D22) ---
 ## Serialized combat, when the player quit mid-fight. Empty otherwise.
@@ -157,6 +176,7 @@ func run_to_dict() -> Dictionary:
 		"removals": run_removals,
 		"traversal": traversal.save_state(),
 		"escrow_cards": escrow_cards, "escrow_gold": escrow_gold,
+		"escrow_relics": escrow_relics,
 		"shop_stock": shop_stock,
 		"combat": combat_state,
 	}
@@ -187,6 +207,11 @@ func run_from_dict(d: Dictionary) -> bool:
 		if meta.CATALOG.has(id):
 			escrow_cards.append(id)
 	escrow_gold = maxi(0, int(d.get("escrow_gold", 0)))
+	# a relic renamed or removed since the save is simply dropped, like a card
+	escrow_relics = []
+	for rid in d.get("escrow_relics", []):
+		if meta.RELIC_CATALOG.has(rid):
+			escrow_relics.append(rid)
 	shop_stock = d.get("shop_stock", [])
 	combat_state = d.get("combat", {})
 	traversal = Traversal.from_state(d.get("traversal", {}), dungeon_data())
@@ -246,6 +271,7 @@ func reset_run_progress() -> void:
 	shop_stock = []
 	escrow_cards = []
 	escrow_gold = 0
+	escrow_relics = []
 	combat_state = {}
 
 ## Choose which named dungeon to attempt (D6). Sets difficulty from its data.

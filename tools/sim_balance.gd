@@ -133,7 +133,9 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					gold = int(res["gold"])
 					tv.clear_pending()
 				Traversal.Enc.SHOP:
-					var hprice := Balance.heal_price(max_hp)
+					# the simulator must price the shop the way the shop does, or the
+					# HP curve it reports is measured against a different economy
+					var hprice := Balance.heal_price(max_hp, difficulty)
 					if gold >= hprice and hp < max_hp:
 						gold -= hprice
 						hp = min(max_hp, hp + Balance.heal_amount(max_hp))

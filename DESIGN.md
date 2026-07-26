@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **Elites drop relics, the mid-game plateau closed, and the last two art paths wired (D68, D69, D70).** An elite was a stat check; it now drops a relic, held in escrow so dying on purpose cannot bank it. The five-dungeon plateau in the middle turned out to be an incentive problem rather than a difficulty one — re-clearing a beaten dungeon was the safest income in the game — so repeat clears pay a fifth of what a first clear does, down to a floor. And the card-illustration and frame-kit files finally have code that looks for them, after finding that the art manifest had been generating filenames from its own private copy of the card taxonomy.
+
 - **Cards that read the fight, and dungeons with their own shapes (D66, D67).** Not one card in the game was conditional — no "for each", no "if you played" — so a turn was arithmetic and a deck never became an engine; six mechanics now let a build's cards multiply each other. And every dungeon drew from one global encounter mix, so twelve dungeons had one rhythm; the mix is per-place now (a swarm, a market, a climb, a treasure run). Both were measured, and both needed correcting: the card pricing was under-charging builds by half, and the first pass at shapes turned the deepest dungeons into six-fight gauntlets on top of their difficulty.
 
 - **The UI scale was a second scale (D65).** Removed the zoom — keys, slider, persisted value and setters. The engine's `canvas_items` stretch already scales the whole canvas to the window (measured: a 640x360 window and a 1920x1080 one both present 1280x720 layout units), so the app-level multiplier was a duplicate that had already caused three separate incidents. F11 still toggles fullscreen; nothing else resizes.
@@ -2545,3 +2547,157 @@ onto the difficulty curve: 8-11 encounters, 3-6 fights, at least two things that
 not a fight, at least six distinct shapes across the twelve, and — unchanged — all
 three models must still spend whatever budget a dungeon asks for, compared now
 against the mean of the per-dungeon budgets rather than one global number.
+
+### D70 — The merchant sold nothing, because prices were flat and income is not
+
+Reported from play as "the merchant is bugged, it never sells anything". The
+purchase code was fine — driven headless, a buy correctly moved gold 999→959, the
+run deck 12→13, escrow_cards 0→1 and marked the entry `sold`. The bug was economic.
+
+Shop prices were **flat gold at every depth**: common 40, uncommon 63, rare 103,
+epic 179, legendary 400, heal 42, removal 55. Income is not flat — `gold_reward`
+scales with `GOLD_DEPTH_EXP` (1.8). A Crypt fight pays 5-10 gold and the shop sits
+at row 2-4 of the map, so the player arrives holding almost nothing.
+
+**Measured, 400 generated Crypt maps, first run, 0 banked gold, walking a legal
+path that takes the shop as soon as it is reachable:** median 20 gold in hand
+against a cheapest item of 40, and **nothing at all affordable on 74% of visits**.
+The 26% that could buy something had a treasure node (25-60 gold) fall first. A
+full Crypt clear earns 91 gold, so the money exists — it arrives after the shop,
+and the shop is one-shot (`_on_leave` clears the stock and the node is cleared).
+At the other end it inverts: the Maw pays 46-51 per fight against the same 40-gold
+common.
+
+**Prices are now quoted in FIGHTS.** `fight_income(difficulty)` is one average
+fight's takings, and every shop price is a multiple of it: a common is
+`SHOP_COMMON_IN_FIGHTS` (2.0), a heal 2.5, a removal 3.0 rising 2.0 per removal
+already taken. A purchase costs the same amount of *play* at every depth, and the
+price cannot drift from the income curve because it is computed from it. Common
+now runs 14g at d1 to 96g at d8; one fight pays 7g and 48g respectively.
+
+Re-measured with a natural policy over a whole run: **67-90% of runs containing a
+shop now get at least one usable purchase**, 0.7-1.1 items bought per run, flat
+across all twelve dungeons.
+
+**One copy of the rarity multiplier.** `card_price` and `fuse_gold_cost` each
+carried their own `sqrt(common / weight)`, with a comment on the second saying it
+was deliberately the same as the first — the D34 restated-table shape, and the
+reason pricing cards by depth risked silently repricing every fusion in the game.
+Extracted to `rarity_price_mult()`; depth is an argument to the shop price and
+fusion simply does not take one. Fusion costs are pinned unchanged at
+[20, 32, 52, 89, 200], and `test_shop.gd` now fails if a second copy of that
+formula appears.
+
+Anything bought OUTSIDE a dungeon has no run to take a difficulty from, so
+`card_price` defaults to `mid_difficulty()` — derived from the dungeons that exist,
+not restated. `test_shop.gd` already reasoned this way, measuring legendary
+affordability at mid depth because "pricing the rarest card against the poorest
+floor would call every legendary unobtainable"; that was the right instinct applied
+to the test instead of to the price. `power_price` moves only 80→72 at common.
+
+**The sim moved, and it moved at depth.** 19 of 34 comparable RUN cells changed;
+the shallow ones by ±1-3, the deep ones by up to 14:
+
+```
+Endgame (Lv100)     The Maw             66% -> 52%   (-14)
+AoE build           The Drowned Market  72% -> 59%   (-13)
+Late (Lv40+6)       The Maw             44% -> 31%   (-13)
+Thorns build        The Abyssal Stair   56% -> 44%   (-12)
+Late (Lv40+6)       The Abyssal Stair   44% -> 33%   (-11)
+Starter             The Crypt           99% ->100%   (+1)
+Barricade build     The Foundry         48% -> 50%   (+2)
+```
+
+The cause is heal pricing specifically: healing is the only mitigation the
+simulator buys at a shop, and a 42-gold salve at d8 was under one fight's income.
+Every moved cell went *toward* the documented target band (~50-70% matched,
+<20% over-reaching) rather than away from it — the Maw at Endgame from the top of
+the band into the middle, the AoE build at the Drowned Market from above it to
+inside it. It is nonetheless a real difficulty change, and it rides on a bug fix
+that did not ask for one. If the endgame should keep its old slack, the lever is
+`SHOP_HEAL_IN_FIGHTS` alone; the card and removal prices carry no HP curve.
+
+**Also fixed: the screen would not say why.** An unaffordable button read a bare
+`"40 g"`, greyed, with no hint that you had 20 and needed 40 — so the one screen
+that had to explain itself explained nothing, and it read as a broken button rather
+than an expensive one. All three now state the shortfall and carry a tooltip, the
+same shape `combat.gd:_refresh_power()` already used ("Needs %d energy, you have
+%d"). The removal button had two silent refusal reasons (no gold, deck at minimum)
+and now distinguishes them.
+
+**Found while measuring, not fixed here:** the Ossuary's encounter deck contains
+**no Shop at all** — 200 generated piles, zero shops (Combat, Elite, Event, Rest,
+Treasure, BOSS only). The Warrens has no Elite and no Treasure. Those are content
+gaps in `resources/dungeons/*.tres`, not pricing, and repricing the shop cannot
+reach a dungeon that never offers one.
+
+### D68 — The elite drops a relic, and escrow holds it
+
+An elite was a harder fight for more gold: a stat check, not a decision. It drops a
+relic now, which is also the mid-run "this run is special" spike the game did not
+have — `grant_relic` was called from exactly two places, beating a boss and an event
+that happened to roll one.
+
+**It goes into escrow, not into the collection.** Granting it immediately would
+reopen the hole D20 was built to close, with a different noun: kill the elite, die
+on purpose, keep the relic. `MetaState.pick_relic()` splits rolling from taking so
+the elite path can hold one at risk; `commit_escrow` banks it on the boss (or a
+rope), `forfeit_escrow` loses it, and `run_to_dict` carries it through a quit —
+otherwise the escrow is a lie the moment somebody reloads. Relics are still never
+lost once banked (D11); they are simply not banked until the run is finished.
+
+### D69 — The plateau was an incentive, not a difficulty
+
+Measured across the whole game, the curve read: **wall, plateau, wall.**
+
+    Crypt 92%  Ossuary 68%  Warrens 100%  |  Foundry 28%  |
+    Ember 100%  Slag 100%  Fungal 100%  Rot 100%  Vault 100%  |
+    Market 8%  Stair 8%  Maw 16%
+
+Five consecutive dungeons with no resistance in them. The tempting fix — make d3-d5
+harder — would have been wrong: the D36 ratchet *means* you to outgrow a place, and
+each of those caps at `1.4 + 0.73 x (depth - 1)`, which a mid deck passes on purpose.
+
+The real problem was the incentive. Re-clearing a dungeon you had already beaten at
+100% was the safest income in the game, so farming the flat middle strictly beat
+risking the next depth. Nothing was too easy; the easy thing paid too well.
+
+`Balance.repeat_reward_mult()` makes ground already taken pay less — full price the
+first time, then 0.45 per clear down to a floor of 0.25 — applied to gold and to the
+reward rarity tilt. The floor is deliberate: a build's cards live in specific places
+and you may need to go back for one, so returning stays possible, it is simply no
+longer the efficient way to get stronger. `MetaState.clear_counts` records how well
+trodden each dungeon is (SAVE_VERSION 6; an existing save's cleared dungeons migrate
+to exactly one clear each, so nobody is charged for history the file never kept).
+
+### D70 — Two art paths with no code behind them
+
+Wiring the enemy art (D62) covered one of three. Two remained where a correctly
+named file would have sat on disk doing nothing, which is the worst kind of gap
+because it reads as an art problem:
+
+* **Card illustrations.** `card_art()` sliced a CC0 atlas by position and had no
+  file path at all. Now `cards/<card_id>.png`, then `cards/<family>.png`, then the
+  atlas — id first, family second, exactly as ART_ASSETS describes.
+* **The frame kit.** Two of its 24 files had hooks. Buttons now take per-state
+  paintings, and the panel, tooltip, dropdown, slider, scrollbar, checkbox and the
+  card frame (per rarity) all light up the moment their file appears. Each is "use
+  it if it exists, else keep exactly what ships", so the kit can arrive one file at
+  a time.
+
+**The generator had a private copy of the card taxonomy.** `art_manifest.gd` carried
+its own `_family()` — twelve families — while the runtime resolved seven, under
+filenames that did not match (`cards/family_x.png` against the `cards/x.png` the
+loader looks for). Five of the paintings it asked for could never have loaded and
+the other seven would have been sought under other names. A document is generated
+precisely so it cannot drift from the code; a generator with its own lookup table is
+the D34 bug with better manners. `Icons.card_family()` is now the one function, the
+manifest calls it, and `tests/test_art.gd` fails if a private copy comes back.
+
+**And the autoload trap, for the fourth time.** `Icons` reached for `UITheme.kit()`
+while this was being wired. UITheme is an autoload, autoloads are not registered in
+`--script` runs, and the symptom is not a failure — three suites **hung**, because
+the parse error skips the `quit()`. The lookup moved to `PixelArt` (a plain
+class_name), and `tests/test_layout.gd` now greps the four classes the headless
+suite loads for bare autoload calls, ignoring comments. Verified by putting the call
+back.
