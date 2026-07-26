@@ -53,11 +53,17 @@ func options() -> Array:
 	var out: Array = []
 	out.append({"type": revealed, "label": "Face it", "action": "face"})
 	if revealed == Enc.COMBAT or revealed == Enc.ELITE:
+		# The price rises with each fight already dodged this run, so slipping past
+		# one is a plan and slipping past all of them is not. Derived from the
+		# dungeon's difficulty rather than the player's HP: a traversal is pure
+		# logic and never reads run resources.
+		var diff: int = dungeon.difficulty if dungeon != null else 1
+		var cost := Balance.deck_avoid_cost(diff, avoided)
 		out.append({
 			"type": revealed,
-			"label": "Avoid (-%d HP)" % Balance.DECK_AVOID_HP_COST,
+			"label": "Avoid (-%d HP%s)" % [cost, ", rising" if avoided > 0 else ""],
 			"action": "avoid",
-			"hp_cost": Balance.DECK_AVOID_HP_COST,
+			"hp_cost": cost,
 		})
 	return out
 

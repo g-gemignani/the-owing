@@ -169,8 +169,51 @@ func _init() -> void:
 		if o.has("hp_cost"):
 			fails += 1; print("FAIL DECK: boss can be avoided")
 
+	# --- the dodge has to be a trade, not a discount --------------------------
+	#
+	# It was a flat 8 HP and nothing measured it, because the simulator's driver
+	# only dodged below 35% HP and therefore never dodged at all. Measured properly,
+	# skipping every avoidable fight beat fighting outright — the Drowned Market
+	# went 49% to 87% for the same deck. A dominant strategy is a removed decision
+	# (D20), so the price now rises with depth and with each dodge already taken.
+	#
+	# Asserted structurally rather than by simulation: what breaks the mechanic is
+	# the TOTAL being small against the health bar you are spending it from.
+	var dodgeable: int = Balance.ENCOUNTER_COMBATS + Balance.ENCOUNTER_ELITES
+	for did in Balance.DUNGEONS:
+		var dd2 := Balance.dungeon(did)
+		if dd2 == null or dd2.traversal != Traversal.Kind.DECK:
+			continue
+		var depth: int = dd2.difficulty
+		var bar := float(Balance.BASE_MAX_HP + (depth - 1) * Balance.HP_PER_DUNGEON)
+		var total := 0
+		var prev := 0
+		for i in dodgeable:
+			var c: int = Balance.deck_avoid_cost(depth, i)
+			if c <= prev:
+				fails += 1
+				print("FAIL %s: dodge %d costs %d, no more than the one before it (%d)" % [
+					did, i + 1, c, prev])
+			prev = c
+			total += c
+		# skipping the whole dungeon must cost most of a health bar...
+		if float(total) < bar * 0.5:
+			fails += 1
+			print("FAIL %s: dodging every fight costs %d of %d HP — the dungeon can be skipped on pocket change" % [
+				did, total, int(bar)])
+		# ...while one dodge stays affordable, or nobody would ever use it
+		var first: int = Balance.deck_avoid_cost(depth, 0)
+		if float(first) > bar * 0.25:
+			fails += 1
+			print("FAIL %s: the first dodge costs %d of %d HP, too dear to ever be worth it" % [
+				did, first, int(bar)])
+	# and depth must matter, or a flat price gets cheaper the deeper you go
+	if Balance.deck_avoid_cost(8, 0) <= Balance.deck_avoid_cost(1, 0):
+		fails += 1
+		print("FAIL the dodge costs no more at depth 8 than at depth 1")
+
 	if fails == 0:
-		print("TRAVERSAL TEST: PASS (contract holds for %d models: termination, one boss, equal budget)" % KINDS.size())
+		print("TRAVERSAL TEST: PASS (contract holds for %d models: termination, one boss, equal budget, priced dodge)" % KINDS.size())
 	else:
 		print("TRAVERSAL TEST: FAIL (%d)" % fails)
 	quit()

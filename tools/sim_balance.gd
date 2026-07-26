@@ -34,7 +34,42 @@ func _init() -> void:
 			print(line)
 		print("")
 	print("Target: RUN completion ~50-70%% at matched progression; <20%% when over-reaching.")
+	_avoid_calibration()
 	quit()
+
+## Is paying HP to skip a fight priced, or is it a cheat?
+##
+## The deck model's whole decision is face-or-dodge, and it went unmeasured for its
+## entire existence because the driver only dodged below 35% HP — which a greedy
+## player almost never sits at. So the three lines of play are now measured against
+## each other. The property that matters is D20's: **a dominant strategy is a
+## removed decision.** If ALWAYS-AVOID clears more often than SMART, the price is
+## wrong; if it clears far less, dodging is decoration.
+const CALIBRATION_TRIALS := 150
+
+func _avoid_calibration() -> void:
+	print("\n=== Avoid calibration (%d trials per cell) ===" % CALIBRATION_TRIALS)
+	print("Deck dungeons only — the other models have nothing to dodge.")
+	print("A price is right when SMART >= both fixed lines of play.\n")
+	for profile in _profiles():
+		var deck: Array[CardData] = profile["deck"]
+		for dungeon_id in profile["dungeons"]:
+			var dd := Balance.dungeon(dungeon_id)
+			if dd == null or dd.traversal != Traversal.Kind.DECK:
+				continue
+			var roster: Array = Array(dd.enemy_roster) if dd.has_roster() else []
+			var relics: Array = profile.get("relics", [])
+			var cells: Array = []
+			for mode in [Policy.ALWAYS_FACE, Policy.SMART, Policy.ALWAYS_AVOID]:
+				cells.append(_measure_run(dungeon_id, deck, relics, roster, mode,
+					CALIBRATION_TRIALS))
+			print("   %-18s %-24s face %3.0f%% | smart %3.0f%% (%2.0f%% dodged) | avoid %3.0f%% (%2.0f%% dodged)" % [
+				dd.name, profile["name"],
+				cells[0]["complete"] * 100.0,
+				cells[1]["complete"] * 100.0, cells[1]["avoid_rate"] * 100.0,
+				cells[2]["complete"] * 100.0, cells[2]["avoid_rate"] * 100.0])
+			if cells[2]["complete"] > cells[1]["complete"] + 0.05:
+				print("      ^ ALWAYS-AVOID beats the smart line: the dodge is underpriced")
 
 ## Simulate a full dungeon: walk a random path through the real generated map,
 ## fighting with persistent HP, resting where offered. Returns completion rate.
@@ -42,13 +77,18 @@ func _init() -> void:
 ## Because Traversal is pure logic, ONE walker measures every model — a per-model
 ## walker would be the first thing to rot when a new model is added.
 func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
-		roster: Array = []) -> Dictionary:
+		roster: Array = [], mode: int = Policy.SMART, trials: int = TRIALS) -> Dictionary:
 	var dd := Balance.dungeon(dungeon_id)
 	var difficulty: int = dd.difficulty if dd != null else 1
 	var completed := 0
 	var fights_total := 0
 	var avoided_total := 0
-	for t in TRIALS:
+	var avoidable_total := 0
+	# What fights here have been costing, learned across the trials of this cell and
+	# carried between them: a player who has walked this dungeon before knows.
+	var cost_est := {}
+	var cost_n := {}
+	for t in trials:
 		var tv := Traversal.make(dd.traversal if dd != null else Traversal.Kind.GRAPH)
 		tv.generate(dd)
 		var relic_hp := 0
@@ -65,7 +105,11 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 			var opts := tv.options()
 			if opts.is_empty():
 				break
-			var pick := _choose_option(opts, hp, max_hp)
+			for o in opts:
+				if o.has("hp_cost"):
+					avoidable_total += 1
+					break
+			var pick := _choose_option(opts, hp, max_hp, cost_est, mode)
 			var cost := int(opts[pick].get("hp_cost", 0))
 			var node := tv.select(pick)
 			if node.is_empty():
@@ -96,6 +140,8 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					tv.clear_pending()
 				_:
 					var tier := _tier_of_enc(int(node["type"]))
+					var enc_kind := int(node["type"])
+					var hp_before := hp
 					var eng := CombatEngine.new()
 					eng.setup(deck, hp, max_hp, difficulty, tier, "", relics, roster)
 					var g2 := 0
@@ -108,20 +154,31 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					fights += 1
 					if eng.lost():
 						alive = false
+						var nd: int = int(cost_n.get(enc_kind, 0)) + 1
+						var pd: float = float(cost_est.get(enc_kind, 0.0))
+						cost_est[enc_kind] = pd + (float(hp_before) - pd) / float(nd)
+						cost_n[enc_kind] = nd
 					else:
 						hp = eng.player.hp
+						# the driver's only source of "what does a fight here cost me"
+						var n: int = int(cost_n.get(enc_kind, 0)) + 1
+						var prev: float = float(cost_est.get(enc_kind, 0.0))
+						cost_est[enc_kind] = prev + (float(hp_before - hp) - prev) / float(n)
+						cost_n[enc_kind] = n
 						gold += Balance.gold_reward(difficulty, tier, randi() % 6)
 						tv.clear_pending()
 		fights_total += fights
 		if alive and tv.is_complete():
 			completed += 1
 	return {
-		"complete": float(completed) / TRIALS,
-		"avg_fights": float(fights_total) / TRIALS,
-		"avg_avoided": float(avoided_total) / TRIALS,
+		"complete": float(completed) / float(trials),
+		"avg_fights": float(fights_total) / float(trials),
+		"avg_avoided": float(avoided_total) / float(trials),
+		# of the encounters that COULD be dodged, how many were: 0.0 here for a whole
+		# report is the signal that the driver is ignoring the mechanic again
+		"avoid_rate": float(avoided_total) / float(maxi(1, avoidable_total)),
 	}
 
-## Route policy: rest when hurt, avoid a fight when badly hurt and it is offered.
 ## Resolve an event the way a reasonable player would: take the cheapest option
 ## that does not cost HP if one exists, else accept the HP cost.
 func _sim_event(hp: int, max_hp: int, gold: int) -> Dictionary:
@@ -146,7 +203,36 @@ func _sim_event(hp: int, max_hp: int, gold: int) -> Dictionary:
 		"gold": maxi(0, gold + e.gold_delta(best)),
 	}
 
-func _choose_option(opts: Array, hp: int, max_hp: int) -> int:
+## Route policy.
+##
+## The old version reached for Avoid only below 35% HP, and measured **0.0 avoids
+## per run in every profile** — so the deck model's entire decision (face this
+## encounter, or pay HP to skip it and forfeit the loot) was never exercised, and
+## `DECK_AVOID_HP_COST` had never been calibrated against anything. That is the
+## same class of blind spot as the pure-debuff cards the sim never played and the
+## poison-only cards it could not value: a mechanic the driver ignores reads as a
+## mechanic that does not matter.
+##
+## A player does not decide this on a percentage. They decide it on *what fights
+## have been costing them*: dodge when the fight is dearer than the dodge, and eat
+## the dodge when the fight might kill. `cost_est` is exactly that knowledge —
+## running average HP lost per encounter type, learned across the trials of this
+## cell, which is the same thing as a player who has been here before.
+##
+## `mode` exists so the tool can measure the two degenerate lines of play as well:
+## if "always_avoid" beats "smart", the price is a cheat and the mechanic is broken
+## in the D20 sense (a dominant strategy is a removed decision).
+enum Policy { SMART, ALWAYS_FACE, ALWAYS_AVOID }
+
+## Only dodge a fight that costs meaningfully more than the dodge: the loot, and
+## the gold that buys healing later, is worth some HP. 1.0 would dodge on a tie.
+const FACE_BIAS := 1.35
+## A fight whose *average* cost is this close to what is left is a coin flip, and
+## paying a known price beats rolling for it.
+const LETHAL_MARGIN := 1.6
+
+func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
+		mode: int = Policy.SMART) -> int:
 	var frac := float(hp) / float(maxi(1, max_hp))
 	# take a rest or shop if it is on offer and we are damaged
 	for i in opts.size():
@@ -155,12 +241,30 @@ func _choose_option(opts: Array, hp: int, max_hp: int) -> int:
 			return i   # free value, always worth landing on
 		if frac < 0.6 and (t == Traversal.Enc.REST or t == Traversal.Enc.SHOP):
 			return i
-	# badly hurt: pay HP to skip a fight rather than risk it
-	if frac < 0.35:
-		for i in opts.size():
-			if opts[i].has("hp_cost") and int(opts[i]["hp_cost"]) < hp - 5:
-				return i
-	# otherwise prefer facing it, choosing randomly among non-avoid options
+
+	var avoid := -1
+	for i in opts.size():
+		if opts[i].has("hp_cost"):
+			avoid = i
+	if avoid >= 0:
+		var cost := int(opts[avoid]["hp_cost"])
+		var affordable := cost < hp        # never pay a price that kills you
+		var enc := int(opts[avoid].get("type", 0))
+		var expected: float = float(cost_est.get(enc, -1.0))
+		match mode:
+			Policy.ALWAYS_AVOID:
+				if affordable:
+					return avoid
+			Policy.ALWAYS_FACE:
+				pass
+			_:
+				if affordable and expected >= 0.0:
+					if expected * LETHAL_MARGIN >= float(hp):
+						return avoid          # facing this might end the run
+					if expected > float(cost) * FACE_BIAS:
+						return avoid          # the dodge is simply cheaper
+
+	# otherwise face it, choosing randomly among the non-avoid options
 	var faceable: Array = []
 	for i in opts.size():
 		if not opts[i].has("hp_cost"):

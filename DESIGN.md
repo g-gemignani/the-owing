@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The dodge nobody had ever measured (D60).** The simulator's driver was taught to use the deck model's Avoid at all — it never had, in the model's whole existence — which immediately showed that skipping every fight beat fighting: 49% to 87% completion for one deck. The price now rises with depth and with each dodge already taken.
+
 - **The numbers behind three decisions (D58, D59).** A card now shows what it will do in *this fight* — Strength and Dexterity applied — on its face, its hover and in the engine that resolves it, after a play report that gaining Strength changed nothing visible. Alongside it: the draw and discard piles are on screen, unaffordable cards are dimmed, the combat log keeps four lines, dying gets a screen the player dismisses instead of a 2.5-second wait, and fusing states what a level buys rather than only what it costs.
 
 - **The endgame stopped being a walkover (D54).** The deepest dungeons were cleared 100% of the time by every late deck, because enemy HP grows at half the rate of the player's damage — so more power made fights *shorter*, and a shorter fight offers fewer chances to be hit. Extra enemy HP and ratio-scaled pierce now switch on above a floor at the top of the build band, leaving every cell the previous pass tuned exactly where it was. The Maw now reads 40/49/70% by deck strength. The test changed probe: attrition per fight rose all through the plateau, so fight length is what is asserted.
@@ -2146,3 +2148,48 @@ row and on every bulk button's hover.
 All three are pinned by tests that were verified by reintroducing each bug in turn:
 the piles vanish, every card looks playable, the log drops to one line, the defeat
 screen loses its numbers, the fusion preview stops naming the before and after.
+
+### D60 — The dodge nobody had ever measured
+
+Every cell of the balance report read `0.0 avoided`. The deck model's entire
+decision — face this encounter, or pay HP to skip it and forfeit the loot — had
+never been exercised, because the simulator's driver only reached for Avoid below
+35% HP, and a greedy player is rarely sitting there. `DECK_AVOID_HP_COST` had
+therefore never been calibrated against anything at all. Same class of blind spot
+as the pure-debuff cards the sim never played and the poison-only cards it could
+not value: **a mechanic the driver ignores reads as a mechanic that does not
+matter.**
+
+The driver now decides it the way a player does — on what fights have been costing
+it. `cost_est` is a running average of HP lost per encounter type, learned across
+the trials of a cell and carried between them, which is the same thing as a player
+who has walked this dungeon before. It dodges when the fight is dearer than the
+dodge (with a bias toward facing, because the loot is worth some HP) or when the
+fight's average cost is close enough to what is left that facing it is a coin flip.
+
+The tool also measures the two degenerate lines of play, because the property that
+matters is D20's — a dominant strategy is a removed decision:
+
+| | face everything | smart | avoid everything |
+|---|---|---|---|
+| Drowned Market, AoE Lv15 | 49% | **87%** | 87% |
+| Slag Pits, Thorns Lv15 | 97% | 100% | 100% |
+
+Skipping every fight was strictly better, and the reason is that a **flat** 8 HP
+gets cheaper the deeper you go while fights get dearer: at the Drowned Market, four
+dodges cost 32 of a 110-point health bar, against fights costing 17-31% each. Every
+deck-dungeon number ever reported was measuring a line of play no sensible player
+would take.
+
+The price now scales with depth *and* rises with each dodge already taken this run
+— the same shape as `removal_price`, and derived from the dungeon's difficulty
+rather than the player's max HP, because a Traversal must never read run resources
+(D13). Tuned so dodging everything costs ~70% of the bar and arrives at the boss
+with no gold and no rewards. After: SMART is at least as good as both fixed lines
+everywhere, always-avoid now *loses* (57% vs 61% facing at the Drowned Market), and
+the smart line dodges 22-56% of what it could — situational, which is the point.
+
+`tests/test_traversal.gd` pins it structurally rather than by simulation: the cost
+must rise per dodge, dodging every fight must cost at least half a health bar, one
+dodge must still be affordable (under a quarter), and depth must matter. Verified
+by restoring the flat 8 — it names every dungeon.
