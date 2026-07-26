@@ -203,7 +203,7 @@ func _refresh() -> void:
 		pb.text = "%s%s Lv%d" % ["> " if on else "", pd.name, pd.level]
 		pb.disabled = on
 		UI.hoverable(pb, "%s\n%s\nCost %s, once per turn." % [
-			pd.name, pd.description, "free" if pd.cost == 0 else "%dE" % pd.cost])
+			pd.name, pd.effect_text(), "free" if pd.cost == 0 else "%dE" % pd.cost])
 		pb.pressed.connect(func():
 			MetaState.equip_power(pid)
 			_refresh())

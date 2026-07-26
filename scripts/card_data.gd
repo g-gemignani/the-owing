@@ -57,6 +57,68 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 ## Legendary power: block stops expiring at end of turn and accumulates instead.
 @export var retain_block: bool = false
 
+## What this card does RIGHT NOW, generated from its effective numbers.
+##
+## The `description` field is authored text baked at level 1, so a fused card lied:
+## a level-40 Bash still read "Deal 10 damage." on its face while dealing 38, and
+## disagreed with its own hover text, which was generated. Anything shown to the
+## player is built from the same getters the engine uses, so the two cannot drift.
+##
+## Terse on purpose — this goes on the card face. Icons.card_tooltip() is the long
+## form for hovering.
+func effect_text() -> String:
+	var parts: Array[String] = []
+	if eff_damage() > 0:
+		var d := "Deal %d damage" % eff_damage()
+		if hits > 1:
+			d += " x%d" % hits
+		if aoe:
+			d += " to all"
+		parts.append(d)
+	if damage_from_block:
+		parts.append("Deal damage equal to Block")
+	if strength_mult > 0:
+		parts.append("+%d damage per Strength" % strength_mult)
+	if lifesteal:
+		parts.append("Heal for damage dealt")
+	if double_block:
+		parts.append("Double Block")
+	if eff_block() > 0:
+		parts.append("Gain %d Block" % eff_block())
+	if eff_heal() > 0:
+		parts.append("Heal %d" % eff_heal())
+	if energy_gain > 0:
+		parts.append("+%d Energy" % energy_gain)
+	if draw > 0:
+		parts.append("Draw %d" % draw)
+	if eff_vulnerable() > 0:
+		parts.append("Vulnerable %d" % eff_vulnerable())
+	if eff_weak() > 0:
+		parts.append("Weak %d" % eff_weak())
+	if eff_poison() > 0:
+		parts.append("Poison %d" % eff_poison())
+	if eff_strength() > 0:
+		parts.append("+%d Strength" % eff_strength())
+	if eff_dexterity() > 0:
+		parts.append("+%d Dexterity" % eff_dexterity())
+	if eff_thorns() > 0:
+		parts.append("+%d Thorns" % eff_thorns())
+	if retain_block:
+		parts.append("Block stops expiring")
+	if grows > 0:
+		parts.append("Grows +%d per play" % grows)
+	if hp_cost > 0:
+		parts.append("Costs %d HP" % hp_cost)
+	if retain:
+		parts.append("Retain")
+	if exhaust:
+		parts.append("Exhaust")
+	if parts.is_empty():
+		# a mechanic nobody has taught this function about: fall back rather than
+		# show a blank card
+		return description
+	return ". ".join(parts) + "."
+
 ## Effective numbers after level scaling.
 ##
 ## Scaling is deliberately SUB-LINEAR (sqrt). Upgrade tracks run to 100 levels for

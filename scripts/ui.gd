@@ -318,7 +318,8 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 
 	var desc_y := pad + badge_h + title_h
 	var desc_h := size.y - pad - desc_y
-	var desc := _card_label(holder, card.description, Color(0.86, 0.84, 0.80))
+	# generated, not the authored line: a fused card must not misreport itself
+	var desc := _card_label(holder, card.effect_text(), Color(0.86, 0.84, 0.80))
 	_place(desc, pad, desc_y, inner.x, desc_h)
 
 	# Shrink to fit rather than clip. Card text is authored, so its length varies

@@ -225,7 +225,7 @@ func _refresh_power() -> void:
 	elif p.hp_cost > 0 and eng.player.hp <= p.hp_cost:
 		why = "\nCosts %d HP and would be lethal." % p.hp_cost
 	UI.hoverable(power_btn, "%s\n%s\nOnce per turn, every turn.%s" % [
-		p.name, p.description, why])
+		p.name, p.effect_text(), why])
 
 func _on_target_pressed(i: int) -> void:
 	if eng.set_target(i):
@@ -267,9 +267,7 @@ func _win() -> void:
 	var rw := Icons.fit_card_width(3, rbase.x,
 		get_viewport_rect().size.x - UITheme.px(40), float(UITheme.sep()))
 	for card in _roll_rewards(3):
-		UI.card_button(row, card, Vector2(rw, rbase.y), _on_reward_picked.bind(card),
-			"%s\n(%d) [%s]\n%s" % [card.name, card.cost,
-				CardData.Rarity.keys()[card.rarity], card.description])
+		UI.card_button(row, card, Vector2(rw, rbase.y), _on_reward_picked.bind(card))
 	# What taking one COSTS. Dilution is real — a bigger deck draws each card less
 	# often — but it was invisible, so "take one of three" was an automatic click
 	# rather than a decision. Skipping is a legitimate play and should read as one.

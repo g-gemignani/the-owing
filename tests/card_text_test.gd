@@ -178,9 +178,12 @@ func _hover(holder: Control, open: bool) -> void:
 	var cb: Callable = holder.get_meta("show_all")
 	cb.call(open)
 
+## What the card actually puts on its face. Generated from the effective numbers,
+## not the authored `description`, which is baked at level 1 and lied about any
+## fused card — see tests/test_card_truth.gd.
 func card_desc(id: String) -> String:
 	var c := load(MetaState.CATALOG[id]) as CardData
-	return c.description if c != null else ""
+	return c.effect_text() if c != null else ""
 
 func _cards(n: Node) -> Array[Control]:
 	var out: Array[Control] = []

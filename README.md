@@ -21,7 +21,7 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 | Events         | 20                                                           |
 | Dungeons       | 12 across 5 zones, 8 difficulty tiers                        |
 | Traversal      | 3 pluggable models: node graph, card draw, dice board        |
-| Tests          | 32 suites, including a playability integration test          |
+| Tests          | 33 suites, including a playability integration test          |
 
 ## Running it
 
@@ -72,7 +72,7 @@ scripts/     game code — one file per screen or system
 resources/   all content as .tres data: cards, enemies, relics, powers, events,
              dungeons, zones, builds
 scenes/      thin .tscn wrappers; screens build their UI in code
-tests/       32 suites + tests/run.sh
+tests/       33 suites + tests/run.sh
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd
 DESIGN.md    the reasoning behind every decision, and every mistake
 ```

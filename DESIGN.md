@@ -1718,3 +1718,40 @@ carved frame collapsed. Caught by `MenuArtTest`, which had just been taught to
 check exactly this. Fixed with `UITheme.button_height(base)`, which never returns
 less than `min_button_height()`, so the default scale can move again without
 breaking every button in the game.
+
+### D50 — A card must not lie about itself
+
+`CardData.description` is authored text baked at level 1, while everything that
+resolves an effect reads `eff_*()`, which scales. So a fused card misreported
+itself, and disagreed with its own hover text, which was generated:
+
+| card | level | face said | actually dealt |
+|------|-------|-----------|----------------|
+| Strike | 40 | "Deal 6 damage." | 15 |
+| Bash | 40 | "Deal 10 damage. Apply 2 Vulnerable." | 38, Vulnerable 6 |
+| Clear Mind | 40 | "Gain 3 block, draw 2." | 11 Block |
+
+`CardData.effect_text()` generates the face line from the same getters the engine
+uses, so the two cannot drift. `Icons.card_tooltip()` remains the long form. Every
+display site — card faces, shop rows, the powers screen, the combat power button,
+the deck-builder power picker — now reads the generated text, and powers inherit it
+because `PowerData extends CardData`.
+
+**Deviation worth stating.** The request was to drop the text from the card and rely
+on the hover. I generated it instead, because tooltips do not exist on a
+touchscreen: `UI.touch_ui()` reveals the card's own text on the first tap (D43), so
+deleting it would have left mobile players with no way to read a card at all.
+Generating it satisfies the same goal — one source of truth, no contradiction —
+without that cost.
+
+The authored field is kept only as a fallback for a mechanic `effect_text()` has not
+been taught, so a new card shows something rather than a blank face.
+
+`tests/test_card_truth.gd` walks all 100 cards at levels 1, 10 and their cap and
+asserts every effective number appears in both the face text and the hover text; it
+also asserts a scaling card reads differently at Lv40 than Lv1, and greps the UI
+scripts for any return of the stale field. Verified by restoring
+`card.description` on the card face — caught immediately.
+
+`CardTextTest` had encoded the old behaviour (it looked for the authored line), which
+is why updating a test is sometimes the correct half of a fix.

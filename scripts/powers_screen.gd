@@ -63,7 +63,7 @@ func _refresh() -> void:
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity))
 		var cost := "free" if p.cost == 0 else "%dE" % p.cost
 		lbl.text = "%s  [%s]  %s   Lv%d/%d   (%s)" % [
-			p.name, cost, p.description, level, p.level_capped(),
+			p.name, cost, p.effect_text(), level, p.level_capped(),
 			"owned" if owned else "locked"]
 		row.add_child(lbl)
 		UI.hoverable(row, Icons.card_tooltip(p))
