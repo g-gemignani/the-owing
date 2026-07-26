@@ -220,8 +220,13 @@ func intent_text(i: int) -> String:
 	match a:
 		EnemyData.Action.ATTACK:
 			# show what would actually land, after the enemy's Weak and the
-			# player's Vulnerable/block
-			return "hit %d" % player.predicted_damage(enemies[i].outgoing_damage(v))
+			# player's Vulnerable/block — including the share Block cannot stop
+			var raw := enemies[i].outgoing_damage(v)
+			var pierce := int(round(float(raw) * Balance.pierce_fraction(dungeon)))
+			var total := player.predicted_damage(maxi(0, raw - pierce)) + pierce
+			if pierce > 0:
+				return "hit %d (%d pierces Block)" % [total, pierce]
+			return "hit %d" % total
 		EnemyData.Action.DEBUFF_VULN:
 			return "Vuln %d" % v
 		EnemyData.Action.DEBUFF_WEAK:
@@ -578,9 +583,16 @@ func _resolve_enemy(i: int) -> String:
 	match a:
 		EnemyData.Action.ATTACK:
 			var dealt := e.outgoing_damage(v)
-			var landed := player.predicted_damage(dealt)
-			player.take_damage(dealt)
-			var out := "%s hits for %d." % [e.name, landed]
+			# Deeper places hit through a shield. Split off the piercing share
+			# BEFORE Block sees the rest — see Balance.pierce_fraction.
+			var pierce := int(round(float(dealt) * Balance.pierce_fraction(dungeon)))
+			var blockable := maxi(0, dealt - pierce)
+			var landed := player.predicted_damage(blockable) + pierce
+			player.take_damage(blockable)
+			if pierce > 0:
+				player.hp = maxi(0, player.hp - pierce)
+			var out := "%s hits for %d%s." % [
+				e.name, landed, (" (%d pierces)" % pierce) if pierce > 0 else ""]
 			var hurt := _fire_relics(RelicData.Trigger.ON_HP_BELOW_PCT)
 			if hurt != "":
 				out += " " + hurt

@@ -73,12 +73,30 @@ func _init() -> void:
 			fails += 1
 			print("FAIL power is punished at d%d: starter loses %.1f HP/fight, maxed loses %.1f" % [
 				d, weak_loss, strong_loss])
+	# --- the curve must not flatline (D45) ---
+	#
+	# Measured before this guard existed: every profile past mid-game cleared every
+	# dungeon at 100% losing single-digit HP, because Block scales linearly with
+	# deck power while enemy damage cannot. Roughly 80% of the content had no
+	# resistance left in it, and nothing in the suite noticed.
+	if Balance.ratio_ceiling(_deepest()) < Balance.MAX_ACHIEVABLE_RATIO:
+		fails += 1
+		print("FAIL deepest ceiling %.2f is under the strongest reachable deck %.2f — it gets outgrown" % [
+			Balance.ratio_ceiling(_deepest()), Balance.MAX_ACHIEVABLE_RATIO])
+	var maxed_loss := _hp_lost_per_fight(_deepest(), Balance.MAX_ACHIEVABLE_RATIO)
+	if maxed_loss < 5.0:
+		fails += 1
+		print("FAIL the deepest dungeon costs a maxed deck %.1f HP a fight — no resistance left" % maxed_loss)
+	# and Block alone must never be a complete answer at depth
+	if Balance.pierce_fraction(_deepest()) <= 0.0:
+		fails += 1
+		print("FAIL nothing at depth bypasses Block, so a block deck takes zero damage")
+	# ...while the first dungeon stays answerable with a shield
+	if Balance.pierce_fraction(1) > 0.05:
+		fails += 1; print("FAIL the tutorial dungeon already pierces Block")
+
 	# ...but depth must still be dangerous: a maxed deck cannot walk the deepest floor
-	var deepest := 1
-	for did in Balance.DUNGEONS:
-		var dd := Balance.dungeon(did)
-		if dd != null:
-			deepest = maxi(deepest, dd.difficulty)
+	var deepest := _deepest()
 	if Balance.ratio_ceiling(deepest) < Balance.POWER_RATIO_CAP:
 		fails += 1
 		print("FAIL deepest dungeon (d%d) stops scaling at %.2f, below the power cap %.2f" % [
@@ -185,13 +203,30 @@ func _init() -> void:
 		print("BALANCE TEST: FAIL (%d)" % fails)
 	quit()
 
-## HP the player loses clearing one normal fight: how long the fight runs times
-## what lands each turn. The single number that says whether power feels good.
+## HP the player loses clearing one normal fight.
+##
+## Models BLOCK, which the first version of this helper did not — and that omission
+## is exactly why the difficulty curve was able to flatline unnoticed. A deck spends
+## roughly half its throughput on Block, Block scales linearly with deck power, and
+## enemy damage deliberately does not. Ignore Block and the numbers say the deepest
+## dungeon costs 58 HP a fight; include it and the truth was zero.
 func _hp_lost_per_fight(dungeon: int, ratio: float) -> float:
 	var hp := Balance.enemy_max_hp(dungeon, Balance.Tier.NORMAL, ratio)
-	var dmg := Balance.enemy_damage(dungeon, Balance.Tier.NORMAL, ratio, 0)
-	var out: float = Balance.BASELINE_CARD_POWER * float(Balance.MAX_ENERGY) * ratio
-	return (float(hp) / maxf(1.0, out)) * float(dmg)
+	var dmg := float(Balance.enemy_damage(dungeon, Balance.Tier.NORMAL, ratio, 0))
+	var throughput: float = Balance.BASELINE_CARD_POWER * float(Balance.MAX_ENERGY) * ratio
+	var turns: float = float(hp) / maxf(1.0, throughput * Balance.OFFENSE_SHARE)
+	# the share of a hit Block cannot touch, plus whatever Block fails to cover
+	var pierced: float = dmg * Balance.pierce_fraction(dungeon)
+	# Not all of a deck's Block is available when it is needed: you hold what you
+	# drew, not what you wanted. Calibrated against tools/sim_balance.gd, where a
+	# starter deck loses ~8% of 60 HP per fight in the Crypt — assuming perfect
+	# allocation the model said zero, which is how this helper first "proved" that
+	# a starter deck takes no damage.
+	const BLOCK_EFFICIENCY := 0.65
+	var block: float = throughput * (1.0 - Balance.OFFENSE_SHARE) \
+		/ CardData.BLOCK_VALUE * BLOCK_EFFICIENCY
+	var per_turn: float = pierced + maxf(0.0, (dmg - pierced) - block)
+	return turns * per_turn
 
 ## Gold from a typical clear: eight normals, an elite, a boss.
 func _run_gold(dungeon: int) -> int:
@@ -199,6 +234,15 @@ func _run_gold(dungeon: int) -> int:
 	g += Balance.gold_reward(dungeon, Balance.Tier.ELITE, 3)
 	g += Balance.gold_reward(dungeon, Balance.Tier.BOSS, 3)
 	return g
+
+## Difficulty of the deepest dungeon that exists.
+func _deepest() -> int:
+	var d := 1
+	for did in Balance.DUNGEONS:
+		var dd := Balance.dungeon(did)
+		if dd != null:
+			d = maxi(d, dd.difficulty)
+	return d
 
 func _deck(loadout: Dictionary, level: int = 1) -> Array[CardData]:
 	var deck: Array[CardData] = []

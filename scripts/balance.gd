@@ -125,8 +125,21 @@ const POWER_RATIO_CAP := 4.5  # room for maxed decks; sub-linear card growth kee
 ## of your ability stays a fight. Above it, enemy stats stop moving while your
 ## damage keeps climbing — so you outgrow the Crypt, exactly as you should, and
 ## difficulty comes from choosing to go deeper.
+## The top of the curve must sit ABOVE the strongest deck the game can produce,
+## or the deepest content gets outgrown too. Measured: a maxed deck with six
+## relics reaches ratio 5.92, while these once topped out at 4.55 — so by
+## mid-game the player was above the ceiling of every dungeon and the whole
+## back half of the game was a walkover at 100% completion and single-digit HP
+## loss. The ratchet is meant to let you outgrow the CRYPT, not the Maw.
 const RATIO_CEILING_BASE := 1.4
-const RATIO_CEILING_PER_DEPTH := 0.45
+## Set so the deepest dungeon's ceiling clears the maximum achievable ratio with
+## room to spare; see MAX_ACHIEVABLE_RATIO and the test that pins the relationship.
+const RATIO_CEILING_PER_DEPTH := 0.73
+
+## The strongest ratio a fully-built player can reach: maxed card levels plus a
+## full relic set. Measured with tools/sim_balance.gd, not guessed. The deepest
+## dungeon must scale past this or the endgame stops resisting.
+const MAX_ACHIEVABLE_RATIO := 6.0
 
 ## The power level `difficulty` will scale its enemies to match.
 static func ratio_ceiling(difficulty: int) -> float:
@@ -585,6 +598,28 @@ static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn:
 ## and AoE decks from 92% to 32%. It is meant to punish over-blocking, not to
 ## delete defensive play.
 const SUNDER_DAMAGE_FRAC := 0.55
+
+## Share of an enemy attack that ignores Block, rising with dungeon depth.
+##
+## Without this the difficulty curve flatlines, and no tuning constant fixes it.
+## Block scales LINEARLY with deck power, while enemy damage scales as
+## 1 + DMG_POWER_K x (ratio - 1) — sublinear for any K below 1, which is the whole
+## point of the ratchet. So once a deck's throughput passes the enemy's, block
+## absorbs everything: measured 0 net damage per turn at ratio 5, at every K from
+## 0.15 to 0.75. Raising K to 1.0 only flips it back to punishing progression.
+## The system is a knife edge between "block wins entirely" and "power is punished".
+##
+## Pressure that Block cannot answer is what breaks the tie, and the game already
+## had it in SUNDER and poison — just on too few archetypes to matter. Depth now
+## carries it directly: the shallow floors are answerable with a shield, the deep
+## ones are not, which is also what makes them read as deeper.
+const PIERCE_AT_DEPTH_1 := 0.0
+const PIERCE_PER_DEPTH := 0.032
+
+## Fraction of a hit that goes straight to HP at this difficulty.
+static func pierce_fraction(dungeon: int) -> float:
+	return clampf(PIERCE_AT_DEPTH_1 + PIERCE_PER_DEPTH * float(maxi(1, dungeon) - 1),
+		0.0, 0.5)
 
 const ESCALATION_PER_TURN := 0.06
 const ESCALATION_MAX := 1.6

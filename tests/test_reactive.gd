@@ -110,15 +110,41 @@ func _init() -> void:
 	e1._resolve_enemy(0)
 	if e1.player.hp >= before_hp:
 		fails += 1; print("FAIL SUNDER was stopped by Block")
+	# At depth 1 nothing pierces, so Block is a complete answer there...
 	var e2 = Engine_.new()
-	e2.setup(_deck(), 80, 80, 3, Balance.Tier.BOSS, "warden")
+	e2.setup(_deck(), 80, 80, 1, Balance.Tier.BOSS, "warden")
 	e2.start_turn()
 	e2.intents[0] = {"action": EnemyData.Action.ATTACK, "value": 10}
 	e2.player.gain_block(100)
 	var before2: int = e2.player.hp
 	e2._resolve_enemy(0)
 	if e2.player.hp != before2:
-		fails += 1; print("FAIL a normal attack punched through 100 Block")
+		fails += 1; print("FAIL a normal attack punched through Block in the first dungeon")
+
+	# ...but deeper down a share of every hit goes straight to HP (D45), and that
+	# share must still be far smaller than a SUNDER, or SUNDER stops being special.
+	var e2b = Engine_.new()
+	e2b.setup(_deck(), 80, 80, 8, Balance.Tier.BOSS, "warden")
+	e2b.start_turn()
+	e2b.intents[0] = {"action": EnemyData.Action.ATTACK, "value": 40}
+	e2b.player.gain_block(500)
+	var before2b: int = e2b.player.hp
+	e2b._resolve_enemy(0)
+	var normal_through: int = before2b - e2b.player.hp
+	if normal_through <= 0:
+		fails += 1; print("FAIL nothing pierces Block at the deepest depth")
+	var e2c = Engine_.new()
+	e2c.setup(_deck(), 80, 80, 8, Balance.Tier.BOSS, "warden")
+	e2c.start_turn()
+	e2c.intents[0] = {"action": EnemyData.Action.SUNDER, "value": 40}
+	e2c.player.gain_block(500)
+	var before2c: int = e2c.player.hp
+	e2c._resolve_enemy(0)
+	var sunder_through: int = before2c - e2c.player.hp
+	if sunder_through <= normal_through * 2:
+		fails += 1
+		print("FAIL SUNDER (%d through Block) is barely worse than a normal hit (%d)" % [
+			sunder_through, normal_through])
 
 	# --- SUNDER must TRADE damage for bypassing Block ---
 	# At full damage it is strictly better than attacking, so an enemy would simply

@@ -1551,3 +1551,76 @@ The half that needs no templates lives in `tests/test_content.gd` and runs in th
 normal suite: presets exist for all five platforms, `import_etc2_astc` is on,
 landscape orientation is set, touch emulation is on, and `card_button` has a touch
 path. Both halves run in CI, with the ~1 GB templates cached on the engine version.
+
+### D45 — The curve flatlined, and Block was why
+
+Measuring the whole progression, not one cell of it, showed the game had exactly
+**one** difficult moment and then nothing:
+
+| deck | ratio | result |
+|------|-------|--------|
+| Starter | 1.00 | Crypt 99% |
+| Early | 1.26 | **Foundry d3 39%** |
+| Mid | 2.84 | everything 100%, -3 to -13% HP |
+| Relic (Lv15 + 4) | 4.32 | everything 100%, **-0 to -6% HP** |
+| Late (Lv40 + 6) | 5.09 | 100%, **-0 to -3% HP** |
+| Endgame (Lv100) | 5.92 | 100%, -1 to -2% HP |
+
+Roughly 80% of the content had no resistance left in it. Two causes, and the
+second was not a tuning value at all.
+
+**The ceiling was below achievable power.** `ratio_ceiling(8)` was 4.55 while real
+decks reach 5.92 — and mid-game decks already hit 4.32, above the ceiling of every
+dungeon up to d7. The D36 ratchet was meant to let a player outgrow the *Crypt*;
+it let them outgrow the *Maw*. `RATIO_CEILING_PER_DEPTH` 0.45 -> 0.73 puts the
+deepest ceiling at 6.51, above `MAX_ACHIEVABLE_RATIO`.
+
+**Block scales linearly and enemy damage cannot.** This is structural. A deck
+spends about half its throughput on Block, and that grows linearly with deck
+power; enemy damage grows as `1 + DMG_POWER_K x (ratio - 1)`, sublinear for any K
+below 1 — which is the entire point of the ratchet. So past a threshold, Block
+absorbs everything. Measured net damage per turn at ratio 5, at four different
+values of K:
+
+| DMG_K | enemy dmg/turn | player block/turn | net taken |
+|-------|----------------|-------------------|-----------|
+| 0.15 | 20.0 | 54.3 | **0.0** |
+| 0.35 | 30.1 | 54.3 | **0.0** |
+| 0.55 | 40.3 | 54.3 | **0.0** |
+| 0.75 | 50.4 | 54.3 | **0.0** |
+
+No value of K fixes it. Raising it to 1.0 only flips back to punishing
+progression. The system is a knife edge between "Block wins outright" and "power
+is punished", and a single constant cannot sit between them.
+
+**Pressure Block cannot answer is what breaks the tie.** The game already had it
+in SUNDER and poison, just on too few archetypes to matter. `pierce_fraction()`
+now makes depth carry it: 0% of a hit at d1, rising 3.2% per difficulty to ~22% at
+the Maw. Shallow floors stay answerable with a shield; deep ones are not, which is
+also what makes them read as deeper. The intent line says so — "hit 14 (4 pierces
+Block)" — because piercing damage the player was not warned about is a cheat.
+
+After, every stage has something that resists it:
+
+| build | result |
+|-------|--------|
+| Status Lv15 | Foundry 69%, Ember Road 64% |
+| Barricade Lv15 | Foundry 53%, Sunken Vault 60% |
+| AoE Lv15 | Rot Gardens 85%, Drowned Market 73% |
+| Thorns Lv15 | Abyssal Stair 78%, Maw 71% |
+| Late Lv40 + 6 relics | Maw 100% but -12 to -21% HP a fight |
+| Endgame Lv100 | Maw 100%, -9 to -17% HP |
+
+Pierce was first set at 4.5% per depth, which put Barricade at 44% — a block deck
+eats it twice, once for being blocked-through and again because its slow fights
+multiply the per-turn cost. 3.2% keeps it the hardest build to pilot without
+deleting it.
+
+**The test was measuring the wrong thing.** `test_balance.gd`'s attrition helper
+ignored Block entirely — half of what a deck does. It reported the deepest dungeon
+costing 58 HP a fight when the truth was zero, which is precisely how this went
+unnoticed through D36 and D41. It now models Block, including a calibrated
+efficiency factor (you hold what you drew, not what you wanted), and guards the
+flatline directly: the deepest ceiling must clear `MAX_ACHIEVABLE_RATIO`, a maxed
+deck must still lose HP at depth, and Block must never be a complete answer there.
+Verified by reverting each cause in turn — both are caught.
