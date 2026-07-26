@@ -47,6 +47,12 @@ var player_block_last_turn: int = 0
 ## Rule indices already spent, per enemy. A once-only rule (an enrage) must not
 ## re-trigger every turn after its condition stays true.
 var rules_fired: Array = []
+
+## Relic triggers already spent this fight, keyed "relicIndex:effectIndex".
+## ON_HP_BELOW_PCT must fire once as you cross the line, not every turn after it.
+var relic_fired: Dictionary = {}
+## Last thing a relic trigger did, so the UI can report it on the next refresh.
+var last_relic_text: String = ""
 var extra_draw: int = 0
 
 var dungeon: int = 1
@@ -247,6 +253,9 @@ func living_enemies() -> int:
 
 func start_turn() -> void:
 	turn += 1
+	# Block expires inside player.begin_turn() below, so capture it first: a relic
+	# that pays out on wasted Block needs to know how much was wasted.
+	var expiring: int = 0 if player.retain_block else player.block
 	energy = Balance.MAX_ENERGY + bonus_energy
 	power_used = false
 	cards_played_this_turn = 0
@@ -257,6 +266,9 @@ func start_turn() -> void:
 			player.gain_block(player.outgoing_block(r.start_block))
 	draw_cards(Balance.HAND_SIZE + extra_draw)
 	retarget()
+	var relic_msg := _fire_relics(RelicData.Trigger.ON_TURN_START)
+	var expired_msg := _fire_relics(RelicData.Trigger.ON_BLOCK_EXPIRED, expiring)
+	last_relic_text = " ".join([relic_msg, expired_msg]).strip_edges()
 
 func draw_cards(n: int) -> void:
 	for i in n:
@@ -275,6 +287,75 @@ func can_play(card: CardData) -> bool:
 	if card.hp_cost > 0 and player.hp <= card.hp_cost:
 		return false
 	return true
+
+## Fire every relic effect matching `when`. Returns a log line, or "".
+##
+## Relics used to be flat stats applied at setup; a trigger has to be checked at
+## the moment it describes, so each call site names its own moment rather than one
+## catch-all "update relics" pass that would quietly fire the wrong things.
+func _fire_relics(when: int, amount: int = 0) -> String:
+	var parts: Array[String] = []
+	for ri in relics.size():
+		var r = relics[ri]
+		if not (r is RelicData):
+			continue
+		for ei in r.trigger_count():
+			if r.trigger[ei] != when:
+				continue
+			var threshold: int = r.threshold_at(ei)
+			var key := "%d:%d" % [ri, ei]
+			match when:
+				RelicData.Trigger.ON_TURN_START:
+					if threshold <= 0 or turn % threshold != 0:
+						continue
+				RelicData.Trigger.ON_CARDS_PLAYED:
+					if amount != threshold:
+						continue   # the Nth card exactly, not every card after it
+				RelicData.Trigger.ON_HP_BELOW_PCT:
+					if relic_fired.has(key):
+						continue
+					if float(player.hp) * 100.0 / maxf(1.0, float(player.max_hp)) >= float(threshold):
+						continue
+					relic_fired[key] = true
+				RelicData.Trigger.ON_BLOCK_EXPIRED:
+					if amount <= 0:
+						continue
+			var msg := _apply_relic_effect(r, ei, amount)
+			if msg != "":
+				parts.append("%s: %s" % [r.name, msg])
+	return " ".join(parts)
+
+func _apply_relic_effect(r: RelicData, ei: int, amount: int) -> String:
+	var v: int = r.effect_value[ei]
+	match r.effect[ei]:
+		RelicData.Effect.DAMAGE_ALL:
+			var hit := 0
+			for e in enemies:
+				if not e.is_dead():
+					e.take_damage(player.outgoing_damage(v))
+					hit += 1
+			if hit == 0:
+				return ""
+			retarget()
+			return "%d to all." % v
+		RelicData.Effect.DRAW:
+			draw_cards(v)
+			return "draw %d." % v
+		RelicData.Effect.GAIN_BLOCK:
+			# ON_BLOCK_EXPIRED converts what evaporated, so it scales with the loss
+			var gain: int = v if amount <= 0 else v
+			player.gain_block(player.outgoing_block(gain))
+			return "block +%d." % gain
+		RelicData.Effect.GAIN_STRENGTH:
+			player.strength += v
+			return "Strength +%d." % v
+		RelicData.Effect.HEAL:
+			player.hp = mini(player.max_hp, player.hp + v)
+			return "heal %d." % v
+		RelicData.Effect.GAIN_ENERGY:
+			energy += v
+			return "energy +%d." % v
+	return ""
 
 ## Can the equipped power be fired right now?
 ##
@@ -305,6 +386,9 @@ func play_card(card: CardData) -> String:
 	cards_played_this_turn += 1
 	var msg := _resolve(card)
 	hand.erase(card)
+	var fired := _fire_relics(RelicData.Trigger.ON_CARDS_PLAYED, cards_played_this_turn)
+	if fired != "":
+		msg += " " + fired
 	# exhausted cards leave the combat entirely instead of returning to the discard
 	if not card.exhaust:
 		discard_pile.append(card)
@@ -355,6 +439,9 @@ func _resolve(card: CardData) -> String:
 		for e in enemies:
 			if e.is_dead():
 				msg += "%s dies! " % e.name
+				var onkill := _fire_relics(RelicData.Trigger.ON_KILL)
+				if onkill != "":
+					msg += onkill + " "
 		retarget()
 
 	if card.double_block:
@@ -479,6 +566,9 @@ func _resolve_enemy(i: int) -> String:
 			var landed := player.predicted_damage(dealt)
 			player.take_damage(dealt)
 			var out := "%s hits for %d." % [e.name, landed]
+			var hurt := _fire_relics(RelicData.Trigger.ON_HP_BELOW_PCT)
+			if hurt != "":
+				out += " " + hurt
 			if player.thorns > 0:
 				e.take_damage(player.thorns)
 				out += " Thorns bite back for %d." % player.thorns
@@ -570,6 +660,7 @@ func save_state() -> Dictionary:
 		"cards_played_last_turn": cards_played_last_turn,
 		"player_block_last_turn": player_block_last_turn,
 		"rules_fired": rules_fired,
+		"relic_fired": relic_fired,
 		"draw": _cards_to_state(draw_pile),
 		"hand": _cards_to_state(hand),
 		"discard": _cards_to_state(discard_pile),
@@ -592,6 +683,7 @@ func load_state(d: Dictionary, catalog: Dictionary, p_relics: Array = []) -> voi
 	power_used = bool(d.get("power_used", false))
 	cards_played_last_turn = int(d.get("cards_played_last_turn", 0))
 	player_block_last_turn = int(d.get("player_block_last_turn", 0))
+	relic_fired = d.get("relic_fired", {}).duplicate()
 	rules_fired = []
 	for entry in d.get("rules_fired", []):
 		var spent: Array = []

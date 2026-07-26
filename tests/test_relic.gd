@@ -124,6 +124,107 @@ func _init() -> void:
 	if plain.energy != Balance.MAX_ENERGY or plain.hand.size() != Balance.HAND_SIZE:
 		fails += 1; print("FAIL baseline changed without relics")
 
+	# --- triggered relics (D40) ---
+	#
+	# Relics were nine flat stat fields, every one of them "+15 max HP": they
+	# changed your numbers, never how you played. Triggers fix that, but a trigger
+	# is throughput OUTSIDE the deck, so the same trap applies as with powers —
+	# unpriced, it is free strength and the difficulty ratchet stops working.
+	var triggered := 0
+	var relic_dir := "res://resources/relics/"
+	var dd := DirAccess.open(relic_dir)
+	dd.list_dir_begin()
+	var rf := dd.get_next()
+	var starter := _starter_deck()
+	var bare: float = Balance.power_ratio(starter)
+	while rf != "":
+		if rf.ends_with(".tres"):
+			var r := load(relic_dir + rf) as RelicData
+			if r != null and r.trigger_count() > 0:
+				triggered += 1
+				# parallel arrays must all cover every effect, or threshold_at()
+				# quietly substitutes a default and the authored value is lost
+				for nm in ["trigger", "trigger_threshold", "effect", "effect_value"]:
+					var arr: PackedInt32Array = r.get(nm)
+					if arr.size() != r.trigger_count():
+						fails += 1
+						print("FAIL %s.%s has %d entries for %d effects" % [
+							r.id, nm, arr.size(), r.trigger_count()])
+				for i in r.trigger_count():
+					if r.trigger[i] < 0 or r.trigger[i] > RelicData.Trigger.ON_BLOCK_EXPIRED:
+						fails += 1; print("FAIL %s effect %d has unknown trigger" % [r.id, i])
+					if r.effect[i] < 0 or r.effect[i] > RelicData.Effect.GAIN_ENERGY:
+						fails += 1; print("FAIL %s effect %d has unknown effect" % [r.id, i])
+					if r.trigger[i] == RelicData.Trigger.ON_TURN_START and r.threshold_at(i) <= 0:
+						fails += 1; print("FAIL %s ticks every 0 turns" % r.id)
+				if r.triggered_power() <= 0.0:
+					fails += 1
+					print("FAIL %s has triggers but prices at 0 — free strength" % r.id)
+				if Balance.power_ratio(starter, [r]) <= bare:
+					fails += 1
+					print("FAIL %s does not raise the scaling ratio" % r.id)
+				# ...and no single relic may dwarf the deck it supplements
+				if Balance.power_ratio(starter, [r]) > bare * 1.6:
+					fails += 1
+					print("FAIL %s dominates: ratio %.2f vs %.2f" % [
+						r.id, Balance.power_ratio(starter, [r]), bare])
+		rf = dd.get_next()
+	dd.list_dir_end()
+	if triggered < 5:
+		fails += 1; print("FAIL only %d relics do anything conditional" % triggered)
+
+	# --- they actually fire, at the moment they claim ---
+	var Engine_ = load("res://scripts/combat_engine.gd")
+
+	# ON_KILL: Bone Charm draws when something dies
+	var e1 = Engine_.new()
+	e1.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "", [load(relic_dir + "bone_charm.tres")])
+	e1.start_turn()
+	var hand_before: int = e1.hand.size()
+	for foe in e1.enemies:
+		foe.hp = 1
+	e1.intents[0] = {"action": EnemyData.Action.ATTACK, "value": 1}
+	var killer := (load(CARD_DIR + "strike.tres") as CardData).duplicate()
+	killer.damage = 999
+	e1.hand.append(killer)
+	e1.play_card(killer)
+	if e1.hand.size() != hand_before:   # -1 for the card played, +1 from the relic
+		fails += 1; print("FAIL Bone Charm did not draw on a kill (hand %d -> %d)" % [
+			hand_before, e1.hand.size()])
+
+	# ON_TURN_START: Eternal Furnace hits everything every 3rd turn, and only then
+	var e2 = Engine_.new()
+	e2.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "",
+		[load(relic_dir + "eternal_furnace.tres")])
+	e2.start_turn()                       # turn 1: must NOT fire
+	if e2.last_relic_text.find("to all") != -1:
+		fails += 1; print("FAIL Eternal Furnace fired on turn 1")
+	e2.turn = 2
+	e2.start_turn()                       # turn 3
+	if e2.last_relic_text.find("to all") == -1:
+		fails += 1; print("FAIL Eternal Furnace did not fire on turn 3: '%s'" % e2.last_relic_text)
+
+	# ON_HP_BELOW_PCT: Reliquary Heart fires once, not every turn thereafter
+	var e3 = Engine_.new()
+	e3.setup(_starter_deck(), 100, 100, 1, Balance.Tier.NORMAL, "",
+		[load(relic_dir + "reliquary_heart.tres")])
+	e3.start_turn()
+	e3.player.hp = 10                     # well under 50%
+	e3.intents[0] = {"action": EnemyData.Action.ATTACK, "value": 1}
+	e3._resolve_enemy(0)
+	var after_first: int = e3.player.strength
+	if after_first <= 0:
+		fails += 1; print("FAIL Reliquary Heart did not fire below half HP")
+	e3._resolve_enemy(0)
+	if e3.player.strength != after_first:
+		fails += 1; print("FAIL a once-per-fight relic fired twice")
+	# and the spent state survives a save
+	var st = e3.save_state()
+	var e4 = Engine_.new()
+	e4.load_state(st, Meta_.CATALOG, [load(relic_dir + "reliquary_heart.tres")])
+	if str(e4.relic_fired) != str(e3.relic_fired):
+		fails += 1; print("FAIL spent relic triggers not persisted")
+
 	if fails == 0:
 		print("RELIC TEST: PASS (ownership, persistence, scaling, effects, death-safety)")
 	else:
@@ -157,3 +258,11 @@ func _cleanup_sandbox() -> void:
 	for x in doomed:
 		# absolute removal: the relative form silently no-ops here
 		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + x))
+
+
+func _starter_deck() -> Array[CardData]:
+	var deck: Array[CardData] = []
+	for i in 5:
+		deck.append((load(CARD_DIR + "strike.tres") as CardData).duplicate())
+		deck.append((load(CARD_DIR + "defend.tres") as CardData).duplicate())
+	return deck

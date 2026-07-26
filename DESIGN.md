@@ -1300,3 +1300,53 @@ the first attempt at this test.
 
 The image is generated, not CC0 — `assets/art/README.md` records that it is not
 covered by the Kenney licences alongside the pixel and audio assets.
+
+### D40 — Relics that change how you play
+
+All 30 relics were flat stat fields: `+15 max HP`, `start_block = 8`,
+`gold_percent = 40`. They changed your numbers and never your decisions.
+
+`RelicData` gains the same rule shape `EnemyData` uses — parallel
+`PackedInt32Array`s of trigger, threshold, effect and value — deliberately reusing
+one proven pattern rather than inventing a second. Five triggers (`ON_KILL`,
+`ON_TURN_START`, `ON_CARDS_PLAYED`, `ON_HP_BELOW_PCT`, `ON_BLOCK_EXPIRED`) and six
+effects. Ten relics were rebuilt around them:
+
+* *Bone Charm* — an enemy dies, draw 1. Chase kills.
+* *Crown of Thorns* — an enemy dies, 4 to all. Snowballs through a group.
+* *Duelist's Glove* — every 3rd card in a turn, 5 to all. Rewards emptying a hand.
+* *Weighted Soles* — Block you did not spend comes back next turn.
+* *Reliquary Heart* / *Surgeon's Thread* — pay out once, when you are nearly dead.
+
+**Priced, and verified twice.** A trigger is throughput from outside the deck —
+the hole `RELIC_POWER_PER_RATIO` exists to close, and the one that made powers read
+as +0.9 ratio on the first attempt. `triggered_power()` values each effect by how
+often it realistically fires in a fight of `TARGET_NORMAL_TURNS`, and feeds
+`flat_power()`. Triggered relics land at 0.03-0.39 ratio, the same band as the flat
+ones (0.19-0.29).
+
+Pricing being *correct* is a separate question from it existing, so it was
+measured: the relic-bearing sim profiles were run with triggers live and with
+`_fire_relics` stubbed out. Run completion and HP loss were identical within noise.
+The relics change what you do without changing how hard the game is, which is
+exactly the intent.
+
+**A mistake worth recording.** The first pass converted `ancient_battery` and
+`scholars_lens`, which the suite uses as *the* energy relic and *the* draw relic in
+four unrelated assertions. Repurposing a fixture broke tests that had nothing to do
+with triggers. Both were restored and the two triggers moved onto `lucky_penny` and
+`field_kit`, whose flat effects (20% gold, heal 3) nothing depended on.
+
+### Known gap: the endgame plateaus above the deepest ceiling
+
+Measured while verifying D40, not caused by it. `ratio_ceiling(8)` is 4.55, but
+real late decks reach ratio 5.09 and maxed ones 5.92. Above the ceiling nothing
+scales, so the last dungeons finish at 100% completion losing 1-6% HP.
+
+This is the flip side of the D36 ratchet and the test for it did not catch the
+case: it checks that the deepest dungeon still scales up to `POWER_RATIO_CAP`
+(4.5), and 4.55 clears that — but decks do not stop at the cap. Ascension is the
+designed answer and multiplies enemy stats outside the ceiling, but it is off by
+default, so a first playthrough ends on a walkover. Not fixed here; fixing it means
+deciding whether the deepest dungeons should keep scaling indefinitely or whether
+finishing should push the player into ascension.
