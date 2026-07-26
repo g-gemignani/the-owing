@@ -267,9 +267,22 @@ func _map_and_traversal() -> void:
 	for e in MAP_KIT:
 		_add(String(e[0]), String(e[1]), String(e[2]))
 
+## How many dungeons are still on the 16x16 fallback tile. COUNTED, not written down:
+## this line read "nine of twelve" while nine of them were being installed, which is
+## the restated-number habit this project keeps paying for (D34).
+func _backdrop_gap() -> String:
+	var missing := 0
+	for did in Balance.DUNGEONS:
+		if not FileAccess.file_exists(ART + "bg_" + did + ".png"):
+			missing += 1
+	if missing == 0:
+		return "Every dungeon has one now."
+	return "%d of %d dungeons still fall back to a 16x16 tinted tile." % [
+		missing, Balance.DUNGEONS.size()]
+
 func _backdrops() -> void:
 	_section("Tier 5 — dungeon battle backdrops",
-		"The single most VISIBLE gap: nine of twelve dungeons fall back to a 16x16 tinted tile. Match `bg_crypt.png`: symmetrical one-point perspective, 20-35% luminance, light source kept OUT of the top and bottom 34% where the combat text sits. NO text painted into the image — `bg_warrens.png` has a 'THE WARRENS' sign in it, which a rename or a translation turns into a lie.")
+		"%s Match `bg_crypt.png`: symmetrical one-point perspective, 20-35%% luminance, light source kept OUT of the top and bottom 34%% where the combat text sits. NO text painted into the image — `bg_warrens.png` has a 'THE WARRENS' sign in it, which a rename or a translation turns into a lie." % _backdrop_gap())
 	for did in Balance.DUNGEONS:
 		var dd := Balance.dungeon(did)
 		if dd == null:

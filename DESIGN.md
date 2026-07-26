@@ -940,7 +940,7 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
-- **The simulator was measuring a weaker player than the game gives you (D71).** Reported from play as "the first dungeons feel easy and the sim disagrees" — and the sim was wrong four ways: max HP grew with the dungeon's difficulty instead of with dungeons cleared (60 HP where the player has 120), the equipped Power was never passed, the named boss was never passed so every finale was a roster enemy in a boss costume, and the deck never grew during a run. The opening now measures the way it plays, and `test_balance.gd` fails if the tool drops any of it again.
+- **The simulator was measuring a weaker player than the game gives you (D72).** Reported from play as "the first dungeons feel easy and the sim disagrees" — and the sim was wrong four ways: max HP grew with the dungeon's difficulty instead of with dungeons cleared (60 HP where the player has 120), the equipped Power was never passed, the named boss was never passed so every finale was a roster enemy in a boss costume, and the deck never grew during a run. The opening now measures the way it plays, and `test_balance.gd` fails if the tool drops any of it again.
 
 - **Elites drop relics, the mid-game plateau closed, and the last two art paths wired (D68, D69, D70).** An elite was a stat check; it now drops a relic, held in escrow so dying on purpose cannot bank it. The five-dungeon plateau in the middle turned out to be an incentive problem rather than a difficulty one — re-clearing a beaten dungeon was the safest income in the game — so repeat clears pay a fifth of what a first clear does, down to a floor. And the card-illustration and frame-kit files finally have code that looks for them, after finding that the art manifest had been generating filenames from its own private copy of the card taxonomy.
 
@@ -2714,7 +2714,7 @@ Treasure, BOSS only). The Warrens has no Elite and no Treasure. Those are conten
 gaps in `resources/dungeons/*.tres`, not pricing, and repricing the shop cannot
 reach a dungeon that never offers one.
 
-### D71 — The simulator was measuring a weaker player than the game gives you
+### D72 — The simulator was measuring a weaker player than the game gives you
 
 Reported from play: the first dungeons feel easy, and the simulator disagrees. It
 did, and the simulator was wrong. Its model of the player had drifted from the
@@ -2769,3 +2769,167 @@ the HP formula or stops modelling the Power, the named boss, the cards won durin
 run, or the gate a dungeon sits behind. A tool cannot be unit-tested into honesty,
 but it can be stopped from quietly dropping the player's equipment again — verified
 by putting the old HP formula back.
+
+### D73 — Twelve painted rooms, and the filename is the wiring
+
+All nine missing dungeon backdrops arrived as generated images, so every dungeon now
+fights in a painted room instead of on a 16×16 tinted tile. What is worth writing
+down is not the art but the three things that could have made installing it silently
+useless.
+
+**The filename IS the wiring.** `PixelArt.battle_art()` resolves
+`assets/art/bg_<dungeon_id>.png` by convention — no `@export`, no catalogue line. A
+backdrop dropped in as `bg_rot_gardgens.png` (the source file carried exactly that
+typo) loads nothing and the dungeon keeps its fallback tile, which looks identical
+to "the art was never made". `tools/install_backdrops.gd` therefore checks every
+target against `Balance.DUNGEONS` before writing a byte, and reports what is *still*
+missing afterwards so a partial delivery cannot read as a complete one. It caught
+two mismatches on the way in: `rot gardgens` → `rot_gardens`, and `maw` → `the_maw`.
+
+**Contrast was measured before installing, not after.** `menu_art_test.gd` gates
+these at 3.0:1 worst-pixel for white text over the top band, after the D39 dim and
+scrim. Reimplementing that arithmetic outside the engine and running it on the
+source files took a minute and meant nothing was committed on the hope it would
+pass. All twelve now measure 6.1–9.5:1 — the new nine at 6.4–9.5, the three older
+ones unchanged at 6.1–6.7.
+
+**Resized to the shipped 1280×720.** They arrived at 1376×768, a 0.8% wider aspect.
+`STRETCH_KEEP_ASPECT_COVERED` would have absorbed it invisibly, so this is about
+weight, not correctness: nine files at 2.2–2.6 MB would have added ~19 MB to a 12 MB
+repository. At 1280×720 they are 1.6–2.0 MB, matching the three that were already
+there and the size ART.md specifies. If high-DPI ever matters, that is a decision
+for all twelve at once, not a side effect of an install.
+
+The art itself holds the brief: one-point symmetrical composition, ink weight
+matching `bg_crypt.png` rather than the heavier `bg_warrens.png`, the zone accent
+carrying the light (Foundry orange, Rot acid-green, Deeps blue, Beyond magenta), and
+**no readable text painted in** — the Foundry's door plaque is deliberately blank,
+and the runes on the ceilings are decorative script, not words. `bg_warrens.png`
+still has its "THE WARRENS" sign and is still the one that needs redrawing.
+
+**A restated number, one more time.** The generator's Tier 5 blurb said "nine of
+twelve dungeons fall back to a 16×16 tinted tile" as a hardcoded string, and was
+therefore wrong the moment the first file landed. It counts now
+(`_backdrop_gap()`). Fourth instance of the same habit in this log; the manifest
+exists precisely because hand-typed lists rot, and it had one typed into it anyway.
+
+Remaining backdrop work is the eleven that are not dungeons: five zone establishing
+shots and six scene rooms (shop, rest, event, treasure, victory, defeat).
+
+### D74 — A fourth way to walk a dungeon: an isometric floor, because the best of the other three was the problem
+
+Play report, and it is not a bug report: *"the Slay-the-Spire version is the best out
+of the three, but it makes the game too similar to Slay the Spire."* All three
+existing models are abstractions of a **route** — a layered graph you commit to
+blind (D6), a stack of encounters you draw and can pay to dodge (D13), a track you
+roll along and overshoot (D14). None of them is a *place*. The one that feels best
+is the one that reads most like the game it is standing next to.
+
+So: a fourth model, `TraversalIso`, deliberately built as a placeholder to answer
+one question — does crawling a floor feel like something this game should be? — and
+plugged into a dungeon that is open on a fresh save, so the answer can be had by
+playing rather than by reasoning.
+
+**What is different about it.** It is the only model where the ground is spatial and
+can be re-walked. A floor is a grid of rooms carved out of a 6×6 plate; you stand in
+one, and your options are the doors out of it. The torch shows the room you are in
+and the rooms adjoining it, and nothing further. **The stair down is not marked** —
+it is somewhere on the floor. So the run is a question of coverage rather than
+route: how much of the floor do you strip before you take the stairs you have just
+found?
+
+Two rules turn that from a chore into a decision:
+
+* **Every room holds something.** There are no empty corridors padding the floor, so
+  a route is a plan and not a walk to a marked exit.
+* **Light runs out.** `torch = rooms × 1.4` pays for a tidy tour of the whole floor.
+  It does not pay for crossing explored ground twice more to come back for the last
+  treasure. Past that, every step costs HP (`Balance.iso_dark_cost`, `2 + depth-1`).
+  This is the mirror of the deck model's priced dodge: there you pay to see *less* of
+  a dungeon, here you pay to see *more* of one.
+
+**Keeping the shared budget.** The contract (D14) is that every model costs a
+comparable attrition budget, or a difficulty rating stops meaning one thing. A
+spatial model can break that *geometrically*, in two ways, and both are now closed:
+
+* The floor carves exactly `budget + 2` rooms — one per budgeted encounter, plus the
+  entrance and the stair — and `tests/test_traversal.gd` fails if the grid cannot
+  hold them, because the surplus would otherwise be dropped silently during
+  generation and the dungeon would quietly become cheaper than itself.
+* The stair goes in the room **furthest from the entrance**, and `options()` sorts it
+  **last** while any room is still unexplored. That ordering is not decoration: it is
+  what makes a greedy driver — the simulator, and a player leaning on the first
+  button — spend a whole floor instead of beelining. Measured over 30 runs of all 12
+  dungeons: ISO averages **9.2 encounters** against a budget of 9.2, the same as
+  GRAPH (9.2), DECK (9.2) and DICE (9.1).
+
+**The deadlock the contract test caught.** Ordering the stair last created a
+loop that no amount of reading the code would have found: on a floor where the
+*short* way to the remaining rooms ran through the stair room, the "one step closer"
+ordering pointed at a room the ranking then refused to enter, and the walker paced
+between two rooms for ever. It failed in 3 runs of 360 — a rate that would have
+looked like a hang in play and like nothing at all in a diff. The fix is that the
+stair is neither a destination nor a **way through** while there is floor left, which
+is also simply true: nobody walks through the boss to reach a shop. That cannot cut
+the floor in two, and the reason is worth writing down: the stair sits at the
+furthest room from the entrance, and a furthest room can never be the only way to
+anywhere — whatever was behind it would be further still.
+
+**The entrance is two constraints, and each fix broke the other one.** The carve
+seeds from the middle of the grid and grows outward, so the seed room was usually a
+stub with a single exit: the run opened on one button, where every other model opens
+on a choice. Taking the room with the **most** doors instead fixed that and quietly
+broke something worse — the most-connected room is the hub in the middle of the
+plate, and from the middle the furthest room is *two steps away*, so the stair was
+placed two steps from the entrance and the entire floor could be skipped by walking
+into it. The entrance is now the room, **of those with at least two doors**, that the
+floor stretches furthest from. Measured over 3000 generated floors: the entrance
+always has 2-4 doors, and the stair sits 4 to 8 steps away (mode 5) on a ten-room
+floor carrying 14 torch — so a tidy tour is affordable and a completionist's last
+detour is not. Both halves are now asserted, because each was satisfied on its own
+while the other was broken.
+
+**Looking at it, twice (D56/D57, again).** The first capture of the screen was three
+diamonds floating in an empty window with one card-sized button holding three words
+of text — every test green, the encounter counts perfect, and it read as a broken
+screen. Two things were wrong and neither is visible in a diff: only *lit* rooms were
+drawn, so there was no ground for them to be cut out of, and the move buttons reused
+`reward_card_size()`. The floor now draws the rock plate as well, the tiles are
+116×58 rather than 96×48, and the buttons are a row of short labels.
+`tests/test_layout.gd` reads the tile size and the grid size **together** and fails if
+they stop fitting the window, because this floor is the one board in the game with no
+scrolling to fall back on and a drawn Control cannot report being crushed.
+
+**Where it is plugged in.** The Warrens (difficulty 2, open on a fresh save, five
+combats and no elite — "nothing here fights alone, and the tunnels double back").
+The three opening dungeons now teach three different models instead of two:
+Crypt/graph, Ossuary/deck, Warrens/floor.
+
+**Measured** (`tools/sim_balance.gd`, the Warrens against the two dungeons on either
+side of it):
+
+| profile | Crypt (d1, graph) | Ossuary (d2, deck) | Warrens (d2, **iso**) |
+|---|---|---|---|
+| Starter, 60 HP | 98% | 74% | **88%** |
+| Early, 70 HP | 100% | — | **97%** |
+| Mid, 90 HP | — | — | **100%** |
+| Status build, 90 HP | — | — | **99%** |
+
+with 5.2-5.4 fights per run, which is what the mix asks for. The completion rates
+move a point or two between runs; the shape is what matters — the floor sits where a
+difficulty-2 dungeon should, between the Crypt and the Ossuary, and it is not the
+dodge-priced outlier the deck model is.
+
+**A drift the new model exposed in the simulator.** The walker paid an option's
+`hp_cost` only when `select()` resolved nothing, because until now the only priced
+option in the game was the deck's dodge and a dodge resolves nothing by definition.
+A step taken after the torch is out costs HP *and* hands back the encounter in the
+room it led to, so the sim was measuring walking in the dark as free. Every priced
+option is now paid for, and the avoid metrics key on `action == "avoid"` rather than
+on "has a price", so a step across explored ground is no longer counted as a dodged
+fight.
+
+**Deliberately not done.** No tileset, no wall art, no character sprite, no
+animation, no multiple floors per dungeon, no line of sight past the adjoining rooms,
+and the dark costs a flat price per step. This is a concept test; art and depth are
+only worth spending once the feel is judged.

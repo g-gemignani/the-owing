@@ -16,12 +16,15 @@ before and after any art pass (§7). Nothing here was inferred from source code 
 
 ## 1. The diagnosis: four visual languages, fighting
 
+*Written against the 16-capture pass; the dungeon backdrops named as missing here
+have since all been installed (D73). Everything else in this section still stands.*
+
 The game is not short of art. It is short of art that **agrees**. Right now five
 screens' worth of assets speak four unrelated dialects:
 
 | language | assets | verdict |
 |---|---|---|
-| **Painted, inked illustration** | `main_menu.jpg`, `bg_crypt/ossuary/warrens.png` | **This is the game.** Keep. |
+| **Painted, inked illustration** | `main_menu.jpg` + all 12 dungeon backdrops | **This is the game.** Keep. |
 | **Kenney 16×16 pixel art** | 41 enemy sprites, 5 zone tiles, 1 card sheet | Off-style, and semantically arbitrary |
 | **Hand-authored 16×16 mono glyphs** | 13 in `PixelArt.GLYPHS` | Off-style, too small to read as art |
 | **A stretched illustration pretending to be a frame** | `ui_button.png`, `ui_panel.png` | Actively damaging — see below |
@@ -120,8 +123,8 @@ Taken from what already works, so it needs no leap of faith:
 
 ## 3. The asset list
 
-> **The file-by-file list lives in [ART_ASSETS.md](ART_ASSETS.md)** — 213 wanted, 3
-> present, **210 to provide** — with every filename, size and a brief taken from the
+> **The file-by-file list lives in [ART_ASSETS.md](ART_ASSETS.md)** — 209 wanted, 12
+> present, **197 to provide** — with every filename, size and a brief taken from the
 > content's own name and description. It is *generated*, by
 > `tools/art_manifest.gd`, from the catalogues in `resources/`, so it cannot fall out
 > of step with the game the way a hand-typed list of 35 enemy names would. It also
@@ -145,7 +148,7 @@ category:
 | 2 | enemies | 35 |
 | 3 | card illustrations | 12 |
 | 4 | map and traversal | 26 |
-| 5 | backdrops (9 dungeon + 5 zone + 6 scene) | 23 |
+| 5 | backdrops (5 zone + 6 scene; all 12 dungeons **done**) | 23 |
 | 6 | relics and powers | 40 |
 | 7 | identity and shell | 6 |
 
@@ -392,15 +395,15 @@ buttons.
 
 ---
 
-### Tier 5 — Backdrops  ·  20 to draw of 23 at 1280×720  ·  the most *visible* gap
+### Tier 5 — Backdrops  ·  11 to draw of 23 at 1280×720
 
-Three dungeon backdrops exist. **Nine of twelve dungeons fall back to a 16×16
-tinted tile** — which is what `Overworld.png`, `Map.png`, `Shop.png` and
-`Encounter.png` all show: near-black with a faint dot grid.
+**All twelve dungeon backdrops are installed** (D73). What still shows the 16×16
+tinted tile — near-black with a faint dot grid — is every screen that is not a
+fight: `Overworld.png`, `Map.png`, `Shop.png`, `Encounter.png`.
 
 | set | count | missing |
 |---|---|---|
-| Dungeon battle backdrops | 12 | 9 — `foundry` `ember_road` `slag_pits` `fungal_deep` `rot_gardens` `sunken_vault` `drowned_market` `abyssal_stair` `the_maw` |
+| Dungeon battle backdrops | 12 | **0 — done** |
 | Zone backdrops (overworld / zone view) | 5 | 5 — all are 16×16 tiles today |
 | Scene backdrops | 6 | 6 — shop interior, rest camp, event shrine, treasure vault, victory, defeat |
 

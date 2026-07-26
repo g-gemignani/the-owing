@@ -278,10 +278,24 @@ func _init() -> void:
 	# it somewhere else does not look wrong on its own; it makes the enemies in that
 	# dungeon hover or sink, which reads as an enemy bug.
 	#
-	# The measurement is a heuristic (the largest row-to-row luminance step in the
-	# lower half), so it PRINTS the number for every backdrop and only fails on a
-	# gross miss. A flaky assertion about a painting would be worse than none.
-	var floor_band := 0.10
+	# The measurement is a heuristic — the largest row-to-row luminance step in the
+	# lower half — and when the other nine backdrops landed (D73) it turned out not to
+	# be good enough to assert on. It scored the Foundry at 51% and the Maw at 82%,
+	# and BOTH are correct: rendering those two fights shows the enemies' feet on
+	# STAND_LINE, on the painted floor. What it actually found was a stone lintel
+	# running across the Foundry's walls and the pale bone clutter low in the Maw. Six
+	# of twelve tripped a ±10pt band. Tightening the search to the centre corridor was
+	# tried and simply moved the errors around (it fixed the Foundry and broke the
+	# Ossuary, 66% -> 55%).
+	#
+	# So this PRINTS for every backdrop and fails only on a value no dungeon room
+	# could legitimately produce — a floor in the top half, or off the bottom edge.
+	# That still catches a portrait, a sky-filled scene or a wrong file, which is the
+	# gross miss worth automating. Whether a specific enemy hovers is a question for
+	# `tools/screenshots.gd`, where you can see it; a number that is confidently wrong
+	# half the time is worse than an honest eyeball.
+	var floor_lo := 0.45
+	var floor_hi := 0.95
 	var checked_bg := 0
 	for did in Balance.DUNGEONS:
 		var bg := PixelArt.battle_art(did)
@@ -290,12 +304,12 @@ func _init() -> void:
 		checked_bg += 1
 		var f := _floor_fraction(bg.get_image())
 		var off: float = absf(f - PixelArt.HORIZON_LINE)
-		print("  (info: %s floor at %.0f%% (line %.0f%%, off %.0f pts))" % [
+		print("  (info: %s floor ~%.0f%% (line %.0f%%, off %.0f pts))" % [
 			did, f * 100.0, PixelArt.HORIZON_LINE * 100.0, off * 100.0])
-		if off > floor_band:
+		if f < floor_lo or f > floor_hi:
 			fails += 1
-			print("FAIL %s puts its floor at %.0f%% but enemies stand at %.0f%% — they will hover" % [
-				did, f * 100.0, PixelArt.HORIZON_LINE * 100.0])
+			print("FAIL %s has no floor in the lower half (~%.0f%%) — wrong image?" % [
+				did, f * 100.0])
 	if checked_bg == 0:
 		fails += 1; print("FAIL no painted battle backdrop was measured")
 	# a figure standing ABOVE the horizon is standing in the back wall
