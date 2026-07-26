@@ -3,6 +3,7 @@
 extends Control
 
 var list_box: VBoxContainer
+var filter_box: VBoxContainer
 var info_label: Label
 
 func _ready() -> void:
@@ -27,6 +28,10 @@ func _build_ui() -> void:
 	info_label = Label.new()
 	root.add_child(info_label)
 
+	# the bar lives in its own box so a filter change can rebuild just the controls
+	filter_box = VBoxContainer.new()
+	root.add_child(filter_box)
+
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(scroll)
@@ -48,16 +53,23 @@ func _build_ui() -> void:
 	root.add_child(back)
 
 func _refresh() -> void:
-	var total := 0
-	for id in MetaState.collection:
-		total += MetaState.collection[id]["count"]
-	info_label.text = "%d cards owned (min %d to run a dungeon), %d types    Gold %d" % [
-		total, Balance.MIN_KEEP, MetaState.collection.size(), MetaState.gold]
+	# MetaState already knows the total; recounting it here was a second copy of the
+	# same sum, and the kind of loop that gets mistaken for a listing loop later.
+	var total: int = MetaState.total_copies()
+
+	for c in filter_box.get_children():
+		c.queue_free()
+	UI.card_filter_bar(filter_box, _refresh)
+
+	var shown: Array = CardFilter.apply(MetaState.collection, MetaState.CATALOG)
+	info_label.text = "%d cards owned (min %d to run a dungeon)    Gold %d    %s" % [
+		total, Balance.MIN_KEEP, MetaState.gold,
+		CardFilter.summary(shown.size(), MetaState.collection.size())]
 
 	for c in list_box.get_children():
 		c.queue_free()
 
-	for id in MetaState.collection:
+	for id in shown:
 		var entry: Dictionary = MetaState.collection[id]
 		var card := (load(MetaState.CATALOG[id]) as CardData).duplicate()
 		card.level = entry["level"]

@@ -8,6 +8,7 @@ var selection: Dictionary = {}  # id -> count chosen
 var info_label: Label
 var decks_box: HBoxContainer
 var list_box: VBoxContainer
+var filter_box: VBoxContainer
 var power_box: HBoxContainer
 var name_edit: LineEdit
 var start_btn: Button
@@ -104,6 +105,9 @@ func _build_ui() -> void:
 	decks_box = HBoxContainer.new()
 	decks_box.add_theme_constant_override("separation", UITheme.sep(6))
 	decks_row.add_child(decks_box)
+
+	filter_box = VBoxContainer.new()
+	root.add_child(filter_box)
 
 	var scroll := ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -222,9 +226,13 @@ func _refresh() -> void:
 		decks_box.add_child(lb)
 
 	# per-card selectors
+	for c in filter_box.get_children():
+		c.queue_free()
+	UI.card_filter_bar(filter_box, _refresh)
+
 	for c in list_box.get_children():
 		c.queue_free()
-	for id in MetaState.collection:
+	for id in CardFilter.apply(MetaState.collection, MetaState.CATALOG):
 		var entry: Dictionary = MetaState.collection[id]
 		var card := (load(MetaState.CATALOG[id]) as CardData).duplicate()
 		card.level = entry["level"]

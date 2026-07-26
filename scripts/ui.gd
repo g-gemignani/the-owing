@@ -191,6 +191,82 @@ static func hoverable(control: Control, text: String) -> void:
 	if control.mouse_filter == Control.MOUSE_FILTER_IGNORE:
 		control.mouse_filter = Control.MOUSE_FILTER_STOP
 
+## Filter and sort controls for a list of owned cards.
+##
+## One builder used by both the collection and the deck builder, so the two cannot
+## end up offering different orderings of the same cards. Calls `on_change` after
+## mutating CardFilter.state; the screen just re-runs its own refresh.
+static func card_filter_bar(parent: Node, on_change: Callable) -> void:
+	var st: Dictionary = CardFilter.state
+
+	var bar := HBoxContainer.new()
+	bar.add_theme_constant_override("separation", UITheme.sep(6))
+	parent.add_child(bar)
+
+	var lbl := Label.new()
+	lbl.text = "Sort"
+	bar.add_child(lbl)
+
+	var sort := OptionButton.new()
+	for i in CardFilter.SORTS.size():
+		sort.add_item(String(CardFilter.SORTS[i]["label"]), i)
+		if CardFilter.SORTS[i]["id"] == st.get("sort", "name"):
+			sort.select(i)
+	sort.item_selected.connect(func(i: int):
+		CardFilter.state["sort"] = CardFilter.SORTS[i]["id"]
+		Audio.play("ui_select")
+		on_change.call())
+	bar.add_child(sort)
+
+	# direction is a toggle rather than two more menu entries: it applies to
+	# whichever key is chosen
+	var dir := Button.new()
+	UITheme.style_button(dir)
+	dir.text = "desc" if bool(st.get("desc", false)) else "asc"
+	dir.pressed.connect(func():
+		CardFilter.state["desc"] = not bool(CardFilter.state.get("desc", false))
+		Audio.play("ui_click")
+		on_change.call())
+	UI.hoverable(dir, "Reverse the order")
+	bar.add_child(dir)
+
+	var rl := Label.new()
+	rl.text = "   Rarity"
+	bar.add_child(rl)
+	var rarity := OptionButton.new()
+	rarity.add_item("All", 0)
+	for r in CardData.Rarity.keys().size():
+		rarity.add_item(String(CardData.Rarity.keys()[r]).capitalize(), r + 1)
+	rarity.select(int(st.get("rarity", -1)) + 1)
+	rarity.item_selected.connect(func(i: int):
+		CardFilter.state["rarity"] = i - 1
+		Audio.play("ui_select")
+		on_change.call())
+	bar.add_child(rarity)
+
+	var tl := Label.new()
+	tl.text = "   Type"
+	bar.add_child(tl)
+	var type := OptionButton.new()
+	type.add_item("All", 0)
+	for t in CardData.Type.keys().size():
+		type.add_item(String(CardData.Type.keys()[t]).capitalize(), t + 1)
+	type.select(int(st.get("type", -1)) + 1)
+	type.item_selected.connect(func(i: int):
+		CardFilter.state["type"] = i - 1
+		Audio.play("ui_select")
+		on_change.call())
+	bar.add_child(type)
+
+	var clear := Button.new()
+	UITheme.style_button(clear)
+	clear.text = "Clear"
+	clear.pressed.connect(func():
+		CardFilter.state = CardFilter.default_state()
+		Audio.play("ui_back")
+		on_change.call())
+	bar.add_child(clear)
+
 ## A modal list of the run deck, for anything that acts on one card.
 ##
 ## An overlay rather than a screen, so it works identically from a shop, a rest and

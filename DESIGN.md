@@ -1755,3 +1755,27 @@ scripts for any return of the stale field. Verified by restoring
 
 `CardTextTest` had encoded the old behaviour (it looked for the authored line), which
 is why updating a test is sometimes the correct half of a fix.
+
+### D51 — Filter and sort the collection
+
+Both the collection and the deck builder listed cards by raw iteration order of
+`MetaState.collection`, which is neither stable nor meaningful once you own a
+hundred of them.
+
+`CardFilter` is a **pure function over ids** — `apply(collection, catalog, state)`
+returns the ids that pass, in order — so it is tested headlessly without building a
+screen, and both screens call the same function. Two independent sort
+implementations would be the same class of bug as the D34 label table that made the
+first dungeon unplayable.
+
+Six sort keys (name, cost, rarity, level, owned count, power), an
+ascending/descending toggle, and rarity + type filters that AND together. `UI.card_filter_bar`
+is the one control strip both screens mount, and `CardFilter.state` is a session
+static so moving from the collection to the deck builder keeps what you asked for.
+
+Two things worth noting. **Power sorts by the level actually owned**, not the base
+card — a level-12 Strike outranks an unlevelled one, which the test pins by sorting
+the same collection with and without the level. And the filter test greps both
+screens for `CardFilter.apply` and for any surviving raw `for id in
+MetaState.collection` in a listing loop, which caught a leftover count loop in the
+collection (replaced with the existing `total_copies()`).
