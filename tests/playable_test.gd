@@ -41,6 +41,8 @@ func _ready() -> void:
 	await _a_combat_can_be_won()
 	await _a_rest_resolves()
 	await _every_encounter_can_be_left()
+	await _every_screen_has_a_way_out()
+	await _the_score_plays()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -86,6 +88,7 @@ func _every_screen_is_usable() -> void:
 		if usable == 0:
 			_fails += 1
 			print("FAIL %s presents nothing the player can press — a dead end" % name)
+		_no_scroll_is_crushed(inst, name)
 		inst.queue_free()
 		await get_tree().process_frame
 
@@ -116,6 +119,8 @@ func _every_dungeon_is_enterable() -> void:
 		# and the traversal itself must offer somewhere to go
 		if GameState.traversal != null and GameState.traversal.options().is_empty():
 			_fails += 1; print("FAIL %s offers no reachable encounter" % did)
+		# ...and the map/board/deck it built must be on screen and not 0px
+		_no_scroll_is_crushed(inst, did)
 		inst.queue_free()
 		await get_tree().process_frame
 
@@ -148,6 +153,18 @@ func _a_combat_can_be_won() -> void:
 	elif not eng.won():
 		# losing a fight is legal, but a starter deck should beat a d1 normal
 		_fails += 1; print("FAIL a starter deck lost a first-dungeon fight")
+	else:
+		# Mid-fight the screen offers a way out, because the fight is serialized and
+		# Resume returns to this turn. Between the killing blow and the reward pick
+		# it must NOT: the encounter is not cleared until the reward is taken, so
+		# stepping out there and coming back would offer the same fight again.
+		if not UI.has_escape():
+			_fails += 1; print("FAIL a fight in progress cannot be left")
+		inst._win()
+		await get_tree().process_frame
+		if UI.has_escape() or not inst.menu_btn.disabled:
+			_fails += 1
+			print("FAIL combat can be left between the kill and the reward — the fight is re-offerable")
 	inst.queue_free()
 	await get_tree().process_frame
 
@@ -238,6 +255,128 @@ func _every_encounter_can_be_left() -> void:
 				_fails += 1
 				print("FAIL %s: after a %s the run has nowhere left to go" % [
 					did, Balance.NODE_LABEL.get(t, "?")])
+
+## --- 6. every screen has a way out, and Escape takes it ----------------------
+##
+## Escape used to leave fullscreen on every screen in the game, and Combat had no
+## exit control at all — the longest scene was the only one you could not leave.
+## Both are one registration now (`UI.exit_button` binds the button and the key to
+## the same Callable), so what needs pinning is that each screen actually makes it.
+## An exit that exists only as a button is an exit that a player who pressed
+## Escape did not find.
+##
+## The screens listed here declare none ON PURPOSE, and the test says so, because
+## "no exit" and "forgot the exit" look identical from the outside.
+const NO_EXIT := {
+	"MainMenu": "the root screen: there is nothing behind it",
+	"Overworld": "the hub; the way out is Save and quit, which must be deliberate",
+	"Encounter": "an event is a decision, and every event has a cost-free option",
+}
+
+func _every_screen_has_a_way_out() -> void:
+	_start_a_run("crypt")
+	GameState.pending = {"type": GameState.NodeType.COMBAT}
+	GameState.combat_state = {}
+	for name in _scene_names():
+		var path := "res://scenes/%s.tscn" % name
+		var packed := load(path) as PackedScene
+		if packed == null:
+			continue
+		if name in ["Map", "DeckRun", "DiceRun"]:
+			# same reason as stage 1: these need their own kind of run state
+			_start_a_run(_a_dungeon_using(name))
+			if GameState.run_scene() != path:
+				continue
+		var inst = packed.instantiate()
+		UI.clear_escape(self)   # so a leftover registration cannot answer for this screen
+		add_child(inst)
+		await get_tree().process_frame
+		if not is_inside_tree():
+			return
+		await get_tree().process_frame
+		var declared := UI.has_escape()
+		if NO_EXIT.has(name):
+			if declared:
+				_fails += 1
+				print("FAIL %s declares an Escape action but is listed as deliberately having none" % name)
+		elif not declared:
+			_fails += 1
+			print("FAIL %s offers no way out — Escape does nothing on it" % name)
+		inst.queue_free()
+		await get_tree().process_frame
+
+## --- 7. the score plays, and on the bus its slider drives --------------------
+##
+## test_art.gd checks the files and the tables from source. This is the half that
+## needs a running engine: that a track is actually playing, that it is on the
+## Music bus (a track on SFX would make the Music slider a placeholder again, the
+## exact bug this replaced), and that a fight against a boss sounds different from
+## the corridor outside it.
+func _the_score_plays() -> void:
+	Audio.play_music("dungeon")
+	await get_tree().process_frame
+	if Audio.current_score() != "dungeon":
+		_fails += 1; print("FAIL asked for the dungeon score and nothing is playing")
+	if Audio.music_bus() != "Music":
+		_fails += 1
+		print("FAIL the score plays on the %s bus, so the Music slider does nothing" % Audio.music_bus())
+
+	GameState.pending = {"type": GameState.NodeType.BOSS}
+	var boss := Audio.score_for("Combat")
+	GameState.pending = {"type": GameState.NodeType.COMBAT}
+	var normal := Audio.score_for("Combat")
+	if boss == normal:
+		_fails += 1; print("FAIL a boss fight sounds exactly like a normal one")
+	if Audio.score_for("SomeScreenNobodyListed") == "":
+		_fails += 1; print("FAIL an unlisted screen gets no score — new screens would be silent")
+
+## No ScrollContainer may be squeezed to nothing on an axis its content needs.
+##
+## Written after the dice board turned out to be **0px tall in the shipped window**.
+## `dice_run.gd` left both scroll modes at AUTO, and a ScrollContainer reports a
+## minimum size of 0 on any axis it can scroll — so the `SIZE_EXPAND_FILL` spacers
+## around it took every pixel. Sixteen track cells were built on every refresh and
+## none of them had anywhere to be drawn.
+##
+## Every check in this suite passed throughout: the scene loads, its script compiles,
+## its buttons are enabled and pressable, and `test_layout.gd` confirms the
+## scroll-to-token function exists by reading the file as text. What none of them
+## asked was whether the content had a **size**. This is D47 again — booting is not
+## playability — and the generalisation is deliberate: the same shape would hide the
+## map, the shop stock or the collection just as silently.
+func _no_scroll_is_crushed(n: Node, where: String) -> void:
+	for sc in _scrolls(n):
+		if not sc.is_visible_in_tree():
+			continue
+		for content in sc.get_children():
+			var c := content as Control
+			if c == null:
+				continue
+			var need := c.get_combined_minimum_size()
+			var have := sc.size
+			if need.y > 0.0 and have.y <= 0.0:
+				_fails += 1
+				print("FAIL %s: a scroll area is 0px TALL holding %.0fpx of content — invisible" % [
+					where, need.y])
+			if need.x > 0.0 and have.x <= 0.0:
+				_fails += 1
+				print("FAIL %s: a scroll area is 0px WIDE holding %.0fpx of content — invisible" % [
+					where, need.x])
+
+func _scrolls(n: Node) -> Array[ScrollContainer]:
+	var out: Array[ScrollContainer] = []
+	if n is ScrollContainer:
+		out.append(n as ScrollContainer)
+	for c in n.get_children():
+		out.append_array(_scrolls(c))
+	return out
+
+func _a_dungeon_using(scene_name: String) -> String:
+	for did in Balance.DUNGEONS:
+		GameState.select_dungeon(did)
+		if GameState.run_scene().ends_with("%s.tscn" % scene_name):
+			return did
+	return "crypt"
 
 # --- helpers -----------------------------------------------------------------
 

@@ -49,6 +49,20 @@ func _build_ui() -> void:
 
 	board_scroll = ScrollContainer.new()
 	board_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# The track scrolls SIDEWAYS only, and saying so is what gives it a height.
+	#
+	# A ScrollContainer contributes its content's minimum size only on axes where
+	# scrolling is DISABLED — on a scrollable axis it reports 0, because scrolling is
+	# how it copes with being too small. Left at the default AUTO on both axes this
+	# one reported a minimum height of 0, and the SIZE_EXPAND_FILL spacers either
+	# side of it took every spare pixel: sixteen track cells were built on every
+	# refresh and the board was 0px tall, so the player saw no board at all.
+	#
+	# Nothing caught it. The scene loads, `_enabled_buttons` finds the move buttons,
+	# and test_layout.gd reads dice_run.gd as TEXT for a scroll-to-token function
+	# which is present and correct. It took rendering the screen to a PNG to see it —
+	# D47's lesson one more time, sideways.
+	board_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	root.add_child(board_scroll)
 	var scroll := board_scroll
 	board_box = HBoxContainer.new()
@@ -68,10 +82,8 @@ func _build_ui() -> void:
 	coll.text = "Collection"
 	coll.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
 	root.add_child(coll)
-	var menu_btn := Button.new()
-	menu_btn.text = "Menu"
-	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/PauseMenu.tscn"))
-	root.add_child(menu_btn)
+	# same Callable on the button and on Escape, so the two cannot drift apart
+	UI.exit_button(root, "Menu", func(): UI.goto(self, "res://scenes/PauseMenu.tscn"))
 
 func _refresh() -> void:
 	var tv := GameState.traversal as TraversalDice

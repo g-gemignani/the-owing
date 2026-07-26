@@ -2,9 +2,10 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D51 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D56 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
-how to build and run is in [BUILD.md](BUILD.md).
+how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
+the asset list that gets it there, is in [ART.md](ART.md).
 
 > **Keep this file and DESIGN.md current.** Every substantive change should land with
 > its reasoning written down. A decision that only lives in a commit message is a
@@ -101,6 +102,19 @@ These are failure modes that have actually bitten this project. Treat each as a 
 - **Booting is not playability.** A scene that loads can still be a black screen. 34
   suites once passed while the first dungeon was unplayable. `tests/test_compile.gd`
   and `tests/PlayableTest.tscn` exist because of this — run them.
+- **Nor is passing a test *looking* right.** Rendering all 20 screens to PNG (D56)
+  found a dice board with zero height, seven screens with no backdrop and a button
+  frame stretched 14×, none of which any suite noticed and none of which is visible in
+  a diff. `tools/screenshots.gd` exists because of this — look at the game.
+- **A test that reads source text proves code exists, not that it works.** A
+  `--script` test has no autoloads, so it can only inspect files — which is why
+  `test_layout.gd` happily confirmed the dice board's scroll-to-token function while
+  the board itself was 0px tall (D57). Anything about *size, position or visibility*
+  belongs in a scene test that measures the built tree.
+- **Zero-size is the quiet failure mode.** A `ScrollContainer` reports a minimum size
+  of 0 on any axis it can scroll, so `SIZE_EXPAND_FILL` siblings will crush it to
+  nothing and its contents vanish while every other check stays green. `PlayableTest`
+  now asserts no scroll area is squeezed flat.
 - **`load()` returns non-null for a script that failed to parse.** Never use it as a
   "does this compile" check. `get_instance_base_type() == ""` is the honest probe.
 - **`--headless --import` does not compile scripts** and its viewport defaults to a
@@ -127,8 +141,10 @@ resources/   all content as .tres: cards, enemies, relics, powers, events, dunge
 scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      pixel/ (CC0 Kenney) and art/ (generated backdrops + painted UI frames)
 tests/       34 suites + run.sh; export.sh and export_ready.sh need templates
-tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd
-DESIGN.md    the full reasoning, decision by decision (D1–D51)
+tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
+             screenshots.gd (renders every screen to PNG)
+DESIGN.md    the full reasoning, decision by decision (D1–D56)
+ART.md       the art brief: the style, and the asset list to reach it
 ```
 
 ## Working rules

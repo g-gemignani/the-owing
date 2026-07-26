@@ -10,8 +10,11 @@ func _ready() -> void:
 	_section(list, "Combat")
 	_entry(list, "Energy", "You get %d energy a turn. Cards cost energy. Unspent energy is lost." % Balance.MAX_ENERGY)
 	_entry(list, "Block", "Absorbs damage from the next attack, then expires at the start of your next turn. Legendary cards can make it persist instead.")
-	_entry(list, "Vulnerable", "The target takes +50%% damage. One stack expires each turn.")
-	_entry(list, "Weak", "The target deals -25%% damage. One stack expires each turn.")
+	# Single %, not %%: these are plain strings, not format arguments. `%%` only
+	# collapses inside a `%` operation, and neither of these lines has one — so the
+	# glossary read "+50%% damage" to the player.
+	_entry(list, "Vulnerable", "The target takes +50% damage. One stack expires each turn.")
+	_entry(list, "Weak", "The target deals -25% damage. One stack expires each turn.")
 	_entry(list, "Strength / Dexterity", "Permanent for the fight: +damage per attack, +block per block card.")
 	_entry(list, "Poison", "Damage at the end of each turn that ignores Block entirely, losing one stack each time.")
 	_entry(list, "Thorns", "Anything that attacks you takes this much damage back.")
@@ -42,7 +45,7 @@ func _ready() -> void:
 			_entry(list, a.name, "Acts on a fixed, visible cycle. Learn the pattern and you can plan around it.")
 			break
 
-	UI.button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
+	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
 
 func _section(parent: Node, title: String) -> void:
 	var l := Label.new()

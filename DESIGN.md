@@ -940,7 +940,7 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
-- **The endgame stopped being a walkover (D54).** The deepest dungeons were cleared 100% of the time by every late deck, because enemy HP grows at half the rate of the player's damage — so more power made fights *shorter*, and a shorter fight offers fewer chances to be hit. Extra enemy HP and ratio-scaled pierce now switch on above a floor at the top of the build band, leaving every cell the previous pass tuned exactly where it was. The Maw now reads 40/54/71% by deck strength. The test changed probe: attrition per fight rose all through the plateau, so fight length is what is asserted.
+- **The endgame stopped being a walkover (D54).** The deepest dungeons were cleared 100% of the time by every late deck, because enemy HP grows at half the rate of the player's damage — so more power made fights *shorter*, and a shorter fight offers fewer chances to be hit. Extra enemy HP and ratio-scaled pierce now switch on above a floor at the top of the build band, leaving every cell the previous pass tuned exactly where it was. The Maw now reads 40/49/70% by deck strength. The test changed probe: attrition per fight rose all through the plateau, so fight length is what is asserted.
 - **Music, at last, on the Music bus (D53).** The bus and its slider existed with nothing routed to them. Five generated, measured, seamless loops now play, chosen by which screen the player is on from one table polled in one place, so a new screen cannot be silent by omission. Also fixed a third restated constant: `SettingsState` defaulted the UI scale to 1.6 and applied it over the theme's 1.0, so no new player ever got the shipped default.
 - **A way out of the fight (D52).** Combat had no exit control and Escape only left fullscreen. Screens now declare their exit once, and the button and the key run the same Callable; combat seals it between the killing blow and the reward pick so the fight cannot be re-offered. Found a crash class while doing it: a static Callable outliving its screen corrupted the heap at shutdown and, because the output is piped, silently discarded three tests' PASS lines — the runner now checks exit codes too.
 
@@ -1912,11 +1912,11 @@ After (before → after):
 | Barricade Lv15 | 2.37 | Foundry / Vault | 55/59% → 52/58% |
 | Status Lv15 | 3.15 | Foundry | 66% → 67% |
 | Thorns Lv15 | 3.76 | Stair / Maw | 80/68% → 54/40% |
-| Late Lv40 + 6 | 5.09 | Stair / Maw | 100/100% → 73/**54%** |
-| Endgame Lv100 | 5.92 | Stair / Maw | 100/100% → 90/**71%** |
+| Late Lv40 + 6 | 5.09 | Stair / Maw | 100/100% → 69/**49%** |
+| Endgame Lv100 | 5.92 | Stair / Maw | 100/100% → 89/**70%** |
 
 The build band is where D45 left it, and the last dungeon in the game now reads as
-a gradient: 40% for a deck that arrived early, 54% for a strong one, 71% for a
+a gradient: 40% for a deck that arrived early, 49% for a strong one, 70% for a
 maxed one. More power still wins — it is no longer free.
 
 **The test for this had to change probe.** The obvious assertion — a maxed deck
@@ -1928,7 +1928,10 @@ first dungeon must still get easier (or the ratchet has been undone). Verified b
 setting `HP_POWER_K_HIGH` back to 0: the HP-loss version passes, the length version
 names all three ratios.
 
-### D52 — AGENTS.md, and a hook that keeps the docs honest
+### D55 — AGENTS.md, and a hook that keeps the docs honest
+
+*(Numbered D52 when written, colliding with "A way out of the fight". Renumbered
+here; the summary list above references the combat one, which keeps D52.)*
 
 Added `AGENTS.md`: the concept, the design pillars, and the engineering lessons in
 one brief, with DESIGN.md as the full decision log behind it. It exists so the *why*
@@ -1947,3 +1950,114 @@ context on every call and surfacing a concrete staleness signal. The three-way l
 (clean tree, code-only, code+docs) was verified in an isolated git repo; the JSON
 output was verified valid both with and without `jq` on PATH, because the dev shell
 here does not always have it.
+
+### D56 — Art direction, and looking at the game before talking about it
+
+The graphics work needed a brief, so `ART.md` is now the art brief: the diagnosis,
+the one style everything gets brought to, and the ~225-file asset list with the code
+hook each asset plugs into. It sits alongside AGENTS.md (the concept) and this file
+(the decision log).
+
+**The harness came first, deliberately.** `tools/screenshots.gd` boots all 20 screens
+at the shipped 1280×720 with a stocked save and writes a PNG each. Writing an art
+brief from source code would have produced a plausible document and missed everything
+below, because none of it is visible in the code. It needs a real GL context — art
+direction is a render, not a simulation — so it runs against Xvfb with software GL
+rather than `--headless`.
+
+Two things the harness taught about itself:
+
+* `GameState.reset_run_progress()` clears `dungeon_id`, and as an *argument* to
+  `enter_dungeon()` it evaluated **after** `select_dungeon()`. Combat therefore saw no
+  dungeon and fell back to the tiling zone backdrop. The first capture looked exactly
+  like missing painted art, and the conclusion "the Crypt backdrop does not load"
+  would have been wrong.
+* One process per screen. The first all-in-one run wedged on a screen and spun for 26
+  CPU-minutes, costing every capture after it; a `-- <SceneName>` filter makes a hang
+  cost one.
+
+**What the captures showed that the code did not.**
+
+The frame art is the headline. `ui_button.png` is a 128×83 *painting* of torn
+parchment, nine-sliced with `22/22/19/21`. Horizontally its 84px centre is stretched
+to 1204px on a full-width button — **14.3×** — so the ragged edges and the lighting
+gradient across them become the purple-and-white smears on every wide button in the
+game. Vertically it is worse and it is arithmetic, not taste: `min_button_height()`
+is `19 + 21 + 10 = 50`, so a standard button is 50px tall with **40px of fixed border
+and a 10px parchment band**, and a 16px font overflows that band by 6px. That is why
+text sits *on* the carved border everywhere. Neither fact is visible in a diff, and
+both were introduced by art that is illustrative where a nine-slice has to be flat.
+
+Also found, and all invisible from source:
+
+* **Seven screens have no backdrop at all** — `collection` `deck_builder` `deck_run`
+  `dice_run` `encounter` `map` `shop`. They never call `UI.screen()` or
+  `PixelArt.backdrop()`. The map, shop and event screens are flat near-black.
+* **The dice board renders nothing.** `dice_run.gd` puts `board_box` in a
+  `ScrollContainer` with both scroll modes AUTO, so its minimum size is 0 on both axes
+  and the surrounding `SIZE_EXPAND_FILL` spacers crush it to zero height. Sixteen
+  track cells are built every refresh and none are visible at the shipped scale. This
+  is the D47 lesson again — a scene that loads can still be a black screen — and
+  `test_layout.gd` should assert a non-zero board rect.
+* **The theme covers `Button` and `PanelContainer` only.** Every `OptionButton`,
+  `HSlider`, `VScrollBar` and `CheckBox` is default Godot chrome next to painted
+  buttons.
+* **Card illustrations are semantic noise.** `PixelArt.CARD_TILES` indexes Kenney's
+  1-Bit sheet, which is largely alphabet glyphs and dither patterns; the collection
+  capture shows a shopping cart on Battle Trance and a cactus on Berserker Rage.
+* **`bg_warrens.png` has "THE WARRENS" painted into the sign above the door** — a
+  rename or a translation makes the art lie. It also carries visibly heavier ink than
+  `bg_crypt.png`, which is the style target.
+
+**The direction chosen** is what already works rather than something new:
+`bg_crypt.png` and `bg_warrens.png` agree with each other on composition, lighting
+model and vocabulary, so painted-and-inked dark fantasy is the style and everything
+else — 16×16 Kenney sprites, the 13 authored mono glyphs, the stretched frames — gets
+brought to it. New art inherits the D39 contrast contract (worst-pixel, not average)
+rather than being allowed to opt out of it.
+
+**Not done here, on purpose.** No assets were drawn and no screens changed. The brief
+names the ~225 files, their sizes, their paths and their hooks, and §4 lists the seven
+code fixes that have to land or new art will sit on top of the same problems.
+
+### D57 — Two bugs the renders found, and the assertion that was missing
+
+Both defects came out of the D56 capture pass, and neither was findable any other way.
+
+**The dice board was 0px tall.** `dice_run.gd` put the track in a `ScrollContainer`
+and left both scroll modes at their `AUTO` default. A `ScrollContainer` contributes
+its content's minimum size **only on axes where scrolling is DISABLED** — on a
+scrollable axis it reports 0, because scrolling is how it copes with being too small.
+So the board's minimum height was 0, the `SIZE_EXPAND_FILL` spacers either side of it
+took every spare pixel, and all sixteen track cells were built on every refresh with
+nowhere to be drawn. Four of the twelve dungeons use this traversal; on all four the
+player saw no board.
+
+The fix is one line — `vertical_scroll_mode = SCROLL_MODE_DISABLED` — and it is also
+the honest statement of intent: the track scrolls sideways, never vertically.
+
+**The glossary said "+50%% damage".** Two `_entry()` calls carried `%%` in plain
+string literals. `%%` only collapses inside a `%` format operation, and those two
+lines have none, so the escape was rendered verbatim to the player. The other four
+`%%` in the codebase are all inside real format calls and are correct.
+
+**Why nothing caught the board.** Every existing check passed throughout: the scene
+loads, its script compiles, `_enabled_buttons()` finds the two move buttons enabled
+and pressable, and `test_layout.gd` confirms `_scroll_to_token` exists — by reading
+`dice_run.gd` as *text*, which is all a `--script` test can do without autoloads.
+What no check asked was whether the content had a **size**.
+
+`playable_test.gd` now asserts it, and deliberately as a *class* rather than as this
+one screen: no `ScrollContainer` may be squeezed to zero on an axis whose content
+needs pixels. The same shape would have hidden the map, the shop stock or the
+collection just as silently. Verified both ways through `tests/run.sh` — red on all
+four dice dungeons with the fix reverted (`a scroll area is 0px TALL holding 67px of
+content`), green with it in. 34/34 suites pass.
+
+This is D47 for the third time. Booting is not playability; passing is not looking
+right either. The generalisation worth keeping: **a test that reads source text can
+only confirm that code exists, never that it had an effect.**
+
+One thing that looked like a third bug and was not: with the board finally visible,
+no `^you` marker appears under any cell. `TraversalDice.pos` starts at `-1` — at the
+entrance, not yet on the board — so no cell is the player's yet. Correct as written.
