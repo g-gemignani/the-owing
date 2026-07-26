@@ -5,8 +5,11 @@
 ## derives from it, so the whole interface grows/shrinks together.
 extends Node
 
-## The single knob. 1.0 = original size. 1.6 = 60% bigger. Try 1.4-2.0.
-const UI_SCALE := 1.6
+## The single knob. 1.0 = original size. 1.6 = 60% bigger. Try 1.0-2.0.
+##
+## Only the default for a machine with no settings file: SettingsState applies the
+## persisted value right after this, so an existing player keeps whatever they set.
+const UI_SCALE := 1.0
 
 ## Start the game in fullscreen.
 const FULLSCREEN := true
@@ -78,8 +81,9 @@ func set_scale_silent(new_scale: float) -> void:
 const BUTTON_ART := "res://assets/art/ui_button.png"
 const PANEL_ART := "res://assets/art/ui_panel.png"
 ## Where the frame gives way to parchment, measured off the art itself. Applied at
-## 1:1 and deliberately NOT scaled with `scale`: at 1.6 the border would eat a
-## 67px button whole and leave three pixels of middle.
+## 1:1 and deliberately NOT scaled with `scale`: scaled up it would eat a button
+## whole and leave a few pixels of middle. min_button_height() keeps buttons taller
+## than their own border regardless of the scale in force.
 const BUTTON_SLICE := {"l": 22, "r": 22, "t": 19, "b": 21}
 const PANEL_SLICE := {"l": 38, "r": 19, "t": 49, "b": 57}
 ## The parchment reads at luminance 0.86. White text on it measures 1.2:1 — flatly
@@ -131,9 +135,19 @@ func style_button(b: Button) -> void:
 	b.add_theme_color_override("font_disabled_color", Color(0.36, 0.32, 0.32))
 	b.custom_minimum_size.y = maxf(b.custom_minimum_size.y, float(min_button_height()))
 
-## The shortest a framed button may be without crushing its own border.
+## The shortest a framed button may be without crushing its own border. The border
+## is drawn 1:1, so this does NOT shrink with the UI scale.
 func min_button_height() -> int:
 	return int(BUTTON_SLICE["t"]) + int(BUTTON_SLICE["b"]) + 10
+
+## Height for a button whose design calls for `base` unscaled pixels.
+##
+## Never shorter than the carved border needs. Callers used to write
+## `px(40)` directly, which was 64px at scale 1.6 and fine — and 40px at scale 1.0,
+## which squashed the frame. One helper so lowering the default scale cannot quietly
+## break every button in the game again.
+func button_height(base: float) -> float:
+	return maxf(px(base), float(min_button_height()))
 
 func _rebuild_theme() -> void:
 	theme = Theme.new()

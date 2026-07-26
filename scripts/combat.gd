@@ -106,7 +106,7 @@ func _build_ui() -> void:
 	end_btn = Button.new()
 	end_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	end_btn.text = "End Turn"
-	end_btn.custom_minimum_size = Vector2(0, UITheme.px(44))
+	end_btn.custom_minimum_size = Vector2(0, UITheme.button_height(44))
 	end_btn.pressed.connect(_on_end_turn)
 	bar.add_child(end_btn)
 

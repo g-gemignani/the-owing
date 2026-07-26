@@ -113,7 +113,7 @@ static func button(parent: Node, text: String, on_press: Callable = Callable(),
 		height: float = 42.0) -> Button:
 	var b := Button.new()
 	b.text = text
-	b.custom_minimum_size = Vector2(0, UITheme.px(height))
+	b.custom_minimum_size = Vector2(0, UITheme.button_height(height))
 	if on_press.is_valid():
 		b.pressed.connect(on_press)
 	else:

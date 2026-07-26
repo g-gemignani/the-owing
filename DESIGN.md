@@ -1698,3 +1698,23 @@ per-dungeon with the state they actually receive rather than generically.
 whole-block text replacements that silently landed at the wrong indentation. GDScript
 is indentation-sensitive and the edits looked right in a diff. Blocks are now edited
 in place with exact anchors, and `test_compile.gd` is the backstop.
+
+### D49 — Default UI scale 1.0
+
+`UITheme.UI_SCALE` 1.6 -> 1.0. It is only the default for a machine with no
+settings file; `SettingsState` applies the persisted value straight after, so an
+existing player keeps whatever they chose.
+
+Two things broke on the way down, both instructive.
+
+**A duplicated constant lied.** `tests/test_layout.gd` carried
+`var scale := 1.6   # the shipped default UI scale`. Lowering the real constant
+would have left that test measuring a window nobody uses while still passing. It
+now reads `UI_SCALE` from the script. Third time a restated number has done this.
+
+**Buttons squashed their own frame.** The painted border is drawn 1:1 at 40px and
+does not scale, so `px(40)` — 64px at scale 1.6, fine — became 40px at 1.0 and the
+carved frame collapsed. Caught by `MenuArtTest`, which had just been taught to
+check exactly this. Fixed with `UITheme.button_height(base)`, which never returns
+less than `min_button_height()`, so the default scale can move again without
+breaking every button in the game.

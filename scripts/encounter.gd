@@ -68,7 +68,7 @@ func _show_event() -> void:
 		var b := Button.new()
 		UITheme.style_button(b)
 		b.text = ev.choice_labels[i]
-		b.custom_minimum_size = Vector2(0, UITheme.px(40))
+		b.custom_minimum_size = Vector2(0, UITheme.button_height(40))
 		# do not offer a choice the player cannot pay for
 		if GameState.available_gold() + ev.gold_delta(i) < 0:
 			b.disabled = true
@@ -136,7 +136,7 @@ func _on_choice(i: int) -> void:
 	var cont := Button.new()
 	UITheme.style_button(cont)
 	cont.text = "Continue"
-	cont.custom_minimum_size = Vector2(0, UITheme.px(40))
+	cont.custom_minimum_size = Vector2(0, UITheme.button_height(40))
 	cont.pressed.connect(_finish)
 	options_box.add_child(cont)
 
@@ -158,7 +158,7 @@ func _show_treasure() -> void:
 	var cont := Button.new()
 	UITheme.style_button(cont)
 	cont.text = "Continue"
-	cont.custom_minimum_size = Vector2(0, UITheme.px(40))
+	cont.custom_minimum_size = Vector2(0, UITheme.button_height(40))
 	cont.pressed.connect(_finish)
 	options_box.add_child(cont)
 

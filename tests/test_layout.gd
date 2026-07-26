@@ -29,7 +29,10 @@ func _init() -> void:
 	var tv := TraversalGraph.new()
 	tv.generate(Balance.dungeon(Balance.DUNGEONS[0]))
 	var rows: int = tv.map.size()
-	var scale: float = 1.6   # the shipped default UI scale
+	# Read the shipped default rather than restating it. This line said 1.6 while
+	# the constant was changed to 1.0, which is exactly how a duplicated number
+	# turns a passing test into a lie.
+	var scale: float = load("res://scripts/ui_theme.gd").UI_SCALE
 	var node_h: float = 52.0 * scale
 	var sep: float = 6.0 * scale
 	var map_h: float = float(rows) * node_h + float(rows - 1) * sep

@@ -22,7 +22,7 @@ func _ready() -> void:
 
 		var b := Button.new()
 		b.text = "%s — %s" % [kit["name"], kit["hint"]]
-		b.custom_minimum_size = Vector2(0, UITheme.px(44))
+		b.custom_minimum_size = Vector2(0, UITheme.button_height(44))
 		b.pressed.connect(_pick.bind(kid))
 		box.add_child(b)
 

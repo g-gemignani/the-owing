@@ -51,7 +51,7 @@ func _build_ui() -> void:
 	var leave := Button.new()
 	UITheme.style_button(leave)
 	leave.text = "Leave"
-	leave.custom_minimum_size = Vector2(0, UITheme.px(40))
+	leave.custom_minimum_size = Vector2(0, UITheme.button_height(40))
 	leave.pressed.connect(_on_leave)
 	root.add_child(leave)
 
