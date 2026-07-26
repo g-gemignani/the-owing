@@ -476,6 +476,23 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	show_all.call(false)
 	holder.set_meta("show_all", show_all)   # so tests can drive both states
 
+	# Re-read the live numbers without rebuilding the widget. The combat screen
+	# diffs its hand instead of destroying it every action (that is what allows a
+	# card to animate at all), so a buff landing mid-turn has to be able to change
+	# what the cards already on screen claim to do.
+	holder.set_meta("relabel", func(live2: CombatEngine) -> void:
+		var d2: int = live2.card_damage(card) if live2 != null else -1
+		var b2: int = live2.card_block(card) if live2 != null else -1
+		desc.text = card.effect_text(d2, b2)
+		b.tooltip_text = Icons.card_tooltip(card, d2, b2)
+		if value_labels.size() > 0 and d2 >= 0 and headline != "":
+			var head := str(d2)
+			if card.hits > 1:
+				head += "x%d" % card.hits
+			value_labels[0].text = head
+		if b2 > 0 and shield != "":
+			value_labels[value_labels.size() - 1].text = str(b2))
+
 	# Grow from the bottom edge: a hand sits along the bottom of the screen, so a
 	# card that grew from its centre would push its own text off-screen.
 	holder.pivot_offset = Vector2(size.x * 0.5, size.y)

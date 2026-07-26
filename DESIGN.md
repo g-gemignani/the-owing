@@ -940,7 +940,7 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
-- **The dodge nobody had ever measured (D60).** The simulator's driver was taught to use the deck model's Avoid at all — it never had, in the model's whole existence — which immediately showed that skipping every fight beat fighting: 49% to 87% completion for one deck. The price now rises with depth and with each dodge already taken.
+- **The fight moves, and the dodge got priced (D60, D61).** Damage numbers, hit flashes, a screen jolt and cards that fly out of the hand — made possible by the real change underneath, which is that combat now updates its widgets instead of destroying and rebuilding them every action. Separately, the simulator's driver was taught to use the deck model's Avoid at all (it never had, in the model's whole existence), which immediately showed that skipping every fight beat fighting: 49% to 87% completion for one deck. The price now rises with depth and with each dodge taken.
 
 - **The numbers behind three decisions (D58, D59).** A card now shows what it will do in *this fight* — Strength and Dexterity applied — on its face, its hover and in the engine that resolves it, after a play report that gaining Strength changed nothing visible. Alongside it: the draw and discard piles are on screen, unaffordable cards are dimmed, the combat log keeps four lines, dying gets a screen the player dismisses instead of a 2.5-second wait, and fusing states what a level buys rather than only what it costs.
 
@@ -2193,3 +2193,40 @@ the smart line dodges 22-56% of what it could — situational, which is the poin
 must rise per dodge, dodging every fight must cost at least half a health bar, one
 dodge must still be affordable (under a quarter), and depth must matter. Verified
 by restoring the flat 8 — it names every dungeon.
+
+### D61 — Making the fight move
+
+Nothing in this game had ever animated. `_refresh()` freed the entire enemy row and
+the entire hand and rebuilt them on every action, so HP numbers jumped, nothing
+flashed, and a played card blinked out of existence. That rebuild is also *why*
+nothing could animate: you cannot tween between two states when one of them has
+been deleted.
+
+**The refactor is the feature.** Enemy plates are built once and mutated. The hand
+is diffed — cards that stayed keep their node, cards that left are flown out, cards
+that arrived are dealt in. `UI.card_button` grew a `relabel` hook so a card already
+on screen can re-read its live numbers when a buff lands, instead of being
+destroyed and rebuilt to say a different number.
+
+On top of that, deliberately short (a card game is read; an animation you wait
+through is worse than none):
+
+* floating damage and healing numbers, derived by diffing real HP before and after
+  an action rather than by parsing the log line;
+* a red tint and a jolt on whatever was hit — the jolt moves the plate's own
+  position, so the row never reflows;
+* a screen flash when the player is hit, scaled by how hard, because the player has
+  no plate to shake;
+* played cards fly out of the hand and drawn cards fade in.
+
+Feedback lives on its own full-rect layer above the layout, mouse-deaf, and a
+played card is *reparented* onto it rather than left in `hand_box` — the hand must
+contain real cards only, because that is what both the screen and the tests count.
+
+The load-bearing test is the invisible one: **a card that stays in hand must keep
+the same node across a refresh.** Damage numbers and flashes get noticed when they
+go missing; a future edit that quietly goes back to rebuilding would take every
+animation with it and leave the screen looking perfectly correct in a screenshot.
+Verified by putting the rebuild back — the test names it. The floating number is
+also checked for actually *moving*, since a tween that was never started looks
+exactly like a label parked on the spot.

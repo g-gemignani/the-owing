@@ -45,6 +45,7 @@ func _ready() -> void:
 	await _the_score_plays()
 	await _the_fight_shows_its_state()
 	await _dying_is_reported()
+	await _the_fight_reacts()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -478,6 +479,105 @@ func _dying_is_reported() -> void:
 		if t.find("create_timer") != -1:
 			_fails += 1
 			print("FAIL combat still waits on a timer instead of letting the player read the result")
+
+## --- 10. the fight reacts to what happens in it -------------------------------
+##
+## Nothing in this game moved: `_refresh()` freed the enemy row and the whole hand
+## and built them again on every action, so HP numbers jumped, nothing flashed, and
+## a played card blinked out of existence. You cannot tween between two states when
+## one of them has been deleted.
+##
+## The load-bearing assertion is the third one. Damage numbers and flashes are
+## visible enough that their absence gets noticed; **widgets surviving a refresh**
+## is invisible, and a future edit that goes back to rebuilding would silently take
+## every animation with it while leaving the screen looking correct in a still.
+func _the_fight_reacts() -> void:
+	_start_a_run("crypt")
+	GameState.pending = {"type": GameState.NodeType.COMBAT}
+	GameState.combat_state = {}
+	var inst = (load("res://scenes/Combat.tscn") as PackedScene).instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var eng = inst.eng
+	if eng == null:
+		_fails += 1; print("FAIL combat started with no engine"); inst.queue_free(); return
+
+	# feedback must never be able to swallow a click meant for a card
+	if inst.fx_layer.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+		_fails += 1; print("FAIL the effects layer can intercept the mouse")
+	if inst.hurt_veil.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+		_fails += 1; print("FAIL the hurt flash can intercept the mouse")
+
+	# a card that stays in hand must keep its node across a refresh
+	var keeper = null
+	for card in eng.hand:
+		if not eng.can_play(card):
+			keeper = card
+			break
+	if keeper == null and eng.hand.size() > 1:
+		keeper = eng.hand[eng.hand.size() - 1]
+	var node_before = inst.card_widgets.get(keeper) if keeper != null else null
+	inst._refresh()
+	await get_tree().process_frame
+	var node_after = inst.card_widgets.get(keeper) if keeper != null else null
+	if keeper == null:
+		_fails += 1; print("FAIL no card in hand to check for widget reuse")
+	elif node_before == null or node_after != node_before:
+		_fails += 1
+		print("FAIL the hand is rebuilt rather than updated — nothing can animate between two states")
+
+	# playing a damaging card must float a number and take the card out of the hand
+	var attack = null
+	for card in eng.hand:
+		if eng.can_play(card) and eng.card_damage(card) > 0:
+			attack = card
+			break
+	if attack == null:
+		_fails += 1; print("FAIL no affordable attack in the opening hand")
+	else:
+		var fx_before: int = inst.fx_layer.get_child_count()
+		var hand_before: int = eng.hand.size()
+		inst._on_card_pressed(attack)
+		await get_tree().process_frame
+		if inst.fx_layer.get_child_count() <= fx_before:
+			_fails += 1
+			print("FAIL dealing damage shows nothing — no number, no reaction")
+		else:
+			# and it has to actually MOVE: a label parked on the spot is the same
+			# static screen with extra steps, which is exactly what a tween that was
+			# never started looks like
+			var floater: Control = null
+			for c in inst.fx_layer.get_children():
+				if c is Label:
+					floater = c
+			if floater == null:
+				_fails += 1; print("FAIL the damage number is not a label that can move")
+			else:
+				var y0: float = floater.position.y
+				await get_tree().create_timer(0.15).timeout
+				if is_instance_valid(floater) and floater.position.y >= y0:
+					_fails += 1
+					print("FAIL the damage number does not move — the tween never ran")
+		if eng.hand.size() != hand_before - 1:
+			_fails += 1; print("FAIL the played card is still in hand")
+		if inst.card_widgets.has(attack):
+			_fails += 1; print("FAIL the played card's widget was never released")
+		# hand_box holds real cards only: the flown-out one is reparented, not left
+		if inst.hand_box.get_child_count() != eng.hand.size():
+			_fails += 1
+			print("FAIL hand_box holds %d widgets for %d cards" % [
+				inst.hand_box.get_child_count(), eng.hand.size()])
+
+	# and being hit must register on the screen, not only in the log
+	inst.hurt_veil.color.a = 0.0
+	var before := {"player": eng.player.hp + 12, "block": eng.player.block}
+	inst._show_deltas(before)
+	await get_tree().process_frame
+	if inst.hurt_veil.color.a <= 0.0:
+		_fails += 1; print("FAIL taking 12 damage does not register anywhere on screen")
+	inst.queue_free()
+	await get_tree().process_frame
 
 func _all_text(n: Node) -> String:
 	var out := ""

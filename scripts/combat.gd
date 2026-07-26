@@ -20,6 +20,13 @@ var log_label: Label
 ## The last few things that happened. One overwritten line lost most of a turn:
 ## three enemies acting reported only the third.
 var log_lines: Array[String] = []
+## Persistent widgets, built once and mutated. See `_refresh_enemies`.
+var enemy_plates: Array = []
+var card_widgets: Dictionary = {}
+## Where floating numbers and flashes are drawn: on top of everything, deaf to the
+## mouse, and never a parent of anything the game logic reads.
+var fx_layer: Control
+var hurt_veil: ColorRect
 var reward_box: VBoxContainer
 var end_btn: Button
 var power_btn: Button
@@ -159,15 +166,29 @@ func _build_ui() -> void:
 	end_btn.pressed.connect(_on_end_turn)
 	bar.add_child(end_btn)
 
+	# Feedback lives above the layout and outside it: a floating number must not
+	# resize a container, and nothing here may ever eat a click meant for a card.
+	hurt_veil = ColorRect.new()
+	hurt_veil.color = Color(0.7, 0.05, 0.05, 0.0)
+	hurt_veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hurt_veil.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(hurt_veil)
+	fx_layer = Control.new()
+	fx_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(fx_layer)
+
 func _on_power_pressed() -> void:
+	var before := _snapshot_hp()
 	var msg := eng.use_power()
 	if msg == "":
 		return
 	Audio.play("buff" if eng.power != null and eng.power.eff_damage() == 0 else "attack")
 	_log(msg)
-	_after_action()
+	_after_action(before)
 
 func _on_card_pressed(card: CardData) -> void:
+	var before := _snapshot_hp()
 	var msg := eng.play_card(card)
 	if msg == "":
 		Audio.play("ui_denied")
@@ -183,30 +204,37 @@ func _on_card_pressed(card: CardData) -> void:
 	elif card.eff_strength() > 0 or card.eff_dexterity() > 0 or card.retain_block:
 		Audio.play("buff")
 	_log(msg)
-	_after_action()
+	_after_action(before)
 
 ## Shared tail for anything the player does on their own turn: a kill may have
 ## ended the fight, and if not the run must be saved and the screen redrawn.
-func _after_action() -> void:
+func _after_action(before: Dictionary = {}) -> void:
 	if eng.won():
+		_refresh_enemies()      # so the killing blow is shown before the plates go
+		_show_deltas(before)
 		_win()
 		return
 	_snapshot()
 	_refresh()
+	_show_deltas(before)
 
 func _on_end_turn() -> void:
+	var before := _snapshot_hp()
 	var hp_before := eng.player.hp
 	_log(eng.end_turn())
 	if eng.player.hp < hp_before:
 		Audio.play("hurt")
 	if eng.lost():
+		_show_deltas(before)
 		_lose()
 		return
 	if eng.won():
+		_show_deltas(before)
 		_win()
 		return
 	_snapshot()
 	_refresh()
+	_show_deltas(before)
 
 func _refresh() -> void:
 	var p := eng.player
@@ -216,20 +244,26 @@ func _refresh() -> void:
 		eng.energy, Balance.MAX_ENERGY + eng.bonus_energy, eng.enemy_intent]
 	_refresh_buffs(p)
 
-	# enemies
-	for c in enemy_box.get_children():
-		c.queue_free()
-	for i in eng.enemies.size():
-		var e: Combatant = eng.enemies[i]
-		if e.is_dead():
-			continue
+	_refresh_enemies()
+	_refresh_hand()
+
+	piles_label.text = "Draw %d   ·   Discard %d   ·   Hand %d" % [
+		eng.draw_pile.size(), eng.discard_pile.size(), eng.hand.size()]
+
+	_refresh_power()
+
+## Enemy plates are built ONCE and then updated.
+##
+## Every action used to `queue_free` the entire enemy row and the entire hand and
+## build them again. That is why nothing in this game has ever moved: you cannot
+## tween between two states when one of them has been deleted, and it also threw
+## away hover state mid-turn and flickered on every card played. Widgets now
+## persist and are mutated, which is what makes the feedback below possible.
+func _refresh_enemies() -> void:
+	while enemy_plates.size() < eng.enemies.size():
+		var i := enemy_plates.size()
 		var b := Button.new()
 		UITheme.style_button(b)
-		var estat := e.status_text()
-		var mark := "▶ " if i == eng.target else ""
-		b.text = "%s%s\nHP %d/%d\n%s%s" % [
-			mark, e.name, e.hp, e.max_hp, eng.intent_text(i),
-			("\n[%s]" % estat) if estat != "" else ""]
 		b.custom_minimum_size = UITheme.card_size()
 		var arch := eng.archetypes[i] as EnemyData
 		var etex := Icons.enemy(arch.id if arch != null else "cultist")
@@ -237,35 +271,63 @@ func _refresh() -> void:
 			b.icon = etex
 			b.expand_icon = true
 			b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-		b.tooltip_text = "%s\nIntent: %s\nClick to target." % [e.name, eng.intent_text(i)]
 		b.pressed.connect(_on_target_pressed.bind(i))
 		enemy_box.add_child(b)
+		enemy_plates.append(b)
 
-	# hand
-	for c in hand_box.get_children():
-		c.queue_free()
-	# every card in the hand gets the SAME width, shrunk only if the row would
-	# otherwise run past the edge of the window
+	for i in eng.enemies.size():
+		var e: Combatant = eng.enemies[i]
+		var b: Button = enemy_plates[i]
+		if e.is_dead():
+			b.visible = false
+			continue
+		b.visible = true
+		var estat := e.status_text()
+		var mark := "▶ " if i == eng.target else ""
+		b.text = "%s%s\nHP %d/%d\n%s%s" % [
+			mark, e.name, e.hp, e.max_hp, eng.intent_text(i),
+			("\n[%s]" % estat) if estat != "" else ""]
+		b.tooltip_text = "%s\nIntent: %s\nClick to target." % [e.name, eng.intent_text(i)]
+
+## The hand is diffed, not rebuilt: cards that stayed keep their node (and so can
+## be animated), cards that left are flown out, cards that arrived are dealt in.
+func _refresh_hand() -> void:
 	var base := UITheme.card_size()
 	var avail := get_viewport_rect().size.x - UITheme.px(40)
 	var w := Icons.fit_card_width(eng.hand.size(), base.x, avail, float(UITheme.sep()))
-	for card in eng.hand:
-		# `eng` passed in: the face quotes what this card does THIS turn, Strength,
-		# Dexterity, Weak and per-combat growth included.
-		var cb := UI.card_button(hand_box, card, Vector2(w, base.y),
-			_on_card_pressed.bind(card), "", eng)
+
+	# gone from hand: played, discarded or exhausted
+	for card in card_widgets.keys():
+		if card in eng.hand:
+			continue
+		var ghost: Control = card_widgets[card]
+		card_widgets.erase(card)
+		_fly_out(ghost)
+
+	for idx in eng.hand.size():
+		var card: CardData = eng.hand[idx]
+		var holder: Control = card_widgets.get(card)
 		# A card you cannot afford used to look exactly like one you could, and the
 		# only way to find out was to click it and be refused. Dimmed, not disabled —
 		# pressing it still explains why, which is how the rule gets learned.
-		if not eng.can_play(card):
-			var holder := cb.get_parent() as Control
-			if holder != null:
-				holder.modulate = Color(1, 1, 1, 0.45)
-
-	piles_label.text = "Draw %d   ·   Discard %d   ·   Hand %d" % [
-		eng.draw_pile.size(), eng.discard_pile.size(), eng.hand.size()]
-
-	_refresh_power()
+		var want_a := 1.0 if eng.can_play(card) else 0.45
+		if holder == null:
+			# `eng` passed in: the face quotes what this card does THIS turn, with
+			# Strength, Dexterity, Weak and per-combat growth applied.
+			var cb := UI.card_button(hand_box, card, Vector2(w, base.y),
+				_on_card_pressed.bind(card), "", eng)
+			holder = cb.get_parent() as Control
+			card_widgets[card] = holder
+			holder.modulate = Color(1, 1, 1, want_a)
+			_deal_in(holder, want_a)
+		else:
+			# a buff landing mid-turn changes what every card in hand would do
+			var again: Callable = holder.get_meta("relabel", Callable())
+			if again.is_valid():
+				again.call(eng)
+			holder.custom_minimum_size = Vector2(w, base.y)
+			holder.modulate = Color(1, 1, 1, want_a)
+		hand_box.move_child(holder, idx)
 
 ## The power button states the whole rule: what it does, what it costs, and — when
 ## it cannot be fired — WHY. "Used this turn" and "not enough energy" are different
@@ -292,6 +354,120 @@ func _refresh_power() -> void:
 func _on_target_pressed(i: int) -> void:
 	if eng.set_target(i):
 		_refresh()
+
+# --- feedback -----------------------------------------------------------------
+#
+# Until now every state change was instantaneous and silent: HP numbers jumped,
+# nothing flashed, cards vanished from the hand. The rules were all legible and
+# none of them were felt. These are deliberately short — a card game is read, and
+# an animation you have to wait through is worse than none.
+
+const FX_RISE := 0.55        ## how long a floating number lives
+const FX_FLASH := 0.22       ## hit tint
+const FX_SHAKE := 0.20
+
+## HP of everything, before an action. Compared afterwards to work out what to
+## show — derived from the real numbers rather than from parsing the log line.
+func _snapshot_hp() -> Dictionary:
+	var out := {"player": eng.player.hp, "block": eng.player.block}
+	for i in eng.enemies.size():
+		out[i] = eng.enemies[i].hp
+	return out
+
+## Float the difference above whoever it happened to, and shake them.
+func _show_deltas(before: Dictionary) -> void:
+	for i in eng.enemies.size():
+		if not before.has(i) or i >= enemy_plates.size():
+			continue
+		var lost: int = int(before[i]) - eng.enemies[i].hp
+		var plate: Control = enemy_plates[i]
+		if lost > 0:
+			_float_number(plate, "-%d" % lost, Color(1.0, 0.62, 0.42))
+			_hit(plate)
+		elif lost < 0:
+			_float_number(plate, "+%d" % (-lost), Color(0.62, 0.95, 0.62))
+
+	var p_lost: int = int(before.get("player", eng.player.hp)) - eng.player.hp
+	if p_lost > 0:
+		_float_number(status_label, "-%d" % p_lost, Color(1.0, 0.5, 0.45))
+		_flash_hurt(p_lost)
+	elif p_lost < 0:
+		_float_number(status_label, "+%d" % (-p_lost), Color(0.62, 0.95, 0.62))
+	var gained_block: int = eng.player.block - int(before.get("block", eng.player.block))
+	if gained_block > 0:
+		_float_number(status_label, "+%d block" % gained_block, Color(0.62, 0.80, 1.0))
+
+func _float_number(over: Control, text: String, colour: Color) -> void:
+	if fx_layer == null or not is_inside_tree():
+		return
+	var l := Label.new()
+	l.text = text
+	l.add_theme_color_override("font_color", colour)
+	l.add_theme_font_size_override("font_size", UITheme.title_font())
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fx_layer.add_child(l)
+	var r := over.get_global_rect()
+	l.position = Vector2(r.position.x + r.size.x * 0.5, r.position.y + r.size.y * 0.25)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(l, "position:y", l.position.y - UITheme.px(44), FX_RISE)
+	tw.tween_property(l, "modulate:a", 0.0, FX_RISE).set_delay(FX_RISE * 0.4)
+	tw.chain().tween_callback(l.queue_free)
+
+## Tint red and jolt. The jolt is on the plate's own position, so the row layout
+## is untouched — a container that reflows on every hit would be far worse than
+## no feedback at all.
+func _hit(plate: Control) -> void:
+	var home := plate.position
+	var tw := create_tween()
+	tw.tween_property(plate, "modulate", Color(1.6, 0.6, 0.6), FX_FLASH * 0.35)
+	tw.tween_property(plate, "modulate", Color(1, 1, 1), FX_FLASH)
+	var sh := create_tween()
+	sh.tween_property(plate, "position:x", home.x + UITheme.px(6), FX_SHAKE * 0.25)
+	sh.tween_property(plate, "position:x", home.x - UITheme.px(4), FX_SHAKE * 0.35)
+	sh.tween_property(plate, "position:x", home.x, FX_SHAKE * 0.4)
+
+## The player has no plate to shake, so the screen itself takes the hit. Scaled by
+## how hard: a 4-point chip should not look like a boss landing 40.
+func _flash_hurt(amount: int) -> void:
+	if hurt_veil == null:
+		return
+	var share := clampf(float(amount) / maxf(1.0, float(eng.player.max_hp) * 0.35), 0.08, 1.0)
+	hurt_veil.color.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(hurt_veil, "color:a", 0.26 * share, 0.06)
+	tw.tween_property(hurt_veil, "color:a", 0.0, 0.32)
+
+## A played card leaves the hand rather than blinking out of existence. It is
+## reparented to the effects layer first: hand_box must contain only real cards,
+## because that is what the screen and the tests count.
+func _fly_out(holder: Control) -> void:
+	if holder == null or not is_instance_valid(holder):
+		return
+	var here := holder.get_global_rect()
+	if hand_box.is_ancestor_of(holder):
+		hand_box.remove_child(holder)
+	if fx_layer == null:
+		holder.queue_free()
+		return
+	fx_layer.add_child(holder)
+	holder.position = here.position
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tw := create_tween()
+	tw.set_parallel(true)
+	tw.tween_property(holder, "position:y", here.position.y - UITheme.px(60), 0.26)
+	tw.tween_property(holder, "modulate:a", 0.0, 0.26)
+	tw.tween_property(holder, "scale", Vector2(0.7, 0.7), 0.26)
+	tw.chain().tween_callback(holder.queue_free)
+
+## A drawn card fades up instead of appearing fully formed. It fades to whatever
+## alpha affordability wants, so the two do not fight over the same property.
+func _deal_in(holder: Control, target_alpha: float) -> void:
+	if holder == null:
+		return
+	holder.modulate.a = 0.0
+	var tw := create_tween()
+	tw.tween_property(holder, "modulate:a", target_alpha, 0.18)
 
 ## Buffs and debuffs, written out, in the colour of what they are.
 ##
@@ -350,6 +526,8 @@ func _win() -> void:
 	GameState.earn_gold(g)   # at risk until the boss falls (D20)
 	end_btn.disabled = true
 	_seal_exit()
+	card_widgets.clear()
+	enemy_plates.clear()
 	for c in hand_box.get_children():
 		c.queue_free()
 	for c in enemy_box.get_children():
@@ -457,6 +635,7 @@ func _on_reward_picked(card) -> void:
 func _lose() -> void:
 	end_btn.disabled = true
 	_seal_exit()
+	card_widgets.clear()
 	for c in hand_box.get_children():
 		c.queue_free()
 	Audio.play("defeat")
