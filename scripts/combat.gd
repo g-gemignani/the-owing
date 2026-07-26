@@ -265,8 +265,20 @@ func _win() -> void:
 		UI.card_button(row, card, Vector2(rw, rbase.y), _on_reward_picked.bind(card),
 			"%s\n(%d) [%s]\n%s" % [card.name, card.cost,
 				CardData.Rarity.keys()[card.rarity], card.description])
+	# What taking one COSTS. Dilution is real — a bigger deck draws each card less
+	# often — but it was invisible, so "take one of three" was an automatic click
+	# rather than a decision. Skipping is a legitimate play and should read as one.
+	var now: int = GameState.run_deck.size()
+	var cost := Label.new()
+	cost.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	cost.add_theme_color_override("font_color", Color(0.85, 0.80, 0.62))
+	cost.text = "Taking one makes your deck %d cards: you would see any given card every %.1f turns instead of %.1f." % [
+		now + 1, Balance.draw_interval(now + 1), Balance.draw_interval(now)]
+	reward_box.add_child(cost)
+	UI.hoverable(cost, "Every card you add makes the rest come up less often. Shops and rests can thin the deck back down.")
+
 	var skip := Button.new()
-	skip.text = "Skip"
+	skip.text = "Skip  —  keep the deck at %d" % now
 	skip.pressed.connect(_on_reward_picked.bind(null))
 	reward_box.add_child(skip)
 	reward_box.visible = true

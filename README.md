@@ -21,7 +21,7 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 | Events         | 20                                                           |
 | Dungeons       | 12 across 5 zones, 8 difficulty tiers                        |
 | Traversal      | 3 pluggable models: node graph, card draw, dice board        |
-| Tests          | 29 suites                                                    |
+| Tests          | 32 suites, including a playability integration test          |
 
 ## Running it
 
@@ -55,6 +55,12 @@ Two kinds live in `tests/`:
   actually been built (`mouse_filter`, wrapped line counts, scaled rects), and
   autoloads are not registered in a `--script` run.
 
+`tests/test_compile.gd` checks that every script and scene root compiles, and
+`tests/PlayableTest.tscn` walks every screen and every dungeon asserting the player
+always has something to press. Both exist because a black screen once shipped and
+survived five green runs: `--import` does not compile scripts, and `load()` returns
+a non-null Resource for a script that failed to parse.
+
 Tests are sandboxed away from real save data, and the runner fails if any test
 leaves a file behind. That is not paranoia: a test once overwrote a real
 `settings.json`, and a debug harness destroyed someone's in-progress run.
@@ -66,7 +72,7 @@ scripts/     game code — one file per screen or system
 resources/   all content as .tres data: cards, enemies, relics, powers, events,
              dungeons, zones, builds
 scenes/      thin .tscn wrappers; screens build their UI in code
-tests/       29 suites + tests/run.sh
+tests/       32 suites + tests/run.sh
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd
 DESIGN.md    the reasoning behind every decision, and every mistake
 ```

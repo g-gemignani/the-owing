@@ -124,9 +124,12 @@ func _on_pick(i: int) -> void:
 		_refresh()
 		return
 	GameState.pending = chosen
-	if RunFlow.enter_node(self, chosen):
-		log_label.text = "Rested."
+	if RunFlow.enter_node(self, chosen, _after_rest):
 		_refresh()
+
+func _after_rest() -> void:
+	log_label.text = "Rested."
+	_refresh()
 
 func _leave() -> void:
 	get_tree().change_scene_to_file(RunFlow.leave_run())

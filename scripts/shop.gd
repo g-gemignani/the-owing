@@ -142,6 +142,44 @@ func _refresh() -> void:
 		hbtn.pressed.connect(_on_buy_heal.bind(hprice, heal))
 	hrow.add_child(hbtn)
 
+	_add_removal_service(hrow.get_parent())
+
+## Thinning is the other direction of deck building, and it belongs next to the
+## things it competes with for the same gold.
+func _add_removal_service(root: Node) -> void:
+	var price := Balance.removal_price(GameState.run_removals)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UITheme.sep(10))
+	root.add_child(row)
+	var lbl := Label.new()
+	lbl.custom_minimum_size = Vector2(UITheme.px(520), 0)
+	lbl.text = "Thin your deck — remove one card for the rest of this run (%d cards, one card seen every %.1f turns)" % [
+		GameState.run_deck.size(), Balance.draw_interval(GameState.run_deck.size())]
+	row.add_child(lbl)
+	UI.hoverable(row, "Removing a card makes the rest come up more often. It does not touch your collection — this run only.")
+	var btn := Button.new()
+	btn.text = "Remove  (%dg)" % price
+	btn.disabled = GameState.available_gold() < price or not GameState.can_remove_from_run_deck()
+	if not GameState.can_remove_from_run_deck():
+		btn.text = "Remove  (deck at minimum)"
+	btn.pressed.connect(_on_remove.bind(price))
+	row.add_child(btn)
+
+func _on_remove(price: int) -> void:
+	if GameState.available_gold() < price or not GameState.can_remove_from_run_deck():
+		Audio.play("ui_denied")
+		return
+	UI.card_picker(self, GameState.run_deck, "Remove which card? (%dg)" % price,
+		func(card):
+			if not GameState.spend_gold(price):
+				Audio.play("ui_denied")
+				return
+			if GameState.remove_from_run_deck(card):
+				Audio.play("fuse")
+				msg_label.text = "Removed %s. Deck is now %d cards." % [
+					card.name, GameState.run_deck.size()]
+			_refresh())
+
 func _on_buy_card(index: int, price: int) -> void:
 	var entry: Dictionary = GameState.shop_stock[index]
 	if entry["sold"] or not GameState.spend_gold(price):

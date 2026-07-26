@@ -654,6 +654,27 @@ static func heal_price(max_hp: int) -> int:
 static func heal_amount(max_hp: int) -> int:
 	return int(round(max_hp * SHOP_HEAL_FRAC))
 
+# --- in-run deck shaping (D46) ---
+## A run used to only ever ADD cards: earn_card appends and nothing removes, so
+## surviving longer made your deck steadily less consistent. Thinning is the other
+## direction, and it is priced so it competes with buying and healing.
+##
+## The price rises per removal within a run: the first cut is the obvious one, and
+## each after it should be a harder call than the last.
+const REMOVAL_BASE_PRICE := 55
+const REMOVAL_PRICE_STEP := 40
+
+static func removal_price(already_removed: int) -> int:
+	return REMOVAL_BASE_PRICE + REMOVAL_PRICE_STEP * maxi(0, already_removed)
+
+## How often a deck of this size shows you any particular card, in turns.
+##
+## Dilution is real — a bigger deck draws each card less often — but it was
+## completely invisible, so taking every reward was an automatic click rather than
+## a decision. This is the number the reward screen quotes.
+static func draw_interval(deck_size: int) -> float:
+	return float(maxi(1, deck_size)) / float(maxi(1, HAND_SIZE))
+
 # --- rewards ---
 const TIER_GOLD_MULT := {Tier.NORMAL: 1, Tier.ELITE: 2, Tier.BOSS: 4}
 

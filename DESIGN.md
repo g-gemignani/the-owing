@@ -1624,3 +1624,77 @@ efficiency factor (you hold what you drew, not what you wanted), and guards the
 flatline directly: the deepest ceiling must clear `MAX_ACHIEVABLE_RATIO`, a maxed
 deck must still lose HP at depth, and Block must never be a complete answer there.
 Verified by reverting each cause in turn — both are caught.
+
+### D46 — Reward tension and in-run deck shaping
+
+A run only ever ADDED cards: `earn_card` appends and nothing removed it, so
+surviving longer made the deck steadily less consistent. And the reward screen's
+"take one of three" had no tension in it, because taking was free — dilution is
+real but was completely invisible.
+
+**Both directions now exist.** Shops sell a removal at a price that rises with each
+cut taken this run (`Balance.removal_price`), and a rest is no longer a free heal:
+it offers *Recover* or *Sharpen*, so healing costs you the thinning and vice versa.
+The picker is an overlay (`UI.card_picker`) rather than a screen, so it works
+identically from a shop, a rest and all three traversal views without any of them
+knowing how it works.
+
+Thinning is **run-scoped** — the collection is never touched — and it is **not free
+power**: `power_ratio` is power per energy, so cutting a weak card raises the ratio
+and enemies scale to match. What the player buys is consistency, which is the point.
+
+**The reward screen now quotes what taking costs**: "Taking one makes your deck 15
+cards: you would see any given card every 3.0 turns instead of 2.8", and Skip reads
+"keep the deck at 14" so declining looks like the play it is.
+
+### D47 — A black screen shipped, and the suite stayed green for five commits
+
+`map.gd` stopped compiling in D41 and stayed broken through **four more commits**,
+every one of which reported 29/29 passing, while every graph dungeon — including
+the Crypt, the first dungeon in the game — was a black screen. A player found it,
+not the tests.
+
+Three independent failures let that happen, and each is worth stating plainly:
+
+1. **`godot --headless --import` does not compile scripts.** It reported zero
+   errors the entire time.
+2. **`load()` returns a non-null Resource for a script that failed to parse.** The
+   export smoke test's `if load(path) == null` check therefore passed happily on a
+   broken `Map.tscn`. `can_instantiate()` is no better — it answers false for
+   perfectly good scripts. `get_instance_base_type() == ""` is the honest probe.
+3. **No test loaded the traversal scripts at all.** `test_layout.gd` inspects them
+   as *text*, which cannot notice that they no longer parse.
+
+The deeper problem was that the suite tested *units and data* thoroughly and the
+*game* barely at all. D33 had already recorded the lesson — "booting is not
+playability" — and it was enforced for exactly one screen.
+
+**`tests/test_compile.gd`** — every script in `scripts/`, `tests/` and `tools/`
+plus every scene root must compile. Runs in about a second and would have caught
+this the moment it was introduced.
+
+**`tests/PlayableTest.tscn`** — the integration test that was missing:
+
+* every screen instantiates *and offers at least one thing the player can press*.
+  A screen with no enabled control is a dead end and indistinguishable from a crash
+  to whoever is holding the controller.
+* **every dungeon** can be entered and its traversal view offers a reachable
+  encounter. This is the exact reported failure, across all three traversal models.
+* a combat plays from the first card to victory through the real scene.
+* a rest resolves and hands control back.
+
+Verified by reintroducing the precise bug that shipped: `test_compile` names the
+file and the scene, and `PlayableTest` reports *"crypt: entered the dungeon and
+there is nothing to click"* for all four graph dungeons.
+
+Two things learned while writing it. A screen with missing state bails out by
+*navigating* — `ZoneView` with no zone calls `change_scene_to_file`, which in a
+harness replaces the test scene itself and hangs the await forever; every screen
+therefore gets plausible state, as the game would have given it. And feeding a
+traversal view another kind's run state spins forever, so those three are covered
+per-dungeon with the state they actually receive rather than generically.
+
+**Root cause of my own error:** three of these breakages came from scripted
+whole-block text replacements that silently landed at the wrong indentation. GDScript
+is indentation-sensitive and the edits looked right in a diff. Blocks are now edited
+in place with exact anchors, and `test_compile.gd` is the backstop.

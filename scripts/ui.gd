@@ -190,6 +190,56 @@ static func hoverable(control: Control, text: String) -> void:
 	if control.mouse_filter == Control.MOUSE_FILTER_IGNORE:
 		control.mouse_filter = Control.MOUSE_FILTER_STOP
 
+## A modal list of the run deck, for anything that acts on one card.
+##
+## An overlay rather than a screen, so it works identically from a shop, a rest and
+## any traversal view without one of them having to know how to route back.
+static func card_picker(host: Control, deck: Array, title: String,
+		on_pick: Callable) -> Control:
+	var veil := ColorRect.new()
+	veil.color = Color(0, 0, 0, 0.82)
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	veil.z_index = 100
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP   # nothing behind it is clickable
+	host.add_child(veil)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	UITheme.pad(margin)
+	veil.add_child(margin)
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", UITheme.sep(8))
+	margin.add_child(col)
+
+	var t := Label.new()
+	t.text = title
+	t.add_theme_font_size_override("font_size", UITheme.title_font())
+	col.add_child(t)
+
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	col.add_child(scroll)
+	var grid := HFlowContainer.new()
+	grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	grid.add_theme_constant_override("h_separation", UITheme.sep(6))
+	grid.add_theme_constant_override("v_separation", UITheme.sep(6))
+	scroll.add_child(grid)
+
+	var size := UITheme.card_size() * 0.8
+	for c in deck:
+		card_button(grid, c, size, func(): 
+			veil.queue_free()
+			on_pick.call(c))
+
+	var cancel := Button.new()
+	cancel.text = "Never mind"
+	cancel.custom_minimum_size = Vector2(0, UITheme.px(40))
+	cancel.pressed.connect(func():
+		Audio.play("ui_back")
+		veil.queue_free())
+	col.add_child(cancel)
+	return veil
+
 static func card_button(parent: Node, card: CardData, size: Vector2,
 		on_press: Callable, label: String = "") -> Button:
 	# A plain Control, NOT a Container. PanelContainer overrides its children's

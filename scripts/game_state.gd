@@ -16,6 +16,8 @@ var run_deck: Array[CardData] = []
 ## level mid-run must not retroactively strengthen a fight already in progress, and
 ## the run file has to restore exactly what was equipped.
 var run_power: PowerData = null
+## Cards thinned out of the deck this run, for the rising removal price.
+var run_removals: int = 0
 var max_hp: int = 60
 var hp: int = 60
 var dungeon: int = 1        # difficulty; drives enemy scaling + loot rarity
@@ -64,6 +66,26 @@ func earn_card(id: String) -> void:
 	# joins at the level the collection already has for that card
 	c.level = int(meta.collection[id]["level"]) if meta.collection.has(id) else 1
 	run_deck.append(c)
+
+## Thin one card out of the run deck. Run-scoped only: the collection is never
+## touched, so a removal cannot cost the player something permanent.
+##
+## Deliberately NOT free power. Balance.power_ratio is power per energy, so cutting
+## a weak card raises the ratio and enemies scale to match — the gain is
+## consistency, which is exactly what the player is paying for.
+func remove_from_run_deck(card: CardData) -> bool:
+	if run_deck.size() <= Balance.MIN_DECK_SIZE:
+		return false
+	var i := run_deck.find(card)
+	if i < 0:
+		return false
+	run_deck.remove_at(i)
+	run_removals += 1
+	autosave()
+	return true
+
+func can_remove_from_run_deck() -> bool:
+	return run_deck.size() > Balance.MIN_DECK_SIZE
 
 func earn_gold(n: int) -> void:
 	escrow_gold += maxi(0, n)
@@ -126,6 +148,7 @@ func run_to_dict() -> Dictionary:
 		"deck": CombatEngine._cards_to_state(run_deck),
 		"power": run_power.id if run_power != null else "",
 		"power_level": run_power.level if run_power != null else 1,
+		"removals": run_removals,
 		"traversal": traversal.save_state(),
 		"escrow_cards": escrow_cards, "escrow_gold": escrow_gold,
 		"shop_stock": shop_stock,
@@ -145,6 +168,7 @@ func run_from_dict(d: Dictionary) -> bool:
 	max_hp = int(d.get("max_hp", Balance.BASE_MAX_HP))
 	hp = clampi(int(d.get("hp", max_hp)), 1, max_hp)
 	run_deck = CombatEngine._cards_from_state(d.get("deck", []), meta.CATALOG)
+	run_removals = int(d.get("removals", 0))
 	run_power = null
 	var pid := String(d.get("power", ""))
 	if pid != "":
@@ -200,6 +224,7 @@ func dungeon_data() -> DungeonData:
 func reset_run_progress() -> void:
 	run_deck = []
 	run_power = null
+	run_removals = 0
 	# relics can raise the run's max HP (Phase 7)
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
 	var relic_hp: int = meta.relic_bonus("bonus_max_hp") if meta else 0

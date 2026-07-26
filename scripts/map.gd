@@ -99,12 +99,14 @@ func _refresh() -> void:
 			# Treasure when those were added — and an unknown key threw mid-render,
 			# so every row below it (including the only actionable one) vanished.
 			var label: String = Balance.NODE_LABEL.get(int(node["type"]), "?")
-		if int(node["type"]) == GameState.NodeType.BOSS:
-			var boss := Balance.boss_of(GameState.dungeon_id)
-			if boss != null:
-				label = "BOSS: %s" % boss.name
-				UI.hoverable(b, "%s\n%s" % [boss.name, Balance.boss_warning(GameState.dungeon_id)])
-		b.text = "%s%s" % [label, mark]
+			# name the boss on its own node, so the finale is never a surprise
+			if int(node["type"]) == GameState.NodeType.BOSS:
+				var boss := Balance.boss_of(GameState.dungeon_id)
+				if boss != null:
+					label = "BOSS: %s" % boss.name
+					UI.hoverable(b, "%s\n%s" % [
+						boss.name, Balance.boss_warning(GameState.dungeon_id)])
+			b.text = "%s%s" % [label, mark]
 			var is_reach := false
 			for rn in reach:
 				if rn["row"] == node["row"] and rn["col"] == node["col"]:
@@ -158,10 +160,16 @@ func _on_node_selected(node: Dictionary) -> void:
 	var chosen := tv.select(idx)
 	if chosen.is_empty():
 		return
-	if RunFlow.enter_node(self, chosen):
-		log_label.text = "Rested."
+	# A rest resolves through an overlay now, so RunFlow calls back once the player
+	# has actually chosen. Anything else is still handled inline.
+	if RunFlow.enter_node(self, chosen, _after_rest):
 		_refresh()
 		call_deferred("_scroll_to_focus")
+
+func _after_rest() -> void:
+	log_label.text = "Rested."
+	_refresh()
+	call_deferred("_scroll_to_focus")
 
 func _go_to_deck_builder() -> void:
 	var dest := "res://scenes/Overworld.tscn"

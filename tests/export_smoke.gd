@@ -57,8 +57,20 @@ func _init() -> void:
 		var path := "res://scenes/%s.tscn" % scene
 		if not ResourceLoader.exists(path):
 			continue   # optional screens are named differently; only check real ones
-		if load(path) == null:
-			fails += 1; print("FAIL scene %s does not load from the pack" % scene)
+		var packed := load(path) as PackedScene
+		if packed == null:
+			fails += 1; print("FAIL scene %s does not load from the pack" % scene); continue
+		# `load()` returns a Resource even for a script that failed to PARSE, so the
+		# previous null check here passed while map.gd was broken for five commits.
+		# Instantiating is the only honest answer.
+		var inst = packed.instantiate()
+		if inst == null:
+			fails += 1; print("FAIL scene %s does not instantiate from the pack" % scene)
+			continue
+		var sc = inst.get_script()
+		if sc != null and (sc as GDScript).get_instance_base_type() == "":
+			fails += 1; print("FAIL scene %s has a script that does not compile" % scene)
+		inst.free()
 
 	print("  packed: %d sprites, %d archetypes, %d cards" % [
 		sprites, archetypes, PixelArt.card_ids().size()])
