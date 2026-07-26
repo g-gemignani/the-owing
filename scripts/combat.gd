@@ -19,7 +19,12 @@ var enemy_box: Control
 ## Rebuild slot positions only when the living count changes, so a hit-shake tween
 ## is not fought by the next refresh snapping the slot back.
 var slot_count: int = -1
-var hand_box: HBoxContainer
+## A Control, not an HBoxContainer: the hand is a fan, placed by `_place_hand()`.
+## Leaving the old type here assigned a Control to an HBoxContainer variable, which
+## GDScript rejects at RUNTIME — so `test_compile` passed, `hand_box` stayed null,
+## every card silently failed to be added, and the fight rendered with no hand at
+## all. Third time a stale restatement has done this (D34, D49).
+var hand_box: Control
 var log_label: Label
 ## The last few things that happened. One overwritten line lost most of a turn:
 ## three enemies acting reported only the third.
@@ -35,6 +40,14 @@ var reward_box: VBoxContainer
 var end_btn: Button
 var power_btn: Button
 var menu_btn: Button
+var place_label: Label
+var power_ring: Panel
+## The two bottom corners the hand has to stay out of. Kept as members so the fan
+## can measure them instead of guessing: a hardcoded reserve was wrong the moment a
+## Label's BOX turned out wider than its text, and would be wrong again at any other
+## UI scale.
+var hud_box: VBoxContainer
+var controls_box: HBoxContainer
 
 func _ready() -> void:
 	tier = _tier_of(GameState.pending.get("type", GameState.NodeType.COMBAT))
@@ -52,6 +65,8 @@ func _ready() -> void:
 			dd.boss if dd != null else "")
 		_snapshot()
 	_refresh()
+	# rects only exist after a frame, and the fan is measured against them
+	call_deferred("_place_hand")
 
 ## Persist the fight in progress. Called after every action that changes it.
 func _snapshot() -> void:
@@ -74,6 +89,14 @@ func _pause() -> void:
 func _seal_exit() -> void:
 	menu_btn.disabled = true
 	UI.clear_escape(self)
+
+## "The Crypt — Elite" / "— BOSS". Nothing for an ordinary fight: most encounters
+## are ordinary, and labelling them says less than saying nothing.
+func _tier_suffix() -> String:
+	match tier:
+		Balance.Tier.ELITE: return "  —  Elite"
+		Balance.Tier.BOSS: return "  —  BOSS"
+		_: return ""
 
 func _tier_of(node_type: int) -> int:
 	match node_type:
@@ -109,12 +132,10 @@ func _build_ui() -> void:
 	add_child(margin)
 	var root := VBoxContainer.new()
 	root.add_theme_constant_override("separation", UITheme.sep(10))
+	root.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	margin.add_child(root)
 
-	# --- top band: everything about YOU, plus the way out --------------------
-	#
-	# Vitals sit at the top rather than beside the hand. The bottom of the screen
-	# is the hand's, and stays uncluttered.
+	# --- top band: where you are, and the way out ----------------------------
 	#
 	# The fight is serialized after every action, so leaving it is a pause, not an
 	# escape: Resume comes straight back into this turn. Until this existed the
@@ -123,74 +144,148 @@ func _build_ui() -> void:
 	header.add_theme_constant_override("separation", UITheme.sep(12))
 	root.add_child(header)
 
-	status_label = Label.new()
-	status_label.add_theme_font_size_override("font_size", UITheme.title_font())
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(status_label)
-
-	# What is left to draw, and what has gone by. The reward screen quotes how often
-	# you will see a card ("every 3.0 turns instead of 2.8") and the shop sells deck
-	# thinning, and until now the fight itself showed neither pile — the player was
-	# asked to price consistency while blind to it. Up here with the rest of your
-	# own state, not down by the cards.
-	piles_label = Label.new()
-	piles_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.72))
-	header.add_child(piles_label)
-	UI.hoverable(piles_label, "Your deck is drawn through, then the discard pile is shuffled back. A smaller deck comes round faster.")
+	place_label = Label.new()
+	place_label.add_theme_font_size_override("font_size", UITheme.title_font())
+	place_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var dd0 := GameState.dungeon_data()
+	place_label.text = "%s%s" % [dd0.name if dd0 != null else "The dark", _tier_suffix()]
+	header.add_child(place_label)
 
 	menu_btn = UI.exit_button(header, "Menu", _pause, 38.0)
 
-	# Buffs and debuffs on their own line, spelled out. They used to be a "[Blk 5
-	# Str 3]" fragment inside a run-on status line, which is not where anybody
-	# looks for the reason their damage changed — and the cards did not show the
-	# change either, so Strength was effectively invisible while it was working.
-	buffs_label = Label.new()
-	buffs_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	buffs_label.add_theme_color_override("font_color", Color(0.98, 0.85, 0.45))
-	root.add_child(buffs_label)
+	# --- bottom left: everything about YOU -----------------------------------
+	#
+	# Back down here beside the hand, deliberately. Energy gates every click a turn
+	# contains and HP is what every decision is spent against, so both belong where
+	# the eye already is while cards are being read — not in a corner you look at
+	# once. (This was at the top for one iteration. It reads better here.)
+	# Anchored with explicit offsets, not PRESET_BOTTOM_LEFT: that preset puts the
+	# box's TOP edge on the bottom of the screen, so the whole HUD rendered below the
+	# frame — visible only because the layout was rendered and looked at.
+	var hud := VBoxContainer.new()
+	hud_box = hud
+	hud.add_theme_constant_override("separation", UITheme.sep(4))
+	add_child(hud)
+	hud.anchor_left = 0.0
+	hud.anchor_right = 0.0
+	hud.anchor_top = 1.0
+	hud.anchor_bottom = 1.0
+	hud.offset_left = UITheme.px(16)
+	hud.offset_right = UITheme.px(16) + UITheme.px(348)
+	hud.offset_top = -UITheme.px(128)
+	hud.offset_bottom = -UITheme.px(10)
 
-	# --- the bottom belongs to the cards -------------------------------------
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(spacer)
+	status_label = Label.new()
+	status_label.add_theme_font_size_override("font_size", UITheme.title_font())
+	# wrapped inside a known width: as one line it measured ~530px at title size and
+	# ran straight under the leftmost card, which no box could prevent because a
+	# Label overflows rather than clips
+	status_label.custom_minimum_size.x = UITheme.px(330)
+	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hud.add_child(status_label)
+	UI.hoverable(status_label, "Block expires at the start of your next turn. 'incoming' is what would actually land after Block.")
+
+	# Buffs and debuffs spelled out, under the vitals they modify. They used to be a
+	# "[Blk 5 Str 3]" fragment inside a run-on line, which is not where anybody looks
+	# for the reason their damage changed.
+	buffs_label = Label.new()
+	buffs_label.add_theme_color_override("font_color", Color(0.98, 0.85, 0.45))
+	hud.add_child(buffs_label)
+
+	# What is left to draw, and what has gone by. The reward screen quotes how often
+	# you will see a card and the shop sells thinning, so the fight has to show the
+	# piles those numbers are about.
+	piles_label = Label.new()
+	piles_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.72))
+	hud.add_child(piles_label)
+	UI.hoverable(piles_label, "Your deck is drawn through, then the discard pile is shuffled back. A smaller deck comes round faster.")
+
+	# Two lines, low and quiet: four lines of running commentary across a painted
+	# corridor is what would ruin the framing.
+	log_label = Label.new()
+	log_lines = ["Combat start."]
+	log_label.text = log_lines[0]
+	log_label.custom_minimum_size.x = UITheme.px(330)
+	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	log_label.add_theme_color_override("font_color", Color(0.84, 0.82, 0.78))
+	hud.add_child(log_label)
+
+	# --- bottom right: the two things you press ------------------------------
+	var controls := HBoxContainer.new()
+	controls_box = controls
+	controls.alignment = BoxContainer.ALIGNMENT_END
+	controls.add_theme_constant_override("separation", UITheme.sep(10))
+	add_child(controls)
+	controls.anchor_left = 1.0
+	controls.anchor_right = 1.0
+	controls.anchor_top = 1.0
+	controls.anchor_bottom = 1.0
+	controls.offset_left = -(UITheme.px(16) + UITheme.px(282))
+	controls.offset_right = -UITheme.px(16)
+	controls.offset_top = -UITheme.px(128)
+	controls.offset_bottom = -UITheme.px(10)
+
+	# The power as a round sigil rather than a wide bar: it is one always-available
+	# ability with a cost, which is a Hearthstone hero power, not a menu entry. A
+	# 260px bar next to an equally wide End Turn was eating the frame the fight is
+	# supposed to be in.
+	var orb := Control.new()
+	var od := UITheme.px(112)
+	orb.custom_minimum_size = Vector2(od, od)
+	controls.add_child(orb)
+	var ring := Panel.new()
+	var rsb := StyleBoxFlat.new()
+	rsb.bg_color = Color(0.10, 0.09, 0.14, 0.88)
+	rsb.border_color = Color(0.86, 0.72, 0.38, 0.85)
+	rsb.set_border_width_all(3)
+	rsb.corner_radius_top_left = 999
+	rsb.corner_radius_top_right = 999
+	rsb.corner_radius_bottom_left = 999
+	rsb.corner_radius_bottom_right = 999
+	ring.add_theme_stylebox_override("panel", rsb)
+	ring.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	orb.add_child(ring)
+	power_btn = Button.new()
+	power_btn.flat = true
+	power_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	power_btn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	power_btn.add_theme_font_size_override("font_size", int(UITheme.font() * 0.85))
+	power_btn.pressed.connect(_on_power_pressed)
+	orb.add_child(power_btn)
+	power_ring = ring
+
+	# End Turn is pressed once a turn and never in a hurry. A corner button.
+	end_btn = Button.new()
+	end_btn.text = "End Turn"
+	end_btn.custom_minimum_size = Vector2(UITheme.px(150), UITheme.button_height(38))
+	end_btn.size_flags_vertical = Control.SIZE_SHRINK_END
+	end_btn.pressed.connect(_on_end_turn)
+	controls.add_child(end_btn)
+
+	# --- the hand: a fan along the bottom edge -------------------------------
+	#
+	# A Control, not an HBox: the cards are placed and rotated by hand so the hand
+	# reads as a hand. `_place_hand()` owns the arc, and `UI.card_button` lifts and
+	# straightens whichever card is hovered.
+	hand_box = Control.new()
+	hand_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(hand_box)
+	hand_box.anchor_left = 0.0
+	hand_box.anchor_right = 1.0
+	hand_box.anchor_top = 1.0
+	hand_box.anchor_bottom = 1.0
+	hand_box.offset_top = -(UITheme.card_size().y + UITheme.px(FAN_ARC) + UITheme.px(14))
+	hand_box.offset_bottom = -UITheme.px(20)
 
 	reward_box = VBoxContainer.new()
 	reward_box.add_theme_constant_override("separation", UITheme.sep())
 	reward_box.visible = false
-	root.add_child(reward_box)
-
-	# Two lines, low and quiet: four lines of running commentary across the middle
-	# of a painted corridor is the thing that would ruin the framing.
-	log_label = Label.new()
-	log_lines = ["Combat start."]
-	log_label.text = log_lines[0]
-	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	log_label.add_theme_color_override("font_color", Color(0.84, 0.82, 0.78))
-	root.add_child(log_label)
-
-	hand_box = HBoxContainer.new()
-	hand_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	hand_box.add_theme_constant_override("separation", UITheme.sep())
-	root.add_child(hand_box)
-
-	# The power sits next to End Turn, not in the hand: it is always there, and
-	# putting it among the cards would imply it can be drawn or discarded.
-	var bar := HBoxContainer.new()
-	bar.add_theme_constant_override("separation", UITheme.sep())
-	root.add_child(bar)
-
-	power_btn = Button.new()
-	power_btn.custom_minimum_size = Vector2(UITheme.px(260), UITheme.px(44))
-	power_btn.pressed.connect(_on_power_pressed)
-	bar.add_child(power_btn)
-
-	end_btn = Button.new()
-	end_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	end_btn.text = "End Turn"
-	end_btn.custom_minimum_size = Vector2(0, UITheme.button_height(44))
-	end_btn.pressed.connect(_on_end_turn)
-	bar.add_child(end_btn)
+	add_child(reward_box)
+	reward_box.anchor_left = 0.12
+	reward_box.anchor_right = 0.88
+	reward_box.anchor_top = 0.30
+	reward_box.anchor_bottom = 0.86
 
 	# Feedback lives above the layout and outside it: a floating number must not
 	# resize a container, and nothing here may ever eat a click meant for a card.
@@ -265,17 +360,13 @@ func _on_end_turn() -> void:
 func _refresh() -> void:
 	var p := eng.player
 	UI.hoverable(status_label, "Block expires at the start of your next turn. 'incoming' is what would actually land after Block.")
-	status_label.text = "%s  HP %d/%d   Block %d   Energy %d/%d   incoming %d" % [
-		p.name, p.hp, p.max_hp, p.block,
+	status_label.text = "HP %d/%d    Block %d\nEnergy %d/%d    incoming %d" % [
+		p.hp, p.max_hp, p.block,
 		eng.energy, Balance.MAX_ENERGY + eng.bonus_energy, eng.enemy_intent]
 	_refresh_buffs(p)
 
 	_refresh_enemies()
 	_refresh_hand()
-
-	piles_label.text = "Draw %d   ·   Discard %d   ·   Hand %d" % [
-		eng.draw_pile.size(), eng.discard_pile.size(), eng.hand.size()]
-
 	_refresh_power()
 
 ## Enemy slots are built ONCE and then updated.
@@ -455,8 +546,6 @@ func _place_slots(living: Array[int]) -> void:
 ## be animated), cards that left are flown out, cards that arrived are dealt in.
 func _refresh_hand() -> void:
 	var base := UITheme.card_size()
-	var avail := get_viewport_rect().size.x - UITheme.px(40)
-	var w := Icons.fit_card_width(eng.hand.size(), base.x, avail, float(UITheme.sep()))
 
 	# gone from hand: played, discarded or exhausted
 	for card in card_widgets.keys():
@@ -476,7 +565,7 @@ func _refresh_hand() -> void:
 		if holder == null:
 			# `eng` passed in: the face quotes what this card does THIS turn, with
 			# Strength, Dexterity, Weak and per-combat growth applied.
-			var cb := UI.card_button(hand_box, card, Vector2(w, base.y),
+			var cb := UI.card_button(hand_box, card, base,
 				_on_card_pressed.bind(card), "", eng)
 			holder = cb.get_parent() as Control
 			card_widgets[card] = holder
@@ -487,9 +576,79 @@ func _refresh_hand() -> void:
 			var again: Callable = holder.get_meta("relabel", Callable())
 			if again.is_valid():
 				again.call(eng)
-			holder.custom_minimum_size = Vector2(w, base.y)
 			holder.modulate = Color(1, 1, 1, want_a)
-		hand_box.move_child(holder, idx)
+	_place_hand()
+
+## Lay the hand out as a hand: an arc across the bottom, cards overlapping, each
+## tilted a little, the middle of the fan riding highest.
+##
+## Overlapping is what makes a hand of nine cards possible at all — side by side
+## they would either run off the frame or shrink until nothing on them could be
+## read. The trade is that a card at rest is partly covered, which is why hovering
+## one straightens it, lifts it clear and enlarges it (UI.card_button); at rest a
+## card shows its name, its cost and its headline number, which is what you scan.
+const FAN_TILT := 0.075        ## radians at the outermost card
+const FAN_ARC := 22.0          ## how much higher the middle of the fan rides
+const FAN_OVERLAP := 0.88      ## fraction of a card's width between neighbours
+
+func _place_hand() -> void:
+	var n := eng.hand.size()
+	if n == 0:
+		return
+	var base := UITheme.card_size()
+	var vp := get_viewport_rect().size
+	# stay clear of the vitals on the left and the power/End Turn on the right
+	# Measured against what is actually beside the hand, not assumed. The first
+	# version hardcoded the reserves from a screenshot and was wrong immediately: a
+	# Label overflows its box, so the vitals text looked narrower than the 380px box
+	# it sits in, and the leftmost card slid under it. The rects are the truth, and
+	# they are also what the test checks.
+	var left := UITheme.px(372)
+	var right := vp.x - UITheme.px(320)
+	if hud_box != null:
+		var hr := hud_box.get_global_rect()
+		if hr.size.x > 1.0:
+			left = maxf(left, hr.end.x + UITheme.px(14))
+	if controls_box != null:
+		var cr := controls_box.get_global_rect()
+		if cr.size.x > 1.0:
+			right = minf(right, cr.position.x - UITheme.px(14))
+	var room := maxf(base.x, right - left)
+	# The step has to leave room for the WIDTH of the outermost cards, not just for
+	# their centres: `room / n` put the leftmost card's edge 21px inside the vitals,
+	# which the render did not show and the geometry test did.
+	var step := base.x * FAN_OVERLAP
+	if n > 1:
+		step = minf(step, (room - base.x) / float(n - 1))
+	var span := step * float(n - 1)
+	var cx := (left + right) * 0.5
+	var arc := UITheme.px(FAN_ARC)
+	for i in n:
+		var card: CardData = eng.hand[i]
+		var holder: Control = card_widgets.get(card)
+		if holder == null:
+			continue
+		holder.custom_minimum_size = base
+		holder.size = base
+		# rotation and growth both happen about the bottom-centre, so a card pivots
+		# in the hand rather than sliding sideways as it turns
+		holder.pivot_offset = Vector2(base.x * 0.5, base.y)
+		var f := 0.0 if n == 1 else (float(i) / float(n - 1)) * 2.0 - 1.0   # -1..1
+		var rot := f * FAN_TILT
+		# measured DOWN from the top of the band: the band is exactly a card plus the
+		# arc, so the outermost (lowest) card still finishes inside the frame. Taking
+		# it up from the bottom instead pushed the whole fan off the screen edge.
+		var pos := Vector2(cx - span * 0.5 + step * float(i) - base.x * 0.5,
+			f * f * arc)
+		holder.set_meta("fan", {"pos": pos, "rot": rot, "lift": base.y * 0.34})
+		# do not fight the hover: a card being read owns its own transform
+		if holder.z_index == 0:
+			holder.position = pos
+			holder.rotation = rot
+		hand_box.move_child(holder, i)
+
+	piles_label.text = "Draw %d   ·   Discard %d   ·   Hand %d" % [
+		eng.draw_pile.size(), eng.discard_pile.size(), eng.hand.size()]
 
 ## The power button states the whole rule: what it does, what it costs, and — when
 ## it cannot be fired — WHY. "Used this turn" and "not enough energy" are different
@@ -498,11 +657,15 @@ func _refresh_power() -> void:
 	var p := eng.power
 	if p == null:
 		power_btn.visible = false
+		power_ring.visible = false
 		return
 	power_btn.visible = true
-	var cost := "Free" if p.cost == 0 else "%dE" % p.cost
-	power_btn.text = "%s  (%s)" % [p.name, cost]
+	power_ring.visible = true
+	power_btn.text = "%s\n%s" % [p.name, "free" if p.cost == 0 else "%dE" % p.cost]
 	power_btn.disabled = not eng.can_use_power()
+	# spent or unaffordable reads on the ring, not only in the tooltip: the orb is
+	# small, so its STATE has to be visible from the shape rather than the words
+	power_ring.modulate = Color(1, 1, 1) if not power_btn.disabled else Color(0.5, 0.5, 0.55, 0.7)
 	var why := ""
 	if eng.power_used:
 		why = "\nAlready used this turn."

@@ -126,6 +126,56 @@ func _check_live_hand() -> void:
 	if seen == 0:
 		_fails += 1; print("FAIL combat rendered no card text at all")
 
+	# --- the hand is a fan, and it fits ------------------------------------------
+	#
+	# Every one of these was broken at some point while building the layout, each
+	# time found only by rendering it and looking: cards running off the bottom edge,
+	# the vitals line overflowing its box and passing under the leftmost card, and the
+	# rightmost card tucking behind the power orb. A still image cannot keep them
+	# fixed, so the rects are measured.
+	var vp := get_viewport().get_visible_rect()
+	var cards := _cards(inst)
+	if cards.size() < 3:
+		_fails += 1; print("FAIL only %d cards in hand to measure" % cards.size())
+	var rots := {}
+	var lowest_y := -1.0e9
+	var middle_y := 0.0
+	for k in cards.size():
+		var holder: Control = cards[k]
+		var r := holder.get_global_rect()
+		if r.position.y < 0.0 or r.end.y > vp.size.y + 1.0:
+			_fails += 1
+			print("FAIL card %s spans y %.0f-%.0f, outside a %.0f-tall frame" % [
+				holder.get_meta("card_id"), r.position.y, r.end.y, vp.size.y])
+		if r.position.x < 0.0 or r.end.x > vp.size.x + 1.0:
+			_fails += 1
+			print("FAIL card %s spans x %.0f-%.0f, outside a %.0f-wide frame" % [
+				holder.get_meta("card_id"), r.position.x, r.end.x, vp.size.x])
+		rots[snappedf(holder.rotation, 0.001)] = true
+		if k == 0 or k == cards.size() - 1:
+			lowest_y = maxf(lowest_y, r.position.y)
+		if k == cards.size() / 2:
+			middle_y = r.position.y
+	# a fan, not a row: the cards are tilted, and the middle of it rides higher
+	if rots.size() < 3:
+		_fails += 1; print("FAIL the hand is not fanned — %d distinct angles" % rots.size())
+	if middle_y >= lowest_y:
+		_fails += 1
+		print("FAIL the hand has no arc: middle card at y %.0f, outer at y %.0f" % [
+			middle_y, lowest_y])
+	# ...and it must not run under the things parked in both bottom corners
+	for zone in [["the vitals", inst.status_label], ["End Turn", inst.end_btn],
+			["the power orb", inst.power_btn]]:
+		var other: Control = zone[1]
+		if other == null or not other.visible:
+			continue
+		var orect := other.get_global_rect()
+		for holder2 in cards:
+			if (holder2 as Control).get_global_rect().intersects(orect):
+				_fails += 1
+				print("FAIL card %s overlaps %s" % [holder2.get_meta("card_id"), zone[0]])
+				break
+
 	# --- the number has to be readable WITHOUT hovering ---------------------------
 	#
 	# A resting card shows its name and its cost, and the rules text only appears on

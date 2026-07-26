@@ -512,7 +512,7 @@ All 16 rendered at 1280×720, UI scale 1.0, with a stocked save. What each one s
 | `Map` | Flat black. No backdrop, no icons, **no lines between nodes**. `Icons.for_encounter()` exists and is never called. |
 | `DeckRun` | One 16px sword glyph and two unstyled grey buttons on black. |
 | `DiceRun` | Board was 0px tall — a layout bug, not an art gap, **fixed in D57**. Now 16 track cells of 16×16 glyphs, and the player token is the string `^you`. |
-| `Combat` | The screen the game is played on. Framed head-on now: enemies stand on the floor line with name/HP/intent above them and a contact mark under them, vitals in the top band, hand centred at the bottom. Still text where art is wanted — no HP bar, no energy orb, intent as `hit 14` — and the enemies are placeholder footprints until `art/enemies/` exists. |
+| `Combat` | The screen the game is played on. Framed head-on: enemies stand on the floor line with name/HP/intent above them and a contact mark under them; the hand is a fan along the bottom edge; vitals, piles and log occupy the bottom-left; the power is a round sigil and End Turn a small corner button, bottom-right. Still text where art is wanted — no HP bar, no energy orb, intent as `hit 14` — and the enemies are placeholder footprints until `art/enemies/` exists. |
 | `Shop` | Flat black, no merchant, text rows, illegible small buttons. |
 | `Encounter` | Title, two lines, three smeared buttons, and 400px of black where the event illustration goes. |
 | `Collection` | The card-illustration problem in one image: a shopping cart on Battle Trance, a cactus on Berserker Rage, a dither pattern on Abyssal Gift. |

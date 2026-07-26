@@ -500,6 +500,19 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		show_all.call(open)
 		holder.scale = Vector2.ONE * (UITheme.CARD_HOVER_SCALE if open else 1.0)
 		holder.z_index = 10 if open else 0
+		# A fanned hand stores where each card sits at rest ("fan" meta, set by the
+		# combat screen). Opening one straightens it and lifts it clear of its
+		# neighbours, the way you pull a card out of a real hand to read it — without
+		# that, an enlarged card in a fan is still half-covered by the next one.
+		var fan: Dictionary = holder.get_meta("fan", {})
+		if not fan.is_empty():
+			var home: Vector2 = fan.get("pos", holder.position)
+			if open:
+				holder.rotation = 0.0
+				holder.position = home - Vector2(0.0, float(fan.get("lift", 0.0)))
+			else:
+				holder.rotation = float(fan.get("rot", 0.0))
+				holder.position = home
 
 	if touch_ui():
 		# TOUCH: a finger has no hover, so reading a card and committing to it must

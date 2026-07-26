@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The bottom of the screen, laid out properly (D63).** Vitals back at the bottom-left beside the hand, the hand itself a fan of overlapping tilted cards that straighten and lift when hovered, the power a round sigil and End Turn a small corner button instead of two full-width bars. Four layout bugs on the way, three of them invisible to the existing suite — including a `Control` assigned to an `HBoxContainer`-typed variable, which GDScript rejects at runtime, so the hand silently never existed. `CardTextTest` now measures the hand's geometry.
+
 - **The fight is framed head-on, and nobody plays the hero (D62).** Chose a frontal framing into the corridor the backdrops paint over the side-on arena the art brief assumed, which deleted four hero files and a whole class of consistency work. Measured the backdrops to find the shared standing line (68%), measured the old layout to prove the stage had to become a layer rather than a row (236px for a 240-270px sprite, ending 22px above the floor), and added the id-keyed enemy-art lookup plus a floor-line assertion so the coming art pass lands on a contract the game enforces.
 
 - **The fight moves, and the dodge got priced (D60, D61).** Damage numbers, hit flashes, a screen jolt and cards that fly out of the hand — made possible by the real change underneath, which is that combat now updates its widgets instead of destroying and rebuilding them every action. Separately, the simulator's driver was taught to use the deck model's Avoid at all (it never had, in the model's whole existence), which immediately showed that skipping every fight beat fighting: 49% to 87% completion for one deck. The price now rises with depth and with each dodge taken.
@@ -2303,3 +2305,53 @@ contract the game enforces:
   text. Tier 1a is now empty with the reasoning in it, the enemy brief says facing
   the viewer, feet flush to the bottom edge, weight low and dark, and *not* in the
   positional directory. 213 files became **209**.
+
+### D63 — The bottom of the screen, laid out properly
+
+D62 put the vitals in the top band at the player's request; they are back at the
+bottom, at the same player's request, and this time the whole bottom band was
+designed around the hand rather than stacked above it.
+
+* **Vitals bottom-left** — HP and Block on one line, Energy and incoming on the
+  next, with the buffs, the pile counts and the two-line log under them. Energy
+  gates every click a turn contains and HP is what every decision is spent against,
+  so both belong where the eye already is while cards are being read.
+* **The hand is a fan** — placed and rotated by `_place_hand()`, cards overlapping,
+  the middle of the fan riding highest, each tilted a little. Overlapping is what
+  makes a hand of nine cards possible at all; side by side they either run off the
+  frame or shrink until nothing on them can be read. The trade is that a resting
+  card is partly covered, which is why hovering one **straightens it, lifts it clear
+  of its neighbours and enlarges it** — `UI.card_button` reads a `fan` meta the
+  combat screen sets, so the widget owns its own hover and the screen owns the
+  layout.
+* **The power is a round sigil** rather than a 260px bar: it is one
+  always-available ability with a cost, which is a hero power, not a menu entry. Its
+  state reads on the ring, because at that size the words are too small to carry it.
+* **End Turn is a small corner button.** It is pressed once a turn and never in a
+  hurry. The two of them together used to occupy the full width of the frame the
+  fight is supposed to be in.
+
+**Four bugs, and only one of them was found by a test.** Worth listing because they
+are the same shape each time — a layout that cannot be judged without looking at it:
+
+1. `set_anchors_and_offsets_preset(PRESET_BOTTOM_LEFT, ...)` puts the box's TOP edge
+   on the bottom of the screen, so the entire HUD and both controls rendered
+   *below* the frame. Anchors and offsets are now written out.
+2. **`var hand_box: HBoxContainer` with a `Control` assigned to it.** GDScript
+   rejects that at RUNTIME, not compile time, so `test_compile` passed, `hand_box`
+   stayed null, every card silently failed to be added, and the fight rendered with
+   no hand at all. `PlayableTest` caught it only because the piles text is built in
+   the same function. Third time a stale restatement has done real damage (D34, D49).
+3. The vitals were one title-size line measuring ~530px, which **overflowed its
+   380px box** — a Label overflows rather than clips — and passed under the leftmost
+   card. Two wrapped lines now, and the hand measures the real widget rects instead
+   of a reserve read off a screenshot.
+4. The fan was centred without accounting for the **width** of its outermost cards,
+   so `room / n` put the leftmost card's edge 21px inside the vitals. The render did
+   not show it; the new geometry test did.
+
+`CardTextTest` now measures the hand: every card inside the frame on both axes, at
+least three distinct angles (it is a fan, not a row), the middle of the fan higher
+than its ends, and no card intersecting the vitals, the power or End Turn. Three of
+the four bugs above would have been caught by it, and it is the only thing that will
+keep them fixed — a still image cannot.
