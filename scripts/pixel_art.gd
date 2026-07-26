@@ -424,15 +424,8 @@ static func card_ids() -> Array:
 	if _cache.has("_cards"):
 		return _cache["_cards"]
 	var out: Array = []
-	var d := DirAccess.open("res://resources/cards/")
-	if d != null:
-		d.list_dir_begin()
-		var f := d.get_next()
-		while f != "":
-			if f.ends_with(".tres"):
-				out.append(f.replace(".tres", ""))
-			f = d.get_next()
-		d.list_dir_end()
+	for p in list_resources("res://resources/cards/", ".tres"):
+		out.append(p.get_file().replace(".tres", ""))
 	out.sort()
 	_cache["_cards"] = out
 	return out
@@ -490,18 +483,37 @@ static func backdrop(zone_id: String) -> TextureRect:
 static func enemy_sprites() -> Array:
 	if _cache.has("_enemies"):
 		return _cache["_enemies"]
-	var out: Array = []
-	var d := DirAccess.open(ENEMY_DIR)
-	if d != null:
-		d.list_dir_begin()
-		var f := d.get_next()
-		while f != "":
-			if f.ends_with(".png"):
-				out.append(ENEMY_DIR + f)
-			f = d.get_next()
-		d.list_dir_end()
-	out.sort()
+	var out := list_resources(ENEMY_DIR, ".png")
 	_cache["_enemies"] = out
+	return out
+
+## List resources of one kind in a directory, in a form that survives EXPORT.
+##
+## Godot does not ship source .png files in a PCK — it ships the imported texture
+## and leaves a `foo.png.remap` beside it. Code that listed `f.ends_with(".png")`
+## therefore found every sprite while developing and NOTHING in an exported build:
+## the game would have shipped with no enemy art and no card art at all, and no
+## dev run could ever have revealed it, because the editor and `--headless` both
+## read the real filesystem.
+##
+## `load()` still takes the original path, so only the listing needs fixing.
+static func list_resources(dir: String, suffix: String) -> Array:
+	var out: Array = []
+	var d := DirAccess.open(dir)
+	if d == null:
+		return out
+	d.list_dir_begin()
+	var f := d.get_next()
+	while f != "":
+		# an exported build hands back "sprite.png.remap"; strip it back to the
+		# path load() understands
+		if f.ends_with(".remap"):
+			f = f.substr(0, f.length() - 6)
+		if f.ends_with(suffix) and not out.has(dir + f):
+			out.append(dir + f)
+		f = d.get_next()
+	d.list_dir_end()
+	out.sort()
 	return out
 
 ## A stable sprite for an archetype id.
@@ -536,15 +548,8 @@ static func archetype_ids() -> Array:
 	if _cache.has("_archetypes"):
 		return _cache["_archetypes"]
 	var out: Array = []
-	var d := DirAccess.open("res://resources/enemies/")
-	if d != null:
-		d.list_dir_begin()
-		var f := d.get_next()
-		while f != "":
-			if f.ends_with(".tres"):
-				out.append(f.replace(".tres", ""))
-			f = d.get_next()
-		d.list_dir_end()
+	for p in list_resources("res://resources/enemies/", ".tres"):
+		out.append(p.get_file().replace(".tres", ""))
 	out.sort()
 	_cache["_archetypes"] = out
 	return out

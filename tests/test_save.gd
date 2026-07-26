@@ -108,8 +108,50 @@ func _init() -> void:
 	if not m7.deck_valid(sel):
 		fails += 1; print("FAIL empty collection left the player unable to build a deck")
 
+	# --- every historical save version must still migrate ---
+	#
+	# The migration chain grows a step per release and had no fixtures: only v0 was
+	# ever exercised, so a v2 or v3 save could have failed silently for releases.
+	# Each fixture is the shape that version actually wrote, and each must arrive
+	# with its progress intact and the current version's defaults filled in.
+	for old in [
+			{"v": 0, "d": {"collection": {"strike": {"count": 6, "level": 2}}}},
+			{"v": 1, "d": {"version": 1, "collection": {"strike": {"count": 6, "level": 2}},
+				"relics": ["iron_heart"], "gold": 120, "cleared_dungeons": ["crypt"],
+				"decks": {"Starter": {"strike": 4}}}},
+			{"v": 2, "d": {"version": 2, "collection": {"strike": {"count": 6, "level": 2}},
+				"relics": ["iron_heart"], "gold": 120, "cleared_dungeons": ["crypt"],
+				"decks": {"Starter": {"strike": 4}}, "consumables": {"escape_rope": 2}}},
+			{"v": 3, "d": {"version": 3, "collection": {"strike": {"count": 6, "level": 2}},
+				"relics": ["iron_heart"], "gold": 120, "cleared_dungeons": ["crypt"],
+				"decks": {"Starter": {"strike": 4}}, "consumables": {"escape_rope": 2},
+				"starter_kit": "blade", "ascension": 1}},
+			{"v": 4, "d": {"version": 4, "collection": {"strike": {"count": 6, "level": 2}},
+				"relics": ["iron_heart"], "gold": 120, "cleared_dungeons": ["crypt"],
+				"decks": {"Starter": {"strike": 4}}, "consumables": {"escape_rope": 2},
+				"starter_kit": "blade", "ascension": 1, "highest_dungeon": 3}},
+		]:
+		_write(old["d"])
+		var mv = Meta.new()
+		if not mv.load_game():
+			fails += 1; print("FAIL a v%d save does not load" % old["v"]); continue
+		if mv.owned("strike") != 6 or int(mv.collection["strike"]["level"]) != 2:
+			fails += 1; print("FAIL v%d migration lost the collection" % old["v"])
+		if old["v"] >= 1 and mv.gold != 120:
+			fails += 1; print("FAIL v%d migration lost gold (%d)" % [old["v"], mv.gold])
+		if old["v"] >= 1 and not mv.has_cleared("crypt"):
+			fails += 1; print("FAIL v%d migration lost dungeon clears" % old["v"])
+		# every version predates powers, so each must arrive with the starter one
+		if mv.power_data() == null:
+			fails += 1
+			print("FAIL v%d migration leaves the player with no power" % old["v"])
+		# and it must be rewritten in the current shape, not left stale
+		var reread = Meta.new()
+		if not reread.load_game() or reread.power_data() == null:
+			fails += 1; print("FAIL v%d save was not rewritten in the current shape" % old["v"])
+
 	if fails == 0:
-		print("SAVE TEST: PASS (round-trip, v0 migration + backup, future refused, junk dropped)")
+		print("SAVE TEST: PASS (round-trip, every version migrates, backups, future refused, junk dropped)")
 	else:
 		print("SAVE TEST: FAIL (%d)" % fails)
 	_cleanup_sandbox()

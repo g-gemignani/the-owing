@@ -1408,3 +1408,60 @@ sprites, or a trash mob inherits the finale's look. Both are test-enforced.
 signature and a warning, that no dungeon fights its own or any other boss as
 trash, that no two dungeons share a boss, and that 30 rolled normal encounters
 never produce a boss archetype.
+
+### D42 — Making the game expandable
+
+An audit of what it costs to add a card, an enemy or a dungeon, and what would
+break first. Two real defects, several ceilings, and one thing that would only
+have shown up after shipping.
+
+**Runtime `res://` listing does not survive export.** `enemy_sprites()` and the
+card-art lister matched `f.ends_with(".png")`. Godot does not put source PNGs in a
+PCK — it ships the imported texture and leaves `sprite.png.remap` beside it. So
+both listings would have returned **nothing** in an exported build: no enemy art,
+no card illustrations, in a game whose whole look is those sprites. Neither the
+editor nor a `--headless` run can reveal it, because both read the real
+filesystem, and this project has never been exported. Now routed through
+`PixelArt.list_resources()`, which strips `.remap`.
+
+**Catalogues were hand-maintained with nothing checking them.** Six lists —
+`CATALOG` (100 cards), `RELIC_CATALOG`, `POWERS`, `DUNGEONS`, `ZONES`, `BUILDS` —
+each needing an edit per new file. They happened to be in sync, but a forgotten
+line means finished content that silently does not exist, and a renamed file means
+a catalogue entry that fails at load with no clue why.
+
+**Ceilings, now measured and asserted rather than discovered:**
+
+| resource | in use | available | headroom |
+|----------|--------|-----------|----------|
+| enemy sprites | 35 archetypes | 41 tiles, 12 pinned | **6** |
+| card illustrations | 100 | 140 | 40 |
+
+Six spare sprites is the real limit on new enemies, and it was hit blind while
+adding bosses in D41 — the art test only caught it because it already checked for
+duplicates. `tests/test_content.gd` now prints the headroom every run and fails
+below three.
+
+**Persisted enum ordinals.** `EnemyData.Action` and `Trigger`, `RelicData.Trigger`
+and `Effect`, `CardData.Rarity` are stored as raw ints in `.tres` files and in save
+games. Inserting a value silently rewrites every existing enemy and every save.
+This was a comment on one enum; it is now a test that pins the numbers.
+
+**A hand-computed constant that rots silently.** `BASELINE_CARD_POWER` (4.625) is
+the reference deck's power per energy, written out by hand, and every scaling
+number is relative to it. Change card pricing without recomputing it and the whole
+curve drifts with no error anywhere. The test recomputes it from the actual cards.
+
+**Untested migration chain.** `SAVE_VERSION` is 5 with five migration steps, and
+only v0 had a fixture — a v2 or v3 save could have been broken for releases with
+nobody knowing. `tests/test_save.gd` now carries a fixture per historical version
+and asserts each arrives with its progress intact and current defaults filled in.
+
+`CONTRIBUTING.md` documents the actual steps per content type, and the two
+authoring rules that are enforced rather than suggested (no conditional rules on
+group archetypes; no heal on a lasting condition without `once`).
+
+**Still open, deliberately.** Content ids are strings everywhere, so a rename is a
+find-and-replace across `.tres` files — checked by the reference test, not
+prevented. Rule tables are parallel arrays, which the tests keep honest but which
+will get unreadable well before fifty bosses. Neither is worth restructuring yet.

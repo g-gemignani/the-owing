@@ -21,7 +21,7 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 | Events         | 20                                                           |
 | Dungeons       | 12 across 5 zones, 8 difficulty tiers                        |
 | Traversal      | 3 pluggable models: node graph, card draw, dice board        |
-| Tests          | 28 suites                                                    |
+| Tests          | 29 suites                                                    |
 
 ## Running it
 
@@ -63,7 +63,7 @@ scripts/     game code — one file per screen or system
 resources/   all content as .tres data: cards, enemies, relics, powers, events,
              dungeons, zones, builds
 scenes/      thin .tscn wrappers; screens build their UI in code
-tests/       28 suites + tests/run.sh
+tests/       29 suites + tests/run.sh
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd
 DESIGN.md    the reasoning behind every decision, and every mistake
 ```
@@ -87,6 +87,12 @@ Enemies that punish blocking dropped defensive builds from 74% to 32% completion
 before being retuned. Fusion was measured making the player too strong too fast.
 Enemy scaling once made a *maxed* deck perform worse than a merely good one. Those
 stories, with the numbers, are in [DESIGN.md](DESIGN.md).
+
+## Adding content
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Every piece of content is a `.tres`
+file plus one catalogue line, and `tests/test_content.gd` fails if the two ever
+disagree — so a half-added card cannot silently not exist.
 
 ## Design notes
 
