@@ -15,7 +15,7 @@ func _ready() -> void:
 		MetaState.gold, MetaState.relics.size(),
 		MetaState.clear_count(), Balance.DUNGEONS.size()])
 	list = UI.scroll(col)
-	UI.button(col, "Back to the world", func(): _back())
+	UI.exit_button(col, "Back to the world", func(): _back())
 	_fill(z)
 
 func _fill(z: ZoneData) -> void:

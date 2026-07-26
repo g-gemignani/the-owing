@@ -113,6 +113,25 @@ const HP_POWER_K := 0.5
 const DMG_POWER_K := 0.15
 const POWER_RATIO_CAP := 4.5  # room for maxed decks; sub-linear card growth keeps this reachable
 
+## Past this ratio a deck is not "a player with a good build" any more — it is the
+## thing the deepest dungeons exist to test. Two rules switch on above it (extra
+## enemy HP, and pierce that scales with the deck), and NOTHING below it changes,
+## which is what keeps every cell D45 tuned exactly where it was. Chosen as the top
+## of the build band: the archetype decks measure 2.4-4.0, fully-relic'd late ones
+## 4.3-5.9.
+const HIGH_POWER_FLOOR := 3.0
+## Extra enemy HP per point of ratio above the floor.
+##
+## Without it, more power made the game EASIER at the top: `HP_POWER_K` at 0.5
+## means enemy HP grows at half the rate of your damage, so fights get SHORTER the
+## stronger you are — a maxed deck cleared a Maw fight in 4.0 turns against a late
+## deck's 5.2, was hit fewer times for it, and finished the last dungeon in the
+## game at 100% completion. Raising `HP_POWER_K` itself to 1.0 fixes the top and
+## costs the middle everything (measured: Barricade 55% -> 29% at the Foundry, AoE
+## 72% -> 6% at the Drowned Market), because it lengthens fights at EVERY ratio and
+## escalation then compounds on the decks that were already slow.
+const HP_POWER_K_HIGH := 0.5
+
 # --- the ratchet: a dungeon only matches you so far ---
 ## Enemies used to scale against the player's power with NO upper bound, at every
 ## depth. Measured at a fixed depth 3: quadrupling deck power made fights 31%
@@ -566,7 +585,9 @@ static func enemy_max_hp(dungeon: int, tier: int, ratio: float) -> int:
 	var dps := MAX_ENERGY * BASELINE_CARD_POWER * OFFENSE_SHARE
 	var base := dps * TARGET_NORMAL_TURNS + dungeon * 5.0
 	base *= float(TIER_HP_MULT[tier])
-	base *= 1.0 + HP_POWER_K * (scaling_ratio(dungeon, ratio) - 1.0)
+	var sr := scaling_ratio(dungeon, ratio)
+	base *= 1.0 + HP_POWER_K * (sr - 1.0) \
+		+ HP_POWER_K_HIGH * maxf(0.0, sr - HIGH_POWER_FLOOR)
 	base *= ascension_mult()
 	return int(round(base))
 
@@ -613,13 +634,38 @@ const SUNDER_DAMAGE_FRAC := 0.55
 ## had it in SUNDER and poison — just on too few archetypes to matter. Depth now
 ## carries it directly: the shallow floors are answerable with a shield, the deep
 ## ones are not, which is also what makes them read as deeper.
+## Depth alone was not enough, and the reason is the same argument one step
+## further. Pierce exists because Block scales with the player's power and enemy
+## damage does not. A pierce fraction fixed per depth is itself a constant, so the
+## same arithmetic catches up with it: at the Maw a deck at ratio 5 blocked
+## everything the remaining 78% could throw, and every late profile measured 100%
+## completion — the plateau DESIGN.md had recorded as an open gap.
+##
+## So it rises with the deck as well, THROUGH `scaling_ratio` — which is capped by
+## the dungeon's own ceiling. That is what keeps this consistent with the D36
+## ratchet instead of undoing it: the Crypt's ceiling is 1.4, so no amount of
+## growth makes the Crypt pierce you, and you outgrow it exactly as intended. The
+## Maw has no cap below what a player can reach, so it answers back.
+##
+## Multiplying the depth term (rather than adding) keeps depth 1 at exactly zero
+## however strong you are: the tutorial dungeon must stay answerable with a shield,
+## which is what teaches Block in the first place.
 const PIERCE_AT_DEPTH_1 := 0.0
 const PIERCE_PER_DEPTH := 0.032
+## How fast it rises above HIGH_POWER_FLOOR. Below that floor this changes nothing,
+## and that threshold is what makes it safe to add: block builds are the decks
+## pierce punishes twice — once for being blocked through, again because their slow
+## fights pay it every turn — and a Barricade deck sits at 2.4. Measured: scaling
+## from ratio 1 instead took Barricade run completion from 59% to 31%, which
+## deletes an archetype in order to fix the endgame.
+const PIERCE_PER_RATIO := 0.5
 
-## Fraction of a hit that goes straight to HP at this difficulty.
-static func pierce_fraction(dungeon: int) -> float:
-	return clampf(PIERCE_AT_DEPTH_1 + PIERCE_PER_DEPTH * float(maxi(1, dungeon) - 1),
-		0.0, 0.5)
+## Fraction of a hit that goes straight to HP: depth, raised by how far past
+## `HIGH_POWER_FLOOR` the deck has grown — capped by the dungeon, as ever.
+static func pierce_fraction(dungeon: int, ratio: float = 1.0) -> float:
+	var depth := PIERCE_AT_DEPTH_1 + PIERCE_PER_DEPTH * float(maxi(1, dungeon) - 1)
+	var excess := maxf(0.0, scaling_ratio(dungeon, ratio) - HIGH_POWER_FLOOR)
+	return clampf(depth * (1.0 + PIERCE_PER_RATIO * excess), 0.0, 0.5)
 
 const ESCALATION_PER_TURN := 0.06
 const ESCALATION_MAX := 1.6

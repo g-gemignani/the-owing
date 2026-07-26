@@ -136,16 +136,12 @@ func _build_ui() -> void:
 	var bottom := HBoxContainer.new()
 	bottom.add_theme_constant_override("separation", UITheme.sep(10))
 	root.add_child(bottom)
-	var back_btn := Button.new()
-	UITheme.style_button(back_btn)
-	back_btn.text = "Back"
-	back_btn.pressed.connect(func():
+	UI.exit_button(bottom, "Back", func():
 		var dest := "res://scenes/Overworld.tscn"
 		if not GameState.manage_only and GameState.current_zone != "":
 			dest = "res://scenes/ZoneView.tscn"
 		GameState.manage_only = false
-		get_tree().change_scene_to_file(dest))
-	bottom.add_child(back_btn)
+		UI.goto(self, dest))
 	var coll_btn := Button.new()
 	UITheme.style_button(coll_btn)
 	coll_btn.text = "Collection (fuse)"

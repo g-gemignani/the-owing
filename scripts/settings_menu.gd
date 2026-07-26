@@ -44,10 +44,10 @@ func _build() -> void:
 		Audio.apply_volumes()
 		Audio.play("ui_click")   # hear the change you just made
 		SettingsState.save_settings())
+	# no click on this one: the score is playing, so it IS the feedback
 	UI.slider(col, "Music volume", SettingsState.music_volume, 0, 100, 5, func(v):
 		SettingsState.music_volume = int(v)
 		Audio.apply_volumes()
-		Audio.play("ui_click")   # hear the change you just made
 		SettingsState.save_settings())
 	UI.slider(col, "Sound effects", SettingsState.sfx_volume, 0, 100, 5, func(v):
 		SettingsState.sfx_volume = int(v)
@@ -56,5 +56,5 @@ func _build() -> void:
 		SettingsState.save_settings())
 
 	UI.spacer(col)
-	UI.label(col, "Shortcuts: Ctrl +/- scale, Ctrl+0 reset, F11 fullscreen, Esc windowed")
-	UI.button(col, "Back", func(): UI.goto(self, back_to))
+	UI.label(col, "Shortcuts: Ctrl +/- scale, Ctrl+0 reset, F11 fullscreen, Esc back")
+	UI.exit_button(col, "Back", func(): UI.goto(self, back_to))

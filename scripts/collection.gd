@@ -40,17 +40,17 @@ func _build_ui() -> void:
 	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	scroll.add_child(list_box)
 
-	var back := Button.new()
-	UITheme.style_button(back)
 	# return to wherever makes sense: the map if a dungeon is active, else the deck builder
 	var dest := "res://scenes/Overworld.tscn"
 	if GameState.in_run():
-		dest = GameState.run_scene()
+		# resume_scene, not run_scene: the collection is reachable from the pause
+		# menu DURING a fight now, and returning to the map with a fight still
+		# saved would leave the player able to walk into a different node and be
+		# handed the old fight back
+		dest = GameState.resume_scene()
 	elif GameState.dungeon_id != "":
 		dest = "res://scenes/DeckBuilder.tscn"
-	back.text = "Back"
-	back.pressed.connect(func(): get_tree().change_scene_to_file(dest))
-	root.add_child(back)
+	UI.exit_button(root, "Back", func(): UI.goto(self, dest))
 
 func _refresh() -> void:
 	# MetaState already knows the total; recounting it here was a second copy of the
@@ -102,10 +102,24 @@ func _refresh() -> void:
 		if card.eff_block() > 0:
 			stats += "blk %d " % card.eff_block()
 		var cap: int = MetaState.max_level(id)
-		lbl.text = "%s  [%s]  Lv%d/%d  x%d   (%s)" % [
+		# no empty "()" on a card whose numbers are not damage or block
+		var stat_txt := stats.strip_edges()
+		lbl.text = "%s  [%s]  Lv%d/%d  x%d%s" % [
 			card.name, CardData.Rarity.keys()[card.rarity], entry["level"], cap,
-			entry["count"], stats.strip_edges()]
+			entry["count"], "   (%s)" % stat_txt if stat_txt != "" else ""]
 		row.add_child(lbl)
+		# What the next level BUYS. The buttons have always quoted the price; the
+		# benefit was left for the player to infer, which is not a decision anyone
+		# can make well against a shop that states its prices AND its goods.
+		var gain: String = card.level_up_text(int(entry["level"]) + 1)
+		if gain != "" and int(entry["level"]) < cap:
+			var next := Label.new()
+			next.custom_minimum_size.x = UITheme.px(220)
+			next.add_theme_color_override("font_color", Color(0.72, 0.86, 0.68))
+			next.text = "next: %s" % gain
+			row.add_child(next)
+			UI.hoverable(next, "What one more level gives this card. Level %d of %d." % [
+				int(entry["level"]) + 1, cap])
 		# on the row, so hovering the art or the fuse buttons explains the card too
 		UI.hoverable(row, Icons.card_tooltip(card))
 
@@ -119,6 +133,11 @@ func _refresh() -> void:
 				var f := Button.new()
 				UITheme.style_button(f)
 				f.text = "+%d  (-%dx, -%dg)" % [step, price["copies"], price["gold"]]
+				var target: int = int(entry["level"]) + step
+				var buys: String = card.level_up_text(target)
+				UI.hoverable(f, "To level %d: %s\nCosts %d copies and %d gold." % [
+					target, buys if buys != "" else "no change to its numbers",
+					price["copies"], price["gold"]])
 				f.pressed.connect(_on_fuse.bind(id, step))
 				row.add_child(f)
 		else:

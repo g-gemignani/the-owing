@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The numbers behind three decisions (D58, D59).** A card now shows what it will do in *this fight* — Strength and Dexterity applied — on its face, its hover and in the engine that resolves it, after a play report that gaining Strength changed nothing visible. Alongside it: the draw and discard piles are on screen, unaffordable cards are dimmed, the combat log keeps four lines, dying gets a screen the player dismisses instead of a 2.5-second wait, and fusing states what a level buys rather than only what it costs.
+
 - **The endgame stopped being a walkover (D54).** The deepest dungeons were cleared 100% of the time by every late deck, because enemy HP grows at half the rate of the player's damage — so more power made fights *shorter*, and a shorter fight offers fewer chances to be hit. Extra enemy HP and ratio-scaled pierce now switch on above a floor at the top of the build band, leaving every cell the previous pass tuned exactly where it was. The Maw now reads 40/49/70% by deck strength. The test changed probe: attrition per fight rose all through the plateau, so fight length is what is asserted.
 - **Music, at last, on the Music bus (D53).** The bus and its slider existed with nothing routed to them. Five generated, measured, seamless loops now play, chosen by which screen the player is on from one table polled in one place, so a new screen cannot be silent by omission. Also fixed a third restated constant: `SettingsState` defaulted the UI scale to 1.6 and applied it over the theme's 1.0, so no new player ever got the shipped default.
 - **A way out of the fight (D52).** Combat had no exit control and Escape only left fullscreen. Screens now declare their exit once, and the button and the key run the same Callable; combat seals it between the killing blow and the reward pick so the fight cannot be re-offered. Found a crash class while doing it: a static Callable outliving its screen corrupted the heap at shutdown and, because the output is piped, silently discarded three tests' PASS lines — the runner now checks exit codes too.
@@ -2017,8 +2019,30 @@ brought to it. New art inherits the D39 contrast contract (worst-pixel, not aver
 rather than being allowed to opt out of it.
 
 **Not done here, on purpose.** No assets were drawn and no screens changed. The brief
-names the ~225 files, their sizes, their paths and their hooks, and §4 lists the seven
-code fixes that have to land or new art will sit on top of the same problems.
+names the files, their sizes, their paths and their hooks, and §4 lists the seven code
+fixes that have to land or new art will sit on top of the same problems.
+
+**The list itself is generated** — `tools/art_manifest.gd` → `ART_ASSETS.md`, 213
+wanted, 3 present. Hand-typing 35 enemy names, 30 relics and 12 dungeon backdrops
+would be a restated table, and a restated table has gone stale on this project three
+times (D34): the 36th enemy would simply never appear on the list. The briefs are the
+content's own `name` and `description`, so an artist is told what the game already
+says a thing is rather than a second, drifting description of it. It reports which
+files exist, so it doubles as the coverage report and is the natural backing for the
+art-coverage test ART.md §4 asks for.
+
+Writing it corrected two guesses in the brief. Card families are **12, not 24**: the
+100 cards do fall into twelve effect families, but lopsidedly — 28 attack, 19 block,
+12 poison, 8 thorns, then a tail of 2-5 — so splitting each family per zone would have
+meant 60 variants serving three cards each. And the hero briefs presume an **arena**
+layout (hero facing right, enemies facing left), which `combat.gd` does not have: it
+stacks enemies at the top and the hand at the bottom with ~250px of nothing between.
+That is now written down as a layout change rather than smuggled in as an art note.
+
+It also reproduced the D57 glossary bug inside the generator — `%%` in a plain string
+that never reaches a `%` operation, printed verbatim into the manifest. Caught by
+reading the output, one commit after fixing the same thing in `glossary.gd`. Escapes
+without an operation to escape into are apparently a habit worth watching for.
 
 ### D57 — Two bugs the renders found, and the assertion that was missing
 
@@ -2061,3 +2085,64 @@ only confirm that code exists, never that it had an effect.**
 One thing that looked like a third bug and was not: with the board finally visible,
 no `^you` marker appears under any cell. `TraversalDice.pos` starts at `-1` — at the
 entrance, not yet on the board — so no cell is the player's yet. Correct as written.
+
+### D58 — A card must not lie about the fight either
+
+D50 stopped cards misreporting their *level*. They went on misreporting the
+*fight*. `CardData.effect_text()` is generated from `eff_damage()`, which knows
+about fusion and nothing else, so with 3 Strength a card that dealt 9 still said
+6 — and the buff itself was a "[Blk 5 Str 3]" fragment inside a run-on status
+line. Reported from play as "gaining Strength is not visible during the game and
+the card text stays the same", which is exactly right: the effect existed, and
+nothing the player was looking at changed.
+
+Three surfaces, one source. `CombatEngine.card_base_damage()` is what `_resolve()`
+itself computes with, and `card_damage()` / `card_block()` run it through the same
+`Combatant.outgoing_damage()` / `outgoing_block()` the resolution uses. The face
+text, the hover text and the number on the card all read those. A second copy of
+that arithmetic for display would be the D34 label table again.
+
+* **The face carries the headline number**, always, not only on hover. A resting
+  card showed its name and its cost, so the number could only be found by mousing
+  over each card in turn — useless for the thing that changes when a buff lands.
+  Damage in red, Block in blue. The strip hides again when the card opens, because
+  the rules text then carries the same number and leaving it up squeezed the
+  description to 11px, which `CardTextTest` correctly calls unreadable.
+* **Buffs and debuffs get their own line**, spelled out — "Strength +4 (every
+  attack hits harder)" — warm when they are yours, cold when they are being done
+  to you.
+* `Icons.card_tooltip()` takes the same two numbers, so the hover cannot disagree
+  with the face.
+
+`test_card_truth.gd` pins it with the assertion that a second agreeing copy of the
+arithmetic could not satisfy: it plays the card and compares the number the face
+promised against the HP the enemy actually lost. `CardTextTest` pins the visible
+half — with 6 Strength, the number on the *resting* face must be the buffed one.
+
+### D59 — Three places the game asked for a decision without showing the numbers
+
+**The fight.** No draw or discard count, though the reward screen quotes draw
+intervals ("every 3.0 turns instead of 2.8") and the shop sells deck thinning: the
+player was asked to price consistency while blind to it. Unaffordable cards looked
+exactly like affordable ones, and the only way to find out was to click and be
+refused — they are dimmed now, and still clickable, because the refusal is how the
+rule gets learned. The log kept one line, so a turn where three enemies acted
+reported only the third; it keeps four.
+
+**Dying.** Defeat was one line of status text followed by a forced 2.5 second wait
+and a scene change. Escrow (D20), the Escape Rope (D21) and the death penalty (D3)
+all exist to make that moment weigh, and it could not be read, let alone sat with.
+`Defeat.tscn` now reports what killed you and where, what the run was carrying and
+forfeited, what the penalty took from the collection, and — the part that stops a
+loss reading as having undone the whole game — what survives it: relics, card
+levels, banked gold. The player dismisses it themselves.
+
+**Fusing.** The Collection quoted the price ("+1 (-4x, -180g)") and never the
+gain. Since D35 fusion spends gold as well, that is an economic decision against
+the shop with the benefit side missing. `CardData.level_up_text()` generates
+"dmg 10→14, vuln 2→3" from the same getters the engine resolves with, shown on the
+row and on every bulk button's hover.
+
+All three are pinned by tests that were verified by reintroducing each bug in turn:
+the piles vanish, every card looks playable, the log drops to one line, the defeat
+screen loses its numbers, the fusion preview stops naming the before and after.

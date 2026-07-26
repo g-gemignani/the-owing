@@ -222,7 +222,7 @@ func intent_text(i: int) -> String:
 			# show what would actually land, after the enemy's Weak and the
 			# player's Vulnerable/block — including the share Block cannot stop
 			var raw := enemies[i].outgoing_damage(v)
-			var pierce := int(round(float(raw) * Balance.pierce_fraction(dungeon)))
+			var pierce := int(round(float(raw) * Balance.pierce_fraction(dungeon, ratio)))
 			var total := player.predicted_damage(maxi(0, raw - pierce)) + pierce
 			if pierce > 0:
 				return "hit %d (%d pierces Block)" % [total, pierce]
@@ -416,6 +416,39 @@ func play_card(card: CardData) -> String:
 		msg += "(exhausted) "
 	return msg if msg != "" else "%s played." % card.name
 
+# --- what a card would do RIGHT NOW ------------------------------------------
+#
+# D50 stopped cards lying about their level. They went on lying about the fight:
+# a card face is generated from `eff_damage()`, which knows about fusion levels
+# and nothing else, so with 3 Strength a "Deal 6 damage" card dealt 9 and said 6.
+# Strength and Dexterity were effectively invisible — you could read the buff in
+# the status line and still not see it anywhere it mattered.
+#
+# `_resolve()` computes its numbers HERE, and the card face reads the same
+# functions, so what the player is shown is what the engine is about to do. A
+# second copy of this arithmetic for display is the D34 label table again.
+
+## Base damage before the target's own Vulnerable and Block.
+func card_base_damage(card: CardData) -> int:
+	var base := card.hit_damage()          # includes per-combat growth
+	if card.damage_from_block:
+		base = player.block
+	if card.strength_mult > 0:
+		base += player.strength * card.strength_mult
+	return base
+
+## What one hit actually leaves the player's hands as: Strength added, Weak applied.
+func card_damage(card: CardData) -> int:
+	return player.outgoing_damage(card_base_damage(card))
+
+## Block this card actually grants, after Dexterity.
+func card_block(card: CardData) -> int:
+	return player.outgoing_block(card.eff_block())
+
+## The face text with this fight's numbers in it.
+func card_text(card: CardData) -> String:
+	return card.effect_text(card_damage(card), card_block(card))
+
 ## Apply a card's effects. Split out of play_card so a POWER resolves through the
 ## identical path — a power is a card the player always holds, and duplicating
 ## twenty mechanics for it would guarantee the two drift apart.
@@ -428,11 +461,7 @@ func _resolve(card: CardData) -> String:
 		msg += "Paid %d HP. " % card.hp_cost
 
 	# --- damage: multi-hit, AoE, Block-scaled, Strength-scaled ---
-	var base_dmg := card.hit_damage()
-	if card.damage_from_block:
-		base_dmg = player.block
-	if card.strength_mult > 0:
-		base_dmg += player.strength * card.strength_mult
+	var base_dmg := card_base_damage(card)
 	if base_dmg > 0:
 		var targets: Array = []
 		if card.aoe:
@@ -585,7 +614,7 @@ func _resolve_enemy(i: int) -> String:
 			var dealt := e.outgoing_damage(v)
 			# Deeper places hit through a shield. Split off the piercing share
 			# BEFORE Block sees the rest — see Balance.pierce_fraction.
-			var pierce := int(round(float(dealt) * Balance.pierce_fraction(dungeon)))
+			var pierce := int(round(float(dealt) * Balance.pierce_fraction(dungeon, ratio)))
 			var blockable := maxi(0, dealt - pierce)
 			var landed := player.predicted_damage(blockable) + pierce
 			player.take_damage(blockable)

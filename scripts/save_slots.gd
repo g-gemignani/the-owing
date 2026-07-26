@@ -11,7 +11,7 @@ func _ready() -> void:
 	var col := UI.screen(self, "Save Slots")
 	msg = UI.label(col, "Pick a slot to load, or start a new game in it.")
 	list = UI.scroll(col)
-	UI.button(col, "Back", func(): UI.goto(self, "res://scenes/MainMenu.tscn"))
+	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/MainMenu.tscn"))
 	_refresh()
 
 func _refresh() -> void:
@@ -79,7 +79,6 @@ func _load(i: int) -> void:
 		return
 	GameState.reset_run_progress()
 	if MetaState.has_saved_run() and GameState.run_from_dict(MetaState.saved_run):
-		UI.goto(self, "res://scenes/Combat.tscn" if not GameState.combat_state.is_empty()
-			else GameState.run_scene())
+		UI.goto(self, GameState.resume_scene())
 		return
 	UI.goto(self, "res://scenes/Overworld.tscn")

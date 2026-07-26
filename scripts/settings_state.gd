@@ -16,7 +16,13 @@ const VERSION := 1
 var master_volume: int = 80
 var music_volume: int = 70
 var sfx_volume: int = 80
-var ui_scale: float = 1.6
+## -1 means "the player has never chosen": resolved from `UITheme.UI_SCALE` in
+## apply(). It used to restate 1.6, and when D49 lowered the shipped default to
+## 1.0 this line quietly overrode it on every machine with no settings file —
+## which is every new player. `tests/test_layout.gd` reads the constant, so it
+## measured 1.0 and passed while the game shipped 1.6. Third time a restated
+## number has lied; the fix is always to have one copy of it.
+var ui_scale: float = -1.0
 var fullscreen: bool = true
 ## Show the balance-facing numbers (incoming damage, intents) in combat.
 var show_numbers: bool = true
@@ -31,6 +37,8 @@ func apply() -> void:
 	# unloadable there (project convention — see CLAUDE/DESIGN notes).
 	var theme := (get_node_or_null("/root/UITheme") if is_inside_tree() else null)
 	if theme != null:
+		if ui_scale <= 0.0:
+			ui_scale = theme.UI_SCALE
 		theme.set_scale_silent(ui_scale)
 	var audio := (get_node_or_null("/root/Audio") if is_inside_tree() else null)
 	if audio != null:
@@ -63,6 +71,9 @@ func load_settings() -> void:
 	master_volume = clampi(int(d.get("master_volume", master_volume)), 0, 100)
 	music_volume = clampi(int(d.get("music_volume", music_volume)), 0, 100)
 	sfx_volume = clampi(int(d.get("sfx_volume", sfx_volume)), 0, 100)
-	ui_scale = clampf(float(d.get("ui_scale", ui_scale)), 0.6, 3.0)
+	# only when the file actually carries one: clamping the "never chosen" sentinel
+	# would turn it into 0.6 and ship a microscopic UI
+	if d.has("ui_scale"):
+		ui_scale = clampf(float(d["ui_scale"]), 0.6, 3.0)
 	fullscreen = bool(d.get("fullscreen", fullscreen))
 	show_numbers = bool(d.get("show_numbers", show_numbers))

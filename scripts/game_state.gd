@@ -48,6 +48,12 @@ var shop_stock: Array = []
 var last_relic: String = ""
 ## One-shot message about what the last run secured or cost.
 var last_haul: String = ""
+## What the last defeat cost, for the screen that reports it. Dying used to print
+## a line of text and force a 2.5 second wait before dumping the player on the
+## overworld — the moment escrow, ropes and the death penalty all exist to make
+## weigh, and it could not be read, let alone dismissed. Empty means "no death to
+## report", which is what a fresh boot and every screen test sees.
+var last_defeat: Dictionary = {}
 ## Slot a new game is being started in, handed to the kit-choice screen.
 var pending_new_slot: int = 0
 
@@ -286,6 +292,15 @@ func run_scene() -> String:
 		Traversal.Kind.DECK: return "res://scenes/DeckRun.tscn"
 		Traversal.Kind.DICE: return "res://scenes/DiceRun.tscn"
 		_: return "res://scenes/Map.tscn"
+
+## Where picking the run back up goes: into the fight if one is in progress
+## (D22 serializes it), otherwise the traversal view. Continue, loading a slot and
+## the pause menu all ask here — the rule was written out three times, which is
+## how two of them come to disagree.
+func resume_scene() -> String:
+	if not combat_state.is_empty():
+		return "res://scenes/Combat.tscn"
+	return run_scene()
 
 func clear_node(_node: Dictionary) -> void:
 	if traversal != null:

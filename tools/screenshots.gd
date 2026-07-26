@@ -37,6 +37,7 @@ const SHOTS := [
 	["Powers", "res://scenes/Powers.tscn", ""],
 	["Glossary", "res://scenes/Glossary.tscn", ""],
 	["Victory", "res://scenes/Victory.tscn", "combat"],
+	["Defeat", "res://scenes/Defeat.tscn", "defeat"],
 ]
 
 func _ready() -> void:
@@ -127,6 +128,15 @@ func _setup(need: String) -> void:
 			GameState.shop_stock = []
 		"event":
 			GameState.pending = {"type": GameState.NodeType.EVENT, "row": 1, "col": 0, "cleared": false}
+		"defeat":
+			# Defeat renders "Nothing to report." on an empty dictionary, which is
+			# correct behaviour and a useless capture. Give it a real death.
+			GameState.last_defeat = {
+				"dungeon": "The Crypt", "difficulty": 1, "killer": "Crypt Hound",
+				"tier": Balance.Tier.NORMAL, "turns": 6,
+				"forfeited_cards": 3, "forfeited_gold": 140,
+				"penalty_gold": 25, "penalty_cards": ["strike"],
+			}
 		_:
 			GameState.pending = {"type": GameState.NodeType.COMBAT, "row": 1, "col": 0, "cleared": false}
 

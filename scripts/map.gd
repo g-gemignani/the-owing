@@ -37,10 +37,8 @@ func _build_ui() -> void:
 	coll_btn.text = "Collection"
 	coll_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
 	header.add_child(coll_btn)
-	var menu_btn := Button.new()
-	menu_btn.text = "Menu"
-	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/PauseMenu.tscn"))
-	header.add_child(menu_btn)
+	# same Callable on the button and on Escape, so the two cannot drift apart
+	UI.exit_button(header, "Menu", func(): UI.goto(self, "res://scenes/PauseMenu.tscn"), 38.0)
 
 	log_label = Label.new()
 	log_label.text = "Select an encounter to enter."

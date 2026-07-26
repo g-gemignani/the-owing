@@ -33,6 +33,16 @@ func _init() -> void:
 	# the constant was changed to 1.0, which is exactly how a duplicated number
 	# turns a passing test into a lie.
 	var scale: float = load("res://scripts/ui_theme.gd").UI_SCALE
+	# ...and reading it from ONE place was not enough, because a second copy lived
+	# in settings_state.gd, which applies its own default over the theme's on any
+	# machine with no settings file. The scale the test measures must be the scale
+	# a new player is actually given.
+	var settings = load("res://scripts/settings_state.gd").new()
+	if settings.ui_scale > 0.0:
+		fails += 1
+		print("FAIL settings_state restates the default UI scale (%.2f) instead of taking UITheme's %.2f" % [
+			settings.ui_scale, scale])
+	settings.free()
 	var node_h: float = 52.0 * scale
 	var sep: float = 6.0 * scale
 	var map_h: float = float(rows) * node_h + float(rows - 1) * sep

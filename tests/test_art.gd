@@ -270,6 +270,46 @@ func _init() -> void:
 			fails += 1; print("FAIL volume mapping not monotonic at %d" % v)
 		prev_db = db
 
+	# --- music -----------------------------------------------------------------
+	#
+	# The Music bus and its slider existed for a long time with nothing routed to
+	# them: the setting adjusted the volume of silence. That is worse than an
+	# obviously missing feature, because the UI claims otherwise. So the checks are
+	# about the WIRING, not the notes.
+	var scores: int = A.SCORES.size()
+	if scores < 3:
+		fails += 1; print("FAIL only %d scores declared — one loop for the whole game" % scores)
+	var streams := {}
+	for score in A.SCORES:
+		var mpath: String = A.MUSIC_DIR + String(A.SCORES[score]) + ".ogg"
+		if not ResourceLoader.exists(mpath):
+			fails += 1; print("FAIL score '%s' has no file (%s)" % [score, mpath])
+			continue
+		var mst := load(mpath) as AudioStream
+		if mst == null or mst.get_length() <= 1.0:
+			fails += 1; print("FAIL score '%s' is missing or too short to be a loop" % score)
+			continue
+		# A track that does not loop stops after half a minute and the game goes
+		# quiet mid-dungeon, which reads as a bug in the sound, not in the flag.
+		if mst is AudioStreamOggVorbis and not (mst as AudioStreamOggVorbis).loop:
+			if not _source_has("res://scripts/audio.gd", "loop = true"):
+				fails += 1; print("FAIL score '%s' does not loop and nothing sets it" % score)
+		streams[String(A.SCORES[score])] = true
+	# five names pointing at one file is one track pretending to be five
+	if streams.size() != scores:
+		fails += 1; print("FAIL %d scores share only %d files" % [scores, streams.size()])
+
+	# every screen resolves to a real score, including ones nobody listed
+	for scene_name in A.SCENE_SCORE:
+		if not A.SCORES.has(String(A.SCENE_SCORE[scene_name])):
+			fails += 1; print("FAIL %s asks for score '%s', which does not exist" % [
+				scene_name, A.SCENE_SCORE[scene_name]])
+	if not A.SCORES.has(A.DEFAULT_SCORE):
+		fails += 1; print("FAIL the fallback score '%s' does not exist" % A.DEFAULT_SCORE)
+	# the point of the whole exercise: music must be on the bus the slider drives
+	if not _source_has("res://scripts/audio.gd", "_music.bus = \"Music\""):
+		fails += 1; print("FAIL the music player is not on the Music bus — the slider does nothing")
+
 	# licences for the audio packs too
 	var has_audio_licence := false
 	if d != null:

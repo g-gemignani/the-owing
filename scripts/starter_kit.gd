@@ -36,7 +36,7 @@ func _ready() -> void:
 		gap.custom_minimum_size = Vector2(0, UITheme.px(8))
 		box.add_child(gap)
 
-	UI.button(col, "Back", func(): UI.goto(self, "res://scenes/SaveSlots.tscn"))
+	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/SaveSlots.tscn"))
 
 func _pick(kid: String) -> void:
 	MetaState.slot = slot

@@ -53,7 +53,7 @@ func _ready() -> void:
 		gap.custom_minimum_size = Vector2(0, UITheme.px(10))
 		list.add_child(gap)
 
-	UI.button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
+	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
 
 func _card_name(cid: String) -> String:
 	if not MetaState.CATALOG.has(cid):

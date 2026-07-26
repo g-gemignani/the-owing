@@ -17,4 +17,4 @@ func _ready() -> void:
 	if not missing.is_empty():
 		UI.label(list, "")
 		UI.label(list, "Still undiscovered: %d" % missing.size())
-	UI.button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
+	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))

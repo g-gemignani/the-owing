@@ -137,8 +137,46 @@ func _init() -> void:
 	if ratio >= Balance.POWER_RATIO_CAP:
 		print("WARN maxed deck pins the ratio cap (%.2f >= %.2f): enemies stop scaling" % [ratio, Balance.POWER_RATIO_CAP])
 
+	# --- fusion has to state what it BUYS, not only what it costs ---
+	#
+	# The Collection quoted "+1 (-4x, -180g)" and nothing else. Since D35 fusion
+	# spends gold as well, that is an economic decision against the shop with the
+	# benefit side missing. `level_up_text` generates the gain from the same getters
+	# the engine resolves with, so the preview cannot promise what the card will not
+	# deliver.
+	for pid in ["strike", "defend", "bash"]:
+		var pc := (load("res://resources/cards/%s.tres" % pid) as CardData).duplicate() as CardData
+		pc.level = 1
+		var cap2: int = Balance.max_level(pc.rarity)
+		var says := pc.level_up_text(2)
+		if pc.eff_damage() > 0 or pc.eff_block() > 0:
+			if says.strip_edges() == "":
+				fails += 1
+				print("FAIL %s does not say what its next level buys" % pid)
+			# the numbers quoted must be the real before and after
+			var after := pc.duplicate() as CardData
+			after.level = 2
+			for pair2 in [[pc.eff_damage(), after.eff_damage()],
+					[pc.eff_block(), after.eff_block()]]:
+				if int(pair2[1]) > int(pair2[0]) and says.find("%d\u2192%d" % [pair2[0], pair2[1]]) == -1:
+					fails += 1
+					print("FAIL %s preview '%s' omits %d->%d" % [pid, says, pair2[0], pair2[1]])
+		# at the cap there is no next level, and it must not invent one
+		pc.level = cap2
+		if pc.level_up_text(cap2) != "":
+			fails += 1; print("FAIL %s previews a gain at its cap" % pid)
+
+	# ...and the screen must actually use it, or the preview exists only in a test
+	var coll := FileAccess.open("res://scripts/collection.gd", FileAccess.READ)
+	if coll != null:
+		var src2 := coll.get_as_text()
+		coll.close()
+		if src2.find("level_up_text") == -1:
+			fails += 1
+			print("FAIL the collection screen never shows what a level buys")
+
 	if fails == 0:
-		print("UPGRADE TEST: PASS (caps by rarity, fusion stops at cap, sub-linear growth)")
+		print("UPGRADE TEST: PASS (caps by rarity, fusion stops at cap, sub-linear growth, gain previewed)")
 	else:
 		print("UPGRADE TEST: FAIL (%d)" % fails)
 	_cleanup_sandbox()

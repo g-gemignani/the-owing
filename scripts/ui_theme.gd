@@ -39,7 +39,7 @@ func _ready() -> void:
 
 ## Runtime tuning so you don't have to edit code to find a comfortable size:
 ##   Ctrl+= / Ctrl+-  scale up / down      Ctrl+0  reset
-##   F11 toggle fullscreen                 Esc     leave fullscreen
+##   F11 toggle fullscreen                 Esc     back / pause
 func _unhandled_input(event: InputEvent) -> void:
 	if event is not InputEventKey or not event.pressed or event.echo:
 		return
@@ -47,7 +47,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	if k.keycode == KEY_F11:
 		_toggle_fullscreen()
 	elif k.keycode == KEY_ESCAPE:
-		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
+		# Escape means "the way out of this screen" — the very Callable the screen's
+		# own Back/Menu button runs, registered through `UI.exit_button`. Leaving
+		# fullscreen is now only the fallback, for a screen that declares no exit
+		# (the hub screens) — F11 toggles it either way.
+		if not UI.run_escape():
+			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	elif k.ctrl_pressed:
 		match k.keycode:
 			KEY_EQUAL, KEY_PLUS, KEY_KP_ADD:

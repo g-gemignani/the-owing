@@ -18,7 +18,7 @@ func _build_ui() -> void:
 	info_label = Label.new()
 	root.add_child(info_label)
 	list_box = UI.scroll(root)
-	UI.button(root, "Back", func(): get_tree().change_scene_to_file(_back_to()))
+	UI.exit_button(root, "Back", func(): UI.goto(self, _back_to()))
 
 ## Back to wherever this was opened from: the deck builder mid-setup, else the map
 ## if a run is live, else the overworld.
@@ -26,7 +26,7 @@ func _back_to() -> String:
 	if GameState.dungeon_id != "" and not GameState.in_run():
 		return "res://scenes/DeckBuilder.tscn"
 	if GameState.in_run():
-		return GameState.run_scene()
+		return GameState.resume_scene()   # back into the fight, if one is live
 	return "res://scenes/Overworld.tscn"
 
 func _refresh() -> void:

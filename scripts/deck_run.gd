@@ -59,10 +59,8 @@ func _build_ui() -> void:
 	coll.text = "Collection"
 	coll.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
 	root.add_child(coll)
-	var menu_btn := Button.new()
-	menu_btn.text = "Menu"
-	menu_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/PauseMenu.tscn"))
-	root.add_child(menu_btn)
+	# same Callable on the button and on Escape, so the two cannot drift apart
+	UI.exit_button(root, "Menu", func(): UI.goto(self, "res://scenes/PauseMenu.tscn"))
 
 func _refresh() -> void:
 	var tv := GameState.traversal as TraversalDeck

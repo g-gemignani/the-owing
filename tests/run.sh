@@ -23,12 +23,20 @@ TIMEOUT="${TIMEOUT:-300}"
 "$GODOT" --headless --import >/dev/null 2>&1
 
 pass=0; fail=0; failed=()
+# A test passes only if it SAYS so and then exits cleanly. The exit code is
+# checked because a crash during engine shutdown — after the report is printed —
+# still means something is wrong, and it is otherwise invisible: stdout to a pipe
+# is block-buffered, so an abort discards the very "PASS" line this greps for.
+# That failure mode reported three green tests as failures with no explanation.
 run() {  # run <label> <godot args...>
 	local label="$1"; shift
-	if timeout "$TIMEOUT" "$GODOT" --headless "$@" 2>/dev/null | grep -qE "TEST: PASS"; then
+	local out code
+	out=$(timeout "$TIMEOUT" "$GODOT" --headless "$@" 2>/dev/null); code=$?
+	if [[ $code -eq 0 ]] && grep -qE "TEST: PASS" <<<"$out"; then
 		pass=$((pass + 1)); printf '  ok   %s\n' "$label"
 	else
-		fail=$((fail + 1)); failed+=("$label"); printf '  FAIL %s\n' "$label"
+		fail=$((fail + 1)); failed+=("$label")
+		printf '  FAIL %s (exit %d)\n' "$label" "$code"
 	fi
 }
 

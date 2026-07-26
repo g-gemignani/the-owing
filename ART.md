@@ -10,7 +10,7 @@ a drawing that then needs somebody to figure out where it goes.
 
 Captures used to write this were made with `tools/screenshots.gd` — regenerate them
 before and after any art pass (§7). Nothing here was inferred from source code alone;
-§6 says what each of the 15 captures shows.
+§6 says what each of the 16 captures shows.
 
 ---
 
@@ -120,20 +120,34 @@ Taken from what already works, so it needs no leap of faith:
 
 ## 3. The asset list
 
-**About 225 files** — 245 if the optional per-card hero art in Tier 3 is taken.
+> **The file-by-file list lives in [ART_ASSETS.md](ART_ASSETS.md)** — 213 wanted, 3
+> present, **210 to provide** — with every filename, size and a brief taken from the
+> content's own name and description. It is *generated*, by
+> `tools/art_manifest.gd`, from the catalogues in `resources/`, so it cannot fall out
+> of step with the game the way a hand-typed list of 35 enemy names would. It also
+> shows which files already exist, so it doubles as the coverage report. Regenerate
+> with:
+>
+> ```bash
+> godot --headless --script tools/art_manifest.gd > ART_ASSETS.md
+> ```
+>
+> **This section is the reasoning; that file is the shopping list.** Where the two
+> disagree on a count, the generated one is right.
+
 Two thirds are icons. Ordering below is by *visible improvement per hour*, not by
 category:
 
 | tier | what | files |
 |---|---|---|
-| 0 | frame kit + control chrome | 23 |
-| 1 | combat readability | 47 |
+| 0 | frame kit + control chrome | 24 |
+| 1 | combat readability (player, vitals, intents, symbols, VFX) | 47 |
 | 2 | enemies | 35 |
-| 3 | cards | 25 (+20 later) |
+| 3 | card illustrations | 12 |
 | 4 | map and traversal | 26 |
-| 5 | backdrops | 20 |
+| 5 | backdrops (9 dungeon + 5 zone + 6 scene) | 23 |
 | 6 | relics and powers | 40 |
-| 7 | identity and shell | 8 |
+| 7 | identity and shell | 6 |
 
 Proposed layout — `assets/art/` grows subdirectories, `assets/pixel/` demotes to
 fallback:
@@ -161,7 +175,7 @@ assets/art/
 
 ### Tier 0 — The frame kit  ·  23 files  ·  fixes every screen at once
 
-Highest leverage item in this document by a wide margin. One kit, and all 20 screens
+Highest leverage item in this document by a wide margin. One kit, and all 21 screens
 stop looking broken.
 
 | file | size | 9-slice (l/r/t/b) | hook |
@@ -218,6 +232,14 @@ middle, and five flat card shapes.
 | `hero/hero_idle_b.png` | 512×640 | 2-frame breathe |
 | `hero/hero_hurt.png` | 512×640 | on `_on_end_turn` HP loss |
 | `hero/hero_portrait.png` | 256×256 | status bar, deck builder, save slots |
+
+**This presumes an arena, which is a layout change.** Today `combat.gd` stacks the
+enemy row near the top and the hand along the bottom, with ~250px of nothing between
+them — so there is no left and no right to face. The briefs say **hero faces right,
+enemies face left** because the fix is to put both in that middle band looking at each
+other, which is also what makes a target reticle, an HP bar per combatant and a slash
+VFX have somewhere to land. Draw to that; if the arena never happens, mirroring a
+sprite is cheap and re-drawing a composition is not.
 
 **Vitals (7 files)** — HP, Block and Energy are all *text* today
 (`combat.gd:_refresh()` formats one `%s HP %d/%d ... Energy %d/%d` string).
@@ -293,7 +315,7 @@ Boss list, for reference: `grave_sexton` `brood_mother` `marrow_abbot`
 
 ---
 
-### Tier 3 — Cards  ·  25 files now, 20 more later
+### Tier 3 — Cards  ·  12 files now, unique art later
 
 100 cards currently draw their illustration from `assets/pixel/cards/sheet.png` —
 Kenney's 1-Bit pack, a monochrome sheet of tiny symbols, **letters and dither
@@ -305,10 +327,16 @@ Recommended: **not** 100 unique paintings up front.
 
 | step | count | size | note |
 |---|---|---|---|
-| Family illustrations | 24 | 320×240 | one per effect family × zone flavour; shared |
-| Card back | 1 | 320×448 | **required** by the DECK traversal, which reveals cards |
-| Rarity frames | 5 | — | already counted in Tier 0 |
-| Hero cards | 20 | 320×240 | unique art for the 20 most-played, later |
+| Family illustrations | 12 | 320×240 | one per effect family, shared by every card in it |
+| Card back | 1 | 320×448 | in Tier 0. **Required** by the DECK traversal, which reveals cards |
+| Rarity frames | 5 | — | in Tier 0 |
+| Unique card art | later | 320×240 | `cards/<card_id>.png`, checked before the family file |
+
+Twelve, not twenty-four: the 100 cards actually fall into twelve effect families, and
+they are lopsided — 28 attack, 19 block, 12 poison, 8 thorns, then a long tail of
+2–5. Splitting each family per zone would mean drawing 60 variants for the tail to
+serve three cards each. `ART_ASSETS.md` lists which cards land in each family, so the
+big four are the ones worth a second variant if any are.
 
 → hook: `PixelArt.card_art(card_id)`, resolving `cards/<card_id>.png` first and
 falling back to `cards/family_<family>.png`. `CARD_ART_OVERRIDES` becomes the
@@ -353,7 +381,7 @@ buttons.
 
 ---
 
-### Tier 5 — Backdrops  ·  20 files at 1280×720  ·  the most *visible* gap
+### Tier 5 — Backdrops  ·  20 to draw of 23 at 1280×720  ·  the most *visible* gap
 
 Three dungeon backdrops exist. **Nine of twelve dungeons fall back to a 16×16
 tinted tile** — which is what `Overworld.png`, `Map.png`, `Shop.png` and
@@ -390,7 +418,7 @@ Painted objects on transparent, lit from upper-left, ink-outlined, readable at
 
 ---
 
-### Tier 7 — Identity and shell  ·  8 files
+### Tier 7 — Identity and shell  ·  6 files (two of them downloads)
 
 | file | size | note |
 |---|---|---|
@@ -402,7 +430,7 @@ Painted objects on transparent, lit from upper-left, ink-outlined, readable at
 | `ui/cursor.png`, `ui/cursor_press.png` | 64×64 | optional |
 
 The font is the cheapest large win on this list: two files and a `Theme` change,
-and every one of the 20 screens changes character.
+and every screen in the game changes character.
 
 ---
 
@@ -461,7 +489,7 @@ paintings. Worth starting in parallel, because it is the item that will not comp
 
 ## 6. The captures, screen by screen
 
-All 15 rendered at 1280×720, UI scale 1.0, with a stocked save. What each one says:
+All 16 rendered at 1280×720, UI scale 1.0, with a stocked save. What each one says:
 
 | capture | verdict |
 |---|---|
@@ -480,10 +508,11 @@ All 15 rendered at 1280×720, UI scale 1.0, with a stocked save. What each one s
 | `Powers` | Ten powers sharing a handful of monochrome glyphs. |
 | `Glossary` | Text. Fine as text, but nothing teaches a symbol the player will later have to recognise. (It also read `+50%%` to the player — fixed in D57.) |
 | `Victory` | The payoff moment of the whole meta layer is a five-line list on a flat tile. |
+| `Defeat` | Says the right things (D59) and shows none of them: no killer portrait, no before/after on the collection, flat tile, one smeared button. |
 
 ## 7. Looking at the game
 
-`tools/screenshots.gd` boots every screen at the shipped 1280×720 with a stocked
+`tools/screenshots.gd` boots all 21 screens at the shipped 1280×720 with a stocked
 save and writes a PNG each. It is a diagnostic, not shipped, and it needs a real GL
 context — art direction cannot be judged from a simulation:
 

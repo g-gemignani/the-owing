@@ -95,6 +95,32 @@ func _init() -> void:
 	if Balance.pierce_fraction(1) > 0.05:
 		fails += 1; print("FAIL the tutorial dungeon already pierces Block")
 
+	# --- and the endgame must not go soft again as power keeps climbing (D52) ---
+	#
+	# D45's guard asks whether a MAXED deck still loses HP at depth, and it passed
+	# while the deepest dungeon was cleared 100% of the time by every late profile.
+	# The reason it passed is the reason the plateau existed: past the build band,
+	# more power made the deepest floor EASIER, because enemy HP grew at half the
+	# rate of the player's damage, so fights got shorter and fewer hits landed. The
+	# property to pin is therefore the SHAPE of the curve at depth, not one point on
+	# it — attrition may flatten, but it must never turn back downwards.
+	# Fight LENGTH is the mechanism, so length is what gets asserted. Attrition per
+	# fight is the wrong probe here: it kept rising the whole time the plateau
+	# existed (pierce alone lifts it), while the runs themselves were free, because
+	# a shorter fight simply hands out fewer opportunities to be hit. Verified by
+	# reverting HP_POWER_K_HIGH to 0 — the HP-loss version of this check passed.
+	var floor_turns := _fight_turns(_deepest(), Balance.HIGH_POWER_FLOOR)
+	for r in [4.0, 5.0, Balance.MAX_ACHIEVABLE_RATIO]:
+		var turns := _fight_turns(_deepest(), r)
+		if turns < floor_turns - 0.05:
+			fails += 1
+			print("FAIL fights in the deepest dungeon SHORTEN with power: %.1f turns at ratio %.1f vs %.1f at the floor — every point of power buys fewer hits taken" % [
+				turns, r, floor_turns])
+	# the shallow end must keep the opposite property, or this undid the ratchet
+	if _hp_lost_per_fight(1, Balance.MAX_ACHIEVABLE_RATIO) >= _hp_lost_per_fight(1, 1.0):
+		fails += 1
+		print("FAIL the tutorial dungeon no longer gets easier as you grow — the ratchet is gone")
+
 	# ...but depth must still be dangerous: a maxed deck cannot walk the deepest floor
 	var deepest := _deepest()
 	if Balance.ratio_ceiling(deepest) < Balance.POWER_RATIO_CAP:
@@ -203,6 +229,13 @@ func _init() -> void:
 		print("BALANCE TEST: FAIL (%d)" % fails)
 	quit()
 
+## Turns a normal fight lasts at this depth and deck power. The player's damage
+## grows with the ratio; the question is whether the enemy's HP keeps up.
+func _fight_turns(dungeon: int, ratio: float) -> float:
+	var hp := float(Balance.enemy_max_hp(dungeon, Balance.Tier.NORMAL, ratio))
+	var throughput: float = Balance.BASELINE_CARD_POWER * float(Balance.MAX_ENERGY) * ratio
+	return hp / maxf(1.0, throughput * Balance.OFFENSE_SHARE)
+
 ## HP the player loses clearing one normal fight.
 ##
 ## Models BLOCK, which the first version of this helper did not — and that omission
@@ -216,7 +249,7 @@ func _hp_lost_per_fight(dungeon: int, ratio: float) -> float:
 	var throughput: float = Balance.BASELINE_CARD_POWER * float(Balance.MAX_ENERGY) * ratio
 	var turns: float = float(hp) / maxf(1.0, throughput * Balance.OFFENSE_SHARE)
 	# the share of a hit Block cannot touch, plus whatever Block fails to cover
-	var pierced: float = dmg * Balance.pierce_fraction(dungeon)
+	var pierced: float = dmg * Balance.pierce_fraction(dungeon, ratio)
 	# Not all of a deck's Block is available when it is needed: you hold what you
 	# drew, not what you wanted. Calibrated against tools/sim_balance.gd, where a
 	# starter deck loses ~8% of 60 HP per fight in the Crypt — assuming perfect

@@ -4,17 +4,30 @@
 ## art packs these ship *named* files, so the mapping is semantically correct
 ## rather than arbitrary: `knifeSlice` really is the attack sound.
 ##
-## Two things this owns:
+## Three things this owns:
 ##
 ## * **Buses.** Music and SFX are separate buses under Master, created in code so
-##   there is no bus-layout resource to keep in sync. The settings sliders were
-##   placeholders until now; they drive these.
+##   there is no bus-layout resource to keep in sync. The settings sliders drive
+##   these.
 ## * **A voice pool.** Each play grabs a free player rather than allocating one, so
 ##   a burst of hits during a turn cannot spawn dozens of nodes.
+## * **The score.** One looping voice on the Music bus, switched by where the
+##   player is. Until this existed the Music bus and its slider were real and
+##   nothing was routed to them: the slider adjusted the volume of silence, which
+##   is the same placeholder problem the sliders were built to end.
+##
+## The music is *generated* (`tools/gen_music.py`), not a downloaded pack, and the
+## reasoning is in that file: there was no CC0 music pack whose licence I could
+## verify the way the art packs' were, and choosing tracks by ear is not something
+## I can do honestly. It is measured instead — loop seam, level, distinctness.
 extends Node
 
 const DIR := "res://assets/audio/"
+const MUSIC_DIR := "res://assets/audio/music/"
 const VOICES := 8
+## How long a change of place takes to cross over. Long enough not to be a cut,
+## short enough that walking through a menu is not a smear.
+const FADE := 0.45
 
 ## Event name -> file stem. Call sites ask for an event, never a filename.
 const SOUNDS := {
@@ -28,9 +41,31 @@ const SOUNDS := {
 	"boss_cleared": "boss_cleared",
 }
 
+## Score name -> file stem in MUSIC_DIR.
+const SCORES := {
+	"menu": "music_menu", "world": "music_world", "dungeon": "music_dungeon",
+	"combat": "music_combat", "boss": "music_boss",
+}
+
+## Which score a screen gets. ONE table, read in ONE place (`_process` below
+## watches the current scene), so no screen has to remember to ask for music and
+## a new screen cannot be silent by omission — the same reason `UI.button`
+## attaches its own click sound. Anything unlisted gets `DEFAULT_SCORE`.
+const SCENE_SCORE := {
+	"MainMenu": "menu", "SaveSlots": "menu", "StarterKit": "menu", "Victory": "menu",
+	"Map": "dungeon", "DeckRun": "dungeon", "DiceRun": "dungeon",
+	"Shop": "dungeon", "Encounter": "dungeon", "PauseMenu": "dungeon",
+	"Combat": "combat",
+}
+const DEFAULT_SCORE := "world"
+
 var _voices: Array[AudioStreamPlayer] = []
 var _next := 0
 var _cache := {}
+var _music: AudioStreamPlayer
+var _fade: Tween = null
+var _score := ""
+var _watched_scene: Node = null
 
 func _ready() -> void:
 	_ensure_buses()
@@ -39,7 +74,90 @@ func _ready() -> void:
 		p.bus = "SFX"
 		add_child(p)
 		_voices.append(p)
+	# The stingers (victory, defeat, boss cleared) stay on SFX although they came
+	# from a music pack: they are feedback for a thing that just happened, and a
+	# player who turns the music off still wants to hear that they won.
+	_music = AudioStreamPlayer.new()
+	_music.bus = "Music"
+	add_child(_music)
 	apply_volumes()
+
+## Follow the player from screen to screen. Polling the current scene beats asking
+## each screen to announce itself: screens are entered from a dozen places, some
+## of them raw `change_scene_to_file`, and the one that forgets is the one that
+## goes quiet.
+func _process(_delta: float) -> void:
+	var tree := get_tree()
+	if tree == null:
+		return
+	var cur := tree.current_scene
+	if cur == _watched_scene:
+		return
+	_watched_scene = cur
+	if cur != null:
+		play_music(score_for(cur.scene_file_path.get_file().get_basename()))
+
+## The score a screen should carry. Combat is the one screen whose music depends
+## on more than which screen it is.
+func score_for(scene_name: String) -> String:
+	if scene_name == "Combat":
+		var gs := get_node_or_null("/root/GameState")
+		if gs != null and int(gs.pending.get("type", -1)) == gs.NodeType.BOSS:
+			return "boss"
+	return String(SCENE_SCORE.get(scene_name, DEFAULT_SCORE))
+
+func music_stream(score: String) -> AudioStream:
+	if not SCORES.has(score):
+		return null
+	var key := "music:" + score
+	if _cache.has(key):
+		return _cache[key]
+	var path: String = MUSIC_DIR + String(SCORES[score]) + ".ogg"
+	if not ResourceLoader.exists(path):
+		return null
+	var st := load(path) as AudioStream
+	# Set here rather than trusting the .import: a track that does not loop stops
+	# after half a minute, and silence reads as "there is no music" (D32's lesson
+	# about a missing sound being indistinguishable from intent).
+	if st is AudioStreamOggVorbis:
+		(st as AudioStreamOggVorbis).loop = true
+	_cache[key] = st
+	return st
+
+## Switch the score. Asking for the one already playing does nothing — walking
+## between two dungeon screens must not restart the track.
+func play_music(score: String) -> void:
+	if score == _score:
+		return
+	var st := music_stream(score)
+	if st == null:
+		return
+	_score = score
+	if not _music.playing:
+		_music.stream = st
+		_music.volume_db = 0.0
+		_music.play()
+		return
+	# Kill the previous crossfade first. Walking quickly through menus starts one
+	# per screen, and two tweens animating the same volume fight each other — the
+	# audible result is a track that stutters instead of one that changes.
+	if _fade != null and _fade.is_valid():
+		_fade.kill()
+	var tw := create_tween()
+	_fade = tw
+	tw.tween_property(_music, "volume_db", -40.0, FADE * 0.5)
+	tw.tween_callback(func():
+		_music.stream = st
+		_music.play())
+	tw.tween_property(_music, "volume_db", 0.0, FADE)
+
+## What is playing right now (""/none). For tests and for the settings screen.
+func current_score() -> String:
+	return _score if _music != null and _music.playing else ""
+
+## Which bus the score is on. The whole point of the feature, so it is checkable.
+func music_bus() -> String:
+	return _music.bus if _music != null else ""
 
 ## Music and SFX buses, created at runtime so there is no separate resource to
 ## drift out of step with this file.

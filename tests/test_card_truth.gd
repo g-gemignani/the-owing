@@ -82,6 +82,68 @@ func _init() -> void:
 				fails += 1
 				print("FAIL power %s reads the same at Lv1 and Lv%d" % [pid, p2.level])
 
+	# --- and a card must not lie about the FIGHT either ---
+	#
+	# Level was only half of it. `eff_damage()` knows about fusion and nothing else,
+	# so with Strength in play a "Deal 6 damage" card dealt 9 and still said 6 —
+	# which made Strength and Dexterity invisible on the one surface a player reads
+	# before spending energy. `CombatEngine.card_damage()/card_block()` are what
+	# `_resolve()` itself uses; the face and the hover now quote those.
+	var Engine2 = load("res://scripts/combat_engine.gd")
+	var strike := (load(CARD_DIR + "strike.tres") as CardData).duplicate() as CardData
+	var defend := (load(CARD_DIR + "defend.tres") as CardData).duplicate() as CardData
+	var deck: Array[CardData] = []
+	for i in 8:
+		deck.append(strike.duplicate())
+		deck.append(defend.duplicate())
+	var eng = Engine2.new()
+	eng.setup(deck, 200, 200, 1, Balance.Tier.NORMAL, "cultist")
+	eng.player.strength = 5
+	eng.player.dexterity = 3
+
+	var live_dmg: int = eng.card_damage(strike)
+	var live_blk: int = eng.card_block(defend)
+	if live_dmg <= strike.eff_damage():
+		fails += 1
+		print("FAIL 5 Strength did not raise what Strike would deal (%d vs %d)" % [
+			live_dmg, strike.eff_damage()])
+	if live_blk <= defend.eff_block():
+		fails += 1
+		print("FAIL 3 Dexterity did not raise what Defend would give (%d vs %d)" % [
+			live_blk, defend.eff_block()])
+	if strike.effect_text(live_dmg, -1).find(str(live_dmg)) == -1:
+		fails += 1
+		print("FAIL the card face does not show the %d damage it would deal" % live_dmg)
+	if Icons.card_tooltip(strike, live_dmg, live_blk).find(str(live_dmg)) == -1:
+		fails += 1
+		print("FAIL the hover text does not show the %d damage it would deal" % live_dmg)
+	if defend.effect_text(-1, live_blk).find(str(live_blk)) == -1:
+		fails += 1
+		print("FAIL the card face does not show the %d Block it would give" % live_blk)
+
+	# ...and the number shown is the number the engine then removes from an enemy.
+	# This is the assertion that cannot be satisfied by a second, agreeing copy of
+	# the arithmetic: it compares the text against the enemy's HP bar.
+	var foe = eng.current_target()
+	foe.block = 0
+	foe.vulnerable = 0
+	var hp_before: int = foe.hp
+	var promised: int = eng.card_damage(strike)
+	eng.energy = 9
+	eng._resolve(strike)
+	var actually: int = hp_before - foe.hp
+	if actually != promised:
+		fails += 1
+		print("FAIL the card promised %d damage and dealt %d" % [promised, actually])
+
+	# and with no Strength at all it must read exactly as it does at rest
+	var calm = Engine2.new()
+	calm.setup(deck, 200, 200, 1, Balance.Tier.NORMAL, "cultist")
+	if calm.card_text(strike) != strike.effect_text():
+		fails += 1
+		print("FAIL an unbuffed card reads differently in combat: '%s' vs '%s'" % [
+			calm.card_text(strike), strike.effect_text()])
+
 	# --- and nothing displays the stale field any more ---
 	for f in ["res://scripts/ui.gd", "res://scripts/shop.gd",
 			"res://scripts/powers_screen.gd", "res://scripts/deck_builder.gd"]:

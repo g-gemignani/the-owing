@@ -12,12 +12,18 @@ var eng: CombatEngine
 var tier: int = Balance.Tier.NORMAL
 
 var status_label: Label
+var buffs_label: Label
+var piles_label: Label
 var enemy_box: HBoxContainer
 var hand_box: HBoxContainer
 var log_label: Label
+## The last few things that happened. One overwritten line lost most of a turn:
+## three enemies acting reported only the third.
+var log_lines: Array[String] = []
 var reward_box: VBoxContainer
 var end_btn: Button
 var power_btn: Button
+var menu_btn: Button
 
 func _ready() -> void:
 	tier = _tier_of(GameState.pending.get("type", GameState.NodeType.COMBAT))
@@ -44,6 +50,20 @@ func _snapshot() -> void:
 		GameState.combat_state = {}
 	GameState.autosave()
 
+## Step out of the fight. Written to disk first, because the pause menu can quit
+## to the title from here and an unflushed turn would be a free retry.
+func _pause() -> void:
+	_snapshot()
+	GameState.flush_save()
+	UI.goto(self, "res://scenes/PauseMenu.tscn")
+
+## Between the killing blow and the reward pick the encounter is NOT resolved yet,
+## so leaving and coming back would offer the same fight again. The exit closes
+## for those few seconds — Escape included, since it runs the same Callable.
+func _seal_exit() -> void:
+	menu_btn.disabled = true
+	UI.clear_escape(self)
+
 func _tier_of(node_type: int) -> int:
 	match node_type:
 		GameState.NodeType.ELITE: return Balance.Tier.ELITE
@@ -64,13 +84,33 @@ func _build_ui() -> void:
 	root.add_theme_constant_override("separation", UITheme.sep(16))
 	margin.add_child(root)
 
+	# The fight is serialized after every action, so leaving it is a pause, not an
+	# escape: Resume comes straight back into this turn. Until this existed the
+	# longest scene in the game was the only one with no way out of it at all.
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", UITheme.sep(12))
+	root.add_child(header)
+
 	status_label = Label.new()
 	status_label.add_theme_font_size_override("font_size", UITheme.title_font())
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(status_label)
+	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(status_label)
+
+	menu_btn = UI.exit_button(header, "Menu", _pause, 38.0)
+
+	# Buffs and debuffs on their own line, spelled out. They used to be a "[Blk 5
+	# Str 3]" fragment inside a run-on status line, which is not where anybody
+	# looks for the reason their damage changed — and the cards did not show the
+	# change either, so Strength was effectively invisible while it was working.
+	buffs_label = Label.new()
+	buffs_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	buffs_label.add_theme_color_override("font_color", Color(0.98, 0.85, 0.45))
+	root.add_child(buffs_label)
 
 	log_label = Label.new()
-	log_label.text = "Combat start."
+	log_lines = ["Combat start."]
+	log_label.text = log_lines[0]
 	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(log_label)
 
@@ -87,6 +127,15 @@ func _build_ui() -> void:
 	reward_box.add_theme_constant_override("separation", UITheme.sep())
 	reward_box.visible = false
 	root.add_child(reward_box)
+
+	# What is left to draw, and what has gone by. The reward screen quotes how often
+	# you will see a card ("every 3.0 turns instead of 2.8") and the shop sells deck
+	# thinning, and until now the fight itself showed neither pile — the player was
+	# asked to price consistency while blind to it.
+	piles_label = Label.new()
+	piles_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.72))
+	root.add_child(piles_label)
+	UI.hoverable(piles_label, "Your deck is drawn through, then the discard pile is shuffled back. A smaller deck comes round faster.")
 
 	hand_box = HBoxContainer.new()
 	hand_box.add_theme_constant_override("separation", UITheme.sep())
@@ -161,11 +210,11 @@ func _on_end_turn() -> void:
 
 func _refresh() -> void:
 	var p := eng.player
-	var pstat := p.status_text()
 	UI.hoverable(status_label, "Block expires at the start of your next turn. 'incoming' is what would actually land after Block.")
-	status_label.text = "%s HP %d/%d %s | Energy %d/%d | D%d | incoming %d" % [
-		p.name, p.hp, p.max_hp, ("[%s]" % pstat) if pstat != "" else "",
-		eng.energy, Balance.MAX_ENERGY + eng.bonus_energy, eng.dungeon, eng.enemy_intent]
+	status_label.text = "%s  HP %d/%d   Block %d   Energy %d/%d   incoming %d" % [
+		p.name, p.hp, p.max_hp, p.block,
+		eng.energy, Balance.MAX_ENERGY + eng.bonus_energy, eng.enemy_intent]
+	_refresh_buffs(p)
 
 	# enemies
 	for c in enemy_box.get_children():
@@ -201,7 +250,20 @@ func _refresh() -> void:
 	var avail := get_viewport_rect().size.x - UITheme.px(40)
 	var w := Icons.fit_card_width(eng.hand.size(), base.x, avail, float(UITheme.sep()))
 	for card in eng.hand:
-		UI.card_button(hand_box, card, Vector2(w, base.y), _on_card_pressed.bind(card))
+		# `eng` passed in: the face quotes what this card does THIS turn, Strength,
+		# Dexterity, Weak and per-combat growth included.
+		var cb := UI.card_button(hand_box, card, Vector2(w, base.y),
+			_on_card_pressed.bind(card), "", eng)
+		# A card you cannot afford used to look exactly like one you could, and the
+		# only way to find out was to click it and be refused. Dimmed, not disabled —
+		# pressing it still explains why, which is how the rule gets learned.
+		if not eng.can_play(card):
+			var holder := cb.get_parent() as Control
+			if holder != null:
+				holder.modulate = Color(1, 1, 1, 0.45)
+
+	piles_label.text = "Draw %d   ·   Discard %d   ·   Hand %d" % [
+		eng.draw_pile.size(), eng.discard_pile.size(), eng.hand.size()]
 
 	_refresh_power()
 
@@ -231,8 +293,48 @@ func _on_target_pressed(i: int) -> void:
 	if eng.set_target(i):
 		_refresh()
 
+## Buffs and debuffs, written out, in the colour of what they are.
+##
+## `Combatant.status_text()` is the compact form used on the little enemy plates;
+## it was also the player's only readout, tucked inside the status line as
+## "[Blk 5 Str 3]". Strength changes every attack you make, so it belongs where it
+## can be read at a glance — and on the cards themselves, which is what
+## `CombatEngine.card_text()` now does.
+func _refresh_buffs(p: Combatant) -> void:
+	var good: Array[String] = []
+	var bad: Array[String] = []
+	if p.strength > 0:
+		good.append("Strength +%d  (every attack hits harder)" % p.strength)
+	if p.dexterity > 0:
+		good.append("Dexterity +%d  (every Block is bigger)" % p.dexterity)
+	if p.thorns > 0:
+		good.append("Thorns %d" % p.thorns)
+	if p.retain_block:
+		good.append("Block persists")
+	if p.vulnerable > 0:
+		bad.append("Vulnerable %d  (you take +50%%)" % p.vulnerable)
+	if p.weak > 0:
+		bad.append("Weak %d  (you deal -25%%)" % p.weak)
+	if p.poison > 0:
+		bad.append("Poison %d  (ignores Block)" % p.poison)
+	var parts := good + bad
+	buffs_label.visible = not parts.is_empty()
+	buffs_label.text = "   ·   ".join(parts)
+	# warm for "this is helping you", cold for "this is happening to you"
+	buffs_label.add_theme_color_override("font_color",
+		Color(0.98, 0.85, 0.45) if bad.is_empty() else Color(0.95, 0.62, 0.55))
+
+## Keep the last few lines. A turn where three enemies act used to report only the
+## third, because this overwrote a single Label.
+const LOG_LINES := 4
+
 func _log(msg: String) -> void:
-	log_label.text = msg
+	if msg.strip_edges() == "":
+		return
+	log_lines.append(msg.strip_edges())
+	while log_lines.size() > LOG_LINES:
+		log_lines.pop_front()
+	log_label.text = "\n".join(log_lines)
 
 # --- reward ---
 func _win() -> void:
@@ -247,6 +349,7 @@ func _win() -> void:
 	g += int(round(g * MetaState.relic_bonus("gold_percent") / 100.0))
 	GameState.earn_gold(g)   # at risk until the boss falls (D20)
 	end_btn.disabled = true
+	_seal_exit()
 	for c in hand_box.get_children():
 		c.queue_free()
 	for c in enemy_box.get_children():
@@ -353,6 +456,7 @@ func _on_reward_picked(card) -> void:
 
 func _lose() -> void:
 	end_btn.disabled = true
+	_seal_exit()
 	for c in hand_box.get_children():
 		c.queue_free()
 	Audio.play("defeat")
@@ -361,13 +465,35 @@ func _lose() -> void:
 	var lost := GameState.forfeit_escrow()
 	# D3: plus a (retuned) permanent penalty scaled by dungeon difficulty.
 	var pen := MetaState.penalize_death(GameState.dungeon)
-	var lost_cards: Array = pen["cards_lost"]
-	var cards_txt := ", ".join(lost_cards) if not lost_cards.is_empty() else "none"
-	status_label.text = "DEFEAT. Forfeited %d cards and %d gold earned here. Also lost %d banked gold%s." % [
-		lost["cards"], lost["gold"], pen["gold_lost"],
-		" and: %s" % cards_txt if cards_txt != "none" else ""]
+	var dd := GameState.dungeon_data()
+	# Hand the whole reckoning to a screen the player dismisses themselves. This
+	# used to be one line of status text and a forced 2.5 second wait.
+	GameState.last_defeat = {
+		"dungeon": dd.name if dd != null else "the dark",
+		"difficulty": GameState.dungeon,
+		"killer": _killer_name(),
+		"tier": tier,
+		"turns": eng.turn,
+		"forfeited_cards": int(lost["cards"]),
+		"forfeited_gold": int(lost["gold"]),
+		"penalty_gold": int(pen["gold_lost"]),
+		"penalty_cards": pen["cards_lost"],
+	}
+	status_label.text = "DEFEAT."
+	buffs_label.visible = false
+	piles_label.visible = false
 	GameState.reset_run_progress()
 	GameState.clear_run()
 	GameState.flush_save()   # death is final; do not risk losing the penalty
-	await get_tree().create_timer(2.5).timeout
-	get_tree().change_scene_to_file("res://scenes/Overworld.tscn")
+	get_tree().change_scene_to_file("res://scenes/Defeat.tscn")
+
+## Whatever is still standing gets the credit. The current target first: that is
+## the one the player was looking at.
+func _killer_name() -> String:
+	var foe := eng.current_target()
+	if foe != null and not foe.is_dead():
+		return foe.name
+	for e in eng.enemies:
+		if not e.is_dead():
+			return e.name
+	return "something in the dark"

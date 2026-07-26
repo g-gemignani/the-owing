@@ -125,6 +125,45 @@ func _check_live_hand() -> void:
 		_hover(holder, false)
 	if seen == 0:
 		_fails += 1; print("FAIL combat rendered no card text at all")
+
+	# --- the number has to be readable WITHOUT hovering ---------------------------
+	#
+	# A resting card shows its name and its cost, and the rules text only appears on
+	# hover. That made Strength invisible in the place it matters: with a buff up,
+	# every attack is worth more and nothing on screen changed until you moused over
+	# each card in turn. The face now carries the headline number, and in a fight it
+	# is the live one.
+	var eng2 = inst.eng
+	if eng2 == null:
+		_fails += 1; print("FAIL combat has no engine to read")
+	else:
+		eng2.player.strength = 6
+		inst._refresh()
+		await get_tree().process_frame
+		var checked := 0
+		for holder in _cards(inst):
+			var card_id: String = holder.get_meta("card_id")
+			var card: CardData = null
+			for c in eng2.hand:
+				if c.id == card_id:
+					card = c
+					break
+			if card == null or card.eff_damage() <= 0:
+				continue
+			checked += 1
+			var want := str(eng2.card_damage(card))
+			_hover(holder, false)
+			await get_tree().process_frame
+			var on_face := _labels(holder).any(func(l): return l.visible and l.text.begins_with(want))
+			if not on_face:
+				_fails += 1
+				print("FAIL %s does not show the %s damage it would deal until you hover it" % [
+					card_id, want])
+			if want == str(card.eff_damage()):
+				_fails += 1
+				print("FAIL 6 Strength changed nothing about what %s claims to do" % card_id)
+		if checked == 0:
+			_fails += 1; print("FAIL no attack card was in hand to check")
 	# the real signal, not the helper: a layout that only responds to the test is
 	# a layout the player never sees change
 	for holder in _cards(inst):

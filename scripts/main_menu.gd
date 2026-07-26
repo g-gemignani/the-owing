@@ -56,9 +56,6 @@ func _play(s: int) -> void:
 	GameState.reset_run_progress()
 	# resume a dungeon in progress, including a fight mid-turn
 	if MetaState.has_saved_run() and GameState.run_from_dict(MetaState.saved_run):
-		if not GameState.combat_state.is_empty():
-			UI.goto(self, "res://scenes/Combat.tscn")
-		else:
-			UI.goto(self, GameState.run_scene())
+		UI.goto(self, GameState.resume_scene())
 		return
 	UI.goto(self, "res://scenes/Overworld.tscn")

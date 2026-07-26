@@ -25,7 +25,7 @@ func _ready() -> void:
 	# hundred cards have somewhere to go after the last door.
 	UI.label(col, "Descend again? Ascension %d makes every enemy stronger and the loot richer. You keep your collection, relics and ropes; the dungeons re-lock." % (MetaState.ascension + 1))
 	UI.button(col, "Begin Ascension %d" % (MetaState.ascension + 1), func(): _ascend())
-	UI.button(col, "Stay here", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
+	UI.exit_button(col, "Stay here", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
 
 func _ascend() -> void:
 	MetaState.ascension += 1

@@ -36,7 +36,7 @@ func _build() -> void:
 				GameState.escrow_cards.size(), GameState.escrow_gold])
 			var r := UI.row(col, 8)
 			UI.button(r, "Use the rope", func(): _use_rope(), 38.0)
-			UI.button(r, "Keep going", func(): _cancel(), 38.0)
+			UI.exit_button(r, "Keep going", func(): _cancel(), 38.0)
 			return
 		Confirm.QUIT:
 			var warn := "Quit to the title?"
@@ -45,13 +45,15 @@ func _build() -> void:
 			UI.label(col, warn)
 			var q := UI.row(col, 8)
 			UI.button(q, "Quit to title", func(): _quit(), 38.0)
-			UI.button(q, "Stay", func(): _cancel(), 38.0)
+			UI.exit_button(q, "Stay", func(): _cancel(), 38.0)
 			return
 
 	if GameState.in_run():
-		UI.button(col, "Resume", func(): UI.goto(self, GameState.run_scene()))
+		# back into the fight if one is in progress — pausing mid-combat must not
+		# drop the player onto the map with the encounter half-fought
+		UI.exit_button(col, "Resume", func(): UI.goto(self, GameState.resume_scene()))
 	else:
-		UI.button(col, "Back to the world", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
+		UI.exit_button(col, "Back to the world", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
 	UI.button(col, "Collection", func(): UI.goto(self, "res://scenes/Collection.tscn"))
 	UI.button(col, "Settings", func(): UI.goto(self, "res://scenes/Settings.tscn"))
 

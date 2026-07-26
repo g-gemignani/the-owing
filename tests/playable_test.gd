@@ -43,6 +43,8 @@ func _ready() -> void:
 	await _every_encounter_can_be_left()
 	await _every_screen_has_a_way_out()
 	await _the_score_plays()
+	await _the_fight_shows_its_state()
+	await _dying_is_reported()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -369,6 +371,122 @@ func _scrolls(n: Node) -> Array[ScrollContainer]:
 		out.append(n as ScrollContainer)
 	for c in n.get_children():
 		out.append_array(_scrolls(c))
+	return out
+
+## --- 8. the fight shows the state the player is reasoning about ---------------
+##
+## Three things were being asked for and not shown: how deep the draw pile is
+## (while the reward screen quotes draw intervals and the shop sells thinning),
+## which cards are affordable (the only way to find out was to click and be
+## refused), and more than one line of what just happened.
+func _the_fight_shows_its_state() -> void:
+	_start_a_run("crypt")
+	GameState.pending = {"type": GameState.NodeType.COMBAT}
+	GameState.combat_state = {}
+	var inst = (load("res://scenes/Combat.tscn") as PackedScene).instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var eng = inst.eng
+	if eng == null:
+		_fails += 1; print("FAIL combat started with no engine"); inst.queue_free(); return
+
+	var piles := String(inst.piles_label.text)
+	if piles.find(str(eng.draw_pile.size())) == -1 or piles.find(str(eng.discard_pile.size())) == -1:
+		_fails += 1
+		print("FAIL the fight does not show the draw and discard piles (says '%s')" % piles)
+
+	# Strength must be legible AND on the cards. This is the reported bug: the buff
+	# applied, and nothing the player was looking at changed.
+	eng.player.strength = 4
+	inst._refresh()
+	await get_tree().process_frame
+	if not inst.buffs_label.visible or String(inst.buffs_label.text).find("Strength") == -1:
+		_fails += 1
+		print("FAIL 4 Strength is not stated anywhere on the combat screen")
+	var buffed := false
+	for card in eng.hand:
+		if card.eff_damage() <= 0:
+			continue
+		var shown: String = eng.card_text(card)
+		if shown.find(str(eng.card_damage(card))) == -1:
+			_fails += 1
+			print("FAIL a card in hand does not show what it would deal with Strength")
+		if eng.card_damage(card) > card.eff_damage():
+			buffed = true
+	if not buffed:
+		_fails += 1; print("FAIL no attack card in hand reflected Strength at all")
+
+	# an unaffordable card must look different from an affordable one
+	eng.energy = 0
+	inst._refresh()
+	await get_tree().process_frame
+	var dimmed := 0
+	for holder in inst.hand_box.get_children():
+		if (holder as Control).modulate.a < 0.9:
+			dimmed += 1
+	if dimmed == 0 and not eng.hand.is_empty():
+		_fails += 1
+		print("FAIL with no energy left, every card still looks playable")
+
+	# the log keeps more than the last thing that happened
+	inst._log("one")
+	inst._log("two")
+	if String(inst.log_label.text).find("one") == -1:
+		_fails += 1; print("FAIL the combat log still shows only the last line")
+	inst.queue_free()
+	await get_tree().process_frame
+
+## --- 9. dying is reported, not flashed past -----------------------------------
+##
+## Death used to be one line of status text and `await create_timer(2.5)` before
+## the player was moved on. Escrow, ropes and the death penalty all exist to make
+## that moment weigh; it has to be readable, and dismissed by the player.
+func _dying_is_reported() -> void:
+	GameState.last_defeat = {
+		"dungeon": "The Crypt", "difficulty": 1, "killer": "Crypt Hound",
+		"tier": Balance.Tier.NORMAL, "turns": 6,
+		"forfeited_cards": 3, "forfeited_gold": 140,
+		"penalty_gold": 25, "penalty_cards": ["strike"],
+	}
+	UI.clear_escape(self)
+	var inst = (load("res://scenes/Defeat.tscn") as PackedScene).instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var text := _all_text(inst)
+	for needed in ["Crypt Hound", "The Crypt", "3", "140", "25"]:
+		if text.find(needed) == -1:
+			_fails += 1
+			print("FAIL the defeat screen never mentions '%s'" % needed)
+	if _enabled_buttons(inst) == 0:
+		_fails += 1; print("FAIL the defeat screen cannot be dismissed")
+	if not UI.has_escape():
+		_fails += 1; print("FAIL Escape does nothing on the defeat screen")
+	inst.queue_free()
+	GameState.last_defeat = {}
+	await get_tree().process_frame
+
+	# ...and combat must actually route there rather than waiting on a timer
+	var src := FileAccess.open("res://scripts/combat.gd", FileAccess.READ)
+	if src != null:
+		var t := src.get_as_text()
+		src.close()
+		if t.find("Defeat.tscn") == -1:
+			_fails += 1; print("FAIL losing a fight does not lead to the defeat screen")
+		if t.find("create_timer") != -1:
+			_fails += 1
+			print("FAIL combat still waits on a timer instead of letting the player read the result")
+
+func _all_text(n: Node) -> String:
+	var out := ""
+	if n is Label:
+		out += String((n as Label).text) + "\n"
+	if n is Button:
+		out += String((n as Button).text) + "\n"
+	for c in n.get_children():
+		out += _all_text(c)
 	return out
 
 func _a_dungeon_using(scene_name: String) -> String:

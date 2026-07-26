@@ -317,8 +317,12 @@ static func card_picker(host: Control, deck: Array, title: String,
 	col.add_child(cancel)
 	return veil
 
+## `live` is the CombatEngine when this card is being shown inside a fight, and
+## null everywhere else. With it, the face and the hover both quote the damage and
+## Block the card would actually produce this turn — Strength and Dexterity are
+## otherwise invisible on the only surface the player reads before spending energy.
 static func card_button(parent: Node, card: CardData, size: Vector2,
-		on_press: Callable, label: String = "") -> Button:
+		on_press: Callable, label: String = "", live: CombatEngine = null) -> Button:
 	# A plain Control, NOT a Container. PanelContainer overrides its children's
 	# anchors and takes its own size from their minimum sizes — and a Button's
 	# minimum size grows with its wrapped description, so every card ended up a
@@ -357,7 +361,11 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	var b := Button.new()
 	b.flat = true
 	b.set_anchors_preset(Control.PRESET_FULL_RECT)
-	b.tooltip_text = Icons.card_tooltip(card)
+	# both surfaces read the same two numbers, so the face and the hover cannot
+	# disagree about what the card is about to do
+	var live_dmg: int = live.card_damage(card) if live != null else -1
+	var live_blk: int = live.card_block(card) if live != null else -1
+	b.tooltip_text = Icons.card_tooltip(card, live_dmg, live_blk)
 	holder.add_child(b)
 
 	# NO containers inside the card. A VBox/HBox honours its children's *minimum*
@@ -395,7 +403,7 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	var desc_y := pad + badge_h + title_h
 	var desc_h := size.y - pad - desc_y
 	# generated, not the authored line: a fused card must not misreport itself
-	var desc := _card_label(holder, card.effect_text(), Color(0.86, 0.84, 0.80))
+	var desc := _card_label(holder, card.effect_text(live_dmg, live_blk), Color(0.86, 0.84, 0.80))
 	_place(desc, pad, desc_y, inner.x, desc_h)
 
 	# Shrink to fit rather than clip. Card text is authored, so its length varies
@@ -410,8 +418,40 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	fit_label(cost, Vector2(badge_w, badge_h), body, 7)
 	fit_label(desc, Vector2(inner.x, desc_h), int(body * 0.85), 7)
 
+	# The headline number, always on the face — never only on hover.
+	#
+	# At rest a card shows its name and its cost and nothing else, which is fine for
+	# reading a hand at a glance and useless for the thing that changes: with 4
+	# Strength every attack is worth more, and a player could not see that anywhere
+	# without hovering each card in turn. Damage in red, Block in blue, both if the
+	# card does both. In a fight these are the live numbers.
+	var headline := ""
+	if live_dmg > 0 or (live_dmg < 0 and card.eff_damage() > 0):
+		headline = str(live_dmg if live_dmg >= 0 else card.eff_damage())
+		if card.hits > 1:
+			headline += "x%d" % card.hits
+	var shield := ""
+	if live_blk > 0 or (live_blk < 0 and card.eff_block() > 0):
+		shield = str(live_blk if live_blk >= 0 else card.eff_block())
+	var value_labels: Array[Label] = []
+	var value_h := 0.0
+	if headline != "" or shield != "":
+		value_h = badge_h
+		if headline != "":
+			var v := _card_label(holder, headline, Color(1.0, 0.55, 0.45))
+			value_labels.append(v)
+			_place(v, pad, size.y - pad - value_h, inner.x * 0.5, value_h)
+			v.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+			fit_label(v, Vector2(inner.x * 0.5, value_h), body, 7)
+		if shield != "":
+			var s2 := _card_label(holder, shield, Color(0.62, 0.80, 1.0))
+			value_labels.append(s2)
+			_place(s2, pad + inner.x * 0.5, size.y - pad - value_h, inner.x * 0.5, value_h)
+			s2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+			fit_label(s2, Vector2(inner.x * 0.5, value_h), body, 7)
+
 	var rest_y := pad + badge_h
-	var rest_h := size.y - pad - rest_y
+	var rest_h := size.y - pad - rest_y - value_h
 	_place(title, pad, rest_y, title_w, rest_h)
 	fit_label(title, Vector2(title_w, rest_h), UITheme.title_font(), 7)
 	var rest_px: int = title.get_theme_font_size("font_size")
@@ -421,6 +461,12 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 
 	var show_all := func(open: bool) -> void:
 		desc.visible = open
+		# The number strip exists because a resting card shows only a name. Once the
+		# card is open its rules text carries the same number, and leaving the strip
+		# up costs the description the room it needs — measured at 11px, which
+		# CardTextTest calls unreadable and is right to.
+		for vl in value_labels:
+			vl.visible = not open
 		if open:
 			_place(title, pad, pad + badge_h, title_w, title_h)
 			title.add_theme_font_size_override("font_size", open_px)
@@ -530,3 +576,55 @@ static func fit_label(l: Label, avail: Vector2, max_px: int, min_px: int) -> voi
 
 static func goto(node: Node, path: String) -> void:
 	node.get_tree().change_scene_to_file(path)
+
+# --- the way out of a screen -------------------------------------------------
+#
+# Escape used to leave fullscreen, which is not what that key means anywhere
+# else, and Combat had no exit control at all — the longest scene in the game was
+# the only one you could not leave. A screen now declares its exit ONCE, with
+# `exit_button()`, which builds the button AND binds the key to the same
+# Callable. Two independent ways out is the D34 label table again, in navigation.
+## The Callable lives ON the node rather than in a static, and this holds only a
+## pointer to the node. A static Callable capturing a screen outlives that screen:
+## it corrupted the heap at engine shutdown, and because every scene test writes to
+## a pipe, the abort ate the buffered "PASS" line and three green tests reported as
+## failures. Metadata dies with the node it belongs to.
+const ESCAPE_META := "ui_escape"
+static var _escape_owner: Node = null
+
+## Register what Escape does on this screen. The owner is remembered so a stale
+## action cannot fire on the screen that replaced it: once the old scene is freed
+## or removed from the tree, the registration stops answering.
+static func escape(owner: Node, action: Callable) -> void:
+	if action.is_valid():
+		owner.set_meta(ESCAPE_META, action)
+	elif owner.has_meta(ESCAPE_META):
+		owner.remove_meta(ESCAPE_META)
+	_escape_owner = owner
+
+## Withdraw the exit — for a screen that reaches a state it must not be left in,
+## like Combat between the killing blow and the reward pick.
+static func clear_escape(owner: Node) -> void:
+	escape(owner, Callable())
+
+## Does the screen on screen right now offer a way out?
+static func has_escape() -> bool:
+	return is_instance_valid(_escape_owner) and _escape_owner.is_inside_tree() \
+		and _escape_owner.has_meta(ESCAPE_META)
+
+## Take it. False means this screen declared none, and the caller decides what
+## Escape should mean instead.
+static func run_escape() -> bool:
+	if not has_escape():
+		return false
+	var action: Callable = _escape_owner.get_meta(ESCAPE_META)
+	if not action.is_valid():
+		return false
+	action.call()
+	return true
+
+## A button that is also what Escape does.
+static func exit_button(parent: Node, text: String, action: Callable,
+		height: float = 42.0) -> Button:
+	escape(parent, action)
+	return button(parent, text, action, height)

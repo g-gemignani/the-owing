@@ -75,17 +75,26 @@ static func style_card_button(b: Button, rarity: int, icon_name: String = "") ->
 
 ## Full plain-English reading of a card, for tooltips. Generated from the data so
 ## it stays true when numbers or scaling change.
-static func card_tooltip(c: CardData) -> String:
+## `live_damage` / `live_block` come from `CombatEngine.card_damage()` /
+## `card_block()` when the card is hovered inside a fight, so the hover quotes the
+## same numbers the face does. Two independently generated descriptions of one
+## card is how the face and the hover disagreed in the first place (D50).
+static func card_tooltip(c: CardData, live_damage: int = -1, live_block: int = -1) -> String:
 	if c == null:
 		return ""
+	var dmg: int = live_damage if live_damage >= 0 else c.eff_damage()
+	var blk: int = live_block if live_block >= 0 else c.eff_block()
+	var live := live_damage >= 0 or live_block >= 0
 	var lines: Array[String] = []
 	lines.append("%s — %s, cost %d" % [c.name, CardData.Rarity.keys()[c.rarity].to_lower(), c.cost])
-	if c.eff_damage() > 0:
-		var d := "Deals %d damage" % c.eff_damage()
+	if dmg > 0:
+		var d := "Deals %d damage" % dmg
 		if c.hits > 1:
 			d += " %d times" % c.hits
 		if c.aoe:
 			d += " to every enemy"
+		if live and (c.strength_mult > 0 or c.damage_from_block):
+			d += " right now"
 		lines.append(d + ".")
 	if c.damage_from_block:
 		lines.append("Deals damage equal to your current Block.")
@@ -93,8 +102,8 @@ static func card_tooltip(c: CardData) -> String:
 		lines.append("Deals %d extra damage per point of Strength." % c.strength_mult)
 	if c.lifesteal:
 		lines.append("Heals you for the damage it deals.")
-	if c.eff_block() > 0:
-		lines.append("Grants %d Block (expires at the start of your next turn)." % c.eff_block())
+	if blk > 0:
+		lines.append("Grants %d Block (expires at the start of your next turn)." % blk)
 	if c.double_block:
 		lines.append("Doubles your current Block.")
 	if c.eff_heal() > 0:

@@ -4,6 +4,11 @@
 ## All effects are applied HERE rather than inside the data, so run rules are
 ## enforced in one place: HP never drops below 1, gold never goes negative, and
 ## card loss respects the collection floor that prevents softlocks.
+##
+## Deliberately registers no `UI.exit_button`: an event is a decision, and every
+## event offers a cost-free option (asserted by tests/test_event.gd), so there is
+## nothing to be trapped by. Backing out with Escape would leave the node
+## unresolved and re-rollable, which is a different way of taking the good branch.
 extends Control
 
 var title_label: Label

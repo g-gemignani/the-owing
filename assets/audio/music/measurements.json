@@ -1,0 +1,42 @@
+{
+  "music_boss": {
+    "kb": 113.0,
+    "peak": 0.55,
+    "rms": 0.1125,
+    "seam": 6e-05,
+    "seam_ratio": 0.003,
+    "seconds": 17.14
+  },
+  "music_combat": {
+    "kb": 95.2,
+    "peak": 0.55,
+    "rms": 0.1315,
+    "seam": 0.00477,
+    "seam_ratio": 0.278,
+    "seconds": 18.46
+  },
+  "music_dungeon": {
+    "kb": 77.5,
+    "peak": 0.55,
+    "rms": 0.1421,
+    "seam": 0.00152,
+    "seam_ratio": 0.11,
+    "seconds": 30.0
+  },
+  "music_menu": {
+    "kb": 87.2,
+    "peak": 0.55,
+    "rms": 0.1309,
+    "seam": 0.00186,
+    "seam_ratio": 0.099,
+    "seconds": 34.29
+  },
+  "music_world": {
+    "kb": 101.7,
+    "peak": 0.55,
+    "rms": 0.1168,
+    "seam": 0.00015,
+    "seam_ratio": 0.009,
+    "seconds": 26.67
+  }
+}

@@ -48,12 +48,7 @@ func _build_ui() -> void:
 	stock_box.add_theme_constant_override("separation", UITheme.sep(6))
 	scroll.add_child(stock_box)
 
-	var leave := Button.new()
-	UITheme.style_button(leave)
-	leave.text = "Leave"
-	leave.custom_minimum_size = Vector2(0, UITheme.button_height(40))
-	leave.pressed.connect(_on_leave)
-	root.add_child(leave)
+	UI.exit_button(root, "Leave", _on_leave, 40.0)
 
 ## Roll distinct cards for sale. Stored as ids so it survives scene reloads.
 func _roll_stock() -> Array:
