@@ -21,6 +21,9 @@ GameState="*res://scripts/game_state.gd"
 
 ; Pixel art: nearest-neighbour, or scaling blurs every sprite into mush.
 textures/canvas_textures/default_texture_filter=0
+; Required for arm64 targets — macOS universal, Android and iOS all refuse to
+; export without it.
+textures/vram_compression/import_etc2_astc=true
 
 [display]
 
@@ -29,3 +32,12 @@ window/size/viewport_height=720
 window/size/mode=3
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+; Phones default to portrait; a hand of cards along the bottom of a 1280x720
+; layout is unusable in it, so the game asks for landscape either way up.
+window/handheld/orientation=4
+
+[input_devices]
+
+; Touch must generate the button presses the whole UI is built on. Hover it can
+; NOT generate — see UI.touch_ui() and the tap-to-read card interaction.
+pointing/emulate_mouse_from_touch=true

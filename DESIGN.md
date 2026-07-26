@@ -1465,3 +1465,55 @@ group archetypes; no heal on a lasting condition without `once`).
 find-and-replace across `.tres` files — checked by the reference test, not
 prevented. Rule tables are parallel arrays, which the tests keep honest but which
 will get unreadable well before fifty bosses. Neither is worth restructuring yet.
+
+### D43 — Exporting, and the bug only an export could find
+
+D42 flagged that runtime `res://` listing looked unsafe for exported builds and
+fixed it by reasoning about how PCKs work. That reasoning was **wrong**, and only
+building the thing showed it.
+
+The first fix stripped a `.remap` suffix. An actual exported pack reports entries
+as `tile_0056.png.import`. So the fix changed nothing, and a smoke test run inside
+a real pack reported:
+
+```
+enemy sprites found : 0        <- every enemy had no sprite
+card ids found      : 100      <- .tres survive packing fine
+strike card art     : OK       <- a single sheet loaded by path is fine
+```
+
+Only *directory-listed* PNGs break. `load()` on the original path still works;
+it is listing that returns the sidecar. Now stripped correctly, verified at 41
+sprites and 0 archetypes without one.
+
+`tests/export.sh` + `tests/export_smoke.gd` make this permanent: they pack the
+project and run assertions **inside the pack**. Kept out of `tests/run.sh` because
+they need ~1 GB of export templates a normal checkout will not have.
+
+**Built and verified:** Linux (72 MB), Windows (106 MB), macOS universal (58 MB).
+macOS/arm64 additionally required `import_etc2_astc`, which every arm64 target
+needs — the export simply refuses without it.
+
+**Not built here.** Android needs a JDK and the Android SDK (`platform-tools`,
+`build-tools`), neither of which is on this machine; the preset is written and
+`BUILD.md` has the exact commands. iOS requires macOS with Xcode and cannot be
+produced from Linux at all.
+
+### Touch: a finger sends no hover
+
+The card design from D37 — resting cards show name and cost, hovering enlarges
+them to reveal rules text — is unusable on a phone, because touchscreens generate
+no hover events. Every card would have been unreadable until played, which is
+exactly backwards, and the same applies to every tooltip in the game.
+
+`UI.touch_ui()` now splits the interaction: mouse hovers, touch **taps once to
+read and again to commit**. Implemented as a single handler owning both taps
+rather than a reveal handler racing the caller's — deciding whether a tap counts
+by relying on signal connection order would break the first time someone moved a
+line.
+
+Also set: landscape orientation (a hand of cards along the bottom of a 1280x720
+layout is unusable in portrait) and mouse emulation from touch.
+
+Nobody has run this on real hardware. Text size at phone DPI is the likeliest
+thing to need work; `UITheme.UI_SCALE` is the single knob and Settings exposes it.

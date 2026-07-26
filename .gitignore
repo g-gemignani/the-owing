@@ -18,7 +18,6 @@ mono_crash.*.json
 
 # Exported builds
 /build/
-export_presets.cfg
 
 # direnv / nix -------------------------------------------------------------
 .direnv/

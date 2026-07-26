@@ -231,9 +231,6 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	b.flat = true
 	b.set_anchors_preset(Control.PRESET_FULL_RECT)
 	b.tooltip_text = Icons.card_tooltip(card)
-	if on_press.is_valid():
-		b.pressed.connect(func(): Audio.play("card_play"))
-		b.pressed.connect(on_press)
 	holder.add_child(b)
 
 	# NO containers inside the card. A VBox/HBox honours its children's *minimum*
@@ -308,15 +305,54 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# Grow from the bottom edge: a hand sits along the bottom of the screen, so a
 	# card that grew from its centre would push its own text off-screen.
 	holder.pivot_offset = Vector2(size.x * 0.5, size.y)
-	b.mouse_entered.connect(func():
-		show_all.call(true)
-		holder.scale = Vector2(UITheme.CARD_HOVER_SCALE, UITheme.CARD_HOVER_SCALE)
-		holder.z_index = 10)
-	b.mouse_exited.connect(func():
-		show_all.call(false)
-		holder.scale = Vector2.ONE
-		holder.z_index = 0)
+	var open_card := func(open: bool) -> void:
+		show_all.call(open)
+		holder.scale = Vector2.ONE * (UITheme.CARD_HOVER_SCALE if open else 1.0)
+		holder.z_index = 10 if open else 0
+
+	if touch_ui():
+		# TOUCH: a finger has no hover, so reading a card and committing to it must
+		# be two separate taps. Otherwise the only way to find out what a card does
+		# is to play it, which is exactly backwards — and the hover-to-enlarge that
+		# makes a card readable at all would never fire on a phone.
+		#
+		# Deliberately ONE handler that owns both taps, rather than a reveal handler
+		# racing the caller's own. Deciding whether a tap counts by relying on the
+		# order two signals were connected in would break the first time somebody
+		# moved a line.
+		holder.set_meta("preview", open_card)
+		b.pressed.connect(func():
+			if _previewed != b:
+				_close_preview()
+				_previewed = b
+				open_card.call(true)
+				Audio.play("ui_select")
+				return                    # first tap only reveals
+			_close_preview()              # second tap on the same card commits
+			if on_press.is_valid():
+				Audio.play("card_play")
+				on_press.call())
+	else:
+		if on_press.is_valid():
+			b.pressed.connect(func(): Audio.play("card_play"))
+			b.pressed.connect(on_press)
+		b.mouse_entered.connect(func(): open_card.call(true))
+		b.mouse_exited.connect(func(): open_card.call(false))
 	return b
+
+## True where there is a touchscreen and no mouse: phones and tablets.
+static func touch_ui() -> bool:
+	return DisplayServer.is_touchscreen_available() and not OS.has_feature("pc")
+
+## The card currently held open by a tap, so tapping a different one closes it.
+static var _previewed: Button = null
+
+static func _close_preview() -> void:
+	if _previewed != null and is_instance_valid(_previewed):
+		var h := _previewed.get_parent()
+		if h != null and h.has_meta("preview"):
+			(h.get_meta("preview") as Callable).call(false)
+	_previewed = null
 
 ## A card's text layer: wrapped, centred, deaf to the mouse, and clipped as a
 ## last-resort backstop so a mis-measurement can never spill over the frame.

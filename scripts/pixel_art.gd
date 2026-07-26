@@ -489,14 +489,18 @@ static func enemy_sprites() -> Array:
 
 ## List resources of one kind in a directory, in a form that survives EXPORT.
 ##
-## Godot does not ship source .png files in a PCK — it ships the imported texture
-## and leaves a `foo.png.remap` beside it. Code that listed `f.ends_with(".png")`
-## therefore found every sprite while developing and NOTHING in an exported build:
-## the game would have shipped with no enemy art and no card art at all, and no
-## dev run could ever have revealed it, because the editor and `--headless` both
-## read the real filesystem.
+## An exported PCK does not contain the source `.png` at all. It contains the
+## imported texture plus a sidecar, and `DirAccess` lists that sidecar — verified
+## against a real export, which reports entries as `tile_0056.png.import`. Code
+## that listed `f.ends_with(".png")` therefore found every sprite in development
+## and **zero** in a shipped build: the game would have launched with no enemy art.
 ##
-## `load()` still takes the original path, so only the listing needs fixing.
+## No dev run can reveal this. The editor and `--headless` both read the real
+## filesystem, where the .png plainly exists. It took exporting a pack and loading
+## it back to see it — and a first guess at ".remap" was simply wrong, which is why
+## tests/test_export.gd now checks the real thing instead of the assumption.
+##
+## `load()` still accepts the original path, so only the listing needs fixing.
 static func list_resources(dir: String, suffix: String) -> Array:
 	var out: Array = []
 	var d := DirAccess.open(dir)
@@ -505,10 +509,10 @@ static func list_resources(dir: String, suffix: String) -> Array:
 	d.list_dir_begin()
 	var f := d.get_next()
 	while f != "":
-		# an exported build hands back "sprite.png.remap"; strip it back to the
-		# path load() understands
-		if f.ends_with(".remap"):
-			f = f.substr(0, f.length() - 6)
+		# strip whichever sidecar suffix this build flavour reports
+		for tail in [".import", ".remap"]:
+			if f.ends_with(tail):
+				f = f.substr(0, f.length() - tail.length())
 		if f.ends_with(suffix) and not out.has(dir + f):
 			out.append(dir + f)
 		f = d.get_next()

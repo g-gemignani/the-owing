@@ -25,6 +25,9 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 
 ## Running it
 
+See [BUILD.md](BUILD.md) for building distributables and running them on each
+platform.
+
 Needs **Godot 4.7**. Either put it on `PATH`, or:
 
 ```bash
