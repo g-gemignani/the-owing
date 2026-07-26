@@ -501,7 +501,8 @@ paintings. Worth starting in parallel, because it is the item that will not comp
 
 ## 6. The captures, screen by screen
 
-All 16 rendered at 1280×720, UI scale 1.0, with a stocked save. What each one says:
+All rendered at 1280×720 — the size the interface is laid out at, and the only one
+there is (D65) — with a stocked save. What each one says:
 
 | capture | verdict |
 |---|---|

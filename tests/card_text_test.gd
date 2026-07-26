@@ -21,7 +21,6 @@ func _ready() -> void:
 	get_window().size = Vector2i(
 		int(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
 		int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
-	UITheme.set_scale_silent(UITheme.UI_SCALE)
 	await get_tree().process_frame
 
 	MetaState.path_prefix = "t_cardtext_"

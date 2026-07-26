@@ -33,16 +33,20 @@ func _init() -> void:
 	# the constant was changed to 1.0, which is exactly how a duplicated number
 	# turns a passing test into a lie.
 	var scale: float = load("res://scripts/ui_theme.gd").UI_SCALE
-	# ...and reading it from ONE place was not enough, because a second copy lived
-	# in settings_state.gd, which applies its own default over the theme's on any
-	# machine with no settings file. The scale the test measures must be the scale
-	# a new player is actually given.
-	var settings = load("res://scripts/settings_state.gd").new()
-	if settings.ui_scale > 0.0:
-		fails += 1
-		print("FAIL settings_state restates the default UI scale (%.2f) instead of taking UITheme's %.2f" % [
-			settings.ui_scale, scale])
-	settings.free()
+	# ...and there must be no second copy anywhere. settings_state.gd used to carry
+	# its own default and apply it over the theme's, so a new player never got the
+	# shipped scale; the whole zoom is gone now (D65) and this keeps it gone.
+	for src in ["res://scripts/settings_state.gd", "res://scripts/settings_menu.gd",
+			"res://scripts/ui_theme.gd"]:
+		var fh := FileAccess.open(src, FileAccess.READ)
+		if fh == null:
+			continue
+		var text := fh.get_as_text()
+		fh.close()
+		for banned in ["set_scale_silent", "func set_scale("]:
+			if text.find(banned) != -1:
+				fails += 1
+				print("FAIL %s still exposes %s — the UI scale is fixed" % [src, banned])
 	var node_h: float = 52.0 * scale
 	var sep: float = 6.0 * scale
 	var map_h: float = float(rows) * node_h + float(rows - 1) * sep

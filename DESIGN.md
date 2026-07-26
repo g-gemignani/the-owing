@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The UI scale was a second scale (D65).** Removed the zoom — keys, slider, persisted value and setters. The engine's `canvas_items` stretch already scales the whole canvas to the window (measured: a 640x360 window and a 1920x1080 one both present 1280x720 layout units), so the app-level multiplier was a duplicate that had already caused three separate incidents. F11 still toggles fullscreen; nothing else resizes.
+
 - **The horizon is not the standing line (D64).** Enemies stood on the backdrop's wall/floor junction, which in one-point perspective is the *far end* of the corridor — so they read as small and distant. Split into `HORIZON_LINE` (what the painting does) and `STAND_LINE` (where feet go, nearer the viewer, clamped clear of the hand), and grew them to match. Also gave D63's four layout bugs their tests: three were already covered by the new geometry checks, the fourth — the entire HUD anchored off screen — was covered by nothing, and those checks turned out to be measuring a square 1280x1280 window rather than the shipped 720.
 
 - **The bottom of the screen, laid out properly (D63).** Vitals back at the bottom-left beside the hand, the hand itself a fan of overlapping tilted cards that straighten and lift when hovered, the power a round sigil and End Turn a small corner button instead of two full-width bars. Four layout bugs on the way, three of them invisible to the existing suite — including a `Control` assigned to an `HBoxContainer`-typed variable, which GDScript rejects at runtime, so the hand silently never existed. `CardTextTest` now measures the hand's geometry.
@@ -2401,3 +2403,51 @@ check had 560 pixels of vertical slack the player does not have. It now sets the
 shipped size the way `PlayableTest` does, which is where that trap was already
 written down. A test measuring the wrong frame is worse than no test, because it
 reports the thing as covered.
+
+### D65 — The UI scale was a second scale
+
+The interface had a zoom: `Ctrl +/-`, `Ctrl+0`, a settings slider from 0.8 to 2.6,
+and a persisted value. Removed entirely. The layout is a fixed 1280x720 and F11
+toggles fullscreen; nothing else resizes.
+
+**It was redundant with a mechanism that already works.** `project.godot` sets
+`stretch/mode = "canvas_items"` against a 1280x720 base, so the engine scales the
+whole canvas to the window on its own. Measured rather than assumed:
+
+| window | viewport, in layout units |
+|---|---|
+| 1280x720 | 1280x720 |
+| 640x360 | 1280x720 |
+| 1920x1080 | 1280x720 |
+| 1024x768 | 1280x960 *(aspect "expand" adds units on the short axis)* |
+
+So a smaller window already shrinks everything, fullscreen already fills the
+display, and the layout never reflows — it is a clean scale-up or scale-down of one
+composition. A second multiplier on top could only ever disagree with the layout it
+was laid out for, and it repeatedly did: the zoom is what put the map's only
+actionable row below the window (D33), what collapsed the button frames when the
+default moved (D49), and what a restated default in `settings_state.gd` silently
+overrode for every new player (D53). Three separate incidents from one knob that was
+never needed.
+
+It also had a real cost for the art pass now starting: every asset size, every
+nine-slice margin and every layout constant had to be reasoned about across a
+0.6-3.0 range that no longer exists.
+
+Gone with it: `UITheme.set_scale()` / `set_scale_silent()`, `SettingsState.ui_scale`
+(an older settings file may still contain the key; it is read by nobody and not
+carried forward), the slider, and the `set_scale_silent` calls four tests and the
+screenshot tool were making to force a scale they now get for free.
+`tests/test_layout.gd` fails if a setter comes back.
+
+The art brief was regenerated to say what is now true: assets are still authored at
+2x, not because a slider might enlarge them, but because a 1440p display draws every
+one of them at 2x and a 4K display at 3x.
+
+**One thing to know about the aspect row above.** At a non-16:9 window the viewport
+gains units on the short axis rather than letterboxing, so the frame gets taller (or
+wider) in layout units. The combat layout reads `get_viewport_rect()` for the stand
+line and the hand, so it adapts — but the painted backdrops are `KEEP_ASPECT_COVERED`
+and will crop, which moves their horizon away from the 68% the enemies stand
+against. Not fixed here; 16:9 is what the game is composed for, and the alternative
+(letterbox bars) trades a visible black frame for an invisible one.

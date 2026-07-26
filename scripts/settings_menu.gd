@@ -15,11 +15,9 @@ func _build() -> void:
 	var col := UI.screen(self, "Settings")
 
 	UI.label(col, "Display")
-	UI.slider(col, "UI scale", SettingsState.ui_scale, 0.8, 2.6, 0.1, func(v):
-		SettingsState.ui_scale = v
-		UITheme.set_scale_silent(v)
-		SettingsState.save_settings()
-		call_deferred("_build"))
+	# The UI-scale slider used to live here. Removed with the zoom it drove: the
+	# engine's canvas_items stretch already resizes the whole interface with the
+	# window, so this was a second scale fighting the one that works (D65).
 	var fs := CheckBox.new()
 	fs.text = "Fullscreen"
 	fs.button_pressed = SettingsState.fullscreen
@@ -56,5 +54,5 @@ func _build() -> void:
 		SettingsState.save_settings())
 
 	UI.spacer(col)
-	UI.label(col, "Shortcuts: Ctrl +/- scale, Ctrl+0 reset, F11 fullscreen, Esc back")
+	UI.label(col, "Shortcuts: F11 fullscreen, Esc back")
 	UI.exit_button(col, "Back", func(): UI.goto(self, back_to))

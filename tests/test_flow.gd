@@ -47,15 +47,12 @@ func _init() -> void:
 
 	# --- settings round-trip and clamping ---
 	var S = load("res://scripts/settings_state.gd").new()
-	S.ui_scale = 99.0          # out of range
 	S.master_volume = 500
 	S.fullscreen = false
 	S.show_numbers = false
 	S.save_settings()
 	var S2 = load("res://scripts/settings_state.gd").new()
 	S2.load_settings()
-	if S2.ui_scale > 3.0 or S2.ui_scale < 0.6:
-		fails += 1; print("FAIL ui_scale not clamped on load: %.2f" % S2.ui_scale)
 	if S2.master_volume > 100:
 		fails += 1; print("FAIL volume not clamped on load: %d" % S2.master_volume)
 	if S2.fullscreen != false or S2.show_numbers != false:

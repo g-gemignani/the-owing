@@ -367,8 +367,11 @@ func _emit() -> void:
 	print("**%d files wanted · %d already present · %d to provide.**" % [
 		_rows.size(), have, _rows.size() - have])
 	print("")
-	print("Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample:")
-	print("`UITheme.scale` runs 0.6-3.0 and the nine-slice margins do not scale with it.")
+	print("Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.")
+	print("The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`")
+	print("stretch scales the whole canvas to the window — so on a 1440p display every")
+	print("asset is drawn at 2x and on 4K at 3x. Nothing reflows; it is a clean scale-up,")
+	print("and it is why the source art has to have the headroom.")
 	print("Every painted asset needs `texture_filter = LINEAR` at its node — `project.godot`")
 	print("sets NEAREST globally for the pixel assets, which would alias smooth art.")
 	print("")

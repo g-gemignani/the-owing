@@ -12,8 +12,11 @@ this is the shopping list.
 
 **209 files wanted · 3 already present · 206 to provide.**
 
-Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample:
-`UITheme.scale` runs 0.6-3.0 and the nine-slice margins do not scale with it.
+Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
+The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
+stretch scales the whole canvas to the window — so on a 1440p display every
+asset is drawn at 2x and on 4K at 3x. Nothing reflows; it is a clean scale-up,
+and it is why the source art has to have the headroom.
 Every painted asset needs `texture_filter = LINEAR` at its node — `project.godot`
 sets NEAREST globally for the pixel assets, which would alias smooth art.
 

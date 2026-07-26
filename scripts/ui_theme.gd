@@ -1,14 +1,25 @@
-## Global UI scaling + fullscreen. Autoload.
+## Interface sizes + fullscreen. Autoload.
 ##
-## TUNE ONE NUMBER: `UI_SCALE` below (or override at runtime via
-## `UITheme.set_scale(x)`). Everything — fonts, buttons, card sizes, spacing —
-## derives from it, so the whole interface grows/shrinks together.
+## Every size in the game derives from the constants below, at a FIXED scale. There
+## used to be a zoom (Ctrl +/-/0, a settings slider, a persisted value), and it was
+## redundant: `project.godot` sets `stretch/mode = "canvas_items"` against a
+## 1280x720 base, so the engine already scales the entire canvas to whatever the
+## window is. Measured, because this is the sort of thing that gets assumed:
+##
+##     window 1280x720  -> viewport 1280x720 units
+##     window  640x360  -> viewport 1280x720 units
+##     window 1920x1080 -> viewport 1280x720 units
+##     window 1024x768  -> viewport 1280x960 units   (aspect "expand")
+##
+## So shrinking the window already shrinks the interface, and fullscreen already
+## fills the display. A second multiplier on top of that could only disagree with
+## the layout it was laid out for — and did: the same knob is what put the map's
+## only actionable row off screen (D33) and what a restated default silently
+## overrode for every new player (D53).
+##
+## The layout is designed at 1280x720. F11 toggles fullscreen; nothing else resizes.
 extends Node
 
-## The single knob. 1.0 = original size. 1.6 = 60% bigger. Try 1.0-2.0.
-##
-## Only the default for a machine with no settings file: SettingsState applies the
-## persisted value right after this, so an existing player keeps whatever they set.
 const UI_SCALE := 1.0
 
 ## Start the game in fullscreen.
@@ -29,17 +40,14 @@ const BASE_REWARD_CARD := Vector2(170, 148)
 const BASE_MAP_NODE := Vector2(150, 52)
 const BASE_SEPARATION := 8
 
+## Fixed. Read by every size helper below; there is no setter, deliberately.
 var scale: float = UI_SCALE
 var theme: Theme
 
 func _ready() -> void:
-	# SettingsState applies the persisted scale/fullscreen right after this;
-	# UI_SCALE here is only the default for a machine with no settings file yet.
 	_rebuild_theme()
 
-## Runtime tuning so you don't have to edit code to find a comfortable size:
-##   Ctrl+= / Ctrl+-  scale up / down      Ctrl+0  reset
-##   F11 toggle fullscreen                 Esc     back / pause
+##   F11  toggle fullscreen        Esc  back / pause
 func _unhandled_input(event: InputEvent) -> void:
 	if event is not InputEventKey or not event.pressed or event.echo:
 		return
@@ -49,18 +57,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif k.keycode == KEY_ESCAPE:
 		# Escape means "the way out of this screen" — the very Callable the screen's
 		# own Back/Menu button runs, registered through `UI.exit_button`. Leaving
-		# fullscreen is now only the fallback, for a screen that declares no exit
-		# (the hub screens) — F11 toggles it either way.
+		# fullscreen is only the fallback, for a screen that declares no exit (the
+		# hub screens); F11 toggles it either way.
 		if not UI.run_escape():
 			DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
-	elif k.ctrl_pressed:
-		match k.keycode:
-			KEY_EQUAL, KEY_PLUS, KEY_KP_ADD:
-				set_scale(scale + 0.2)
-			KEY_MINUS, KEY_KP_SUBTRACT:
-				set_scale(scale - 0.2)
-			KEY_0:
-				set_scale(UI_SCALE)
 
 func _toggle_fullscreen() -> void:
 	var mode := DisplayServer.window_get_mode()
@@ -68,18 +68,6 @@ func _toggle_fullscreen() -> void:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 	else:
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-
-## Change the UI scale at runtime; rebuilds the theme and reloads the scene.
-func set_scale(new_scale: float) -> void:
-	set_scale_silent(new_scale)
-	if get_tree().current_scene:
-		get_tree().reload_current_scene()
-
-## Apply a scale without reloading — for the settings screen, which rebuilds its
-## own contents and would lose its state on a reload.
-func set_scale_silent(new_scale: float) -> void:
-	scale = clampf(new_scale, 0.6, 3.0)
-	_rebuild_theme()
 
 ## Painted UI frames. Nine-sliced, so the carved border keeps its proportions at
 ## any button size instead of smearing.
