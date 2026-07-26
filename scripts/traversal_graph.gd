@@ -8,8 +8,8 @@ extends Traversal
 ## visits exactly one node per row, so row count *is* this model's encounter count.
 ## Hardcoding it silently broke the budget contract the moment new encounter types
 ## were added to the mix.
-static func rows() -> int:
-	return Traversal.standard_encounters().size() + 1  # +1 for the boss row
+static func rows(dungeon_data = null) -> int:
+	return Traversal.standard_encounters(dungeon_data).size() + 1  # +1 for the boss row
 
 var map: Array = []            # map[row] = Array of node dicts
 var current: Variant = null    # {row, col} of the node just cleared, or null at start
@@ -28,7 +28,7 @@ func generate(p_dungeon) -> void:
 	current = null
 	cleared = 0
 	pending = {}
-	var total := rows()
+	var total := rows(dungeon)
 	for r in total:
 		var row: Array = []
 		for col in row_width(r, total):

@@ -429,21 +429,48 @@ func play_card(card: CardData) -> String:
 # second copy of this arithmetic for display is the D34 label table again.
 
 ## Base damage before the target's own Vulnerable and Block.
+##
+## This is also where cards read the fight (D66). All of it lands here rather than
+## in `_resolve` so the card FACE shows the conditional bonus too — a card that
+## says 9 and hits for 17 because the target is poisoned is the D50 lie again, in a
+## more confusing form.
 func card_base_damage(card: CardData) -> int:
 	var base := card.hit_damage()          # includes per-combat growth
 	if card.damage_from_block:
 		base = player.block
 	if card.strength_mult > 0:
 		base += player.strength * card.strength_mult
+	var foe := current_target()
+	if card.damage_per_poison > 0 and foe != null:
+		base += card.damage_per_poison * foe.poison
+	if card.damage_per_thorns > 0:
+		base += card.damage_per_thorns * player.thorns
+	if card.bonus_vs_debuffed > 0 and foe != null and (foe.vulnerable > 0 or foe.weak > 0):
+		base += card.bonus_vs_debuffed
+	if card.combo_at > 0 and cards_played_this_turn >= card.combo_at:
+		base += card.combo_bonus
 	return base
+
+## Block this card actually grants, after Dexterity and anything it reads.
+##
+## `hand` still contains the card being played at this point (play_card erases it
+## afterwards), so "other cards in hand" is one less than the hand.
+func card_block_bonus(card: CardData) -> int:
+	var bonus := 0
+	if card.block_per_card_in_hand > 0:
+		bonus += card.block_per_card_in_hand * maxi(0, hand.size() - 1)
+	if card.combo_at > 0 and card.eff_block() > 0 and cards_played_this_turn >= card.combo_at:
+		bonus += card.combo_bonus
+	return bonus
 
 ## What one hit actually leaves the player's hands as: Strength added, Weak applied.
 func card_damage(card: CardData) -> int:
 	return player.outgoing_damage(card_base_damage(card))
 
-## Block this card actually grants, after Dexterity.
 func card_block(card: CardData) -> int:
-	return player.outgoing_block(card.eff_block())
+	if card.eff_block() <= 0 and card_block_bonus(card) <= 0:
+		return 0
+	return player.outgoing_block(card.eff_block() + card_block_bonus(card))
 
 ## The face text with this fight's numbers in it.
 func card_text(card: CardData) -> String:
@@ -485,20 +512,28 @@ func _resolve(card: CardData) -> String:
 			var who: String = "all enemies" if card.aoe else String(targets[0].name)
 			msg += "%s hits %s for %d%s. " % [
 				card.name, who, total, (" x%d" % card.hits) if card.hits > 1 else ""]
+		var killed := false
 		for e in enemies:
 			if e.is_dead():
+				if not e.get_meta("counted_dead", false):
+					e.set_meta("counted_dead", true)
+					killed = true
 				msg += "%s dies! " % e.name
 				var onkill := _fire_relics(RelicData.Trigger.ON_KILL)
 				if onkill != "":
 					msg += onkill + " "
+		# a kill that pays for itself: this is what makes a swarm turn keep going
+		if killed and card.energy_on_kill:
+			energy += 1
+			msg += "Energy +1. "
 		retarget()
 
 	if card.double_block:
 		var extra := player.block
 		player.gain_block(extra)
 		msg += "Block doubled to %d. " % player.block
-	if card.eff_block() > 0:
-		var blk := player.outgoing_block(card.eff_block())
+	if card.eff_block() > 0 or card_block_bonus(card) > 0:
+		var blk := card_block(card)
 		player.gain_block(blk)
 		msg += "Block +%d. " % blk
 	if card.eff_heal() > 0:

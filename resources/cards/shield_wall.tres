@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "shield_wall"
 name = "Shield Wall"
-description = "Gain 14 Block. Retain."
+description = "Gain 8 Block, +2 per other card in your hand."
+block_per_card_in_hand = 2
 cost = 2
 type = 1
 rarity = 2
 level = 1
-block = 14
+block = 8
 retain = true

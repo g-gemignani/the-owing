@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "rupture"
 name = "Rupture"
-description = "Deal 6 damage. Apply 3 Poison."
+description = "Deal 4 damage, +1 per Poison on the target. Apply 3 Poison."
+damage_per_poison = 1
 cost = 1
 type = 0
 rarity = 1
 level = 1
-damage = 6
+damage = 4
 apply_poison = 3

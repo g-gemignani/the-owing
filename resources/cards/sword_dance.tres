@@ -6,7 +6,8 @@
 script = ExtResource("1")
 id = "sword_dance"
 name = "Sword Dance"
-description = "Deal 3 damage 3 times."
+description = "Deal 3 damage 3 times. If it kills, gain 1 Energy."
+energy_on_kill = true
 cost = 1
 type = 0
 rarity = 0

@@ -57,6 +57,42 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 ## Legendary power: block stops expiring at end of turn and accumulates instead.
 @export var retain_block: bool = false
 
+# --- cards that read the fight -------------------------------------------------
+#
+# Every card in the game used to be a self-contained arithmetic packet: deal N,
+# block N, apply N. Nothing a card did made another card better, so a turn was
+# "spend three energy on the biggest numbers" and a deck never became an engine —
+# which is the whole thrill of the genre.
+#
+# These are the smallest vocabulary that fixes that, one per existing build, so a
+# build is a set of cards that MULTIPLY each other rather than a shared tag:
+#
+#   poison    a knife that gets worse the more poison is already in the wound
+#   thorns    a strike that scales with the spikes you are wearing
+#   status    a hit that lands harder on something already reeling
+#   tempo     a card that pays off for being the third one this turn
+#   swarm     a kill that gives the energy back, so a good turn keeps going
+#   fortress  a guard that is stronger the more you are still holding
+#
+# Every one of them is priced in `power_value()` below. That is not optional: an
+# unpriced mechanic means enemy scaling silently falls behind the decks using it,
+# which has already happened twice (poison in D17, AoE in the same pass).
+
+## +N damage for each Poison stack already on the target.
+@export var damage_per_poison: int = 0
+## +N damage for each point of Thorns you are wearing.
+@export var damage_per_thorns: int = 0
+## +N damage if the target is Vulnerable or Weak.
+@export var bonus_vs_debuffed: int = 0
+## From your Nth card this turn onward, this card is worth `combo_bonus` more.
+## 0 disables. The count includes this card, so `combo_at = 3` means "your third".
+@export var combo_at: int = 0
+@export var combo_bonus: int = 0
+## Killing something with this card refunds one energy, once.
+@export var energy_on_kill: bool = false
+## +N Block for each OTHER card still in your hand.
+@export var block_per_card_in_hand: int = 0
+
 ## What this card does RIGHT NOW, generated from its effective numbers.
 ##
 ## The `description` field is authored text baked at level 1, so a fused card lied:
@@ -98,6 +134,21 @@ func effect_text(live_damage: int = -1, live_block: int = -1) -> String:
 		parts.append("Deal damage equal to Block")
 	if strength_mult > 0 and (not live or dmg <= 0):
 		parts.append("+%d damage per Strength" % strength_mult)
+	# The conditional half of a card always states its RULE, even when the live
+	# number already includes it: "Deal 17" tells you what happens now, "+1 per
+	# Poison" tells you why, and the second is what makes it a card you build around.
+	if damage_per_poison > 0:
+		parts.append("+%d per Poison" % damage_per_poison)
+	if damage_per_thorns > 0:
+		parts.append("+%d per Thorns" % damage_per_thorns)
+	if bonus_vs_debuffed > 0:
+		parts.append("+%d vs debuffed" % bonus_vs_debuffed)
+	if combo_at > 0 and combo_bonus > 0:
+		parts.append("+%d from card %d" % [combo_bonus, combo_at])
+	if energy_on_kill:
+		parts.append("+1 Energy on kill")
+	if block_per_card_in_hand > 0:
+		parts.append("+%d Block per card held" % block_per_card_in_hand)
 	if lifesteal:
 		parts.append("Heal for damage dealt")
 	if double_block:
@@ -257,6 +308,22 @@ func power_value() -> float:
 		dmg += 3.0 * float(strength_mult)   # assumes a modest Strength stack
 	if lifesteal:
 		dmg *= 1.5   # damage that is also healing
+	# Conditional damage, priced at what it is worth ON AVERAGE rather than at its
+	# ceiling. A deck built for one of these sees it often; a deck that happens to
+	# hold the card sees it never, and pricing the ceiling would charge both.
+	# Calibrated against measured run completion, not intuition — the first guess of
+	# "~4 stacks" was the D17 poison mistake again: a deck BUILT for these holds far
+	# more than a deck that happens to draw the card. Thorns decks sit on 8-14 and
+	# poison decks on 6-10, and at 2.0 the thorns build's completion jumped from 40%
+	# to 69% while its priced ratio FELL — power delivered without being charged for.
+	dmg += 3.5 * float(damage_per_poison)
+	dmg += 5.0 * float(damage_per_thorns)
+	dmg += 0.6 * float(bonus_vs_debuffed)      # roughly the uptime of a debuff
+	if combo_at > 0:
+		# only pays from the Nth card on, and a 3-energy turn rarely reaches 4
+		dmg += float(combo_bonus) * (0.6 if combo_at <= 3 else 0.35)
+	if energy_on_kill:
+		dmg += 6.0                              # a conditional slice of energy_gain
 	# Block is priced BELOW damage on purpose. Damage does double duty: it removes
 	# enemy HP *and* thereby shortens the fight, which prevents damage in turn.
 	# Block only mitigates, and with escalation a longer fight is a worse fight.
@@ -264,6 +331,8 @@ func power_value() -> float:
 	# a fight — measured as a stronger endgame deck winning LESS than a weaker one
 	# (51% vs 73%) while its fights ran 50% longer.
 	var v := dmg + float(eff_block()) * BLOCK_VALUE
+	# ~4 other cards in a typical hand, at the same discount Block gets everywhere
+	v += float(block_per_card_in_hand) * 4.0 * BLOCK_VALUE
 	# debuffs are worth roughly the damage they enable/prevent over their duration
 	v += eff_vulnerable() * 2.0
 	v += eff_weak() * 2.0

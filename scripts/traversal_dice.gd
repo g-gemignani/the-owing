@@ -30,7 +30,7 @@ func generate(p_dungeon) -> void:
 	# Length is derived from the budget and the average roll so the number of
 	# LANDINGS lands near the shared budget — otherwise this model would be
 	# cheaper or dearer than the graph and difficulty would stop meaning one thing.
-	var budget := standard_encounters()
+	var budget := standard_encounters(dungeon)
 	var avg_roll := float(DIE_FACES + 1) / 2.0
 	var length := int(round(float(budget.size()) * avg_roll))
 	track = []

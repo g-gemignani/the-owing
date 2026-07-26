@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "riposte"
 name = "Riposte"
-description = "Deal 7 damage. Gain 3 Thorns."
+description = "Deal 4 damage, +1 per Thorns. Gain 3 Thorns."
+damage_per_thorns = 1
 cost = 1
 type = 0
 rarity = 1
 level = 1
-damage = 7
+damage = 4
 gain_thorns = 3

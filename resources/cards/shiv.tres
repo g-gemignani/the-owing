@@ -6,7 +6,9 @@
 script = ExtResource("1")
 id = "shiv"
 name = "Shiv"
-description = "Deal 4 damage."
+description = "Deal 4 damage. From your third card this turn, +5."
+combo_at = 3
+combo_bonus = 5
 cost = 0
 type = 0
 rarity = 0

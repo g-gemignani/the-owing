@@ -6,7 +6,8 @@
 script = ExtResource("1")
 id = "cull"
 name = "Cull"
-description = "Deal 4 damage 3 times."
+description = "Deal 4 damage 3 times. If it kills, gain 1 Energy."
+energy_on_kill = true
 cost = 2
 type = 0
 rarity = 0

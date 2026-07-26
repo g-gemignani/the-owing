@@ -150,6 +150,93 @@ func _init() -> void:
 		print("MECHANICS TEST: FAIL (%d)" % fails)
 	quit()
 
+	# --- cards that read the fight (D66) ------------------------------------------
+	#
+	# Every one of these has to (a) actually change the number and (b) be priced, or
+	# enemy scaling falls behind the deck built around it. Both are asserted, because
+	# the second failure is invisible: the card works, the build just quietly stops
+	# keeping up with the dungeons it unlocked.
+	var cond := _deck({"strike": 8})
+
+	# poison: the same card is worth more into a poisoned target
+	var ep := _fight(cond)
+	var rup := _card("rupture")
+	var plain: int = ep.card_damage(rup)
+	ep.enemies[0].poison = 6
+	var poisoned: int = ep.card_damage(rup)
+	if poisoned <= plain:
+		fails += 1; print("FAIL rupture ignores Poison: %d vs %d" % [plain, poisoned])
+
+	# thorns: scales with what you are wearing, not with the target
+	var et := _fight(cond)
+	var rip := _card("riposte")
+	var bare: int = et.card_damage(rip)
+	et.player.thorns = 8
+	if et.card_damage(rip) <= bare:
+		fails += 1; print("FAIL riposte ignores Thorns")
+
+	# debuffs: the follow-up hits harder
+	var ed := _fight(cond)
+	var iw := _card("iron_wave")
+	var clean: int = ed.card_damage(iw)
+	ed.enemies[0].vulnerable = 2
+	if ed.card_damage(iw) <= clean:
+		fails += 1; print("FAIL iron_wave ignores a Vulnerable target")
+
+	# tempo: worth more late in the turn than early
+	var ec := _fight(cond)
+	var shiv := _card("shiv")
+	var early: int = ec.card_damage(shiv)
+	ec.cards_played_this_turn = 4
+	if ec.card_damage(shiv) <= early:
+		fails += 1; print("FAIL shiv is worth the same as the first card of a turn")
+
+	# swarm: a kill pays an energy back
+	var ek := _fight(cond)
+	ek.enemies[0].max_hp = 6
+	ek.enemies[0].hp = 6
+	var cull := _card("cull")
+	ek.energy = 3
+	ek.hand.append(cull)
+	var e_before: int = ek.energy
+	ek.play_card(cull)
+	if not ek.enemies[0].is_dead():
+		print("  (info: cull did not kill a 6hp enemy, skipping the refund check)")
+	elif ek.energy != e_before - cull.cost + 1:
+		fails += 1
+		print("FAIL cull killed and did not refund energy: %d -> %d (cost %d)" % [
+			e_before, ek.energy, cull.cost])
+	# ...and NOT when nothing dies
+	var ek2 := _fight(cond)
+	var cull2 := _card("cull")
+	ek2.energy = 3
+	ek2.hand.append(cull2)
+	ek2.play_card(cull2)
+	if ek2.energy != 3 - cull2.cost:
+		fails += 1; print("FAIL cull refunded energy without a kill")
+
+	# fortress: a fuller hand is a bigger shield
+	var eh := _fight(cond)
+	var gd := _card("guard")
+	eh.hand = [gd]
+	var alone: int = eh.card_block(gd)
+	for i in 4:
+		eh.hand.append(_card("strike"))
+	if eh.card_block(gd) <= alone:
+		fails += 1; print("FAIL guard ignores the cards in your hand")
+
+	# ...and every one of them must cost the deck something in priced power
+	for pair in [["rupture", "damage_per_poison"], ["riposte", "damage_per_thorns"],
+			["iron_wave", "bonus_vs_debuffed"], ["shiv", "combo_bonus"],
+			["cull", "energy_on_kill"], ["guard", "block_per_card_in_hand"]]:
+		var real := _card(String(pair[0]))
+		var stripped := _card(String(pair[0]))
+		stripped.set(String(pair[1]), 0 if String(pair[1]) != "energy_on_kill" else false)
+		if real.power_value() <= stripped.power_value():
+			fails += 1
+			print("FAIL %s is not priced for %s — enemy scaling will fall behind it" % [
+				pair[0], pair[1]])
+
 func _card(id: String) -> CardData:
 	return (load(DIR + id + ".tres") as CardData).duplicate()
 

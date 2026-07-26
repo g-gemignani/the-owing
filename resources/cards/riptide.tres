@@ -6,7 +6,8 @@
 script = ExtResource("1")
 id = "riptide"
 name = "Riptide"
-description = "Deal 4 damage twice to ALL enemies."
+description = "Deal 4 damage twice to ALL enemies. If it kills, gain 1 Energy."
+energy_on_kill = true
 cost = 2
 type = 0
 rarity = 1

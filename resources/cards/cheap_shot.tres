@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "cheap_shot"
 name = "Cheap Shot"
-description = "Deal 5 damage. Apply 1 Vulnerable."
+description = "Deal 3 damage, +4 if the target is already Vulnerable or Weak. Apply 1 Vulnerable."
+bonus_vs_debuffed = 4
 cost = 0
 type = 0
 rarity = 1
 level = 1
-damage = 5
+damage = 3
 apply_vulnerable = 1

@@ -9,11 +9,21 @@ extends SceneTree
 const KINDS := [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE]
 const KIND_NAMES := {0: "GRAPH", 1: "DECK", 2: "DICE"}
 
-## Encounters one run should cost, shared by every model.
-func budget() -> int:
-	return Balance.ENCOUNTER_COMBATS + Balance.ENCOUNTER_ELITES \
-		+ Balance.ENCOUNTER_RESTS + Balance.ENCOUNTER_SHOPS \
-		+ Balance.ENCOUNTER_EVENTS + Balance.ENCOUNTER_TREASURES + 1
+## Encounters one run of `did` should cost. The mix is per-dungeon now, but every
+## MODEL still has to spend the same one — that is the contract this test exists
+## for, and it is what lets a difficulty rating mean one thing across three very
+## different ways of walking a dungeon.
+func budget(did: String = "") -> int:
+	var dd := Balance.dungeon(did) if did != "" else null
+	if dd == null:
+		return Balance.ENCOUNTER_COMBATS + Balance.ENCOUNTER_ELITES \
+			+ Balance.ENCOUNTER_RESTS + Balance.ENCOUNTER_SHOPS \
+			+ Balance.ENCOUNTER_EVENTS + Balance.ENCOUNTER_TREASURES + 1
+	var m := dd.encounter_mix()
+	var n := 1   # the boss
+	for k in m:
+		n += int(m[k])
+	return n
 
 func _init() -> void:
 	var fails := 0
@@ -22,6 +32,7 @@ func _init() -> void:
 		var label: String = KIND_NAMES.get(kind, str(kind))
 		var enc_total := 0
 		var enc_runs := 0
+		var budget_total := 0
 		for dungeon_id in Balance.DUNGEONS:
 			var dd := Balance.dungeon(dungeon_id)
 			for trial in 30:
@@ -84,20 +95,25 @@ func _init() -> void:
 				# bound still catches runaway generation.
 				enc_total += encounters
 				enc_runs += 1
-				if encounters > budget() * 3:
+				budget_total += budget(dungeon_id)
+				if encounters > budget(dungeon_id) * 3:
 					fails += 1
 					print("FAIL %s: runaway run of %d encounters" % [label, encounters])
 					break
 
-		# average encounters per run must match the shared budget
+		# Average encounters per run must match what the dungeons asked for. Compared
+		# against the mean of the PER-DUNGEON budgets now that the mix varies by
+		# place — the contract was never "every run is nine encounters", it is "the
+		# three models cost the same as each other".
 		if enc_runs > 0:
 			var avg := float(enc_total) / float(enc_runs)
-			if abs(avg - float(budget())) > 2.0:
+			var want := float(budget_total) / float(enc_runs)
+			if abs(avg - want) > 2.0:
 				fails += 1
-				print("FAIL %s: averages %.1f encounters, budget %d (models must cost the same)" % [
-					label, avg, budget()])
+				print("FAIL %s: averages %.1f encounters, dungeons asked for %.1f (models must cost the same)" % [
+					label, avg, want])
 			else:
-				print("  (info: %s averages %.1f encounters, budget %d)" % [label, avg, budget()])
+				print("  (info: %s averages %.1f encounters, asked for %.1f)" % [label, avg, want])
 
 	# --- graph specifics: every layer reachable, boss reachable ---
 	var g := TraversalGraph.new()
@@ -168,6 +184,45 @@ func _init() -> void:
 	for o in d.options():
 		if o.has("hp_cost"):
 			fails += 1; print("FAIL DECK: boss can be avoided")
+
+	# --- a dungeon may have its own shape, within reason -----------------------
+	#
+	# Every dungeon used to draw from one global mix, so twelve dungeons had one
+	# rhythm. They differ now — a swarm, a treasure run, a market, a gauntlet — and
+	# these are the bounds that keep "difficulty 5" meaning the same thing in all of
+	# them. Without them the mix is a back door onto the difficulty curve: a dungeon
+	# could quietly halve its fights and keep its rating.
+	var shapes := {}
+	for did3 in Balance.DUNGEONS:
+		var dd4 := Balance.dungeon(did3)
+		if dd4 == null:
+			continue
+		var mix: Dictionary = dd4.encounter_mix()
+		var fights: int = int(mix["combat"]) + int(mix["elite"])
+		var total := 1
+		for k2 in mix:
+			total += int(mix[k2])
+		shapes[did3] = "%d/%d/%d/%d/%d/%d" % [mix["combat"], mix["elite"], mix["rest"],
+			mix["shop"], mix["event"], mix["treasure"]]
+		if total < 8 or total > 11:
+			fails += 1
+			print("FAIL %s runs %d encounters; the band is 8-11" % [did3, total])
+		if fights < 3 or fights > 6:
+			fails += 1
+			print("FAIL %s has %d fights; the band is 3-6" % [did3, fights])
+		# something other than fighting has to happen, or the dungeon is a treadmill
+		if int(mix["rest"]) + int(mix["shop"]) + int(mix["event"]) + int(mix["treasure"]) < 2:
+			fails += 1
+			print("FAIL %s is nothing but fights" % did3)
+	# ...and they must not all be the same shape, which is the thing being fixed
+	var distinct := {}
+	for k3 in shapes:
+		distinct[shapes[k3]] = true
+	if distinct.size() < 6:
+		fails += 1
+		print("FAIL only %d distinct dungeon shapes across %d dungeons" % [
+			distinct.size(), shapes.size()])
+	print("  (info: %d distinct shapes across %d dungeons)" % [distinct.size(), shapes.size()])
 
 	# --- the dodge has to be a trade, not a discount --------------------------
 	#

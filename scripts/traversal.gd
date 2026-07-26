@@ -91,21 +91,32 @@ static func from_state(d: Dictionary, dungeon_data) -> Traversal:
 
 # --- shared helpers ---
 
-## Standard encounter mix for one run, so every model costs the player a
+## The encounter mix for one run of `dungeon`, so every model costs the player a
 ## comparable amount. Returns an Array of Node values, boss NOT included.
-static func standard_encounters() -> Array:
+##
+## Takes the dungeon because the mix is now per-place (DungeonData.encounter_mix):
+## the same three models still spend the same budget as each other, but a swarm
+## dungeon and a treasure dungeon no longer feel like the same walk.
+static func standard_encounters(dungeon_data = null) -> Array:
+	var mix := {
+		"combat": Balance.ENCOUNTER_COMBATS, "elite": Balance.ENCOUNTER_ELITES,
+		"rest": Balance.ENCOUNTER_RESTS, "shop": Balance.ENCOUNTER_SHOPS,
+		"event": Balance.ENCOUNTER_EVENTS, "treasure": Balance.ENCOUNTER_TREASURES,
+	}
+	if dungeon_data != null and dungeon_data.has_method("encounter_mix"):
+		mix = dungeon_data.encounter_mix()
 	var out: Array = []
-	for i in Balance.ENCOUNTER_COMBATS:
+	for i in int(mix["combat"]):
 		out.append(Enc.COMBAT)
-	for i in Balance.ENCOUNTER_ELITES:
+	for i in int(mix["elite"]):
 		out.append(Enc.ELITE)
-	for i in Balance.ENCOUNTER_RESTS:
+	for i in int(mix["rest"]):
 		out.append(Enc.REST)
-	for i in Balance.ENCOUNTER_SHOPS:
+	for i in int(mix["shop"]):
 		out.append(Enc.SHOP)
-	for i in Balance.ENCOUNTER_EVENTS:
+	for i in int(mix["event"]):
 		out.append(Enc.EVENT)
-	for i in Balance.ENCOUNTER_TREASURES:
+	for i in int(mix["treasure"]):
 		out.append(Enc.TREASURE)
 	return out
 

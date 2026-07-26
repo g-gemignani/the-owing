@@ -100,6 +100,19 @@ static func card_tooltip(c: CardData, live_damage: int = -1, live_block: int = -
 		lines.append("Deals damage equal to your current Block.")
 	if c.strength_mult > 0:
 		lines.append("Deals %d extra damage per point of Strength." % c.strength_mult)
+	if c.damage_per_poison > 0:
+		lines.append("Deals %d extra damage per Poison stack already on the target." % c.damage_per_poison)
+	if c.damage_per_thorns > 0:
+		lines.append("Deals %d extra damage per point of Thorns you are wearing." % c.damage_per_thorns)
+	if c.bonus_vs_debuffed > 0:
+		lines.append("Deals %d extra damage if the target is Vulnerable or Weak." % c.bonus_vs_debuffed)
+	if c.combo_at > 0 and c.combo_bonus > 0:
+		lines.append("Worth %d more from your %s card of the turn onward." % [
+			c.combo_bonus, ["", "first", "second", "third", "fourth"][mini(c.combo_at, 4)]])
+	if c.energy_on_kill:
+		lines.append("Refunds 1 Energy if it kills something.")
+	if c.block_per_card_in_hand > 0:
+		lines.append("Grants %d extra Block for each other card in your hand." % c.block_per_card_in_hand)
 	if c.lifesteal:
 		lines.append("Heals you for the damage it deals.")
 	if blk > 0:

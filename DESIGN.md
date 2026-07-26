@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **Cards that read the fight, and dungeons with their own shapes (D66, D67).** Not one card in the game was conditional — no "for each", no "if you played" — so a turn was arithmetic and a deck never became an engine; six mechanics now let a build's cards multiply each other. And every dungeon drew from one global encounter mix, so twelve dungeons had one rhythm; the mix is per-place now (a swarm, a market, a climb, a treasure run). Both were measured, and both needed correcting: the card pricing was under-charging builds by half, and the first pass at shapes turned the deepest dungeons into six-fight gauntlets on top of their difficulty.
+
 - **The UI scale was a second scale (D65).** Removed the zoom — keys, slider, persisted value and setters. The engine's `canvas_items` stretch already scales the whole canvas to the window (measured: a 640x360 window and a 1920x1080 one both present 1280x720 layout units), so the app-level multiplier was a duplicate that had already caused three separate incidents. F11 still toggles fullscreen; nothing else resizes.
 
 - **The horizon is not the standing line (D64).** Enemies stood on the backdrop's wall/floor junction, which in one-point perspective is the *far end* of the corridor — so they read as small and distant. Split into `HORIZON_LINE` (what the painting does) and `STAND_LINE` (where feet go, nearer the viewer, clamped clear of the hand), and grew them to match. Also gave D63's four layout bugs their tests: three were already covered by the new geometry checks, the fourth — the entire HUD anchored off screen — was covered by nothing, and those checks turned out to be measuring a square 1280x1280 window rather than the shipped 720.
@@ -2451,3 +2453,95 @@ line and the hand, so it adapts — but the painted backdrops are `KEEP_ASPECT_C
 and will crop, which moves their horizon away from the 68% the enemies stand
 against. Not fixed here; 16:9 is what the game is composed for, and the alternative
 (letterbox bars) trades a visible black frame for an invisible one.
+
+### D66 — Cards that read the fight
+
+Asked what would make the game more fun, the honest answer was in the data model:
+`CardData` had 31 exported fields and **not one of them was conditional**. No "for
+each", no "if you played", no "when you gain". Every card was a self-contained
+arithmetic packet — deal N, block N, apply N — so a turn was "spend three energy on
+the biggest numbers", nothing you drew made anything else better, and a deck never
+became an *engine*. Three cards of a hundred read any state at all (`strength_mult`,
+`damage_from_block`, `grows`).
+
+Six new fields, one per existing build, chosen so a build is a set of cards that
+multiply each other rather than a shared tag:
+
+| build | mechanic | on |
+|---|---|---|
+| poison | `damage_per_poison` | Rupture, Scrape |
+| thorns | `damage_per_thorns` | Riposte, Molten Core |
+| status | `bonus_vs_debuffed` | Iron Wave, Cheap Shot |
+| tempo | `combo_at` / `combo_bonus` | Shiv, Cut and Run, Dagger Throw |
+| swarm | `energy_on_kill` | Cull, Sword Dance, Riptide |
+| fortress | `block_per_card_in_hand` | Guard, Shield Wall |
+
+Fourteen existing cards were rewritten rather than fourteen added: the set stays at
+100 with its rarity distribution intact, and D18 already says a rare's job is to
+*enable a build*. Base numbers came **down** where a conditional went on, so the
+ceiling rises and the floor falls — that is what makes it a build card instead of a
+strictly better card.
+
+All of it resolves in `card_base_damage()` / `card_block()`, which is what the card
+FACE reads (D58). A card that says 9 and hits for 17 because the target is poisoned
+would be the same lie in a more confusing form.
+
+**Pricing was wrong twice, in both directions, and the measurements caught it.**
+Every mechanic must be in `power_value()` or enemy scaling silently falls behind the
+decks using it. First pass assumed "~4 stacks", which is what a deck that *happens
+to draw* the card holds, not what a deck built for it holds:
+
+| | before | after first pricing | after calibration |
+|---|---|---|---|
+| Thorns build @ the Maw | 40% | **69%** (ratio *fell* 3.76 → 3.54) | 61% |
+| Poison build @ Rot Gardens | 89% | 85% | 87% |
+
+A build whose completion jumps while its priced ratio *falls* is D28's exact signal:
+power delivered without being charged for. Per-stack weights went to 3.5 (poison)
+and 5.0 (thorns). Thorns stays high at the Maw and further pricing barely moves it —
+because the rest of that gap is not mispricing but a genuine interaction: the Maw is
+now elite-heavy, thorns punishes attackers, and a deck built to hurt things that hit
+you does well in a dungeon full of things that hit you. That is the texture this and
+D67 exist to create, so it is left alone.
+
+`tests/test_mechanics.gd` asserts each one both ways: the number actually changes
+(a poisoned target takes more, a fuller hand blocks more, a kill refunds energy and
+a non-kill does not) *and* stripping the field lowers `power_value()`.
+
+### D67 — Twelve dungeons, twelve shapes
+
+Every dungeon drew from ONE global mix — 3 combats, 1 elite, 1 rest, 1 shop,
+1 event, 1 treasure — so the Crypt and the Maw had identical rhythms and twelve
+dungeons were one dungeon with different wallpaper and bigger numbers.
+
+The mix moved onto `DungeonData` (`enc_*`, -1 meaning "use the default"), and the
+three traversal models all build from it, so a place can be a swarm, a market, a
+climb or a treasure run:
+
+| | shape | what it is |
+|---|---|---|
+| The Warrens | 5 fights, no elite | a swarm: nothing here is elite, there is simply a lot of it |
+| The Foundry | 3 + **2 elites** | the wall the early game breaks on |
+| The Fungal Deep | 2 rests, 2 events, no shop | it grows back, and the deep is strange |
+| The Sunken Vault | **3 treasures** | a treasure run: fewer fights, more to carry out |
+| The Drowned Market | **2 shops, no rest** | the market: nowhere to sleep |
+| The Maw | **2 combats, 2 elites** | short, and nothing in it is ordinary |
+
+**The first pass made shape into a second difficulty axis, which it must not be.**
+Fight counts were free to climb with depth, and did: the Abyssal Stair and the Maw
+each ran six fights against the default four, on top of already being d7 and d8.
+
+    Abyssal Stair, Late deck   69% -> 20%
+    The Maw, Late deck         49% -> 22%
+    Ember Road, Status build   63% -> 31%   (no rest at all is a wall, not a road)
+
+Fight count is now deliberately *uncorrelated* with depth — deep dungeons get fewer,
+heavier fights (the Maw is 2 combats and 2 elites, not 4 and 2) and shallow ones can
+afford more, cheaper ones. After: the Maw reads 61/44/69% by deck strength and the
+Stair 56/46/75%, against a D54 baseline of 40/49/70.
+
+`tests/test_traversal.gd` polices the shapes so the mix cannot become a back door
+onto the difficulty curve: 8-11 encounters, 3-6 fights, at least two things that are
+not a fight, at least six distinct shapes across the twelve, and — unchanged — all
+three models must still spend whatever budget a dungeon asks for, compared now
+against the mean of the per-dungeon budgets rather than one global number.

@@ -6,9 +6,10 @@
 script = ExtResource("1")
 id = "guard"
 name = "Guard"
-description = "Gain 7 Block."
+description = "Gain 4 Block, +1 per other card in your hand."
+block_per_card_in_hand = 1
 cost = 1
 type = 1
 rarity = 0
 level = 1
-block = 7
+block = 4

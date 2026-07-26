@@ -6,7 +6,8 @@
 script = ExtResource("1")
 id = "molten_core"
 name = "Molten Core"
-description = "Gain 3 Strength and 3 Thorns."
+description = "Deal 2 damage per Thorns you have. Gain 3 Thorns."
+damage_per_thorns = 2
 cost = 2
 type = 2
 rarity = 3

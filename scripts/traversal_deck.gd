@@ -22,7 +22,7 @@ func generate(p_dungeon) -> void:
 	cleared = 0
 	avoided = 0
 	pending = {}
-	draw_pile = standard_encounters()
+	draw_pile = standard_encounters(dungeon)
 	draw_pile.shuffle()
 	draw_pile.append(Enc.BOSS)   # the boss is always the bottom of the stack
 	total = draw_pile.size()
