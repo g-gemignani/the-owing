@@ -100,7 +100,7 @@ func _refresh() -> void:
 	for i in tv.track.size():
 		# each space is an icon plus a marker, so the board reads at a glance
 		var cell := VBoxContainer.new()
-		cell.custom_minimum_size = Vector2(UITheme.px(56), 0)
+		cell.custom_minimum_size.x = UITheme.px(56)
 		var pic := TextureRect.new()
 		pic.texture = Icons.for_encounter(int(tv.track[i]))
 		pic.custom_minimum_size = Vector2(UITheme.px(40), UITheme.px(40))

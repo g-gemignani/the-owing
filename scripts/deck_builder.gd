@@ -90,6 +90,7 @@ func _build_ui() -> void:
 	power_box.add_theme_constant_override("separation", UITheme.sep(6))
 	power_row.add_child(power_box)
 	var manage := Button.new()
+	UITheme.style_button(manage)
 	manage.text = "Powers..."
 	manage.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Powers.tscn"))
 	power_row.add_child(manage)
@@ -117,9 +118,10 @@ func _build_ui() -> void:
 	root.add_child(save_row)
 	name_edit = LineEdit.new()
 	name_edit.placeholder_text = "deck name"
-	name_edit.custom_minimum_size = Vector2(UITheme.px(200), 0)
+	name_edit.custom_minimum_size.x = UITheme.px(200)
 	save_row.add_child(name_edit)
 	var save_btn := Button.new()
+	UITheme.style_button(save_btn)
 	save_btn.text = "Save deck"
 	save_btn.pressed.connect(_on_save)
 	save_row.add_child(save_btn)
@@ -131,6 +133,7 @@ func _build_ui() -> void:
 	bottom.add_theme_constant_override("separation", UITheme.sep(10))
 	root.add_child(bottom)
 	var back_btn := Button.new()
+	UITheme.style_button(back_btn)
 	back_btn.text = "Back"
 	back_btn.pressed.connect(func():
 		var dest := "res://scenes/Overworld.tscn"
@@ -140,6 +143,7 @@ func _build_ui() -> void:
 		get_tree().change_scene_to_file(dest))
 	bottom.add_child(back_btn)
 	var coll_btn := Button.new()
+	UITheme.style_button(coll_btn)
 	coll_btn.text = "Collection (fuse)"
 	coll_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
 	bottom.add_child(coll_btn)
@@ -194,6 +198,7 @@ func _refresh() -> void:
 		pd = pd.duplicate()
 		pd.level = int(MetaState.powers[pid])
 		var pb := Button.new()
+		UITheme.style_button(pb)
 		var on: bool = pid == MetaState.equipped_power
 		pb.text = "%s%s Lv%d" % ["> " if on else "", pd.name, pd.level]
 		pb.disabled = on
@@ -209,6 +214,7 @@ func _refresh() -> void:
 		c.queue_free()
 	for dn in MetaState.decks:
 		var lb := Button.new()
+		UITheme.style_button(lb)
 		lb.text = dn
 		lb.pressed.connect(func():
 			_load_deck(dn)
@@ -242,7 +248,7 @@ func _refresh() -> void:
 		row.add_child(pic)
 		var name_lbl := Label.new()
 		name_lbl.add_theme_color_override("font_color", Icons.rarity_colour(card.rarity))
-		name_lbl.custom_minimum_size = Vector2(UITheme.px(410), 0)
+		name_lbl.custom_minimum_size.x = UITheme.px(410)
 		var stats := ""
 		if card.eff_damage() > 0:
 			stats += "dmg %d " % card.eff_damage()
@@ -255,19 +261,21 @@ func _refresh() -> void:
 		UI.hoverable(row, Icons.card_tooltip(card))
 
 		var minus := Button.new()
+		UITheme.style_button(minus)
 		minus.text = "-"
-		minus.custom_minimum_size = Vector2(UITheme.px(40), 0)
+		minus.custom_minimum_size.x = UITheme.px(40)
 		minus.pressed.connect(_adjust.bind(id, -1))
 		row.add_child(minus)
 
 		var cnt := Label.new()
-		cnt.custom_minimum_size = Vector2(UITheme.px(46), 0)
+		cnt.custom_minimum_size.x = UITheme.px(46)
 		cnt.text = "x%d" % int(selection.get(id, 0))
 		row.add_child(cnt)
 
 		var plus := Button.new()
+		UITheme.style_button(plus)
 		plus.text = "+"
-		plus.custom_minimum_size = Vector2(UITheme.px(40), 0)
+		plus.custom_minimum_size.x = UITheme.px(40)
 		plus.pressed.connect(_adjust.bind(id, 1))
 		row.add_child(plus)
 

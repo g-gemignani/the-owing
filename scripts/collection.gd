@@ -36,6 +36,7 @@ func _build_ui() -> void:
 	scroll.add_child(list_box)
 
 	var back := Button.new()
+	UITheme.style_button(back)
 	# return to wherever makes sense: the map if a dungeon is active, else the deck builder
 	var dest := "res://scenes/Overworld.tscn"
 	if GameState.in_run():
@@ -82,7 +83,7 @@ func _refresh() -> void:
 		row.add_child(pic)
 		var lbl := Label.new()
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(card.rarity))
-		lbl.custom_minimum_size = Vector2(UITheme.px(500), 0)
+		lbl.custom_minimum_size.x = UITheme.px(500)
 		var stats := ""
 		if card.eff_damage() > 0:
 			stats += "dmg %d " % card.eff_damage()
@@ -104,11 +105,13 @@ func _refresh() -> void:
 			for step in _bulk_steps(possible):
 				var price := _price_of(id, step)
 				var f := Button.new()
+				UITheme.style_button(f)
 				f.text = "+%d  (-%dx, -%dg)" % [step, price["copies"], price["gold"]]
 				f.pressed.connect(_on_fuse.bind(id, step))
 				row.add_child(f)
 		else:
 			var blocked := Button.new()
+			UITheme.style_button(blocked)
 			blocked.text = MetaState.fuse_blocked_reason(id)
 			blocked.disabled = true
 			row.add_child(blocked)

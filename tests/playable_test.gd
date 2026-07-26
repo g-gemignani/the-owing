@@ -24,6 +24,14 @@ extends Node
 var _fails := 0
 
 func _ready() -> void:
+	# Headless defaults to a SQUARE 1280x1280 viewport, so every on-screen check in
+	# every scene test has been measuring the wrong window. Use the shipped size.
+	get_window().size = Vector2i(
+		int(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
+		int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
+	UITheme.set_scale_silent(UITheme.UI_SCALE)   # and the shipped UI scale
+	await get_tree().process_frame
+
 	MetaState.path_prefix = "t_playable_"
 	MetaState.slot = 0
 	MetaState.new_save()
@@ -32,6 +40,7 @@ func _ready() -> void:
 	await _every_dungeon_is_enterable()
 	await _a_combat_can_be_won()
 	await _a_rest_resolves()
+	await _every_encounter_can_be_left()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -169,6 +178,66 @@ func _a_rest_resolves() -> void:
 		_fails += 1; print("FAIL resting did not heal")
 	inst.queue_free()
 	await get_tree().process_frame
+
+## --- 5. every encounter can be entered AND left ------------------------------
+##
+## The gap that let a broken shop reach a player: screens were checked in
+## isolation and dungeons were checked as enterable, but nothing walked a run
+## through an encounter and back out. A screen whose exit is unreachable — or
+## which fails to clear its node, so the map keeps offering it — looks exactly
+## like "I entered and now I cannot continue".
+func _every_encounter_can_be_left() -> void:
+	var types := {
+		GameState.NodeType.SHOP: "res://scenes/Shop.tscn",
+		GameState.NodeType.EVENT: "res://scenes/Encounter.tscn",
+		GameState.NodeType.TREASURE: "res://scenes/Encounter.tscn",
+	}
+	for did in ["crypt", "ossuary", "ember_road"]:   # graph, deck, dice
+		for t in types:
+			_start_a_run(did)
+			var tv = GameState.traversal
+			if tv.options().is_empty():
+				_fails += 1; print("FAIL %s offers nothing to enter" % did); continue
+			# take a real option and make it the encounter under test
+			var node = tv.select(0)
+			node["type"] = t
+			GameState.pending = node
+			GameState.shop_stock = []
+
+			var inst = (load(types[t]) as PackedScene).instantiate()
+			add_child(inst)
+			await get_tree().process_frame
+			await get_tree().process_frame
+
+			# there must be a way out, and it must be ON SCREEN
+			var vp := get_viewport().get_visible_rect()
+			var exits := 0
+			var offscreen := 0
+			for b in _buttons(inst):
+				if b.disabled or not b.visible:
+					continue
+				if b.pressed.get_connections().is_empty():
+					continue
+				exits += 1
+				if not vp.intersects(b.get_global_rect()):
+					offscreen += 1
+			if exits == 0:
+				_fails += 1
+				print("FAIL %s in %s offers no working button — the run is stuck" % [
+					Balance.NODE_LABEL.get(t, "?"), did])
+			elif offscreen == exits:
+				_fails += 1
+				print("FAIL every button in %s (%s) is off screen at %dx%d" % [
+					Balance.NODE_LABEL.get(t, "?"), did, int(vp.size.x), int(vp.size.y)])
+			inst.queue_free()
+			await get_tree().process_frame
+
+			# ...and leaving must actually release the node, or the map re-offers it
+			GameState.clear_node(GameState.pending)
+			if tv.options().is_empty() and int(node["type"]) != GameState.NodeType.BOSS:
+				_fails += 1
+				print("FAIL %s: after a %s the run has nowhere left to go" % [
+					did, Balance.NODE_LABEL.get(t, "?")])
 
 # --- helpers -----------------------------------------------------------------
 

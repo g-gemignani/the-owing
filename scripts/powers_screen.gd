@@ -59,7 +59,7 @@ func _refresh() -> void:
 		row.add_child(art)
 
 		var lbl := Label.new()
-		lbl.custom_minimum_size = Vector2(UITheme.px(520), 0)
+		lbl.custom_minimum_size.x = UITheme.px(520)
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity))
 		var cost := "free" if p.cost == 0 else "%dE" % p.cost
 		lbl.text = "%s  [%s]  %s   Lv%d/%d   (%s)" % [
@@ -71,12 +71,14 @@ func _refresh() -> void:
 		if not owned:
 			if not MetaState.power_available(pid):
 				var gate := Button.new()
+				UITheme.style_button(gate)
 				gate.text = "needs %d clears" % p.unlock_after_clears
 				gate.disabled = true
 				row.add_child(gate)
 			else:
 				var price := MetaState.power_price(pid)
 				var buy := Button.new()
+				UITheme.style_button(buy)
 				buy.text = "Buy  (%dg)" % price
 				buy.disabled = MetaState.gold < price
 				buy.pressed.connect(_on_buy.bind(pid))
@@ -85,17 +87,20 @@ func _refresh() -> void:
 
 		if p.at_max():
 			var maxed := Button.new()
+			UITheme.style_button(maxed)
 			maxed.text = "max level"
 			maxed.disabled = true
 			row.add_child(maxed)
 		else:
 			var up := Button.new()
+			UITheme.style_button(up)
 			up.text = "Level up  (%dg)" % MetaState.power_upgrade_price(pid)
 			up.disabled = not MetaState.can_upgrade_power(pid)
 			up.pressed.connect(_on_upgrade.bind(pid))
 			row.add_child(up)
 
 		var eq := Button.new()
+		UITheme.style_button(eq)
 		var on: bool = pid == MetaState.equipped_power
 		eq.text = "Equipped" if on else "Equip"
 		eq.disabled = on

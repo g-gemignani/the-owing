@@ -463,6 +463,95 @@ static func backdrop_texture(zone_id: String) -> Texture2D:
 		return load(p) as Texture2D
 	return null
 
+## A painted battle backdrop for a specific dungeon, if one has been drawn.
+##
+## Separate from the tiling zone patterns: those are CC0 pixel tiles that stand in
+## everywhere, these are illustrations for one place each. Falls back to the zone
+## pattern so a dungeon without art is not a black screen.
+const BATTLE_ART_DIR := "res://assets/art/"
+
+static func battle_art(dungeon_id: String) -> Texture2D:
+	var p := BATTLE_ART_DIR + "bg_" + dungeon_id + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
+## Backdrop for a fight: the dungeon's own illustration where one exists.
+##
+## Dimmed, and then SCRIMMED where the text goes. Dimming alone is not enough: the
+## braziers in these paintings are bright enough that white combat text over one
+## measured 1.7:1, and dimming the whole image far enough to fix that (0.33) turns
+## the art to mud. So the picture keeps its brightness and the bands that carry
+## text get a gradient behind them — the same answer as the title screen.
+const BATTLE_DIM := 0.55
+## Opacity of the band behind the status line and the combat log.
+const BATTLE_SCRIM := 0.78
+## Held flat across the rows that actually carry text, then faded out. A pure fade
+## left its own tail at almost no opacity while the art was still bright there,
+## which measured 2.2:1 — averages and gradients do not read text, worst pixels do.
+const BATTLE_SCRIM_HOLD := 0.15
+const BATTLE_SCRIM_BAND := 0.34
+
+static func battle_backdrop(dungeon_id: String, zone_id: String) -> Control:
+	var art := battle_art(dungeon_id)
+	if art == null:
+		return backdrop(zone_id)
+
+	var host := Control.new()
+	host.set_anchors_preset(Control.PRESET_FULL_RECT)
+	host.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var tr := TextureRect.new()
+	tr.texture = art
+	tr.set_anchors_preset(Control.PRESET_FULL_RECT)
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	# painted art, not pixels: NEAREST is set globally and would alias it
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	tr.modulate = Color(BATTLE_DIM, BATTLE_DIM, BATTLE_DIM, 1.0)
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	host.add_child(tr)
+	host.add_child(_text_scrim(true))    # status line, along the top
+	host.add_child(_text_scrim(false))   # combat log, along the bottom
+	return host
+
+## A gradient band that fades from opaque at one edge to nothing by BAND.
+static func _text_scrim(from_top: bool) -> TextureRect:
+	var g := Gradient.new()
+	g.set_offset(0, 0.0)
+	g.set_color(0, Color(0, 0, 0, BATTLE_SCRIM))
+	g.set_offset(1, BATTLE_SCRIM_HOLD / BATTLE_SCRIM_BAND)
+	g.set_color(1, Color(0, 0, 0, BATTLE_SCRIM))
+	g.add_point(1.0, Color(0, 0, 0, 0.0))
+	var gt := GradientTexture2D.new()
+	gt.gradient = g
+	gt.width = 1
+	gt.height = 128
+	gt.fill_from = Vector2(0, 0)
+	gt.fill_to = Vector2(0, 1)
+
+	var tr := TextureRect.new()
+	tr.texture = gt
+	tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	tr.stretch_mode = TextureRect.STRETCH_SCALE
+	tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	tr.set_anchors_preset(Control.PRESET_TOP_WIDE if from_top else Control.PRESET_BOTTOM_WIDE)
+	tr.anchor_left = 0.0
+	tr.anchor_right = 1.0
+	if from_top:
+		tr.anchor_top = 0.0
+		tr.anchor_bottom = BATTLE_SCRIM_BAND
+	else:
+		tr.anchor_top = 1.0 - BATTLE_SCRIM_BAND
+		tr.anchor_bottom = 1.0
+		tr.flip_v = true
+	tr.offset_top = 0
+	tr.offset_bottom = 0
+	tr.offset_left = 0
+	tr.offset_right = 0
+	return tr
+
 ## Backdrop for a zone: a tiling TextureRect ready to sit behind a screen.
 static func backdrop(zone_id: String) -> TextureRect:
 	var entry: Array = ZONE_BACKDROP.get(zone_id, ["stone", Color(0.30, 0.30, 0.38)])

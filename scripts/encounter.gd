@@ -66,6 +66,7 @@ func _show_event() -> void:
 	body_label.text = "%s\n\n%s" % [ev.description, _status()]
 	for i in ev.choice_count():
 		var b := Button.new()
+		UITheme.style_button(b)
 		b.text = ev.choice_labels[i]
 		b.custom_minimum_size = Vector2(0, UITheme.px(40))
 		# do not offer a choice the player cannot pay for
@@ -133,6 +134,7 @@ func _on_choice(i: int) -> void:
 
 	result_label.text = "\n".join(lines) + "\n\n" + _status()
 	var cont := Button.new()
+	UITheme.style_button(cont)
 	cont.text = "Continue"
 	cont.custom_minimum_size = Vector2(0, UITheme.px(40))
 	cont.pressed.connect(_finish)
@@ -154,6 +156,7 @@ func _show_treasure() -> void:
 		lines.append("Also here: an Escape Rope. A way out, if you want one.")
 	body_label.text = "\n".join(lines) + "\n\n" + _status()
 	var cont := Button.new()
+	UITheme.style_button(cont)
 	cont.text = "Continue"
 	cont.custom_minimum_size = Vector2(0, UITheme.px(40))
 	cont.pressed.connect(_finish)

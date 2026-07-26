@@ -49,6 +49,7 @@ func _build_ui() -> void:
 	scroll.add_child(stock_box)
 
 	var leave := Button.new()
+	UITheme.style_button(leave)
 	leave.text = "Leave"
 	leave.custom_minimum_size = Vector2(0, UITheme.px(40))
 	leave.pressed.connect(_on_leave)
@@ -103,12 +104,13 @@ func _refresh() -> void:
 		row.add_child(pic)
 		var lbl := Label.new()
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(card.rarity))
-		lbl.custom_minimum_size = Vector2(UITheme.px(500), 0)
+		lbl.custom_minimum_size.x = UITheme.px(500)
 		lbl.text = "%s  [%s]  %s" % [card.name, CardData.Rarity.keys()[card.rarity], card.description]
 		row.add_child(lbl)
 		UI.hoverable(row, Icons.card_tooltip(card))
 
 		var buy := Button.new()
+		UITheme.style_button(buy)
 		if entry["sold"]:
 			buy.text = "SOLD"
 			buy.disabled = true
@@ -127,10 +129,11 @@ func _refresh() -> void:
 	hrow.add_theme_constant_override("separation", UITheme.sep(10))
 	stock_box.add_child(hrow)
 	var hlbl := Label.new()
-	hlbl.custom_minimum_size = Vector2(UITheme.px(520), 0)
+	hlbl.custom_minimum_size.x = UITheme.px(520)
 	hlbl.text = "Healing salve — restore %d HP" % heal
 	hrow.add_child(hlbl)
 	var hbtn := Button.new()
+	UITheme.style_button(hbtn)
 	if GameState.hp >= GameState.max_hp:
 		hbtn.text = "Already full"
 		hbtn.disabled = true
@@ -152,12 +155,13 @@ func _add_removal_service(root: Node) -> void:
 	row.add_theme_constant_override("separation", UITheme.sep(10))
 	root.add_child(row)
 	var lbl := Label.new()
-	lbl.custom_minimum_size = Vector2(UITheme.px(520), 0)
+	lbl.custom_minimum_size.x = UITheme.px(520)
 	lbl.text = "Thin your deck — remove one card for the rest of this run (%d cards, one card seen every %.1f turns)" % [
 		GameState.run_deck.size(), Balance.draw_interval(GameState.run_deck.size())]
 	row.add_child(lbl)
 	UI.hoverable(row, "Removing a card makes the rest come up more often. It does not touch your collection — this run only.")
 	var btn := Button.new()
+	UITheme.style_button(btn)
 	btn.text = "Remove  (%dg)" % price
 	btn.disabled = GameState.available_gold() < price or not GameState.can_remove_from_run_deck()
 	if not GameState.can_remove_from_run_deck():

@@ -52,6 +52,10 @@ func _tier_of(node_type: int) -> int:
 
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# the place you are fighting in, behind everything and deaf to the mouse
+	var zone := Balance.zone_of(GameState.dungeon_id)
+	add_child(PixelArt.battle_backdrop(GameState.dungeon_id,
+		zone.id if zone != null else Balance.ZONES[0]))
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UITheme.pad(margin)
@@ -171,6 +175,7 @@ func _refresh() -> void:
 		if e.is_dead():
 			continue
 		var b := Button.new()
+		UITheme.style_button(b)
 		var estat := e.status_text()
 		var mark := "▶ " if i == eng.target else ""
 		b.text = "%s%s\nHP %d/%d\n%s%s" % [
@@ -278,6 +283,7 @@ func _win() -> void:
 	UI.hoverable(cost, "Every card you add makes the rest come up less often. Shops and rests can thin the deck back down.")
 
 	var skip := Button.new()
+	UITheme.style_button(skip)
 	skip.text = "Skip  —  keep the deck at %d" % now
 	skip.pressed.connect(_on_reward_picked.bind(null))
 	reward_box.add_child(skip)

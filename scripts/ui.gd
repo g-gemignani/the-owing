@@ -118,6 +118,7 @@ static func button(parent: Node, text: String, on_press: Callable = Callable(),
 		b.pressed.connect(on_press)
 	else:
 		b.disabled = true
+	UITheme.style_button(b)
 	parent.add_child(b)
 	return b
 
@@ -150,17 +151,17 @@ static func slider(parent: Node, text: String, value: float, lo: float, hi: floa
 	var h := row(parent, 10)
 	var l := Label.new()
 	l.text = text
-	l.custom_minimum_size = Vector2(UITheme.px(220), 0)
+	l.custom_minimum_size.x = UITheme.px(220)
 	h.add_child(l)
 	var s := HSlider.new()
 	s.min_value = lo
 	s.max_value = hi
 	s.step = step
 	s.value = value
-	s.custom_minimum_size = Vector2(UITheme.px(280), 0)
+	s.custom_minimum_size.x = UITheme.px(280)
 	h.add_child(s)
 	var v := Label.new()
-	v.custom_minimum_size = Vector2(UITheme.px(90), 0)
+	v.custom_minimum_size.x = UITheme.px(90)
 	v.text = str(snappedf(value, step))
 	h.add_child(v)
 	s.value_changed.connect(func(nv):
