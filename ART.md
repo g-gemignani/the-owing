@@ -156,7 +156,6 @@ fallback:
 assets/art/
   bg/        1280x720 scene backdrops        (23 files)
   enemies/   256/512 transparent             (35)
-  hero/      the player                      (4)
   cards/     card illustrations              (30)
   relics/    128x128 objects                 (30)
   powers/    128x128 sigils                  (10)
@@ -224,22 +223,34 @@ Combat is where the game is played and it is currently the least drawn screen in
 it: a text status line, two parchment rectangles for enemies, 250px of empty
 middle, and five flat card shapes.
 
-**The player (4 files)** — there is *no* player representation anywhere in the game.
+**The player (0 files) — resolved, and the answer is nobody.** These four files were
+specced (`hero_idle`, `hero_idle_b`, `hero_hurt`, `hero_portrait`, 512×640) on the
+assumption of a side-on arena. That is no longer the layout.
 
-| file | size | hook |
+**The fight is framed head-on into the corridor the backdrop paints, and the player
+is not drawn.** The room belongs to the enemies; the frame belongs to you. It suits
+the art that already exists — all three painted backdrops are symmetric one-point
+corridors, and a side-on arena fights that perspective rather than using it — and it
+deletes work rather than deferring it: no facing to match, no idle/hurt set to keep
+consistent with 35 enemies, no scale relationship between hero and monster to hold.
+
+It also makes the feedback already in `combat.gd` correct rather than provisional:
+with no body on screen, an incoming hit reads as a screen flash and a jolt toward the
+camera, which is what it now does.
+
+What replaces the hero is the HUD — vitals in the top band (next section) — and the
+measured standing line the enemies share:
+
+| decision | value | where |
 |---|---|---|
-| `hero/hero_idle.png` | 512×640 | new node in `combat.gd:_build_ui()`, in the empty centre |
-| `hero/hero_idle_b.png` | 512×640 | 2-frame breathe |
-| `hero/hero_hurt.png` | 512×640 | on `_on_end_turn` HP loss |
-| `hero/hero_portrait.png` | 256×256 | status bar, deck builder, save slots |
+| standing line | **68% of frame** (measured: 71/66/66% in the three painted backdrops) | `PixelArt.FLOOR_LINE` |
+| enemy size | 34% of frame height, ×1.14 elite, ×1.34 boss | `combat.gd:TIER_SIZE` |
+| slot spread | 1-3 across, flanks at 0.88 scale for depth | `combat.gd:_place_slots()` |
+| art lookup | `assets/art/enemies/<archetype_id>.png` | `PixelArt.enemy_art()` |
 
-**This presumes an arena, which is a layout change.** Today `combat.gd` stacks the
-enemy row near the top and the hand along the bottom, with ~250px of nothing between
-them — so there is no left and no right to face. The briefs say **hero faces right,
-enemies face left** because the fix is to put both in that middle band looking at each
-other, which is also what makes a target reticle, an HP bar per combatant and a slash
-VFX have somewhere to land. Draw to that; if the arena never happens, mirroring a
-sprite is cheap and re-drawing a composition is not.
+`tests/test_art.gd` measures every painted backdrop's floor line and fails when one
+lands more than 10 points off, because a backdrop that puts its floor elsewhere does
+not look broken on its own — it makes that dungeon's enemies hover.
 
 **Vitals (7 files)** — HP, Block and Energy are all *text* today
 (`combat.gd:_refresh()` formats one `%s HP %d/%d ... Energy %d/%d` string).
@@ -480,7 +491,8 @@ Assets that land on top of these problems will not look better. None of it is la
    screens. This is the difference between "a prototype" and "a game", and three
    existing paintings already set the target.
 3. **A font, and the player character.** The font changes every screen for two
-   files; the hero fills the hole in the middle of the screen the game is played on.
+   files; the enemies stand on the backdrop's own floor line and the HUD carries the
+   player, who is not drawn.
 
 Enemies (Tier 2) are the biggest *credibility* gap and the biggest single job — 35
 paintings. Worth starting in parallel, because it is the item that will not compress.
@@ -500,7 +512,7 @@ All 16 rendered at 1280×720, UI scale 1.0, with a stocked save. What each one s
 | `Map` | Flat black. No backdrop, no icons, **no lines between nodes**. `Icons.for_encounter()` exists and is never called. |
 | `DeckRun` | One 16px sword glyph and two unstyled grey buttons on black. |
 | `DiceRun` | Board was 0px tall — a layout bug, not an art gap, **fixed in D57**. Now 16 track cells of 16×16 glyphs, and the player token is the string `^you`. |
-| `Combat` | The screen the game is played on: no player, no HP bar, no energy orb, intent as the text `hit 5`, enemy sprites not visibly rendered, 250px of empty centre. |
+| `Combat` | The screen the game is played on. Framed head-on now: enemies stand on the floor line with name/HP/intent above them and a contact mark under them, vitals in the top band, hand centred at the bottom. Still text where art is wanted — no HP bar, no energy orb, intent as `hit 14` — and the enemies are placeholder footprints until `art/enemies/` exists. |
 | `Shop` | Flat black, no merchant, text rows, illegible small buttons. |
 | `Encounter` | Title, two lines, three smeared buttons, and 400px of black where the event illustration goes. |
 | `Collection` | The card-illustration problem in one image: a shopping cart on Battle Trance, a cactus on Berserker Rage, a dither pattern on Abyssal Gift. |

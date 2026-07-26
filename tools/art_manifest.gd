@@ -49,12 +49,17 @@ const FRAME_KIT := [
 	["ui/checkbox_off.png", "64x64", "Unchecked."],
 ]
 
-const HERO := [
-	["hero/hero_idle.png", "512x640", "The player character, full body, facing RIGHT (enemies stand on the right). Transparent, no ground shadow. Goes in the empty centre of the combat screen — there is currently no player on screen anywhere in the game."],
-	["hero/hero_idle_b.png", "512x640", "Second breathe frame: same pose, small shoulder/cloak shift."],
-	["hero/hero_hurt.png", "512x640", "Recoiling, same silhouette footprint so it can swap in place."],
-	["hero/hero_portrait.png", "256x256", "Head and shoulders, for the status bar, deck builder and save slots."],
-]
+## Deliberately empty. The fight is framed HEAD-ON into the corridor the backdrop
+## paints, with no player character rendered: the room belongs to the enemies and
+## the frame belongs to you. Four hero files were specced here before that was
+## decided — a facing to match, an idle/hurt set to keep consistent with 35
+## enemies, and a scale relationship to maintain, all for a figure that would stand
+## in front of the one-point perspective these backdrops are built on.
+##
+## What replaces it is the HUD: vitals in the top band (Tier 1b), and an incoming
+## hit reading as a flash and a jolt toward the camera, which is what combat.gd
+## already does now that there is no body to animate instead.
+const HERO := []
 
 const VITALS := [
 	["ui/bar_frame.png", "256x48", "Nine-slice. The empty HP/Block bar housing."],
@@ -152,10 +157,6 @@ func _init() -> void:
 	for e in FRAME_KIT:
 		_add(String(e[0]), String(e[1]), String(e[2]))
 
-	_section("Tier 1a — the player", "There is no player character on screen anywhere in the game.")
-	for e in HERO:
-		_add(String(e[0]), String(e[1]), String(e[2]))
-
 	_section("Tier 1b — vitals and selection", "HP, Block and Energy are all plain text today.")
 	for e in VITALS:
 		_add(String(e[0]), String(e[1]), String(e[2]))
@@ -206,7 +207,7 @@ func _enemies() -> void:
 			(rosters[aid] as Array).append(dd.name)
 
 	_section("Tier 2 — enemies",
-		"Facing LEFT, lit from the left, transparent, NO baked ground shadow (the backdrop supplies the floor). Filenames are archetype ids: naming them this way lets `PixelArt.OVERRIDES` and its positional-assignment fallback be deleted.")
+		"FACING THE VIEWER (the fight is framed head-on into the corridor; there is no hero on screen), lit from above-front to match the backdrops. Transparent, NO baked ground shadow — the stage draws a contact mark. **Feet flush with the bottom edge of the canvas, no bottom padding**: every enemy is placed on one standing line (`PixelArt.FLOOR_LINE`, measured at 68% of frame), so padding at the bottom of the file makes that enemy hover. Weight the silhouette low and dark — the floor is the BRIGHTEST band in every painted backdrop, so a pale-footed enemy dissolves into it. Filenames are archetype ids: `PixelArt.enemy_art(id)` looks them up directly, so a file lands on the enemy it was drawn for. (Do NOT put them in `assets/pixel/enemies/`, which is assigned positionally and would hand your file to whichever archetype the sort order reaches.)")
 	for aid in PixelArt.archetype_ids():
 		var a := load("res://resources/enemies/%s.tres" % aid) as EnemyData
 		if a == null:

@@ -270,6 +270,70 @@ func _init() -> void:
 			fails += 1; print("FAIL volume mapping not monotonic at %d" % v)
 		prev_db = db
 
+	# --- the floor every enemy stands on ---------------------------------------
+	#
+	# The fight is framed head-on into the backdrop's corridor with no player
+	# character rendered, so the enemies are placed on ONE line — PixelArt.FLOOR_LINE
+	# — and every painted backdrop has to put its floor there. A backdrop that puts
+	# it somewhere else does not look wrong on its own; it makes the enemies in that
+	# dungeon hover or sink, which reads as an enemy bug.
+	#
+	# The measurement is a heuristic (the largest row-to-row luminance step in the
+	# lower half), so it PRINTS the number for every backdrop and only fails on a
+	# gross miss. A flaky assertion about a painting would be worse than none.
+	var floor_band := 0.10
+	var checked_bg := 0
+	for did in Balance.DUNGEONS:
+		var bg := PixelArt.battle_art(did)
+		if bg == null:
+			continue
+		checked_bg += 1
+		var f := _floor_fraction(bg.get_image())
+		var off: float = absf(f - PixelArt.FLOOR_LINE)
+		print("  (info: %s floor at %.0f%% (line %.0f%%, off %.0f pts))" % [
+			did, f * 100.0, PixelArt.FLOOR_LINE * 100.0, off * 100.0])
+		if off > floor_band:
+			fails += 1
+			print("FAIL %s puts its floor at %.0f%% but enemies stand at %.0f%% — they will hover" % [
+				did, f * 100.0, PixelArt.FLOOR_LINE * 100.0])
+	if checked_bg == 0:
+		fails += 1; print("FAIL no painted battle backdrop was measured")
+
+	# --- painted enemies are keyed by id, not by position ----------------------
+	#
+	# The CC0 pixel sprites are assigned by position in a sorted directory listing,
+	# so a correctly-named file dropped in THERE is handed to whichever archetype the
+	# sort order reaches. The painted directory is keyed by archetype id instead, and
+	# a file whose name is not an archetype silently does nothing — so say so.
+	var arche := {}
+	for did2 in Balance.DUNGEONS:
+		var dd3 := Balance.dungeon(did2)
+		if dd3 == null:
+			continue
+		for aid in dd3.enemy_roster:
+			arche[String(aid)] = true
+		if dd3.boss != "":
+			arche[dd3.boss] = true
+	var d4 := DirAccess.open(PixelArt.ENEMY_ART_DIR)
+	var painted := 0
+	if d4 != null:
+		d4.list_dir_begin()
+		var f4 := d4.get_next()
+		while f4 != "":
+			if f4.ends_with(".png") or f4.ends_with(".png.import"):
+				var id4 := f4.replace(".png.import", "").replace(".png", "")
+				painted += 1
+				if not arche.has(id4):
+					fails += 1
+					print("FAIL %s%s.png is not an archetype id — nothing will ever load it" % [
+						PixelArt.ENEMY_ART_DIR, id4])
+			f4 = d4.get_next()
+		d4.list_dir_end()
+	print("  (info: %d of %d archetypes have painted art)" % [painted, arche.size()])
+	if not _source_has("res://scripts/pixel_art.gd", "ENEMY_ART_DIR + archetype_id"):
+		fails += 1
+		print("FAIL painted enemy art is not looked up by archetype id")
+
 	# --- music -----------------------------------------------------------------
 	#
 	# The Music bus and its slider existed for a long time with nothing routed to
@@ -349,3 +413,27 @@ func _init() -> void:
 	else:
 		print("ART TEST: FAIL (%d)" % fails)
 	quit()
+
+## Where the floor meets the wall, as a fraction of image height: the largest
+## row-to-row luminance step in the lower half. Sampled every 4th pixel — this runs
+## over a dozen 1280x720 images and precision is not what is being asked of it.
+func _floor_fraction(img: Image) -> float:
+	var w := img.get_width()
+	var h := img.get_height()
+	var rows: Array[float] = []
+	for y in h:
+		var s := 0.0
+		var n := 0
+		for x in range(0, w, 4):
+			var c := img.get_pixel(x, y)
+			s += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b
+			n += 1
+		rows.append(s / maxf(1.0, float(n)))
+	var best_y := int(h * 0.68)
+	var best_d := 0.0
+	for y in range(int(h * 0.45), h - 2):
+		var d: float = absf(rows[y + 1] - rows[y])
+		if d > best_d:
+			best_d = d
+			best_y = y
+	return float(best_y) / float(h)

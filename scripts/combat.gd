@@ -14,7 +14,11 @@ var tier: int = Balance.Tier.NORMAL
 var status_label: Label
 var buffs_label: Label
 var piles_label: Label
-var enemy_box: HBoxContainer
+## The stage: full-rect, enemies placed on the backdrop's floor line.
+var enemy_box: Control
+## Rebuild slot positions only when the living count changes, so a hit-shake tween
+## is not fought by the next refresh snapping the slot back.
+var slot_count: int = -1
 var hand_box: HBoxContainer
 var log_label: Label
 ## The last few things that happened. One overwritten line lost most of a turn:
@@ -83,14 +87,35 @@ func _build_ui() -> void:
 	var zone := Balance.zone_of(GameState.dungeon_id)
 	add_child(PixelArt.battle_backdrop(GameState.dungeon_id,
 		zone.id if zone != null else Balance.ZONES[0]))
+	# --- the stage -----------------------------------------------------------
+	#
+	# The fight is framed head-on into the corridor the backdrop paints, with no
+	# player character rendered: the room belongs to the enemies and the frame
+	# belongs to you. So the enemies are NOT a row in a stacked layout — they are
+	# placed on the backdrop's own floor line (PixelArt.FLOOR_LINE), full width,
+	# with the HUD and the hand floating over them.
+	#
+	# Measured before building it: stacked as rows, the layout had 236px of height
+	# left for a sprite that wants 240-270, and its stage ended 22px ABOVE the
+	# painted floor. Layering is what makes the framing fit at all.
+	enemy_box = Control.new()
+	enemy_box.set_anchors_preset(Control.PRESET_FULL_RECT)
+	enemy_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(enemy_box)
+
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UITheme.pad(margin)
 	add_child(margin)
 	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", UITheme.sep(16))
+	root.add_theme_constant_override("separation", UITheme.sep(10))
 	margin.add_child(root)
 
+	# --- top band: everything about YOU, plus the way out --------------------
+	#
+	# Vitals sit at the top rather than beside the hand. The bottom of the screen
+	# is the hand's, and stays uncluttered.
+	#
 	# The fight is serialized after every action, so leaving it is a pause, not an
 	# escape: Resume comes straight back into this turn. Until this existed the
 	# longest scene in the game was the only one with no way out of it at all.
@@ -104,6 +129,16 @@ func _build_ui() -> void:
 	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(status_label)
 
+	# What is left to draw, and what has gone by. The reward screen quotes how often
+	# you will see a card ("every 3.0 turns instead of 2.8") and the shop sells deck
+	# thinning, and until now the fight itself showed neither pile — the player was
+	# asked to price consistency while blind to it. Up here with the rest of your
+	# own state, not down by the cards.
+	piles_label = Label.new()
+	piles_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.72))
+	header.add_child(piles_label)
+	UI.hoverable(piles_label, "Your deck is drawn through, then the discard pile is shuffled back. A smaller deck comes round faster.")
+
 	menu_btn = UI.exit_button(header, "Menu", _pause, 38.0)
 
 	# Buffs and debuffs on their own line, spelled out. They used to be a "[Blk 5
@@ -115,17 +150,7 @@ func _build_ui() -> void:
 	buffs_label.add_theme_color_override("font_color", Color(0.98, 0.85, 0.45))
 	root.add_child(buffs_label)
 
-	log_label = Label.new()
-	log_lines = ["Combat start."]
-	log_label.text = log_lines[0]
-	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(log_label)
-
-	# enemy row: click to pick a target (highlighted), shows HP + telegraphed intent
-	enemy_box = HBoxContainer.new()
-	enemy_box.add_theme_constant_override("separation", UITheme.sep(10))
-	root.add_child(enemy_box)
-
+	# --- the bottom belongs to the cards -------------------------------------
 	var spacer := Control.new()
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(spacer)
@@ -135,16 +160,17 @@ func _build_ui() -> void:
 	reward_box.visible = false
 	root.add_child(reward_box)
 
-	# What is left to draw, and what has gone by. The reward screen quotes how often
-	# you will see a card ("every 3.0 turns instead of 2.8") and the shop sells deck
-	# thinning, and until now the fight itself showed neither pile — the player was
-	# asked to price consistency while blind to it.
-	piles_label = Label.new()
-	piles_label.add_theme_color_override("font_color", Color(0.78, 0.76, 0.72))
-	root.add_child(piles_label)
-	UI.hoverable(piles_label, "Your deck is drawn through, then the discard pile is shuffled back. A smaller deck comes round faster.")
+	# Two lines, low and quiet: four lines of running commentary across the middle
+	# of a painted corridor is the thing that would ruin the framing.
+	log_label = Label.new()
+	log_lines = ["Combat start."]
+	log_label.text = log_lines[0]
+	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	log_label.add_theme_color_override("font_color", Color(0.84, 0.82, 0.78))
+	root.add_child(log_label)
 
 	hand_box = HBoxContainer.new()
+	hand_box.alignment = BoxContainer.ALIGNMENT_CENTER
 	hand_box.add_theme_constant_override("separation", UITheme.sep())
 	root.add_child(hand_box)
 
@@ -252,42 +278,178 @@ func _refresh() -> void:
 
 	_refresh_power()
 
-## Enemy plates are built ONCE and then updated.
+## Enemy slots are built ONCE and then updated.
 ##
 ## Every action used to `queue_free` the entire enemy row and the entire hand and
-## build them again. That is why nothing in this game has ever moved: you cannot
-## tween between two states when one of them has been deleted, and it also threw
-## away hover state mid-turn and flickered on every card played. Widgets now
-## persist and are mutated, which is what makes the feedback below possible.
+## build them again. That is why nothing in this game had ever moved: you cannot
+## tween between two states when one of them has been deleted.
+##
+## Slots are placed by hand rather than by a container, because they stand on the
+## backdrop's floor line — a container would put them wherever the stack had room,
+## which measured 22px above the painted floor. `_hit()` also jolts a slot's own
+## position, which a container would immediately undo.
 func _refresh_enemies() -> void:
 	while enemy_plates.size() < eng.enemies.size():
-		var i := enemy_plates.size()
-		var b := Button.new()
-		UITheme.style_button(b)
-		b.custom_minimum_size = UITheme.card_size()
-		var arch := eng.archetypes[i] as EnemyData
-		var etex := Icons.enemy(arch.id if arch != null else "cultist")
-		if etex != null:
-			b.icon = etex
-			b.expand_icon = true
-			b.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
-		b.pressed.connect(_on_target_pressed.bind(i))
-		enemy_box.add_child(b)
-		enemy_plates.append(b)
-
+		enemy_plates.append(_build_slot(enemy_plates.size()))
+	var living: Array[int] = []
+	for i in eng.enemies.size():
+		if not eng.enemies[i].is_dead():
+			living.append(i)
+	if living.size() != slot_count:
+		slot_count = living.size()
+		_place_slots(living)
 	for i in eng.enemies.size():
 		var e: Combatant = eng.enemies[i]
-		var b: Button = enemy_plates[i]
+		var slot: Control = enemy_plates[i]
 		if e.is_dead():
-			b.visible = false
+			slot.visible = false
 			continue
-		b.visible = true
+		slot.visible = true
+		var targeted := i == eng.target
 		var estat := e.status_text()
-		var mark := "▶ " if i == eng.target else ""
-		b.text = "%s%s\nHP %d/%d\n%s%s" % [
-			mark, e.name, e.hp, e.max_hp, eng.intent_text(i),
-			("\n[%s]" % estat) if estat != "" else ""]
-		b.tooltip_text = "%s\nIntent: %s\nClick to target." % [e.name, eng.intent_text(i)]
+		var vitals: Label = slot.get_meta("vitals")
+		vitals.text = "%s%s   %d/%d%s" % ["\u25b6 " if targeted else "", e.name,
+			e.hp, e.max_hp, ("   [%s]" % estat) if estat != "" else ""]
+		vitals.add_theme_color_override("font_color",
+			Color(1.0, 0.92, 0.62) if targeted else Color(0.88, 0.86, 0.84))
+		var intent: Label = slot.get_meta("intent")
+		intent.text = eng.intent_text(i)
+		var mark: Panel = slot.get_meta("mark")
+		mark.modulate = Color(1.0, 0.82, 0.40, 0.85) if targeted else Color(0, 0, 0, 0.72)
+		var hit: Button = slot.get_meta("hit")
+		hit.tooltip_text = "%s\nIntent: %s\nClick to target." % [e.name, eng.intent_text(i)]
+
+## One enemy: its art, the ground mark it stands on, what it intends, and a hit
+## area over the whole silhouette.
+##
+## `PixelArt.enemy_art(id)` is keyed by archetype id, so a painted file lands on
+## the enemy it was drawn for. The 16x16 CC0 sprite is the stand-in until one
+## exists — assigned positionally, which is exactly why the painted directory is
+## keyed separately rather than sharing that pool.
+func _build_slot(i: int) -> Control:
+	var slot := Control.new()
+	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	enemy_box.add_child(slot)
+
+	var mark := Panel.new()          # ground contact / target ring
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1, 1, 1)
+	sb.corner_radius_top_left = 999
+	sb.corner_radius_top_right = 999
+	sb.corner_radius_bottom_left = 999
+	sb.corner_radius_bottom_right = 999
+	mark.add_theme_stylebox_override("panel", sb)
+	mark.modulate = Color(0, 0, 0, 0.72)
+	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.add_child(mark)
+
+	# The footprint a painted enemy is meant to fill: shown ONLY while it is
+	# missing, so the frame can be composed before anything is drawn. A 16x16
+	# stand-in blown up to 240px otherwise dominates the whole picture and makes
+	# the layout impossible to judge.
+	var arch := eng.archetypes[i] as EnemyData
+	var aid: String = arch.id if arch != null else "cultist"
+	var painted := PixelArt.enemy_art(aid)
+	var box := Panel.new()
+	var bsb := StyleBoxFlat.new()
+	bsb.bg_color = Color(0.05, 0.06, 0.09, 0.30)
+	bsb.border_color = Color(0.85, 0.80, 0.60, 0.28)
+	bsb.set_border_width_all(2)
+	box.add_theme_stylebox_override("panel", bsb)
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.visible = painted == null
+	slot.add_child(box)
+
+	var art := TextureRect.new()
+	art.texture = painted if painted != null else Icons.enemy(aid)
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if painted != null:
+		art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	else:
+		# a dark silhouette at a plausible size, standing on the mark
+		art.modulate = Color(0.16, 0.18, 0.24, 0.92)
+	slot.add_child(art)
+
+	var vitals := Label.new()
+	vitals.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vitals.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.add_child(vitals)
+
+	var intent := Label.new()
+	intent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intent.add_theme_color_override("font_color", Color(1.0, 0.72, 0.55))
+	intent.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.add_child(intent)
+
+	var hit := Button.new()
+	hit.flat = true
+	hit.pressed.connect(_on_target_pressed.bind(i))
+	slot.add_child(hit)
+
+	slot.set_meta("art", art)
+	slot.set_meta("box", box)
+	slot.set_meta("stand_in", painted == null)
+	slot.set_meta("vitals", vitals)
+	slot.set_meta("intent", intent)
+	slot.set_meta("mark", mark)
+	slot.set_meta("hit", hit)
+	return slot
+
+## Where each living enemy stands. Feet on `PixelArt.FLOOR_LINE`, spread across the
+## frame, and the flanks pushed slightly back — the backdrops are one-point
+## corridors, so a dead-flat row of equal sizes reads as pasted-on.
+func _place_slots(living: Array[int]) -> void:
+	var vp := get_viewport_rect().size
+	var floor_y := vp.y * PixelArt.FLOOR_LINE
+	# leave the top band and the two text lines their room, and never let the hand
+	# swallow the stage at large UI scales
+	var text_h := UITheme.px(46)
+	var top_limit := UITheme.px(96)
+	# A boss should loom. Same corridor, same floor line, more of the frame — this is
+	# the cheapest way for a fight to announce what it is before the numbers do.
+	var tier_scale: float = TIER_SIZE.get(tier, 1.0)
+	var body := clampf(vp.y * 0.34 * tier_scale, UITheme.px(48),
+		maxf(UITheme.px(48), floor_y - top_limit - text_h))
+	var n := living.size()
+	for k in n:
+		var i: int = living[k]
+		var slot: Control = enemy_plates[i]
+		var s := 1.0 if n == 1 else lerpf(0.88, 1.0,
+			1.0 - absf(float(k) - float(n - 1) * 0.5) / maxf(1.0, float(n - 1) * 0.5))
+		var w := body * s
+		var h := body * s
+		var cx := vp.x * float(k + 1) / float(n + 1)
+		slot.position = Vector2(cx - w * 0.5, floor_y - h - text_h)
+		slot.size = Vector2(w, h + text_h)
+
+		var vitals: Label = slot.get_meta("vitals")
+		vitals.position = Vector2(0, 0)
+		vitals.size = Vector2(w, text_h * 0.5)
+		var intent: Label = slot.get_meta("intent")
+		intent.position = Vector2(0, text_h * 0.5)
+		intent.size = Vector2(w, text_h * 0.5)
+		var art: TextureRect = slot.get_meta("art")
+		var box: Panel = slot.get_meta("box")
+		box.position = Vector2(0, text_h)
+		box.size = Vector2(w, h)
+		if bool(slot.get_meta("stand_in", false)):
+			# the stand-in is 16x16 pixel art with transparent margins: at full slot
+			# size its "feet" float halfway up the box. Real art is authored with its
+			# feet on the bottom edge of the canvas and fills the footprint.
+			art.size = Vector2(w * 0.52, h * 0.52)
+			art.position = Vector2(w * 0.24, text_h + h * 0.46)
+		else:
+			art.position = Vector2(0, text_h)
+			art.size = Vector2(w, h)
+		var hit: Button = slot.get_meta("hit")
+		hit.position = Vector2(0, text_h)
+		hit.size = Vector2(w, h)
+		# the contact mark sits ON the floor line, under the feet
+		var mark: Panel = slot.get_meta("mark")
+		mark.size = Vector2(w * 0.62, maxf(4.0, h * 0.10))
+		mark.position = Vector2((w - mark.size.x) * 0.5, text_h + h - mark.size.y * 0.5)
 
 ## The hand is diffed, not rebuilt: cards that stayed keep their node (and so can
 ## be animated), cards that left are flown out, cards that arrived are dealt in.
@@ -361,6 +523,13 @@ func _on_target_pressed(i: int) -> void:
 # nothing flashed, cards vanished from the hand. The rules were all legible and
 # none of them were felt. These are deliberately short — a card game is read, and
 # an animation you have to wait through is worse than none.
+
+## How much of the frame an enemy takes, by what kind of fight it is.
+const TIER_SIZE := {
+	Balance.Tier.NORMAL: 1.0,
+	Balance.Tier.ELITE: 1.14,
+	Balance.Tier.BOSS: 1.34,
+}
 
 const FX_RISE := 0.55        ## how long a floating number lives
 const FX_FLASH := 0.22       ## hit tint
@@ -502,7 +671,7 @@ func _refresh_buffs(p: Combatant) -> void:
 
 ## Keep the last few lines. A turn where three enemies act used to report only the
 ## third, because this overwrote a single Label.
-const LOG_LINES := 4
+const LOG_LINES := 2
 
 func _log(msg: String) -> void:
 	if msg.strip_edges() == "":

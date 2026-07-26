@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The fight is framed head-on, and nobody plays the hero (D62).** Chose a frontal framing into the corridor the backdrops paint over the side-on arena the art brief assumed, which deleted four hero files and a whole class of consistency work. Measured the backdrops to find the shared standing line (68%), measured the old layout to prove the stage had to become a layer rather than a row (236px for a 240-270px sprite, ending 22px above the floor), and added the id-keyed enemy-art lookup plus a floor-line assertion so the coming art pass lands on a contract the game enforces.
+
 - **The fight moves, and the dodge got priced (D60, D61).** Damage numbers, hit flashes, a screen jolt and cards that fly out of the hand — made possible by the real change underneath, which is that combat now updates its widgets instead of destroying and rebuilding them every action. Separately, the simulator's driver was taught to use the deck model's Avoid at all (it never had, in the model's whole existence), which immediately showed that skipping every fight beat fighting: 49% to 87% completion for one deck. The price now rises with depth and with each dodge taken.
 
 - **The numbers behind three decisions (D58, D59).** A card now shows what it will do in *this fight* — Strength and Dexterity applied — on its face, its hover and in the engine that resolves it, after a play report that gaining Strength changed nothing visible. Alongside it: the draw and discard piles are on screen, unaffordable cards are dimmed, the combat log keeps four lines, dying gets a screen the player dismisses instead of a 2.5-second wait, and fusing states what a level buys rather than only what it costs.
@@ -2230,3 +2232,74 @@ animation with it and leave the screen looking perfectly correct in a screenshot
 Verified by putting the rebuild back — the test names it. The floating number is
 also checked for actually *moving*, since a tween that was never started looks
 exactly like a label parked on the spot.
+
+### D62 — The fight is framed head-on, and nobody plays the hero
+
+The art brief specced a side-on arena: hero on the left facing right, enemies facing
+left, both in the empty middle band. Four hero files, and a layout change to hold
+them. The alternative, chosen instead: **frame the fight head-on into the corridor
+the backdrop paints, and do not draw the player at all.**
+
+Measured first, because the backdrops decide this:
+
+| | size | floor meets wall | luminance top → bottom |
+|---|---|---|---|
+| `bg_crypt` | 1280×720 | 71% down | 0.14 → 0.20 |
+| `bg_ossuary` | 1280×720 | 66% down | 0.21 → 0.25 |
+| `bg_warrens` | 1280×720 | 66% down | 0.20 → 0.27 |
+
+All three are symmetric one-point corridors (asymmetry 0.02-0.06), so a frontal fan
+uses that perspective where a side-on arena fights it. All three put the floor at
+~68%, which is a shared standing line. And the floor is the *brightest* band in every
+one, which is a real constraint on the sprites: weight them low and dark or their
+feet dissolve into it.
+
+It also deletes work instead of deferring it — no facing to match, no idle/hurt set
+to keep consistent across 35 enemies, no hero-to-monster scale to hold — and it makes
+the feedback from D61 correct rather than provisional: with no body on screen, an
+incoming hit reading as a screen flash and a jolt toward the camera is the right
+answer, not a stand-in for an animation nobody drew.
+
+**The layout had to be measured before it could be built.** Stacked as rows the way
+combat.gd was, at 1280×720 and scale 1.0, the fixed bands (header 50, buffs 22, log
+80, piles 22, hand 132, bar 50, six separators 96) left **236px** for a sprite that
+wants 240-270 — and the stage bottomed out at y≈468, **22px above the painted floor at
+y≈490**. No amount of shrinking fixes that; the stage had to stop being a row and
+become a layer. Enemies are now placed by hand on a full-rect stage with the HUD and
+the hand floating over them, which is also what lets `_hit()` jolt a slot without a
+container snapping it back.
+
+Per the player's call, **vitals live in the top band, not beside the hand**: HP,
+Block, Energy, incoming and the pile counts sit with the exit, and the bottom of the
+screen belongs to the cards. The log dropped from four lines to two and moved to the
+bottom corner — four lines of running commentary across a painted corridor is exactly
+what would ruin the framing.
+
+Each enemy slot carries its name and HP, its intent above its head, a contact mark on
+the floor line that doubles as the target ring, and a hit area over the whole
+silhouette. Bosses take 1.34× the frame and elites 1.14×, so a fight announces what it
+is before the numbers do.
+
+**Placeholders that read as placeholders.** With no painted enemies yet, the first
+render blew a 16×16 CC0 sprite up to 240px and the white pixel mass dominated the
+frame so completely that the composition could not be judged at all. The stand-in is
+now a dark silhouette at 52% of the footprint with the intended footprint outlined
+around it, so the frame can be composed before anything is drawn.
+
+Three things landed with it so the 210-file art pass can be generated against a
+contract the game enforces:
+
+* `PixelArt.enemy_art(id)` — painted enemies keyed by **archetype id** in their own
+  directory. The existing pixel sprites are assigned by position in a sorted
+  directory listing, so a correctly-named file dropped in *there* is handed to
+  whichever archetype the sort order reaches: 35 right files, 35 wrong enemies, and
+  the only symptom is "the art looks wrong".
+* `tests/test_art.gd` measures every painted backdrop's floor line, prints it, and
+  fails when one lands more than 10 points off `FLOOR_LINE`. The measurement is a
+  heuristic (largest row-to-row luminance step in the lower half), so it is
+  deliberately loose — a flaky assertion about a painting would be worse than none.
+  Verified by moving `FLOOR_LINE` to 0.45: it names all three backdrops.
+* The brief itself was regenerated, not edited — `tools/art_manifest.gd` owns that
+  text. Tier 1a is now empty with the reasoning in it, the enemy brief says facing
+  the viewer, feet flush to the bottom edge, weight low and dark, and *not* in the
+  positional directory. 213 files became **209**.

@@ -469,9 +469,32 @@ static func backdrop_texture(zone_id: String) -> Texture2D:
 ## everywhere, these are illustrations for one place each. Falls back to the zone
 ## pattern so a dungeon without art is not a black screen.
 const BATTLE_ART_DIR := "res://assets/art/"
+## Painted enemies, one file per archetype id. Distinct from the CC0 pixel sprites
+## in ENEMY_DIR, which are assigned POSITIONALLY — drop `cultist.png` in there and
+## it joins a pool and is handed to whichever archetype the sort order lands on.
+## This directory is keyed by id, so a file lands on the enemy it was drawn for.
+const ENEMY_ART_DIR := "res://assets/art/enemies/"
+
+## Where a combatant's feet are, as a fraction of the frame.
+##
+## Measured from the three painted backdrops that exist: the floor meets the wall
+## at 71% / 66% / 66% down. The fight is framed head-on into a one-point corridor
+## with no player character rendered, so every enemy stands on this one line and
+## every new backdrop has to put its floor there too — `tests/test_art.gd` measures
+## that, because a backdrop whose floor sits elsewhere makes the enemies hover.
+const FLOOR_LINE := 0.68
+## Tolerance either side, in the same units.
+const FLOOR_TOLERANCE := 0.04
 
 static func battle_art(dungeon_id: String) -> Texture2D:
 	var p := BATTLE_ART_DIR + "bg_" + dungeon_id + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
+## The painted art for one archetype, or null if nobody has drawn it yet.
+static func enemy_art(archetype_id: String) -> Texture2D:
+	var p := ENEMY_ART_DIR + archetype_id + ".png"
 	if ResourceLoader.exists(p):
 		return load(p) as Texture2D
 	return null
