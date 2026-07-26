@@ -5,12 +5,19 @@ class_name UI
 extends RefCounted
 
 ## Standard screen scaffold. Returns the VBox to fill.
-static func screen(root: Control, title: String) -> VBoxContainer:
+##
+## `art` optionally names a full-bleed painted image to use instead of the tiling
+## pixel backdrop — for a title screen, where one illustration beats a pattern.
+static func screen(root: Control, title: String, art: String = "") -> VBoxContainer:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# tiling pixel backdrop, themed by wherever the player currently is. Added
-	# first so it sits behind everything, and ignores the mouse so it never eats
+	# Backdrop first, so it sits behind everything, and mouse-deaf so it never eats
 	# a click meant for a button.
-	root.add_child(PixelArt.backdrop(_context_zone()))
+	if art != "" and ResourceLoader.exists(art):
+		for node in illustration(art):
+			root.add_child(node)
+	else:
+		# tiling pixel backdrop, themed by wherever the player currently is
+		root.add_child(PixelArt.backdrop(_context_zone()))
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UITheme.pad(margin)
@@ -24,6 +31,64 @@ static func screen(root: Control, title: String) -> VBoxContainer:
 		t.add_theme_font_size_override("font_size", UITheme.title_font())
 		col.add_child(t)
 	return col
+
+## A full-bleed painted backdrop: the image, plus a scrim that keeps text legible.
+## Returns the layers in draw order.
+##
+## Two things differ from the pixel backdrops:
+##
+## * **LINEAR filtering.** project.godot forces NEAREST globally, which is right
+##   for pixel art and turns a smooth illustration into jagged edges.
+## * **A gradient scrim.** Measured on the title art: white text over the button
+##   area sat at 3.7:1 contrast, under the 4.5:1 needed to read comfortably, with
+##   highlights bright enough to swallow a glyph entirely. The scrim is darkest
+##   behind the menu column and fades out across the image, so the art still shows
+##   where nothing is written on it. A flat dim would have muddied the whole thing
+##   to fix one corner.
+## Held FLAT across the text column before it fades. A pure linear fade left the
+## right-hand end of the column at only 0.2 opacity, so a bright cloud there sat at
+## 1.4:1 against white text — fine on average, illegible exactly where a glyph
+## landed. Averages do not read text; worst pixels do.
+const SCRIM_ALPHA := 0.82   ## opacity behind the text column
+const SCRIM_HOLD := 0.42    ## width fraction held at full opacity
+const SCRIM_END := 0.72     ## width fraction at which the scrim is gone
+## Menu content is kept inside SCRIM_HOLD, so text never strays past the cover.
+const MENU_WIDTH := 0.40
+
+static func illustration(path: String) -> Array[Control]:
+	var art := TextureRect.new()
+	art.texture = load(path) as Texture2D
+	art.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# COVER, not tile: it is one picture, and letterboxing a title screen reads
+	# as a bug rather than a choice.
+	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var grad := Gradient.new()
+	grad.set_offset(0, 0.0)
+	grad.set_color(0, Color(0, 0, 0, SCRIM_ALPHA))
+	grad.set_offset(1, SCRIM_HOLD)
+	grad.set_color(1, Color(0, 0, 0, SCRIM_ALPHA))
+	grad.add_point(SCRIM_END, Color(0, 0, 0, 0.0))
+	var gtex := GradientTexture2D.new()
+	gtex.gradient = grad
+	gtex.width = 256
+	gtex.height = 1
+	gtex.fill_from = Vector2(0, 0)
+	gtex.fill_to = Vector2(1, 0)
+
+	var scrim := TextureRect.new()
+	scrim.texture = gtex
+	scrim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	scrim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	scrim.stretch_mode = TextureRect.STRETCH_SCALE
+	scrim.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var layers: Array[Control] = [art, scrim]
+	return layers
 
 ## Which zone's backdrop suits the current screen: the run's zone if there is one,
 ## else the zone being browsed, else the opening zone.

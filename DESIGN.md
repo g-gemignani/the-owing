@@ -1264,3 +1264,39 @@ completion, rules off -> on:
 
 All three are now test-enforced, not comments: no rules on `count_max > 1`, no
 heal tied to a permanent condition without `once`, and SUNDER must cost damage.
+
+### D39 — A painted title screen
+
+The main menu now uses a generated illustration instead of a tiling pixel
+backdrop. Two things had to change for it to work, and neither was obvious.
+
+**Filtering.** `project.godot` sets `default_texture_filter=0` (NEAREST) globally,
+which is correct for every pixel asset in the game and turns a smooth illustration
+into jagged edges. `UI.illustration()` overrides to LINEAR on that node only.
+
+**Legibility, measured rather than eyeballed.** White menu text over the raw image
+sat at **3.7:1** contrast in the button area — below the 4.5:1 needed to read
+comfortably — with highlights bright enough to swallow a glyph. A gradient scrim
+fixed the average immediately (5.8:1) but the *worst pixel* was still 1.4:1: a pure
+left-to-right fade had dropped to 0.2 opacity exactly where the right-hand end of
+the menu column sits. Averages do not read text; the brightest pixel under a glyph
+does.
+
+The scrim is therefore held FLAT at `SCRIM_ALPHA` across `SCRIM_HOLD` of the width
+before it fades, and `MENU_WIDTH` keeps the column inside that cover. Godot centres
+Button text by default, which would otherwise have thrown every label into the
+middle of the picture where the scrim is gone. Worst-pixel contrast is now
+5.0-9.7:1 across the title, buttons and footer.
+
+`tests/MenuArtTest.tscn` measures the real image and fails under 4.5:1, so a
+darker scrim cannot be quietly weakened and a brighter replacement image cannot be
+dropped in unnoticed. Verified by weakening the scrim (1.6:1, caught) and by
+reverting the filter to NEAREST (caught).
+
+It is a **scene** test: reading `UI.*` from a `--script` run pulls in the UITheme
+autoload, which is not registered there, and the resulting compile error silently
+skips the checks while the suite still reports a pass. That false pass happened on
+the first attempt at this test.
+
+The image is generated, not CC0 — `assets/art/README.md` records that it is not
+covered by the Kenney licences alongside the pixel and audio assets.

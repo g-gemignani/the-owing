@@ -4,8 +4,8 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 (GDScript). Slay-the-Spire-shaped combat, but what you carry between runs is a
 *collection* you grow, fuse and spend — not a fresh start every time.
 
-> Status: playable prototype. All art and audio are CC0 placeholders and there is
-> no animation yet. The systems are the point.
+> Status: playable prototype. Art and audio are CC0 placeholders (plus a generated
+> title image) and there is no animation yet. The systems are the point.
 
 ---
 
@@ -21,7 +21,7 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 | Events         | 20                                                           |
 | Dungeons       | 12 across 5 zones, 8 difficulty tiers                        |
 | Traversal      | 3 pluggable models: node graph, card draw, dice board        |
-| Tests          | 27 suites                                                    |
+| Tests          | 28 suites                                                    |
 
 ## Running it
 
@@ -63,7 +63,7 @@ scripts/     game code — one file per screen or system
 resources/   all content as .tres data: cards, enemies, relics, powers, events,
              dungeons, zones, builds
 scenes/      thin .tscn wrappers; screens build their UI in code
-tests/       27 suites + tests/run.sh
+tests/       28 suites + tests/run.sh
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd
 DESIGN.md    the reasoning behind every decision, and every mistake
 ```
@@ -100,7 +100,10 @@ the simulator said so.
 
 Code is [Apache 2.0](LICENSE).
 
-Art and audio are **CC0** by [Kenney](https://kenney.nl) — Tiny Dungeon, 1-Bit
+The title illustration in `assets/art/` is generated and is **not** CC0; see
+`assets/art/README.md`.
+
+The rest of the art and all audio are **CC0** by [Kenney](https://kenney.nl) — Tiny Dungeon, 1-Bit
 Pack, UI Pack RPG Expansion, Pattern Pack Pixel, Interface Sounds, RPG Audio and
 Music Jingles. The original licence files ship alongside the assets under
 `assets/`. Kenney's work is public domain and requires no attribution; it is given

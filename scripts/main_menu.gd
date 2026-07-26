@@ -2,9 +2,16 @@
 ## screen has to think about slots.
 extends Control
 
+const TITLE_ART := "res://assets/art/main_menu.jpg"
+
 func _ready() -> void:
-	var col := UI.screen(self, "DECKCRAWL")
-	UI.label(col, "A deckbuilding descent. Placeholder art, real systems.")
+	var col := UI.screen(self, "DECKCRAWL", TITLE_ART)
+	# Keep the menu inside the scrim. Buttons centre their text by default, which
+	# would drop every label into the middle of the picture where the backdrop is
+	# brightest and no longer covered.
+	col.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	col.custom_minimum_size.x = get_viewport_rect().size.x * UI.MENU_WIDTH
+	UI.label(col, "A deckbuilding descent.")
 	UI.spacer(col)
 
 	var latest := _latest_slot()

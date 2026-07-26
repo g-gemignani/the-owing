@@ -6,6 +6,16 @@
 ## Run: godot --headless --script tests/test_art.gd
 extends SceneTree
 
+## Some properties only exist in source at this stage: UI scripts reference
+## autoloads, which are not registered in a headless `--script` run.
+func _source_has(path: String, needle: String) -> bool:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return false
+	var text := f.get_as_text()
+	f.close()
+	return text.find(needle) != -1
+
 func _init() -> void:
 	var fails := 0
 	var m = load("res://scripts/meta_state.gd").new()
@@ -273,8 +283,20 @@ func _init() -> void:
 	if not has_audio_licence:
 		fails += 1; print("FAIL no licence file in %s" % A.DIR)
 
+	# --- painted title art exists and is not filtered like a pixel sprite ---
+	#
+	# Only the source-level half lives here: reading UI.* would pull in UITheme,
+	# an autoload that is NOT registered in a headless `--script` run, and the
+	# resulting compile error silently skips the checks while still reporting a
+	# pass. The runtime half is tests/MenuArtTest.tscn.
+	var title_art := "res://assets/art/main_menu.jpg"
+	if not ResourceLoader.exists(title_art):
+		fails += 1; print("FAIL title art missing: %s" % title_art)
+	if not _source_has("res://scripts/ui.gd", "TEXTURE_FILTER_LINEAR"):
+		fails += 1; print("FAIL painted backdrop is not LINEAR-filtered — it will look jagged")
+
 	if fails == 0:
-		print("ART TEST: PASS (filtering, symbols, sprites, illustrations, backdrops, sound, licences)")
+		print("ART TEST: PASS (filtering, symbols, sprites, illustrations, backdrops, title art, sound, licences)")
 	else:
 		print("ART TEST: FAIL (%d)" % fails)
 	quit()
