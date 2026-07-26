@@ -67,7 +67,7 @@ func _every_screen_is_usable() -> void:
 		# produces. Handing a dice board a graph run is a state the game never
 		# creates, and one of them spins forever on it. Stage 2 covers all three
 		# properly, once per dungeon, with the state they actually receive.
-		if name in ["Map", "DeckRun", "DiceRun"]:
+		if name in ["Map", "DeckRun", "DiceRun", "IsoRun"]:
 			continue
 		var path := "res://scenes/%s.tscn" % name
 		var packed := load(path) as PackedScene
@@ -284,7 +284,7 @@ func _every_screen_has_a_way_out() -> void:
 		var packed := load(path) as PackedScene
 		if packed == null:
 			continue
-		if name in ["Map", "DeckRun", "DiceRun"]:
+		if name in ["Map", "DeckRun", "DiceRun", "IsoRun"]:
 			# same reason as stage 1: these need their own kind of run state
 			_start_a_run(_a_dungeon_using(name))
 			if GameState.run_scene() != path:

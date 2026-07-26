@@ -29,6 +29,7 @@ const SHOTS := [
 	["Map", "res://scenes/Map.tscn", "graph"],
 	["DeckRun", "res://scenes/DeckRun.tscn", "deck"],
 	["DiceRun", "res://scenes/DiceRun.tscn", "dice"],
+	["IsoRun", "res://scenes/IsoRun.tscn", "iso"],
 	["Combat", "res://scenes/Combat.tscn", "combat"],
 	["Shop", "res://scenes/Shop.tscn", "shop"],
 	["Encounter", "res://scenes/Encounter.tscn", "event"],
@@ -114,6 +115,7 @@ func _setup(need: String) -> void:
 	match need:
 		"deck": did = _dungeon_with(Traversal.Kind.DECK)
 		"dice": did = _dungeon_with(Traversal.Kind.DICE)
+		"iso": did = _dungeon_with(Traversal.Kind.ISO)
 	GameState.select_dungeon(did)
 	GameState.enter_dungeon(_run_state())
 	var z := Balance.zone_of(did)

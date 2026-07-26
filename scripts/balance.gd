@@ -161,7 +161,7 @@ const HP_POWER_K_HIGH := 0.5
 const RATIO_CEILING_BASE := 1.4
 ## Set so the deepest dungeon's ceiling clears the maximum achievable ratio with
 ## room to spare; see MAX_ACHIEVABLE_RATIO and the test that pins the relationship.
-const RATIO_CEILING_PER_DEPTH := 0.73
+const RATIO_CEILING_PER_DEPTH := 0.90
 
 ## The strongest ratio a fully-built player can reach: maxed card levels plus a
 ## full relic set. Measured with tools/sim_balance.gd, not guessed. The deepest
@@ -256,7 +256,7 @@ const RELIC_DIR := "res://resources/relics/"
 ## Relic power is divided by this to convert it into ratio points. Relics are
 ## permanent and sit outside the deck, so without folding them into the ratio a
 ## relic collection would outscale enemies exactly the way fusion once did.
-const RELIC_POWER_PER_RATIO := 70.0
+const RELIC_POWER_PER_RATIO := 50.0
 
 static func relic_power(relics: Array) -> float:
 	var p := 0.0
@@ -357,6 +357,34 @@ const DECK_AVOID_STEP := 0.5
 static func deck_avoid_cost(difficulty: int, already_avoided: int) -> int:
 	var base := float(DECK_AVOID_BASE_HP + DECK_AVOID_PER_DEPTH * (maxi(1, difficulty) - 1))
 	return int(round(base * (1.0 + DECK_AVOID_STEP * float(maxi(0, already_avoided)))))
+
+## Iso model: the floor is a grid of rooms, and walking it costs light.
+##
+## The other three models price *choosing*. This is the only one where the player
+## can walk back over ground already taken, so the thing that needs a price is
+## WALKING — without one an isometric floor is the graph plus a pathfinding chore,
+## because there would never be a reason not to strip every room.
+##
+## Torch pays for a tidy tour of the whole floor (ISO_TORCH_PER_ROOM against the
+## room count, which is the encounter budget plus the entrance and the stair). What
+## it does not pay for is crossing explored ground twice more to come back for the
+## last treasure. Once it is out every further step costs HP, scaled with depth for
+## the same reason DECK_AVOID_PER_DEPTH is: a flat number gets cheaper the deeper
+## you go, which is a bug with a delay on it.
+##
+## ISO_GRID must leave room for the largest encounter mix plus two (see the room
+## count assertion in tests/test_traversal.gd) or encounters would be silently
+## dropped off the floor and the shared budget would rot quietly.
+const ISO_GRID := 6
+const ISO_TORCH_PER_ROOM := 1.4
+const ISO_DARK_BASE_HP := 2
+const ISO_DARK_PER_DEPTH := 1
+
+static func iso_torch_for(rooms: int) -> int:
+	return int(round(float(maxi(1, rooms)) * ISO_TORCH_PER_ROOM))
+
+static func iso_dark_cost(difficulty: int) -> int:
+	return ISO_DARK_BASE_HP + ISO_DARK_PER_DEPTH * (maxi(1, difficulty) - 1)
 
 const NODE_LABEL := {0: "Combat", 1: "Elite", 2: "Rest", 3: "BOSS", 4: "Shop",
 	5: "Event", 6: "Treasure"}

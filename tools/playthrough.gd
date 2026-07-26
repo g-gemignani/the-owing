@@ -110,7 +110,7 @@ func _choose(opts: Array, hp: int, max_hp: int) -> int:
 	return 0
 
 func _kind(k: int) -> String:
-	return ["map","deck","dice"][k] if k < 3 else "?"
+	return ["map","deck","dice","iso"][k] if k < 4 else "?"
 
 func _run(m, d: DungeonData) -> Dictionary:
 	var deck: Array[CardData] = m.build_deck(_best_loadout(m))
@@ -136,6 +136,10 @@ func _run(m, d: DungeonData) -> Dictionary:
 		# route choice matters as much as card play: blindly taking the first option
 		# meant never steering toward a Rest, which killed runs the simulator clears
 		var pick := _choose(opts, hp, max_hp)
+		# whatever the option costs is paid by the caller, because a traversal never
+		# reads run resources: the deck model's dodge and the iso model's step in the
+		# dark both arrive this way
+		hp = maxi(1, hp - int(opts[pick].get("hp_cost", 0)))
 		var node := tv.select(pick)
 		if node.is_empty(): continue
 		var t := int(node["type"])

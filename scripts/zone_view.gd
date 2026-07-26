@@ -53,6 +53,7 @@ func _kind(k: int) -> String:
 	match k:
 		Traversal.Kind.DECK: return "encounter deck"
 		Traversal.Kind.DICE: return "dice board"
+		Traversal.Kind.ISO: return "isometric floor"
 		_: return "branching map"
 
 func _exclusives(d: DungeonData) -> String:

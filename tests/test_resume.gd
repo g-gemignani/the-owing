@@ -19,7 +19,7 @@ func _init() -> void:
 	var m = load("res://scripts/meta_state.gd").new()
 
 	# --- every traversal model round-trips through JSON ---
-	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE]:
+	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE, Traversal.Kind.ISO]:
 		for did in Balance.DUNGEONS:
 			var dd := Balance.dungeon(did)
 			var a := Traversal.make(kind)

@@ -19,6 +19,24 @@ func _defines(path: String, decl: String) -> bool:
 	f.close()
 	return text.find(decl) != -1
 
+## A numeric `const NAME := 1.5` read out of a script's SOURCE, for the same reason
+## `_defines` reads source: loading a UI script here would compile its autoload
+## references and hang the run. Returns `fallback` if the constant is not found,
+## and the caller prints what it measured so a silent fallback cannot pass quietly.
+func _const_of(path: String, name: String, fallback: float) -> float:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return fallback
+	var text := f.get_as_text()
+	f.close()
+	for line in text.split("\n"):
+		var l: String = line.strip_edges()
+		if l.begins_with("const %s " % name) or l.begins_with("const %s:" % name):
+			var eq := l.find("=")
+			if eq >= 0:
+				return float(l.substr(eq + 1).strip_edges())
+	return fallback
+
 func _init() -> void:
 	var fails := 0
 	var window := Vector2(
@@ -79,9 +97,37 @@ func _init() -> void:
 	print("  (info: dice board %d spaces = %.0fpx, window %.0fpx)" % [
 		dice.track.size(), board_w, window.x])
 
+	# --- the isometric floor has NO scrolling, so it has to fit ---
+	#
+	# The graph scrolls and the dice board scrolls; the floor is one drawn diamond
+	# grid with a fixed footprint, which means the grid size and the tile size are
+	# only safe *together*. Growing ISO_GRID by two, or drawing on a bigger tile,
+	# would push rooms off the bottom of a screen with nothing to scroll — and a
+	# drawn Control cannot report that, because it has no children to measure.
+	# Both numbers are read from source, never restated here.
+	var tile_w := _const_of("res://scripts/iso_run.gd", "TILE_W", 96.0) * scale
+	var tile_h := _const_of("res://scripts/iso_run.gd", "TILE_H", 48.0) * scale
+	var span := float(Balance.ISO_GRID * 2)
+	var floor_w := span * tile_w * 0.5
+	var floor_h := span * tile_h * 0.5 + tile_h
+	# the header, the two text lines and the row of move buttons live in the same
+	# column, so the floor cannot have the whole window
+	var chrome := 260.0 * scale
+	if floor_w > window.x:
+		fails += 1
+		print("FAIL the isometric floor is %.0fpx wide in a %.0fpx window and does not scroll" % [
+			floor_w, window.x])
+	if floor_h > window.y - chrome:
+		fails += 1
+		print("FAIL the isometric floor is %.0fpx tall with only %.0fpx of room and does not scroll" % [
+			floor_h, window.y - chrome])
+	print("  (info: iso floor %dx%d on %.0fx%.0f tiles = %.0fx%.0fpx, window %.0fx%.0f)" % [
+		Balance.ISO_GRID, Balance.ISO_GRID, tile_w, tile_h, floor_w, floor_h,
+		window.x, window.y])
+
 	# --- every traversal must offer something pressable at every step ---
 	# (a state with no options and no completion is a soft dead end)
-	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE]:
+	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE, Traversal.Kind.ISO]:
 		for did in Balance.DUNGEONS:
 			var t := Traversal.make(kind)
 			t.generate(Balance.dungeon(did))
@@ -148,7 +194,7 @@ func _init() -> void:
 		if not Balance.NODE_LABEL.has(enc):
 			fails += 1; print("FAIL no NODE_LABEL for encounter type %d" % enc)
 	# and every type a real map can contain must be labelled
-	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE]:
+	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE, Traversal.Kind.ISO]:
 		for did in Balance.DUNGEONS:
 			var t := Traversal.make(kind)
 			t.generate(Balance.dungeon(did))
@@ -163,6 +209,11 @@ func _init() -> void:
 			elif t is TraversalDice:
 				for e in (t as TraversalDice).track:
 					types[int(e)] = true
+			elif t is TraversalIso:
+				# rock and cleared rooms are not encounters and have no label
+				for e in (t as TraversalIso).enc:
+					if int(e) >= 0:
+						types[int(e)] = true
 			for ty in types:
 				if not Balance.NODE_LABEL.has(ty):
 					fails += 1

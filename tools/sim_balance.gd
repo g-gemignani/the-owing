@@ -4,10 +4,20 @@
 ## Run: godot --headless --script tools/sim_balance.gd
 extends SceneTree
 
-const TRIALS := 400
+## Trials per cell. Overridable for iteration — a tuning pass needs many runs of
+## the report and one at full precision, not fifteen at full precision:
+##     godot --headless --script tools/sim_balance.gd -- --trials=120
+const DEFAULT_TRIALS := 400
+static var TRIALS := DEFAULT_TRIALS
+
+static func _read_trials() -> void:
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--trials="):
+			TRIALS = maxi(10, int(arg.substr(9)))
 const CARD_DIR := "res://resources/cards/"
 
 func _init() -> void:
+	_read_trials()
 	print("=== Balance report (%d trials per cell) ===" % TRIALS)
 	print("RUN = full-dungeon completion with persistent HP (the metric that matters).")
 	print("Per-fight rates are full-HP diagnostics only.\n")
@@ -143,16 +153,24 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 			if opts.is_empty():
 				break
 			for o in opts:
-				if o.has("hp_cost"):
+				if String(o.get("action", "")) == "avoid":
 					avoidable_total += 1
 					break
 			var pick := _choose_option(opts, hp, max_hp, cost_est, mode)
 			var cost := int(opts[pick].get("hp_cost", 0))
+			var was_dodge := String(opts[pick].get("action", "")) == "avoid"
 			var node := tv.select(pick)
-			if node.is_empty():
-				# an option resolved internally (e.g. paying HP to avoid an encounter)
+			# EVERY priced option is paid for, not only the ones that resolve nothing.
+			# The iso model charges HP for a step taken after the torch has burnt out,
+			# and that step still hands back the encounter in the room it led to —
+			# paying only on an empty result measured walking in the dark as free.
+			# `avoidable`/`avoided` count dodges specifically, which is what the
+			# calibration below reports; a step across explored ground is not one.
+			if cost > 0:
 				hp = maxi(1, hp - cost)
-				avoided_total += 1
+			if node.is_empty():
+				if was_dodge:
+					avoided_total += 1
 				continue
 			match int(node["type"]):
 				Traversal.Enc.REST:
@@ -294,9 +312,11 @@ func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
 		if frac < 0.6 and (t == Traversal.Enc.REST or t == Traversal.Enc.SHOP):
 			return i
 
+	# A dodge, not merely a priced option: the iso model prices MOVEMENT once its
+	# torch is out, and this policy is about declining a fight.
 	var avoid := -1
 	for i in opts.size():
-		if opts[i].has("hp_cost"):
+		if String(opts[i].get("action", "")) == "avoid":
 			avoid = i
 	if avoid >= 0:
 		var cost := int(opts[avoid]["hp_cost"])
@@ -329,6 +349,7 @@ func _kind_name(kind: int) -> String:
 	match kind:
 		Traversal.Kind.DECK: return "deck"
 		Traversal.Kind.DICE: return "dice"
+		Traversal.Kind.ISO: return "iso"
 		_: return "graph"
 
 func _tier_of_enc(enc: int) -> int:

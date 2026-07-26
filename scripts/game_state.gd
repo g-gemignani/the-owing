@@ -317,6 +317,7 @@ func run_scene() -> String:
 	match kind:
 		Traversal.Kind.DECK: return "res://scenes/DeckRun.tscn"
 		Traversal.Kind.DICE: return "res://scenes/DiceRun.tscn"
+		Traversal.Kind.ISO: return "res://scenes/IsoRun.tscn"
 		_: return "res://scenes/Map.tscn"
 
 ## Where picking the run back up goes: into the fight if one is in progress

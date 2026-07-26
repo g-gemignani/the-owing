@@ -6,8 +6,8 @@
 script = ExtResource("1")
 id = "warrens"
 name = "The Warrens"
-description = "Overrun. Nothing here fights alone."
-traversal = 1
+description = "Overrun. Nothing here fights alone, and the tunnels double back."
+traversal = 3
 difficulty = 2
 unlock_after_clears = 0
 enemy_roster = PackedStringArray("rat_swarm", "plague_rat", "grave_moth", "hexer", "bone_picker")

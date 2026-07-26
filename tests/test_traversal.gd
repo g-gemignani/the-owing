@@ -6,8 +6,9 @@
 ## Run: godot --headless --script tests/test_traversal.gd
 extends SceneTree
 
-const KINDS := [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE]
-const KIND_NAMES := {0: "GRAPH", 1: "DECK", 2: "DICE"}
+const KINDS := [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE,
+	Traversal.Kind.ISO]
+const KIND_NAMES := {0: "GRAPH", 1: "DECK", 2: "DICE", 3: "ISO"}
 
 ## Encounters one run of `did` should cost. The mix is per-dungeon now, but every
 ## MODEL still has to spend the same one — that is the contract this test exists
@@ -184,6 +185,98 @@ func _init() -> void:
 	for o in d.options():
 		if o.has("hp_cost"):
 			fails += 1; print("FAIL DECK: boss can be avoided")
+
+	# --- iso specifics ---
+	#
+	# The floor is the one model whose budget can leak GEOMETRICALLY: if the grid
+	# cannot hold a room per budgeted encounter, the surplus is dropped on the floor
+	# during generation and the dungeon quietly becomes cheaper than the same
+	# dungeon walked any other way. Nothing above would notice — every other
+	# assertion is about the walk, not the map it was cut from.
+	for did4 in Balance.DUNGEONS:
+		var dd5 := Balance.dungeon(did4)
+		var iso := TraversalIso.new()
+		iso.generate(dd5)
+		var want: int = Traversal.standard_encounters(dd5).size() + 2
+		if iso.rooms != want:
+			fails += 1
+			print("FAIL ISO %s: carved %d rooms for a budget that needs %d — ISO_GRID is too small" % [
+				did4, iso.rooms, want])
+		var placed := 0
+		var bosses2 := 0
+		for e in iso.enc:
+			if int(e) >= 0:
+				placed += 1
+			if int(e) == Traversal.Enc.BOSS:
+				bosses2 += 1
+		if placed != want - 1:
+			fails += 1
+			print("FAIL ISO %s: %d encounters on a floor that budgeted %d" % [
+				did4, placed, want - 1])
+		if bosses2 != 1:
+			fails += 1; print("FAIL ISO %s: %d stairs down" % [did4, bosses2])
+
+	var iso2 := TraversalIso.new()
+	iso2.generate(null)
+	# the stair must be the furthest room from the entrance: a floor that can be
+	# crossed in three rooms is a floor that skips the budget
+	var d_entry: Array = iso2._dist_from(iso2.pos)
+	var stair := -1
+	var furthest := 0
+	for i in iso2.enc.size():
+		if int(iso2.enc[i]) == Traversal.Enc.BOSS:
+			stair = i
+		if int(iso2.enc[i]) != TraversalIso.WALL:
+			furthest = maxi(furthest, int(d_entry[i]))
+	if stair < 0 or int(d_entry[stair]) != furthest:
+		fails += 1
+		print("FAIL ISO: the stair is %d steps in and the floor reaches %d — it is not the far end" % [
+			int(d_entry[stair]) if stair >= 0 else -1, furthest])
+	# the entrance is somewhere you have already been, not a free encounter
+	if int(iso2.enc[iso2.pos]) != TraversalIso.EMPTY:
+		fails += 1; print("FAIL ISO: the entrance room holds an encounter")
+	# ...and it must offer a choice, like the first row of every other model. The
+	# carve seeds a stub with one door, so this is the assertion that keeps the
+	# entrance from being picked for convenience.
+	var entry_doors := 0
+	for n in iso2._neighbours(iso2.pos):
+		if int(iso2.enc[n]) != TraversalIso.WALL:
+			entry_doors += 1
+	if entry_doors < 2:
+		fails += 1
+		print("FAIL ISO: the entrance has %d door(s) — the run opens on no decision" % entry_doors)
+	# The floor must be deep from where you come in. Taking the most-connected room
+	# as the entrance put it in the middle of the plate, where the furthest room —
+	# and therefore the stair — was TWO steps away and the whole floor could be
+	# skipped by walking into it. Measured over 3000 floors after the fix: 4 to 8
+	# steps, mode 5.
+	if furthest < 3:
+		fails += 1
+		print("FAIL ISO: the floor only reaches %d steps from the entrance — that is a puddle" % furthest)
+	# every option must be a step to an adjoining room, and the stair must sort LAST
+	# while anything else is unexplored (that ordering is what makes a greedy
+	# walker — the simulator, and a player leaning on the first button — spend a
+	# whole floor instead of beelining for the exit)
+	for o in iso2.options():
+		if not o.has("cell") or not o.has("label"):
+			fails += 1; print("FAIL ISO: option is not a move"); break
+	# the torch must pay for a straight walk to the stair, or the price of the dark
+	# is levied on a player who had no choice but to walk
+	if iso2.torch < furthest:
+		fails += 1
+		print("FAIL ISO: %d torch for a stair %d steps away — reaching it costs HP by force" % [
+			iso2.torch, furthest])
+	# ...and it must NOT pay for stripping the whole floor twice over, or light is
+	# decoration and the model has no cost at all
+	if iso2.torch >= (iso2.rooms - 1) * 2:
+		fails += 1
+		print("FAIL ISO: %d torch on a %d-room floor — wandering is free" % [
+			iso2.torch, iso2.rooms])
+	print("  (info: iso floor %d rooms, stair %d steps in, torch %d)" % [
+		iso2.rooms, furthest, iso2.torch])
+	# the dark is priced by depth, like every other cost in a scaling game
+	if Balance.iso_dark_cost(8) <= Balance.iso_dark_cost(1):
+		fails += 1; print("FAIL a step in the dark costs no more at depth 8 than at depth 1")
 
 	# --- a dungeon may have its own shape, within reason -----------------------
 	#

@@ -16,7 +16,8 @@
 class_name Traversal
 extends RefCounted
 
-enum Kind { GRAPH, DECK, DICE }
+## Stored as a raw int in every dungeon .tres, so values may only be APPENDED.
+enum Kind { GRAPH, DECK, DICE, ISO }
 
 ## Encounter kinds a traversal hands back. Values mirror GameState.NodeType.
 ## Named Enc, not Node: "Node" would shadow Godot's native class.
@@ -126,5 +127,7 @@ static func make(kind: int) -> Traversal:
 			return TraversalDeck.new()
 		Kind.DICE:
 			return TraversalDice.new()
+		Kind.ISO:
+			return TraversalIso.new()
 		_:
 			return TraversalGraph.new()

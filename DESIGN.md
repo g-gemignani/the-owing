@@ -940,6 +940,12 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **A tuning pass on a corrected instrument (D75).** Everything tuned before D72 was set against a simulator that modelled a weaker player than the game provides. Re-tuned: the Abyssal Stair no longer out-punishes the Maw a full depth below it, mid-game ceilings now sit above the decks that visit them (so a matched deck is no longer pinned where enemies stop scaling), and relics are priced 40% higher after a relic deck out-cleared two stronger-looking ones at the same dungeon. `DMG_POWER_K` was tried as a global lever and rejected with numbers — it crushed the already-hard cells to fix the soft ones.
+
+- **A fourth way to walk a dungeon: an isometric floor (D74).** From play, and not as a bug report: the graph model is the best of the three and that is the problem, because it is the one that reads most like the game this one stands next to. All three existing models abstract a *route*; none of them is a *place*. `TraversalIso` carves a floor of rooms out of a 6x6 plate, lights the room you stand in and its neighbours, and hides the stair down — so the run is a question of coverage, not of route. The torch pays for one tidy tour and every step past it costs HP, which is the mirror of the deck model's priced dodge: there you pay to see less of a dungeon, here you pay to see more. It walks the same encounter budget as the other three (9.2 against 9.2), the contract test caught a pacing deadlock that only fired 3 runs in 360, and it is plugged into the Warrens so the three opening dungeons teach three different models.
+
+- **Twelve painted rooms, and the filename is the wiring (D73).** Every dungeon has its own backdrop now, and the fourth instance in this log of a hand-typed list rotting next to the manifest that exists to prevent exactly that.
+
 - **The simulator was measuring a weaker player than the game gives you (D72).** Reported from play as "the first dungeons feel easy and the sim disagrees" — and the sim was wrong four ways: max HP grew with the dungeon's difficulty instead of with dungeons cleared (60 HP where the player has 120), the equipped Power was never passed, the named boss was never passed so every finale was a roster enemy in a boss costume, and the deck never grew during a run. The opening now measures the way it plays, and `test_balance.gd` fails if the tool drops any of it again.
 
 - **Elites drop relics, the mid-game plateau closed, and the last two art paths wired (D68, D69, D70).** An elite was a stat check; it now drops a relic, held in escrow so dying on purpose cannot bank it. The five-dungeon plateau in the middle turned out to be an incentive problem rather than a difficulty one — re-clearing a beaten dungeon was the safest income in the game — so repeat clears pay a fifth of what a first clear does, down to a floor. And the card-illustration and frame-kit files finally have code that looks for them, after finding that the art manifest had been generating filenames from its own private copy of the card taxonomy.
@@ -2933,3 +2939,72 @@ fight.
 animation, no multiple floors per dungeon, no line of sight past the adjoining rooms,
 and the dark costs a flat price per step. This is a concept test; art and depth are
 only worth spending once the feel is judged.
+
+### D75 — A tuning pass, now that the instrument reads true
+
+D72 corrected four ways the simulator modelled a weaker player than the game gives
+you. Every constant tuned against the old readout was therefore set against wrong
+numbers, so this is the pass that re-tunes them. Three defects, three targeted
+levers, and one lever tried and rejected.
+
+**1. A difficulty rating that did not mean anything.** The Abyssal Stair (d7) was
+harder than the Maw (d8) for every deck measured — 20% against 52% for a thorns
+build, 29% against 41% for a late one. Its shape was 3 combats + 2 elites where the
+Maw runs 2 + 2, and an elite is heavier than a combat, so the *shape* was outweighing
+a whole point of depth. The Stair drops to one elite. This is the D13 trap again
+(roster and now shape swamping the difficulty number) and it is why
+`tests/test_traversal.gd` bounds the mix.
+
+**2. Matched decks were pinned at the ceiling.** `ratio_ceiling(d)` was
+`1.4 + 0.73 x (d - 1)`, which puts d5 at 4.32 — below the 4.43 a relic-carrying
+mid-game deck reaches. A deck at or above the ceiling faces enemies that have
+stopped scaling, so the dungeon can never answer it however well it is played. At
+0.90 per depth the ceilings become d3 3.20, d5 5.00, d8 7.70, and the mid-game
+dungeons can scale to the decks that actually visit them. d1 is untouched at 1.4 —
+outgrowing the Crypt is the point of the ratchet (D36).
+
+**3. Relics were under-priced.** Three decks at the Sunken Vault, and the one with
+relics beat both stronger-looking decks: ratio 4.43 cleared 99% while 4.09 cleared
+79% and 3.82 cleared 73%. A deck that outperforms its ratio is D28's signal, and
+`RELIC_POWER_PER_RATIO` (flat relic power per point of ratio) was the knob: 70 → 50,
+so a relic contributes 40% more ratio and enemies scale to it. Relic-free profiles
+are unmoved, which is exactly what a targeted fix should look like.
+
+**Tried and rejected: `DMG_POWER_K`.** Raising it from 0.15 is the obvious lever for
+"fully-scaled dungeons are too soft", and it is global, so it cannot tighten the
+loose cells without crushing the tight ones. Measured at 0.25 it took the AoE build
+at the Drowned Market from 51% to 11% and a late deck at the Maw from 41% to 19%,
+while the cell it was aimed at (a relic deck at the Vault) only fell from 99% to
+76%. At 0.20 the same shape, half the size. Reverted to 0.15 — D45 already recorded
+that this constant is a knife edge, and the honest fix for a specific over-performer
+is to price that thing, not to raise the tide.
+
+The simulator also gained `--trials=N`, because a tuning pass needs many runs of the
+report and one at full precision, not fifteen at full precision.
+
+**Measured at 120 trials per cell (about +/- 5 points), after the change:**
+
+| deck | | |
+|---|---|---|
+| Starter, 0 clears | Crypt 99% | Ossuary 75% |
+| Early, 1 clear | Crypt 100% | **Foundry 61%** |
+| Mid Lv15, 3 clears | Foundry 99% | Ember Road 98% |
+| Status Lv15 | Foundry 88% | Ember Road 62% |
+| Barricade Lv15 | Foundry 50% | Sunken Vault 52% |
+| Poison Lv15 | Fungal Deep 63% | Rot Gardens 68% |
+| AoE Lv15 | Rot Gardens 68% | Drowned Market 28% |
+| Thorns Lv15 | Abyssal Stair 32% | The Maw 57% |
+| Relic build, 4 relics | Foundry 100% | **Sunken Vault 89%** |
+| Late Lv40, 6 relics | Abyssal Stair 32% | The Maw 27% |
+| Endgame Lv100, 7 relics | Abyssal Stair 70% | The Maw 67% |
+
+The opening stays easy, which is what a player reported and what D71 established the
+tool had been lying about. The Foundry is still the one early wall. The deep end
+spans 27-70% by how well equipped you are, and the Stair no longer beats the Maw.
+
+**A confirmation run at the full 400 trials was abandoned after 32 minutes.** The
+simulator has become much slower — growing decks mean more cards to shuffle and draw
+each fight, and higher ceilings mean longer fights — so the numbers above carry the
+uncertainty of 120 trials, and the tool needs profiling before the next pass. That
+is a real cost of D71's fidelity, and it is worth stating rather than hiding: a
+measurement nobody can afford to run is one that stops being run.
