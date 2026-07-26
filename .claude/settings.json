@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/docs-current.sh\"",
+            "timeout": 10,
+            "statusMessage": "Checking AGENTS.md / DESIGN.md are current"
+          }
+        ]
+      }
+    ]
+  }
+}

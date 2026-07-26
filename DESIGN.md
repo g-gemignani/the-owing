@@ -940,6 +940,10 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The endgame stopped being a walkover (D54).** The deepest dungeons were cleared 100% of the time by every late deck, because enemy HP grows at half the rate of the player's damage — so more power made fights *shorter*, and a shorter fight offers fewer chances to be hit. Extra enemy HP and ratio-scaled pierce now switch on above a floor at the top of the build band, leaving every cell the previous pass tuned exactly where it was. The Maw now reads 40/54/71% by deck strength. The test changed probe: attrition per fight rose all through the plateau, so fight length is what is asserted.
+- **Music, at last, on the Music bus (D53).** The bus and its slider existed with nothing routed to them. Five generated, measured, seamless loops now play, chosen by which screen the player is on from one table polled in one place, so a new screen cannot be silent by omission. Also fixed a third restated constant: `SettingsState` defaulted the UI scale to 1.6 and applied it over the theme's 1.0, so no new player ever got the shipped default.
+- **A way out of the fight (D52).** Combat had no exit control and Escape only left fullscreen. Screens now declare their exit once, and the button and the key run the same Callable; combat seals it between the killing blow and the reward pick so the fight cannot be re-offered. Found a crash class while doing it: a static Callable outliving its screen corrupted the heap at shutdown and, because the output is piped, silently discarded three tests' PASS lines — the runner now checks exit codes too.
+
 - **Phase 0–4 complete.** Environment, combat, reward, encounter map, and meta layer built and validated (headless tests green).
 - **Phase 5 mostly done.** D3 (gold + death penalty) and D4 (per-dungeon deck builder with saved loadouts) resolved & implemented; run flow rewired through the DeckBuilder.
 - **Unclickable map (D34).** The Crypt was unplayable because `map.gd` kept a private copy of the encounter-label table that had gone stale, throwing mid-render and destroying every row below it. Deleted the duplicate, and `tests/test_layout.gd` now rejects private copies of shared lookups — verified by reintroducing the bug.
@@ -1337,7 +1341,7 @@ four unrelated assertions. Repurposing a fixture broke tests that had nothing to
 with triggers. Both were restored and the two triggers moved onto `lucky_penny` and
 `field_kit`, whose flat effects (20% gold, heal 3) nothing depended on.
 
-### Known gap: the endgame plateaus above the deepest ceiling
+### Known gap: the endgame plateaus above the deepest ceiling  *(closed in D54)*
 
 Measured while verifying D40, not caused by it. `ratio_ceiling(8)` is 4.55, but
 real late decks reach ratio 5.09 and maxed ones 5.92. Above the ceiling nothing
@@ -1779,3 +1783,167 @@ the same collection with and without the level. And the filter test greps both
 screens for `CardFilter.apply` and for any surviving raw `for id in
 MetaState.collection` in a listing loop, which caught a leftover count loop in the
 collection (replaced with the existing `total_copies()`).
+
+### D52 — A way out of the fight, and Escape means it
+
+Combat had no exit control at all, and Escape was bound to *leave fullscreen* on
+every screen in the game. The longest scene was the only one you could not leave,
+and the key everybody presses did something unrelated.
+
+Both are one registration now. `UI.exit_button()` builds the button **and** binds
+the key to the same `Callable`, so a screen states its way out once; `UITheme`
+asks `UI.run_escape()` and only falls back to leaving fullscreen when a screen
+declares none. Three screens declare none deliberately and the test names them:
+MainMenu and Overworld are roots, and an event is a decision (every event has a
+cost-free option, so nothing traps you there).
+
+Two details that are not decoration:
+
+* **Combat seals its exit between the killing blow and the reward pick.** The
+  encounter is not cleared until the reward is taken, so stepping out there and
+  coming back would re-offer the fight. Mid-fight leaving is safe because the
+  fight is serialized after every action (D22) and Resume returns to that turn —
+  `GameState.resume_scene()` now owns that rule, which had been written out three
+  times (Continue, slot load, and the pause menu, which sent you to the *map*).
+* **The escape action lives on the node, not in a static.** A static `Callable`
+  holding a lambda that captured a screen outlived that screen and corrupted the
+  heap at engine shutdown. Because a scene test writes to a pipe, the abort
+  discarded the buffered output — including the `PASS` line the runner greps for —
+  so three passing tests reported as failures with no message. `tests/run.sh` now
+  checks the exit code as well as the report: a crash after a pass is still a
+  crash.
+
+`PlayableTest` gained the assertion, verified by removing one registration and one
+seal: it names the screen with no way out, and reports that combat can be left
+between the kill and the reward.
+
+### D53 — The Music bus finally has music on it
+
+`Audio` created a Music bus, `apply_volumes()` drove it, and the settings screen
+offered a Music slider. Nothing was ever routed to it — every voice in the pool
+plays on SFX. The slider adjusted the volume of silence, which is worse than an
+absent feature because the UI claims otherwise. It is the same placeholder problem
+D32 set out to end, arrived at from the other side.
+
+Five looping scores (menu, world, dungeon, combat, boss) now play on that bus,
+switched by **where the player is**: `Audio._process` watches the current scene and
+looks it up in one table. Polling beats asking each screen to announce itself —
+screens are entered from a dozen places, some of them raw `change_scene_to_file`,
+and the one that forgets is the one that goes quiet. Anything unlisted still gets
+the world theme, so a new screen cannot be silent by omission, exactly as
+`UI.button` attaches its own click sound. Combat is the one screen whose score
+depends on more than its name: a boss node sounds different from the corridor.
+
+**The music is generated** (`tools/gen_music.py`), and the reasoning is the same
+as D29's hand-authored glyphs. The sprites and effects are CC0 packs because packs
+of those exist with licences verifiable on the page and in the pack; no comparable
+CC0 pack of *looping* music turned up, and choosing tracks by ear is not a
+judgement I can make honestly. So it is synthesised and **measured** instead, and
+the generator fails rather than shipping a track that clicks at the loop point,
+competes with the sound effects for level, or measures identically to another
+track. Every voice is written into the buffer modulo its length, so a note or a
+delay tail crossing the end wraps into the beginning: the loop is continuous by
+construction rather than repaired afterwards.
+
+One measurement was wrong first and is worth recording. The seam check began as
+"RMS of the first 50 ms against the last 50 ms" and failed all five tracks — a
+loop that begins on a downbeat and ends on a decay is *supposed* to jump in level
+there. That is music, not a click. A click is a step the waveform does not
+otherwise take, so the check now compares the step across the loop point against
+the 99th percentile of every other step. It then caught something real: the
+percussion had an instant attack, which put a full-amplitude sample at index 0 —
+and index 0 *is* the loop point. A 1.5 ms ramp fixed it.
+
+Five tracks, 475 KB. The stingers (victory, defeat, boss cleared) stay on SFX
+although they came from a music pack: they are feedback for something that just
+happened, and a player who turns the music off still wants to hear that they won.
+
+**A third restated constant, found on the way.** `SettingsState.ui_scale`
+defaulted to 1.6 while `UITheme.UI_SCALE` had been lowered to 1.0 in D49 — and
+settings apply *after* the theme, so every machine without a settings file (that
+is, every new player) got 1.6. `tests/test_layout.gd` read the constant, measured
+1.0, and passed. The field is now a sentinel resolved from the theme, and the test
+fails if it is ever a number again.
+
+### D54 — The endgame stopped being a walkover
+
+The gap recorded above ("the endgame plateaus above the deepest ceiling") was still
+open, and measuring it fresh showed both halves:
+
+| deck | ratio | Abyssal Stair | The Maw |
+|------|-------|---------------|---------|
+| Thorns Lv15 | 3.76 | 80% | 68% |
+| Late (Lv40 + 6) | 5.09 | 100% | 100% |
+| Endgame (Lv100) | 5.92 | 100% | 100% |
+
+A greedy playthrough cleared all twelve dungeons without dying once. The ceiling
+was no longer the cause — D45 had already lifted it past `MAX_ACHIEVABLE_RATIO`.
+The cause was that **more power made the deepest floor easier**. `HP_POWER_K` is
+0.5, so enemy HP grows at half the rate of the player's damage: the maxed deck
+finished a Maw fight in 4.0 turns where the late deck needed 5.2, and a shorter
+fight simply hands out fewer opportunities to be hit. Pierce (D45) is per-hit, so
+fewer hits is a discount on it too.
+
+Raising `HP_POWER_K` to 1.0 fixes the top and guts the middle — measured Barricade
+55% → 29% at the Foundry, AoE 72% → 6% at the Drowned Market — because it
+lengthens fights at *every* ratio and escalation compounds on decks that were
+already slow. The same is true of raising `DMG_POWER_K`: at 0.35 the endgame lands
+at 72% and Status drops from 66% to 28%.
+
+So both new rules switch on **above a floor** (`HIGH_POWER_FLOOR` = 3.0, the top of
+the build band) and change nothing below it:
+
+* `HP_POWER_K_HIGH` adds enemy HP per point of ratio past the floor, so fights stop
+  shortening once a deck is beyond what any build reaches.
+* `pierce_fraction()` takes the deck's ratio as well as the depth, and rises past
+  the same floor. It still runs through `scaling_ratio`, so it is capped by the
+  dungeon: the Crypt's ceiling is 1.4 and no amount of growth makes the Crypt
+  pierce you. The ratchet is untouched — you outgrow the Crypt, not the Maw.
+
+Applying the ratio term from ratio 1 instead of from a floor took Barricade from
+59% to 31%: block builds pay pierce twice, once for being blocked through and again
+because their slow fights pay it every turn. The floor is what makes this safe.
+
+After (before → after):
+
+| deck | ratio | cell | |
+|------|-------|------|--|
+| Early | 1.26 | Foundry | 41% → 37% |
+| Barricade Lv15 | 2.37 | Foundry / Vault | 55/59% → 52/58% |
+| Status Lv15 | 3.15 | Foundry | 66% → 67% |
+| Thorns Lv15 | 3.76 | Stair / Maw | 80/68% → 54/40% |
+| Late Lv40 + 6 | 5.09 | Stair / Maw | 100/100% → 73/**54%** |
+| Endgame Lv100 | 5.92 | Stair / Maw | 100/100% → 90/**71%** |
+
+The build band is where D45 left it, and the last dungeon in the game now reads as
+a gradient: 40% for a deck that arrived early, 54% for a strong one, 71% for a
+maxed one. More power still wins — it is no longer free.
+
+**The test for this had to change probe.** The obvious assertion — a maxed deck
+must still lose HP per fight at depth — passed all the way through the plateau,
+because pierce alone keeps that number rising while the runs themselves were free.
+Fight *length* is the mechanism, so `tests/test_balance.gd` now asserts that fights
+in the deepest dungeon never shorten as power climbs past the floor, while the
+first dungeon must still get easier (or the ratchet has been undone). Verified by
+setting `HP_POWER_K_HIGH` back to 0: the HP-loss version passes, the length version
+names all three ratios.
+
+### D52 — AGENTS.md, and a hook that keeps the docs honest
+
+Added `AGENTS.md`: the concept, the design pillars, and the engineering lessons in
+one brief, with DESIGN.md as the full decision log behind it. It exists so the *why*
+is discoverable without reading 1800 lines — for a human or an AI picking the project
+up cold.
+
+The docs are only useful if they stay current, so `.claude/hooks/docs-current.sh` is
+a `UserPromptSubmit` hook (fires every turn) that injects a standing reminder to keep
+AGENTS.md and DESIGN.md current, and escalates to a STALE warning when the working
+tree has uncommitted changes under `scripts/` or `resources/` with no matching change
+to either doc.
+
+What a hook can and cannot do, stated plainly: it cannot write good prose — only the
+author can. What it can do is make forgetting impossible, by re-asserting the rule in
+context on every call and surfacing a concrete staleness signal. The three-way logic
+(clean tree, code-only, code+docs) was verified in an isolated git repo; the JSON
+output was verified valid both with and without `jq` on PATH, because the dev shell
+here does not always have it.
