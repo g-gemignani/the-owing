@@ -13,3 +13,4 @@ unlock_after_clears = 0
 enemy_roster = PackedStringArray("cultist", "crypt_hound", "bone_picker")
 card_pool = PackedStringArray("prepared")
 exclusive_cards = PackedStringArray("prepared")
+boss = "grave_sexton"

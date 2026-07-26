@@ -35,6 +35,13 @@ func _fill(z: ZoneData) -> void:
 			d.name, d.difficulty, _kind(d.traversal), tag],
 			(func(): _enter(d.id)) if unlocked else Callable(), 40.0)
 		UI.label(box, "    %s" % d.description)
+		# Name the boss at the point of choosing. Knowing what waits is what turns
+		# "which dungeon" and "which deck" from guesses into plans.
+		var boss := Balance.boss_of(d.id)
+		if boss != null and unlocked:
+			var bl := UI.label(box, "    Boss: %s — %s" % [
+				boss.name, Balance.boss_warning(d.id)])
+			bl.add_theme_color_override("font_color", Color(0.95, 0.65, 0.45))
 		var only := _exclusives(d)
 		if only != "":
 			UI.label(box, "    Found only here: %s" % only)

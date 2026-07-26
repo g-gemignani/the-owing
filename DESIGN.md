@@ -1350,3 +1350,61 @@ designed answer and multiplies enemy stats outside the ceiling, but it is off by
 default, so a first playthrough ends on a walkover. Not fixed here; fixing it means
 deciding whether the deepest dungeons should keep scaling indefinitely or whether
 finishing should push the player into ascension.
+
+### D41 — Twelve dungeons, twelve bosses
+
+The boss archetype was drawn at random from the dungeon's own `enemy_roster`.
+Auditing that turned up something worse than expected:
+
+* **Seven of twelve dungeons had no boss archetype in their pool at all.** The
+  Crypt's finale was a `cultist`, `crypt_hound` or `bone_picker` with 1.55x HP.
+* In the five that did, it was a coin flip whether the boss archetype turned up.
+* Where one was in the pool it also spawned as a normal encounter, spending its
+  signature before the fight that needed it.
+
+So the boss signatures built in D38 barely reached the player at all.
+
+`DungeonData.boss` now names a fixed archetype per dungeon, matched to the place,
+its foes and its loot — and the engine filters boss archetypes out of ordinary
+encounters entirely.
+
+| dungeon | boss | signature |
+|---------|------|-----------|
+| The Crypt d1 | The Grave-Sexton | winds up every 3 turns — teaches racing a telegraph |
+| The Warrens d2 | The Brood-Mother | grows every 2 turns; nothing here fights alone |
+| The Ossuary d2 | The Marrow-Abbot | enrages under half, shields on a drumbeat |
+| The Ember Road d3 | The Bellows-Master | stokes itself hotter every 3 turns |
+| The Foundry d3 | The Forge-Warden | strikes through 20+ Block — "they hit back harder" |
+| The Slag Pits d4 | The Cinder Knight | enrages under half; punishes a dumped hand |
+| The Fungal Deep d4 | The Mycelial Lord | drains on a drumbeat; it breathes with you |
+| The Rot Gardens d5 | The Gardener | tends itself; enrages when cut back |
+| The Sunken Vault d5 | The Deep Warden | drains every 3 turns; a slow fight is a lost one |
+| The Drowned Market d6 | The Last Vendor | you spend cards, it profits |
+| The Abyssal Stair d7 | The False Step | takes you through Block when you falter |
+| The Maw d8 | The Maw Itself | an appetite, and it enrages |
+
+**This is what makes choosing a deck a decision.** The boss is named at the zone
+list, on the deck-building screen and on the map node, with a one-line warning
+generated from its own rules so the text can never drift from the fight. Knowing
+the Forge-Warden punishes Block *before* choosing whether to bring Block is the
+decision that screen existed to ask and never did.
+
+**Two things measurement caught.**
+
+*Difficulty leaked out with the bosses.* Those archetypes had been carrying real
+pressure as normals; removing them made their dungeons soft — AoE decks went from
+49% to 99% completion at the Drowned Market, Barricade from 73% to 91% at the
+Sunken Vault. Restored by giving two single-spawn normals conditional rules and
+topping the thin rosters up with foes that belong there, rather than by inflating
+numbers: 88% and 85% now.
+
+*Four boss sprites silently did nothing.* `PixelArt.OVERRIDES` pins each boss to a
+chosen tile, but four named tiles had never been copied into the project, and
+`enemy_sprite()` fell back to positional assignment without a word — so those
+bosses wore other enemies' faces. Positional assignment also now skips pinned
+sprites, or a trash mob inherits the finale's look. Both are test-enforced.
+
+`tests/test_dungeon.gd` asserts every dungeon names a loadable boss with a
+signature and a warning, that no dungeon fights its own or any other boss as
+trash, that no two dungeons share a boss, and that 30 rolled normal encounters
+never produce a boss archetype.

@@ -31,7 +31,8 @@ func _ready() -> void:
 		var dd := GameState.dungeon_data()
 		var roster: Array = Array(dd.enemy_roster) if dd != null and dd.has_roster() else []
 		eng.setup(GameState.run_deck, GameState.hp, GameState.max_hp, GameState.dungeon, tier,
-			"", MetaState.relic_data(), roster, GameState.run_power)
+			"", MetaState.relic_data(), roster, GameState.run_power,
+			dd.boss if dd != null else "")
 		_snapshot()
 	_refresh()
 

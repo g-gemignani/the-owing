@@ -13,3 +13,4 @@ unlock_after_clears = 2
 enemy_roster = PackedStringArray("brute", "slag_wretch", "forge_hound", "cultist")
 card_pool = PackedStringArray("battle_trance", "whirlwind")
 exclusive_cards = PackedStringArray("battle_trance", "whirlwind")
+boss = "warden"

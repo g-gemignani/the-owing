@@ -29,6 +29,8 @@ var discard_pile: Array[CardData] = []
 var relics: Array = []
 ## Dungeon-supplied enemy roster (D6). Empty = use the tier roster.
 var roster_override: Array = []
+## The dungeon's named boss archetype, fought at its BOSS node.
+var named_boss: String = ""
 var bonus_energy: int = 0
 
 # --- power: one equipped ability, firable ONCE per turn (see PowerData) ---
@@ -79,7 +81,7 @@ var enemy_intent: int:
 
 func setup(deck: Array[CardData], hp: int, max_hp: int, p_dungeon: int, p_tier: int,
 		forced_archetype: String = "", p_relics: Array = [],
-		p_roster: Array = [], p_power: PowerData = null) -> void:
+		p_roster: Array = [], p_power: PowerData = null, p_boss: String = "") -> void:
 	dungeon = p_dungeon
 	tier = p_tier
 	relics = p_relics
@@ -103,6 +105,7 @@ func setup(deck: Array[CardData], hp: int, max_hp: int, p_dungeon: int, p_tier: 
 		player.dexterity += r.start_dexterity
 
 	roster_override = p_roster
+	named_boss = p_boss
 	_spawn_enemies(forced_archetype)
 
 	draw_pile = []
@@ -124,7 +127,19 @@ func _spawn_enemies(forced_archetype: String) -> void:
 
 	# a dungeon's own roster wins, so each place fights differently
 	var roster: Array = roster_override if not roster_override.is_empty() else Balance.ROSTER[tier]
-	var id: String = forced_archetype if forced_archetype != "" else roster[randi() % roster.size()]
+	# ...but its BOSS is named and fixed, never rolled. Drawing the finale from the
+	# same pool as the trash meant seven of twelve dungeons ended on a trash mob
+	# with 1.55x HP, and leaked the others' signatures into ordinary fights.
+	var id: String = forced_archetype
+	if id == "":
+		if tier == Balance.Tier.BOSS and named_boss != "":
+			id = named_boss
+		else:
+			var pool: Array = roster.filter(
+				func(x): return not (x in Balance.ROSTER[Balance.Tier.BOSS]))
+			if pool.is_empty():
+				pool = roster
+			id = pool[randi() % pool.size()]
 	var arch := load(Balance.ENEMY_DIR + id + ".tres") as EnemyData
 	if arch == null:
 		arch = EnemyData.new()

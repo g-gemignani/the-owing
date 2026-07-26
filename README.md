@@ -14,8 +14,8 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 |                |                                                             |
 |----------------|-------------------------------------------------------------|
 | Cards          | 100, five rarities, levelled by fusing duplicates            |
-| Enemies        | 28 archetypes with telegraphed intents; 9 react to your play |
-| Bosses         | 4, each with a signature rule that demands a different plan  |
+| Enemies        | 35 archetypes with telegraphed intents; many react to you    |
+| Bosses         | 12 — one per dungeon, named and announced before you commit  |
 | Relics         | 30                                                           |
 | Powers         | 10 — one equipped per run, fires once every turn             |
 | Events         | 20                                                           |

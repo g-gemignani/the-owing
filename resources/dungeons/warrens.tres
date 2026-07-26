@@ -13,3 +13,4 @@ unlock_after_clears = 0
 enemy_roster = PackedStringArray("rat_swarm", "plague_rat", "grave_moth", "hexer", "bone_picker")
 card_pool = PackedStringArray("guard", "riposte")
 exclusive_cards = PackedStringArray("guard", "riposte")
+boss = "brood_mother"

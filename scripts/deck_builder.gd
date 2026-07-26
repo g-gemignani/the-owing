@@ -64,6 +64,20 @@ func _build_ui() -> void:
 	relic_label.text = "%sRelics: %s" % [prefix, ", ".join(names) if not names.is_empty() else "none"]
 	root.add_child(relic_label)
 
+	# Who you are building against. A boss you cannot know is a boss you cannot
+	# prepare for, and the preparation is the decision this screen exists to ask.
+	if not GameState.manage_only and GameState.dungeon_id != "":
+		var boss := Balance.boss_of(GameState.dungeon_id)
+		if boss != null:
+			var warn := Label.new()
+			warn.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			warn.add_theme_color_override("font_color", Color(0.95, 0.65, 0.45))
+			warn.text = "BOSS: %s — %s" % [boss.name, Balance.boss_warning(GameState.dungeon_id)]
+			root.add_child(warn)
+			UI.hoverable(warn, "%s waits at the end of %s.\n%s" % [
+				boss.name, dd.name if dd != null else "this dungeon",
+				Balance.boss_warning(GameState.dungeon_id)])
+
 	# Power picker. Sits with the deck because it IS part of the loadout: one
 	# ability, chosen per run, firable once every turn.
 	var power_row := HBoxContainer.new()

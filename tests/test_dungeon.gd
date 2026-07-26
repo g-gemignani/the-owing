@@ -176,6 +176,69 @@ func _init() -> void:
 	print("  (info: roster threat %.2f-%.2f, mean %.2f, first dungeon %.2f)" % [
 		lo, hi, mean, first_threat])
 
+	# --- every dungeon has a named boss (D41) ---
+	#
+	# The boss used to be rolled from the dungeon's own roster, so seven of twelve
+	# dungeons ended on a trash mob with 1.55x HP and no signature at all, while the
+	# five that did carry a boss archetype also spawned it as an ordinary encounter.
+	var bosses := {}
+	for did in Balance.DUNGEONS:
+		var d := Balance.dungeon(did)
+		if d == null:
+			continue
+		if d.boss == "":
+			fails += 1; print("FAIL %s has no named boss" % did); continue
+		var b := Balance.boss_of(did)
+		if b == null:
+			fails += 1; print("FAIL %s names boss '%s', which does not load" % [did, d.boss])
+			continue
+		# a boss must be a boss: a signature is the whole reason it is named
+		if b.rule_count() == 0:
+			fails += 1; print("FAIL boss %s has no signature behaviour" % d.boss)
+		if Balance.boss_warning(did) == "":
+			fails += 1; print("FAIL boss %s cannot describe itself to the player" % d.boss)
+		if not (d.boss in Balance.ROSTER[Balance.Tier.BOSS]):
+			fails += 1; print("FAIL %s is not listed as a boss archetype" % d.boss)
+		# ...and it must NOT be something you already fought on the way there
+		if d.boss in Array(d.enemy_roster):
+			fails += 1
+			print("FAIL %s fights its boss %s as a normal encounter too" % [did, d.boss])
+		for other in Balance.ROSTER[Balance.Tier.BOSS]:
+			if other != d.boss and other in Array(d.enemy_roster):
+				fails += 1
+				print("FAIL %s spawns boss archetype %s as trash" % [did, other])
+		if bosses.has(d.boss):
+			fails += 1; print("FAIL %s and %s share boss %s" % [did, bosses[d.boss], d.boss])
+		bosses[d.boss] = did
+		# a roster still needs variety once the boss is out of it
+		if d.enemy_roster.size() < 3:
+			fails += 1
+			print("FAIL %s has only %d normal archetypes" % [did, d.enemy_roster.size()])
+
+	# --- the engine actually fights the named boss, and never rolls it early ---
+	var Engine_ = load("res://scripts/combat_engine.gd")
+	var bdeck: Array[CardData] = []
+	for i in 8:
+		bdeck.append(load("res://resources/cards/strike.tres") as CardData)
+	for did2 in ["crypt", "the_maw"]:
+		var dd := Balance.dungeon(did2)
+		var eb = Engine_.new()
+		eb.setup(bdeck, 80, 80, dd.difficulty, Balance.Tier.BOSS, "", [],
+			Array(dd.enemy_roster), null, dd.boss)
+		if eb.archetypes[0].id != dd.boss:
+			fails += 1
+			print("FAIL %s boss node fought %s, expected %s" % [
+				did2, eb.archetypes[0].id, dd.boss])
+		# 30 normal encounters must never produce a boss archetype
+		for i in 30:
+			var en = Engine_.new()
+			en.setup(bdeck, 80, 80, dd.difficulty, Balance.Tier.NORMAL, "", [],
+				Array(dd.enemy_roster), null, dd.boss)
+			if en.archetypes[0].id in Balance.ROSTER[Balance.Tier.BOSS]:
+				fails += 1
+				print("FAIL %s rolled boss %s as a normal fight" % [did2, en.archetypes[0].id])
+				break
+
 	if fails == 0:
 		print("DUNGEON TEST: PASS (definitions, unlocks, exclusives, rosters, loot tilt)")
 	else:

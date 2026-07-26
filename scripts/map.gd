@@ -98,7 +98,13 @@ func _refresh() -> void:
 			# map.gd used to keep its own copy, which silently lost Event and
 			# Treasure when those were added — and an unknown key threw mid-render,
 			# so every row below it (including the only actionable one) vanished.
-			b.text = "%s%s" % [Balance.NODE_LABEL.get(int(node["type"]), "?"), mark]
+			var label: String = Balance.NODE_LABEL.get(int(node["type"]), "?")
+		if int(node["type"]) == GameState.NodeType.BOSS:
+			var boss := Balance.boss_of(GameState.dungeon_id)
+			if boss != null:
+				label = "BOSS: %s" % boss.name
+				UI.hoverable(b, "%s\n%s" % [boss.name, Balance.boss_warning(GameState.dungeon_id)])
+		b.text = "%s%s" % [label, mark]
 			var is_reach := false
 			for rn in reach:
 				if rn["row"] == node["row"] and rn["col"] == node["col"]:

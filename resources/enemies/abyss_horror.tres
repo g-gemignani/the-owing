@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 id = "abyss_horror"
-name = "Abyss Horror"
+name = "The Maw Itself"
 hp_mult = 1.15
 dmg_mult = 1.05
 count_min = 1

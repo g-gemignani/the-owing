@@ -5,7 +5,7 @@
 [resource]
 script = ExtResource("1")
 id = "cinder_knight"
-name = "Cinder Knight"
+name = "The Cinder Knight"
 hp_mult = 1.15
 dmg_mult = 1.0
 count_min = 1

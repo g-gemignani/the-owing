@@ -283,6 +283,15 @@ func _init() -> void:
 	if not has_audio_licence:
 		fails += 1; print("FAIL no licence file in %s" % A.DIR)
 
+	# --- a pinned sprite must exist, or the pin silently does nothing ---
+	# Four boss overrides named tiles that had never been copied into the project.
+	# enemy_sprite() fell back to positional assignment without a word, and the
+	# bosses quietly wore other enemies' faces.
+	for aid in PixelArt.OVERRIDES:
+		var pinned: String = PixelArt.ENEMY_DIR + String(PixelArt.OVERRIDES[aid]) + ".png"
+		if not ResourceLoader.exists(pinned):
+			fails += 1; print("FAIL %s is pinned to %s, which does not exist" % [aid, pinned])
+
 	# --- painted title art exists and is not filtered like a pixel sprite ---
 	#
 	# Only the source-level half lives here: reading UI.* would pull in UITheme,

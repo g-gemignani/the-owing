@@ -381,6 +381,49 @@ static func all_builds() -> Array:
 ## whichever is higher. Displaying only the dungeon's own number would understate
 ## the requirement whenever the zone is the real blocker.
 ## The final dungeon: clearing it completes a world and offers the next ascension.
+## The named boss of a dungeon, or null. Fixed per dungeon so the player can plan
+## for it — a boss whose identity is a surprise cannot be prepared for, and the
+## preparation IS the decision the deck screen is asking for.
+static func boss_of(dungeon_id: String) -> EnemyData:
+	var d := dungeon(dungeon_id)
+	if d == null or d.boss == "":
+		return null
+	return load(ENEMY_DIR + d.boss + ".tres") as EnemyData
+
+## One-line warning of what the boss does, built from its rules so it can never
+## drift from the fight itself.
+static func boss_warning(dungeon_id: String) -> String:
+	var b := boss_of(dungeon_id)
+	if b == null:
+		return ""
+	var says: Array[String] = []
+	for i in b.rule_count():
+		var t: int = b.rule_trigger[i]
+		var a: int = b.rule_action[i]
+		var n: int = b.rule_threshold[i]
+		var when := ""
+		match t:
+			EnemyData.Trigger.SELF_HP_BELOW_PCT: when = "below %d%% HP" % n
+			EnemyData.Trigger.PLAYER_BLOCK_ABOVE: when = "if you hold %d+ Block" % n
+			EnemyData.Trigger.PLAYER_HP_BELOW_PCT: when = "when you drop under %d%%" % n
+			EnemyData.Trigger.CARDS_PLAYED_ABOVE: when = "if you play %d+ cards a turn" % n
+			EnemyData.Trigger.EVERY_N_TURNS: when = "every %d turns" % n
+		var does := ""
+		match a:
+			EnemyData.Action.SUNDER: does = "strikes through Block"
+			EnemyData.Action.ENRAGE: does = "enrages"
+			EnemyData.Action.DRAIN: does = "drains and heals"
+			EnemyData.Action.EMPOWER: does = "grows stronger"
+			EnemyData.Action.DEFEND: does = "shields itself"
+			EnemyData.Action.DEBUFF_VULN: does = "makes you Vulnerable"
+			EnemyData.Action.DEBUFF_WEAK: does = "weakens you"
+			_: does = "attacks"
+		# String.capitalize() title-cases every word ("Below 50% Hp"); only the
+		# first letter should change.
+		var lead := when.substr(0, 1).to_upper() + when.substr(1)
+		says.append("%s it %s" % [lead, does])
+	return "; ".join(says) + "." if not says.is_empty() else ""
+
 static func final_dungeon() -> String:
 	return DUNGEONS[DUNGEONS.size() - 1]
 
@@ -465,7 +508,7 @@ const ROSTER := {
 		"crypt_hound", "plague_rat", "spore_thing", "slag_wretch", "drowned_thrall"],
 	Tier.ELITE: ["brute", "warden", "hexer", "pale_acolyte", "bog_lurker",
 		"forge_hound", "rot_priest", "tomb_guard"],
-	Tier.BOSS: ["warden", "cinder_knight", "deep_warden", "abyss_horror"],
+	Tier.BOSS: ["abyss_horror", "bellows_master", "brood_mother", "cinder_knight", "deep_warden", "false_step", "grave_sexton", "last_vendor", "marrow_abbot", "mycelial_lord", "the_gardener", "warden"],
 }
 
 ## Multi-enemy encounters split the tier's HP and damage budget across the group.

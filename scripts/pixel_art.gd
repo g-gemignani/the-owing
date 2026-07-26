@@ -509,7 +509,25 @@ static func enemy_sprites() -> Array:
 ## The packs ship unlabelled files, so which sprite lands on which enemy is
 ## arbitrary — but it is *deterministic*, so an enemy always looks the same. To
 ## correct one by eye later, add it to OVERRIDES.
-const OVERRIDES := {}
+##
+## Every BOSS is pinned here rather than left to fall out of a sorted index. Two
+## reasons: a named boss deserves a sprite chosen for it, not the next one in the
+## list; and positional assignment shifts every enemy whenever a .tres is added,
+## so the finale of a dungeon would silently change face on the next content pass.
+const OVERRIDES := {
+	"grave_sexton": "tile_0111",   # hooded gravedigger
+	"brood_mother": "tile_0122",   # spider — nothing here fights alone
+	"marrow_abbot": "tile_0124",   # helmed skull
+	"bellows_master": "tile_0109", # bare-armed at the forge
+	"warden": "tile_0096",         # armoured, blocks the way
+	"cinder_knight": "tile_0097",  # armoured, molten
+	"mycelial_lord": "tile_0112",  # green, growing
+	"the_gardener": "tile_0123",   # earth-coloured
+	"deep_warden": "tile_0098",
+	"last_vendor": "tile_0100",    # a merchant, still at his stall
+	"false_step": "tile_0121",     # a ghost of a stair
+	"abyss_horror": "tile_0110",   # the red thing at the bottom
+}
 
 ## Sorted list of every archetype id, so sprite assignment is by POSITION.
 ## Hashing the id collided and left different enemies sharing a sprite; indexing a
@@ -539,10 +557,23 @@ static func enemy_sprite(archetype_id: String) -> Texture2D:
 		var p: String = ENEMY_DIR + OVERRIDES[archetype_id] + ".png"
 		if ResourceLoader.exists(p):
 			return load(p) as Texture2D
-	var idx := archetype_ids().find(archetype_id)
+	# Positional assignment must skip anything a boss has claimed, or a trash mob
+	# ends up wearing the face of the finale.
+	var free: Array = []
+	var taken := {}
+	for k in OVERRIDES:
+		taken[ENEMY_DIR + String(OVERRIDES[k]) + ".png"] = true
+	for f in files:
+		if not taken.has(f):
+			free.append(f)
+	if free.is_empty():
+		free = files
+	# index among the UNPINNED archetypes, so the pinned ones do not leave gaps
+	var pool: Array = archetype_ids().filter(func(a): return not OVERRIDES.has(a))
+	var idx := pool.find(archetype_id)
 	if idx < 0:
 		idx = archetype_id.length()   # unknown id: still deterministic
-	return load(files[idx % files.size()]) as Texture2D
+	return load(free[idx % free.size()]) as Texture2D
 
 static func ui(name: String) -> Texture2D:
 	var p := UI_DIR + name + ".png"

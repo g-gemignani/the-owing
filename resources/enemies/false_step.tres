@@ -4,18 +4,18 @@
 
 [resource]
 script = ExtResource("1")
-id = "mycelial_lord"
-name = "The Mycelial Lord"
-hp_mult = 1.15
-dmg_mult = 0.95
+id = "false_step"
+name = "The False Step"
+hp_mult = 1.05
+dmg_mult = 1.1
 count_min = 1
 count_max = 1
-pattern = PackedInt32Array(1, 0, 3, 0)
+pattern = PackedInt32Array(0, 0, 1, 4)
 debuff_stacks = 2
 block_amount = 10
-strength_gain = 2
-rule_trigger = PackedInt32Array(4, 0)
-rule_threshold = PackedInt32Array(2, 45)
-rule_action = PackedInt32Array(7, 6)
+strength_gain = 3
+rule_trigger = PackedInt32Array(2, 4)
+rule_threshold = PackedInt32Array(45, 4)
+rule_action = PackedInt32Array(5, 4)
 rule_value = PackedInt32Array(0, 2)
-rule_once = PackedInt32Array(0, 1)
+rule_once = PackedInt32Array(0, 0)

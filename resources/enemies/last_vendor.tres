@@ -4,18 +4,18 @@
 
 [resource]
 script = ExtResource("1")
-id = "warden"
-name = "The Forge-Warden"
-hp_mult = 1.05
-dmg_mult = 0.95
+id = "last_vendor"
+name = "The Last Vendor"
+hp_mult = 1.1
+dmg_mult = 1.0
 count_min = 1
 count_max = 1
-pattern = PackedInt32Array(0, 3, 0, 4)
-debuff_stacks = 1
-block_amount = 12
+pattern = PackedInt32Array(0, 2, 0, 3)
+debuff_stacks = 2
+block_amount = 11
 strength_gain = 2
-rule_trigger = PackedInt32Array(1)
-rule_threshold = PackedInt32Array(20)
-rule_action = PackedInt32Array(5)
+rule_trigger = PackedInt32Array(3)
+rule_threshold = PackedInt32Array(4)
+rule_action = PackedInt32Array(7)
 rule_value = PackedInt32Array(0)
 rule_once = PackedInt32Array(0)

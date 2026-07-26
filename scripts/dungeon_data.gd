@@ -22,6 +22,17 @@ extends Resource
 
 ## Enemy archetype ids that can appear here. Empty = fall back to the tier roster.
 @export var enemy_roster: PackedStringArray = PackedStringArray()
+## The archetype fought at this dungeon's BOSS node — named, fixed, and announced
+## before the run starts.
+##
+## The boss used to be drawn at random from `enemy_roster`, which meant seven of
+## twelve dungeons had no boss archetype in their pool at all: their finale was a
+## trash mob with 1.55x HP. Where a boss WAS in the pool it also turned up as a
+## normal encounter, spending its signature before the fight that needed it.
+##
+## Fixing the pairing is what makes choosing a deck a decision: you know the
+## Forge-Warden punishes Block before you decide to bring Block.
+@export var boss: String = ""
 ## Card ids that can drop here (rewards and shop stock). Empty = the global pool.
 @export var card_pool: PackedStringArray = PackedStringArray()
 ## Card ids found ONLY here — for UI, so the player can see what a run is for.

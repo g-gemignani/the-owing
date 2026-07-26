@@ -13,3 +13,4 @@ unlock_after_clears = 4
 enemy_roster = PackedStringArray("spore_thing", "rot_priest", "plague_rat", "bog_lurker")
 card_pool = PackedStringArray("leech", "rupture", "spiked_guard")
 exclusive_cards = PackedStringArray("leech", "rupture", "spiked_guard")
+boss = "the_gardener"
