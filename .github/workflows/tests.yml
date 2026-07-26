@@ -9,7 +9,7 @@ on:
 env:
   # One place to bump. The project targets 4.7; a mismatch shows up as parse
   # errors rather than test failures, so it is pinned.
-  GODOT_VERSION: "4.7-stable"
+  GODOT_VERSION: "4.7.1-stable"
 
 jobs:
   test:
@@ -58,3 +58,68 @@ jobs:
 
       - name: Run test suite
         run: tests/run.sh
+
+  # Android and iOS can never be BUILT here — one needs a JDK and the Android SDK,
+  # the other macOS with Xcode and a developer team ID. This job proves the only
+  # thing standing between the project and those builds is the toolchain, so the
+  # day someone installs it, the export works with no further edits.
+  export-ready:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot binary
+        id: godot-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/godot-bin
+          key: godot-${{ env.GODOT_VERSION }}-linux-x86_64
+
+      - name: Download Godot
+        if: steps.godot-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          file="Godot_v${GODOT_VERSION}_linux.x86_64"
+          curl -fsSL -o godot.zip \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/${file}.zip"
+          unzip -q godot.zip
+          mkdir -p ~/godot-bin
+          mv "${file}" ~/godot-bin/godot
+          chmod +x ~/godot-bin/godot
+
+      - name: Put Godot on PATH
+        run: echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+      # ~1 GB, so cached hard. Keyed on the engine version, which is the only
+      # thing that invalidates them.
+      - name: Cache export templates
+        id: template-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/share/godot/export_templates
+          key: godot-templates-${{ env.GODOT_VERSION }}
+
+      - name: Install export templates
+        if: steps.template-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          curl -fsSL -o templates.tpz \
+            "https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz"
+          # the .tpz lays templates out under templates/; Godot wants them flat in
+          # a directory named for the version as it reports it (dots, not dashes)
+          dest=~/.local/share/godot/export_templates/${GODOT_VERSION/-/.}
+          mkdir -p "$dest"
+          unzip -q -j templates.tpz 'templates/*' -d "$dest"
+
+      - name: Import resources
+        run: godot --headless --import || true
+
+      # every platform must be either buildable or blocked ONLY by a missing
+      # toolchain — never by the project
+      - name: Export readiness
+        run: tests/export_ready.sh
+
+      # and the built pack must actually contain its art, which only an export
+      # can prove
+      - name: Export smoke test
+        run: tests/export.sh

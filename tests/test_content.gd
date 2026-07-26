@@ -15,6 +15,16 @@ extends SceneTree
 ## with an existing one.
 const SPRITE_HEADROOM_MIN := 3
 
+## UI scripts reference autoloads, which are not registered in a headless
+## `--script` run, so some things can only be checked as source text.
+func _source_has(path: String, needle: String) -> bool:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return false
+	var text := f.get_as_text()
+	f.close()
+	return text.find(needle) != -1
+
 func _init() -> void:
 	var fails := 0
 	var m = load("res://scripts/meta_state.gd").new()
@@ -148,8 +158,53 @@ func _init() -> void:
 		print("FAIL BASELINE_CARD_POWER is %.3f but the reference deck now measures %.3f" % [
 			Balance.BASELINE_CARD_POWER, recomputed])
 
+	# --- the project must stay exportable to every platform we target ---
+	#
+	# Android and iOS can never be BUILT in CI: one needs a JDK and the Android
+	# SDK, the other needs macOS, Xcode and a per-developer team ID. What can be
+	# guaranteed is that nothing in the repository is what stops them. This is the
+	# half that needs no export templates; tests/export_ready.sh does the rest by
+	# actually attempting each export.
+	var cfg := ConfigFile.new()
+	if cfg.load("res://export_presets.cfg") != OK:
+		fails += 1; print("FAIL export_presets.cfg is missing or unreadable")
+	else:
+		var want := {"Linux": false, "Windows": false, "macOS": false,
+			"Android": false, "iOS": false}
+		for section in cfg.get_sections():
+			if not section.ends_with(".options"):
+				var nm: String = cfg.get_value(section, "name", "")
+				if want.has(nm):
+					want[nm] = true
+		for nm2 in want:
+			if not want[nm2]:
+				fails += 1
+				print("FAIL no export preset for %s — the platform would have to be set up from scratch" % nm2)
+
+	# arm64 targets (macOS universal, Android, iOS) refuse to export without this
+	if not bool(ProjectSettings.get_setting(
+			"rendering/textures/vram_compression/import_etc2_astc", false)):
+		fails += 1
+		print("FAIL import_etc2_astc is off — every arm64 target refuses to export")
+
+	# a hand of cards along the bottom of a 1280x720 layout is unusable in portrait
+	var orientation := int(ProjectSettings.get_setting(
+		"display/window/handheld/orientation", 0))
+	if orientation == 0:
+		fails += 1; print("FAIL no handheld orientation set — phones default to portrait")
+
+	# the whole UI is Buttons; without this, touch presses nothing
+	if not bool(ProjectSettings.get_setting(
+			"input_devices/pointing/emulate_mouse_from_touch", true)):
+		fails += 1; print("FAIL touch does not emulate mouse — no button in the game responds")
+
+	# a finger sends no hover events, so cards must be readable without one
+	if not _source_has("res://scripts/ui.gd", "touch_ui"):
+		fails += 1
+		print("FAIL no touch path in card_button — cards would be unreadable until played")
+
 	if fails == 0:
-		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline)")
+		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness)")
 	else:
 		print("CONTENT TEST: FAIL (%d)" % fails)
 	quit()

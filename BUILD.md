@@ -31,6 +31,30 @@ godot --headless --export-release "macOS"   "$PWD/build/macos/deckcrawl.zip"
 
 Presets live in `export_presets.cfg` and contain no credentials.
 
+### Keeping every platform buildable
+
+```bash
+GODOT=/path/to/godot tests/export_ready.sh
+```
+
+Attempts every preset and classifies each failure. A missing JDK, Android SDK or
+App Store team ID is reported as `skip` — those are toolchain and credentials,
+which no repository can carry. Anything else is a `FAIL`, because it means the
+*project* has regressed and installing the SDK would not be enough.
+
+```
+  built   Linux
+  built   Windows
+  built   macOS
+  skip    Android — toolchain only: A valid Java SDK path is required...
+  skip    iOS     — toolchain only: App Store Team ID not specified.
+```
+
+So the day you install the Android SDK, one command builds the APK with no other
+edits. `tests/test_content.gd` covers the half that needs no templates: presets
+exist for all five platforms, `import_etc2_astc` is on (every arm64 target refuses
+without it), landscape orientation is set, and touch has a path to read cards.
+
 ### Verify the build, don't assume it
 
 ```bash

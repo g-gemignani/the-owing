@@ -1517,3 +1517,37 @@ layout is unusable in portrait) and mouse emulation from touch.
 
 Nobody has run this on real hardware. Text size at phone DPI is the likeliest
 thing to need work; `UITheme.UI_SCALE` is the single knob and Settings exposes it.
+
+### D44 — Staying exportable to platforms we cannot build
+
+Android and iOS will never build in CI: one needs a JDK and the Android SDK, the
+other macOS with Xcode and a per-developer team ID. None of that can live in a
+repository. What *can* be guaranteed is that the toolchain is the only thing
+missing — so the day someone installs it, the export works with no further edits.
+
+Godot reports both kinds of problem identically, as "configuration errors".
+`tests/export_ready.sh` attempts every preset and classifies each reason:
+
+* a missing JDK, SDK, `platform-tools`, `apksigner`, Xcode or team ID -> **skip**
+* anything else -> **FAIL**, the project itself has regressed
+
+```
+built Linux · built Windows · built macOS
+skip  Android — A valid Java SDK path is required in Editor Settings.
+skip  iOS     — App Store Team ID not specified.
+3 buildable here, 2 need a toolchain, 0 blocked by the project
+```
+
+Verified by breaking it two ways: turning off `import_etc2_astc` (macOS flipped to
+FAIL — every arm64 target refuses without it) and blanking the iOS bundle
+identifier (iOS flipped from skip to FAIL). Both exit non-zero.
+
+An iOS preset was added while doing this, and setting it up surfaced a real
+configuration error — `Metal renderer require iOS 14+` — which is now fixed rather
+than waiting to be discovered on a Mac. The one remaining iOS blocker is the team
+ID, which is a credential, not a defect.
+
+The half that needs no templates lives in `tests/test_content.gd` and runs in the
+normal suite: presets exist for all five platforms, `import_etc2_astc` is on,
+landscape orientation is set, touch emulation is on, and `card_button` has a touch
+path. Both halves run in CI, with the ~1 GB templates cached on the engine version.
