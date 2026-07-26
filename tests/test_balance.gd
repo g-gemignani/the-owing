@@ -132,6 +132,40 @@ func _init() -> void:
 		if _hp_lost_per_fight(deepest, r) <= _hp_lost_per_fight(1, r):
 			fails += 1; print("FAIL depth is not the difficulty axis at ratio %.1f" % r)
 
+	# --- the simulator must model the player the game actually gives you --------
+	#
+	# Three of these were silently false, and together they made the tool report a
+	# game roughly twice as dangerous as the one being played:
+	#
+	#   * max HP grew with the DIFFICULTY of the dungeon measured, where the game
+	#     grows it with dungeons CLEARED — 60 HP at the Crypt for a player who
+	#     really has 120;
+	#   * the equipped Power was never passed, so every run was measured without the
+	#     ability every save carries;
+	#   * the dungeon's named boss was never passed, so the finale was a roster
+	#     enemy wearing boss multipliers (the very bug D41 fixed in the game);
+	#   * and the deck never grew, so the boss was always fought with the opening
+	#     deck rather than the five-to-eight cards richer one a real run arrives at.
+	#
+	# Asserted as source, because a tool cannot be unit-tested into honesty and the
+	# failure mode is silence: every one of these produced plausible numbers.
+	var simsrc := FileAccess.open("res://tools/sim_balance.gd", FileAccess.READ)
+	if simsrc == null:
+		fails += 1; print("FAIL the balance simulator is missing")
+	else:
+		var sim := simsrc.get_as_text()
+		simsrc.close()
+		if sim.find("Balance.BASE_MAX_HP +") != -1:
+			fails += 1
+			print("FAIL the simulator restates the max-HP formula; call Balance.max_hp_for")
+		for needed in [["_power_of(profile)", "the equipped Power"],
+				["dd.boss", "the dungeon's named boss"],
+				["_reward_card(", "cards won during the run"],
+				["Balance.effective_gate(", "the clears a dungeon requires"]]:
+			if sim.find(String(needed[0])) == -1:
+				fails += 1
+				print("FAIL the simulator does not model %s" % needed[1])
+
 	# --- reward must climb at least as fast as risk ---
 	#
 	# Once a strong deck can outgrow a shallow dungeon, a flat reward curve makes

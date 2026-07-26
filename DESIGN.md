@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The simulator was measuring a weaker player than the game gives you (D71).** Reported from play as "the first dungeons feel easy and the sim disagrees" — and the sim was wrong four ways: max HP grew with the dungeon's difficulty instead of with dungeons cleared (60 HP where the player has 120), the equipped Power was never passed, the named boss was never passed so every finale was a roster enemy in a boss costume, and the deck never grew during a run. The opening now measures the way it plays, and `test_balance.gd` fails if the tool drops any of it again.
+
 - **Elites drop relics, the mid-game plateau closed, and the last two art paths wired (D68, D69, D70).** An elite was a stat check; it now drops a relic, held in escrow so dying on purpose cannot bank it. The five-dungeon plateau in the middle turned out to be an incentive problem rather than a difficulty one — re-clearing a beaten dungeon was the safest income in the game — so repeat clears pay a fifth of what a first clear does, down to a floor. And the card-illustration and frame-kit files finally have code that looks for them, after finding that the art manifest had been generating filenames from its own private copy of the card taxonomy.
 
 - **Cards that read the fight, and dungeons with their own shapes (D66, D67).** Not one card in the game was conditional — no "for each", no "if you played" — so a turn was arithmetic and a deck never became an engine; six mechanics now let a build's cards multiply each other. And every dungeon drew from one global encounter mix, so twelve dungeons had one rhythm; the mix is per-place now (a swarm, a market, a climb, a treasure run). Both were measured, and both needed correcting: the card pricing was under-charging builds by half, and the first pass at shapes turned the deepest dungeons into six-fight gauntlets on top of their difficulty.
@@ -2711,3 +2713,59 @@ and now distinguishes them.
 Treasure, BOSS only). The Warrens has no Elite and no Treasure. Those are content
 gaps in `resources/dungeons/*.tres`, not pricing, and repricing the shop cannot
 reach a dungeon that never offers one.
+
+### D71 — The simulator was measuring a weaker player than the game gives you
+
+Reported from play: the first dungeons feel easy, and the simulator disagrees. It
+did, and the simulator was wrong. Its model of the player had drifted from the
+game in four separate ways, every one of which made the tool pessimistic, and all
+four produced perfectly plausible numbers.
+
+**1. The health bar.** The game grows max HP with dungeons *cleared*; the sim grew
+it with the *difficulty of the dungeon being measured*.
+
+    game:  BASE_MAX_HP + relics + clears x HP_PER_DUNGEON
+    sim:   BASE_MAX_HP + relics + (difficulty - 1) x HP_PER_DUNGEON
+
+A player with six clears walking into the Crypt has 120 HP. The sim gave that run
+60 — half the bar — and reported the opening of the game as about twice as
+dangerous as it is. `Balance.max_hp_for()` is the one formula now; the game itself
+had *two* copies of it before the sim's third.
+
+**2. No Power.** `eng.setup()` takes the equipped ability as its ninth argument and
+the sim passed eight. Every run was measured without the once-per-turn ability that
+every save carries — less throughput than the player has, and a lower ratio than
+they are scaled against.
+
+**3. The wrong boss.** It passed no `p_boss`, so every finale was a random roster
+enemy wearing boss multipliers — precisely the bug D41 fixed *in the game* and never
+in the tool. All balance work since D41 was tuned against a boss the player never
+meets.
+
+**4. A deck that never grew.** The sim held its deck fixed for a whole run while a
+real player takes a card at nearly every encounter (D1), arriving at the boss five
+to eight cards richer. It fought the finale with the opening deck.
+
+There is a fifth, subtler one: `clears` is now derived per cell as
+`max(profile, Balance.effective_gate(dungeon))`, because you cannot be standing in
+the Maw without having cleared the eight things that open it. Written per cell it
+would go stale the first time a zone requirement moved.
+
+The opening now measures the way it plays:
+
+| | before | after |
+|---|---|---|
+| Starter @ Crypt | 99% | 99% |
+| Early @ Crypt | 98% | **100%** |
+| Early @ Foundry | 41% | **60%** |
+| Mid @ Foundry | 98% | **100%** |
+| Status @ Ember Road | 42% | **81%** |
+
+and the deep end still resists: the Maw reads 41% for a late deck and 71% for a
+maxed one, the Abyssal Stair 20-66%.
+
+`tests/test_balance.gd` now reads the simulator's source and fails if it restates
+the HP formula or stops modelling the Power, the named boss, the cards won during a
+run, or the gate a dungeon sits behind. A tool cannot be unit-tested into honesty,
+but it can be stopped from quietly dropping the player's equipment again — verified
+by putting the old HP formula back.
