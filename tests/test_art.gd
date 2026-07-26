@@ -273,7 +273,7 @@ func _init() -> void:
 	# --- the floor every enemy stands on ---------------------------------------
 	#
 	# The fight is framed head-on into the backdrop's corridor with no player
-	# character rendered, so the enemies are placed on ONE line — PixelArt.FLOOR_LINE
+	# character rendered, so the enemies are placed on ONE line — PixelArt.STAND_LINE
 	# — and every painted backdrop has to put its floor there. A backdrop that puts
 	# it somewhere else does not look wrong on its own; it makes the enemies in that
 	# dungeon hover or sink, which reads as an enemy bug.
@@ -289,15 +289,20 @@ func _init() -> void:
 			continue
 		checked_bg += 1
 		var f := _floor_fraction(bg.get_image())
-		var off: float = absf(f - PixelArt.FLOOR_LINE)
+		var off: float = absf(f - PixelArt.HORIZON_LINE)
 		print("  (info: %s floor at %.0f%% (line %.0f%%, off %.0f pts))" % [
-			did, f * 100.0, PixelArt.FLOOR_LINE * 100.0, off * 100.0])
+			did, f * 100.0, PixelArt.HORIZON_LINE * 100.0, off * 100.0])
 		if off > floor_band:
 			fails += 1
 			print("FAIL %s puts its floor at %.0f%% but enemies stand at %.0f%% — they will hover" % [
-				did, f * 100.0, PixelArt.FLOOR_LINE * 100.0])
+				did, f * 100.0, PixelArt.HORIZON_LINE * 100.0])
 	if checked_bg == 0:
 		fails += 1; print("FAIL no painted battle backdrop was measured")
+	# a figure standing ABOVE the horizon is standing in the back wall
+	if PixelArt.STAND_LINE <= PixelArt.HORIZON_LINE:
+		fails += 1
+		print("FAIL the stand line (%.2f) is not below the horizon (%.2f) — enemies would stand in the wall" % [
+			PixelArt.STAND_LINE, PixelArt.HORIZON_LINE])
 
 	# --- painted enemies are keyed by id, not by position ----------------------
 	#

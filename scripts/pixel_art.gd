@@ -475,14 +475,23 @@ const BATTLE_ART_DIR := "res://assets/art/"
 ## This directory is keyed by id, so a file lands on the enemy it was drawn for.
 const ENEMY_ART_DIR := "res://assets/art/enemies/"
 
-## Where a combatant's feet are, as a fraction of the frame.
+## Two different lines, and conflating them put the enemies at the wrong depth.
 ##
-## Measured from the three painted backdrops that exist: the floor meets the wall
-## at 71% / 66% / 66% down. The fight is framed head-on into a one-point corridor
-## with no player character rendered, so every enemy stands on this one line and
-## every new backdrop has to put its floor there too — `tests/test_art.gd` measures
-## that, because a backdrop whose floor sits elsewhere makes the enemies hover.
-const FLOOR_LINE := 0.68
+## `HORIZON_LINE` is where the BACK WALL meets the floor — a property of the
+## painting, measured from the three that exist: 71% / 66% / 66% down. That is the
+## far end of the corridor.
+##
+## `STAND_LINE` is where a combatant's feet go, and it is NOT the same place. In a
+## one-point perspective the floor spans a range of depths; standing a figure on
+## the horizon puts it as far away as the room allows, which is exactly how it
+## looked — small, distant, and detached from the fight. Combatants stand further
+## down the floor, nearer the viewer, just clear of the hand.
+##
+## `tests/test_art.gd` measures every backdrop against HORIZON_LINE (a backdrop that
+## puts its floor somewhere else makes that dungeon's enemies hover) and asserts the
+## stand line is BELOW it, because a figure above the horizon is standing in a wall.
+const HORIZON_LINE := 0.68
+const STAND_LINE := 0.72
 ## Tolerance either side, in the same units.
 const FLOOR_TOLERANCE := 0.04
 

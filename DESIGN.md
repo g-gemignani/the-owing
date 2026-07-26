@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The horizon is not the standing line (D64).** Enemies stood on the backdrop's wall/floor junction, which in one-point perspective is the *far end* of the corridor — so they read as small and distant. Split into `HORIZON_LINE` (what the painting does) and `STAND_LINE` (where feet go, nearer the viewer, clamped clear of the hand), and grew them to match. Also gave D63's four layout bugs their tests: three were already covered by the new geometry checks, the fourth — the entire HUD anchored off screen — was covered by nothing, and those checks turned out to be measuring a square 1280x1280 window rather than the shipped 720.
+
 - **The bottom of the screen, laid out properly (D63).** Vitals back at the bottom-left beside the hand, the hand itself a fan of overlapping tilted cards that straighten and lift when hovered, the power a round sigil and End Turn a small corner button instead of two full-width bars. Four layout bugs on the way, three of them invisible to the existing suite — including a `Control` assigned to an `HBoxContainer`-typed variable, which GDScript rejects at runtime, so the hand silently never existed. `CardTextTest` now measures the hand's geometry.
 
 - **The fight is framed head-on, and nobody plays the hero (D62).** Chose a frontal framing into the corridor the backdrops paint over the side-on arena the art brief assumed, which deleted four hero files and a whole class of consistency work. Measured the backdrops to find the shared standing line (68%), measured the old layout to prove the stage had to become a layer rather than a row (236px for a 240-270px sprite, ending 22px above the floor), and added the id-keyed enemy-art lookup plus a floor-line assertion so the coming art pass lands on a contract the game enforces.
@@ -2355,3 +2357,47 @@ least three distinct angles (it is a fan, not a row), the middle of the fan high
 than its ends, and no card intersecting the vitals, the power or End Turn. Three of
 the four bugs above would have been caught by it, and it is the only thing that will
 keep them fixed — a still image cannot.
+
+### D64 — The horizon is not the standing line
+
+Play feedback on D62's framing: the enemies sit too high, they should come closer
+to the cards. Correct, and the cause was two different things sharing one constant.
+
+`FLOOR_LINE` was measured as the wall/floor junction of the painted backdrops (68%),
+and then used as the place combatants stand. But in one-point perspective the floor
+spans a *range* of depths, and the junction is its far end — so every enemy was
+standing as far away as the room allows, which is exactly how it read: small,
+distant, detached from the fight.
+
+Split in two. `HORIZON_LINE` (0.68) is a property of the painting and is what
+`tests/test_art.gd` measures every backdrop against. `STAND_LINE` (0.72) is where
+feet go: on the floor, nearer the viewer, and clamped at runtime to stay clear of
+the top of the hand so the two can never collide at another UI scale. Enemies also
+grew from 34% to 38% of the frame, because something closer to the camera is bigger.
+The test asserts the stand line is *below* the horizon — above it, a figure is
+standing in the back wall.
+
+**And the four bugs from D63 got their tests.** Asked directly whether they had been
+covered, three had and one had not:
+
+| bug | covered by |
+|---|---|
+| card off the bottom edge | new: every card rect inside the frame |
+| vitals label overflowing under the hand | new: no card intersects the vitals, power or End Turn |
+| fan centred without card width | same check — it is what caught it in the first place |
+| **HUD anchored off screen entirely** | **nothing** |
+
+The last one is the one worth having: `PRESET_BOTTOM_LEFT` put the whole bottom band
+below the frame and *no test noticed*, because every check in the suite was about
+cards. `CardTextTest` now walks the vitals, buffs, piles, log, power, End Turn, Menu
+and place name and fails if any of them leaves the frame — D33's "actionable content
+must be on screen", applied to the widgets that did not exist when D33 was written.
+Verified by re-anchoring the HUD off screen: it names three of them.
+
+**The new assertions were themselves measuring the wrong window.** They passed on a
+1280×**1280** viewport, because headless defaults to square and `CardTextTest` had
+never needed a window size before — it only measured font sizes. Every geometry
+check had 560 pixels of vertical slack the player does not have. It now sets the
+shipped size the way `PlayableTest` does, which is where that trap was already
+written down. A test measuring the wrong frame is worse than no test, because it
+reports the thing as covered.

@@ -14,6 +14,16 @@ extends Node
 var _fails := 0
 
 func _ready() -> void:
+	# Headless defaults to a SQUARE 1280x1280 viewport. Every geometry check below
+	# would otherwise be measured against 560 pixels of vertical slack the player
+	# never has — the same trap PlayableTest documents, walked into again the moment
+	# this test started measuring rects instead of only font sizes.
+	get_window().size = Vector2i(
+		int(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
+		int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
+	UITheme.set_scale_silent(UITheme.UI_SCALE)
+	await get_tree().process_frame
+
 	MetaState.path_prefix = "t_cardtext_"
 	MetaState.slot = 0
 	MetaState.new_save()
@@ -163,7 +173,29 @@ func _check_live_hand() -> void:
 		_fails += 1
 		print("FAIL the hand has no arc: middle card at y %.0f, outer at y %.0f" % [
 			middle_y, lowest_y])
-	# ...and it must not run under the things parked in both bottom corners
+	# Everything in the bottom band has to be ON the screen. `PRESET_BOTTOM_LEFT`
+	# puts a box's TOP edge on the bottom of the frame, so the entire HUD and both
+	# controls rendered below it — and nothing in the suite noticed, because every
+	# check was about cards. D33's lesson ("actionable content must be on screen")
+	# applied to the widgets that were not there when it was written.
+	for named in [["the vitals", inst.status_label], ["the buffs line", inst.buffs_label],
+			["the piles", inst.piles_label], ["the log", inst.log_label],
+			["the power", inst.power_btn], ["End Turn", inst.end_btn],
+			["the Menu button", inst.menu_btn], ["the place name", inst.place_label]]:
+		var widget: Control = named[1]
+		if widget == null:
+			_fails += 1; print("FAIL %s does not exist" % named[0]); continue
+		if not widget.visible:
+			continue
+		var wr := widget.get_global_rect()
+		if wr.position.y < -1.0 or wr.end.y > vp.size.y + 1.0 \
+				or wr.position.x < -1.0 or wr.end.x > vp.size.x + 1.0:
+			_fails += 1
+			print("FAIL %s is off screen: %.0f,%.0f to %.0f,%.0f in a %.0fx%.0f frame" % [
+				named[0], wr.position.x, wr.position.y, wr.end.x, wr.end.y,
+				vp.size.x, vp.size.y])
+
+	# ...and the hand must not run under the things parked in both bottom corners
 	for zone in [["the vitals", inst.status_label], ["End Turn", inst.end_btn],
 			["the power orb", inst.power_btn]]:
 		var other: Control = zone[1]

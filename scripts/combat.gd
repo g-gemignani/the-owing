@@ -115,7 +115,7 @@ func _build_ui() -> void:
 	# The fight is framed head-on into the corridor the backdrop paints, with no
 	# player character rendered: the room belongs to the enemies and the frame
 	# belongs to you. So the enemies are NOT a row in a stacked layout — they are
-	# placed on the backdrop's own floor line (PixelArt.FLOOR_LINE), full width,
+	# placed on the backdrop's own floor (PixelArt.STAND_LINE), full width,
 	# with the HUD and the hand floating over them.
 	#
 	# Measured before building it: stacked as rows, the layout had 236px of height
@@ -488,12 +488,18 @@ func _build_slot(i: int) -> Control:
 	slot.set_meta("hit", hit)
 	return slot
 
-## Where each living enemy stands. Feet on `PixelArt.FLOOR_LINE`, spread across the
+## Where each living enemy stands. Feet on `PixelArt.STAND_LINE`, spread across the
 ## frame, and the flanks pushed slightly back — the backdrops are one-point
 ## corridors, so a dead-flat row of equal sizes reads as pasted-on.
 func _place_slots(living: Array[int]) -> void:
 	var vp := get_viewport_rect().size
-	var floor_y := vp.y * PixelArt.FLOOR_LINE
+	# On the floor and near the viewer, not on the horizon: standing them where the
+	# back wall meets the floor put them at the far end of the corridor, small and
+	# detached from the fight. Kept clear of the hand by measurement, so the two can
+	# never end up on top of each other at another UI scale.
+	var floor_y := vp.y * PixelArt.STAND_LINE
+	if hand_box != null and hand_box.size.y > 1.0:
+		floor_y = minf(floor_y, hand_box.global_position.y - UITheme.px(10))
 	# leave the top band and the two text lines their room, and never let the hand
 	# swallow the stage at large UI scales
 	var text_h := UITheme.px(46)
@@ -501,7 +507,7 @@ func _place_slots(living: Array[int]) -> void:
 	# A boss should loom. Same corridor, same floor line, more of the frame — this is
 	# the cheapest way for a fight to announce what it is before the numbers do.
 	var tier_scale: float = TIER_SIZE.get(tier, 1.0)
-	var body := clampf(vp.y * 0.34 * tier_scale, UITheme.px(48),
+	var body := clampf(vp.y * 0.38 * tier_scale, UITheme.px(48),
 		maxf(UITheme.px(48), floor_y - top_limit - text_h))
 	var n := living.size()
 	for k in n:
