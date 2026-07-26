@@ -23,6 +23,15 @@ const MAX_ENERGY := 3
 const BASE_MAX_HP := 60
 const HP_PER_DUNGEON := 10  # max HP gained on clearing a dungeon
 
+## The health bar a player actually has. ONE formula, because the simulator had
+## its own and they disagreed about the most important number in the model:
+## the game grows max HP with dungeons CLEARED, the sim grew it with the
+## difficulty of the dungeon being measured. A player with six clears walking into
+## the Crypt has 120 HP; the sim gave that same run 60 and reported the opening of
+## the game as roughly twice as dangerous as it is.
+static func max_hp_for(clears: int, relic_hp: int = 0) -> int:
+	return BASE_MAX_HP + relic_hp + maxi(0, clears) * HP_PER_DUNGEON
+
 # --- upgrade (fusion) caps ---
 ## Max level per rarity. Caps are derived from drop weight: a rarity that appears
 ## W/100 as often as a common gets W/100 of the level track, which makes every
@@ -70,7 +79,7 @@ static func fuse_copy_cost(level: int) -> int:
 ## Gold burned for that same step. Shares `rarity_price_mult` with the shop, so
 ## levelling a card is priced against buying one — but takes NO difficulty, because
 ## fusion happens between runs. That separation is what let shop prices start
-## scaling with depth (D70) without quietly repricing every fusion in the game.
+## scaling with depth (D71) without quietly repricing every fusion in the game.
 static func fuse_gold_cost(rarity: int, level: int) -> int:
 	var growth := pow(float(maxi(1, level)), FUSE_GOLD_EXP)
 	return int(round(FUSE_BASE_GOLD * rarity_price_mult(rarity) * growth))
@@ -707,7 +716,7 @@ const SHOP_CARD_OFFERS := 3
 ## Healing sold as a fraction of max HP.
 const SHOP_HEAL_FRAC := 0.35
 
-## Shop prices are quoted in FIGHTS, not in gold (D70).
+## Shop prices are quoted in FIGHTS, not in gold (D71).
 ##
 ## They used to be flat numbers — a common was 40 gold in the Crypt and 40 gold in
 ## the Maw — while income scales with `GOLD_DEPTH_EXP`. Measured over 400 generated
@@ -782,7 +791,7 @@ static func heal_amount(max_hp: int) -> int:
 ##
 ## The price rises per removal within a run: the first cut is the obvious one, and
 ## each after it should be a harder call than the last.
-## Quoted in fights like everything else the merchant sells (D70), so thinning
+## Quoted in fights like everything else the merchant sells (D71), so thinning
 ## stays a real choice against a card and a heal at every depth instead of being
 ## unaffordable in the Crypt and loose change in the Maw.
 static func removal_price(already_removed: int, difficulty: int = 0) -> int:

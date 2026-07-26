@@ -112,7 +112,7 @@ func _refresh() -> void:
 			buy.disabled = true
 		elif GameState.available_gold() < price:
 			# A greyed button showing a bare price does not say WHY, and the merchant
-			# was unaffordable on most first visits (D70) — so the one screen that had
+			# was unaffordable on most first visits (D71) — so the one screen that had
 			# to explain itself was the one that explained nothing. Same shape as
 			# `combat.gd:_refresh_power()`, which states the shortfall.
 			buy.text = "%d g  (short %d)" % [price, price - GameState.available_gold()]

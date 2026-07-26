@@ -2548,89 +2548,6 @@ not a fight, at least six distinct shapes across the twelve, and — unchanged �
 three models must still spend whatever budget a dungeon asks for, compared now
 against the mean of the per-dungeon budgets rather than one global number.
 
-### D70 — The merchant sold nothing, because prices were flat and income is not
-
-Reported from play as "the merchant is bugged, it never sells anything". The
-purchase code was fine — driven headless, a buy correctly moved gold 999→959, the
-run deck 12→13, escrow_cards 0→1 and marked the entry `sold`. The bug was economic.
-
-Shop prices were **flat gold at every depth**: common 40, uncommon 63, rare 103,
-epic 179, legendary 400, heal 42, removal 55. Income is not flat — `gold_reward`
-scales with `GOLD_DEPTH_EXP` (1.8). A Crypt fight pays 5-10 gold and the shop sits
-at row 2-4 of the map, so the player arrives holding almost nothing.
-
-**Measured, 400 generated Crypt maps, first run, 0 banked gold, walking a legal
-path that takes the shop as soon as it is reachable:** median 20 gold in hand
-against a cheapest item of 40, and **nothing at all affordable on 74% of visits**.
-The 26% that could buy something had a treasure node (25-60 gold) fall first. A
-full Crypt clear earns 91 gold, so the money exists — it arrives after the shop,
-and the shop is one-shot (`_on_leave` clears the stock and the node is cleared).
-At the other end it inverts: the Maw pays 46-51 per fight against the same 40-gold
-common.
-
-**Prices are now quoted in FIGHTS.** `fight_income(difficulty)` is one average
-fight's takings, and every shop price is a multiple of it: a common is
-`SHOP_COMMON_IN_FIGHTS` (2.0), a heal 2.5, a removal 3.0 rising 2.0 per removal
-already taken. A purchase costs the same amount of *play* at every depth, and the
-price cannot drift from the income curve because it is computed from it. Common
-now runs 14g at d1 to 96g at d8; one fight pays 7g and 48g respectively.
-
-Re-measured with a natural policy over a whole run: **67-90% of runs containing a
-shop now get at least one usable purchase**, 0.7-1.1 items bought per run, flat
-across all twelve dungeons.
-
-**One copy of the rarity multiplier.** `card_price` and `fuse_gold_cost` each
-carried their own `sqrt(common / weight)`, with a comment on the second saying it
-was deliberately the same as the first — the D34 restated-table shape, and the
-reason pricing cards by depth risked silently repricing every fusion in the game.
-Extracted to `rarity_price_mult()`; depth is an argument to the shop price and
-fusion simply does not take one. Fusion costs are pinned unchanged at
-[20, 32, 52, 89, 200], and `test_shop.gd` now fails if a second copy of that
-formula appears.
-
-Anything bought OUTSIDE a dungeon has no run to take a difficulty from, so
-`card_price` defaults to `mid_difficulty()` — derived from the dungeons that exist,
-not restated. `test_shop.gd` already reasoned this way, measuring legendary
-affordability at mid depth because "pricing the rarest card against the poorest
-floor would call every legendary unobtainable"; that was the right instinct applied
-to the test instead of to the price. `power_price` moves only 80→72 at common.
-
-**The sim moved, and it moved at depth.** 19 of 34 comparable RUN cells changed;
-the shallow ones by ±1-3, the deep ones by up to 14:
-
-```
-Endgame (Lv100)     The Maw             66% -> 52%   (-14)
-AoE build           The Drowned Market  72% -> 59%   (-13)
-Late (Lv40+6)       The Maw             44% -> 31%   (-13)
-Thorns build        The Abyssal Stair   56% -> 44%   (-12)
-Late (Lv40+6)       The Abyssal Stair   44% -> 33%   (-11)
-Starter             The Crypt           99% ->100%   (+1)
-Barricade build     The Foundry         48% -> 50%   (+2)
-```
-
-The cause is heal pricing specifically: healing is the only mitigation the
-simulator buys at a shop, and a 42-gold salve at d8 was under one fight's income.
-Every moved cell went *toward* the documented target band (~50-70% matched,
-<20% over-reaching) rather than away from it — the Maw at Endgame from the top of
-the band into the middle, the AoE build at the Drowned Market from above it to
-inside it. It is nonetheless a real difficulty change, and it rides on a bug fix
-that did not ask for one. If the endgame should keep its old slack, the lever is
-`SHOP_HEAL_IN_FIGHTS` alone; the card and removal prices carry no HP curve.
-
-**Also fixed: the screen would not say why.** An unaffordable button read a bare
-`"40 g"`, greyed, with no hint that you had 20 and needed 40 — so the one screen
-that had to explain itself explained nothing, and it read as a broken button rather
-than an expensive one. All three now state the shortfall and carry a tooltip, the
-same shape `combat.gd:_refresh_power()` already used ("Needs %d energy, you have
-%d"). The removal button had two silent refusal reasons (no gold, deck at minimum)
-and now distinguishes them.
-
-**Found while measuring, not fixed here:** the Ossuary's encounter deck contains
-**no Shop at all** — 200 generated piles, zero shops (Combat, Elite, Event, Rest,
-Treasure, BOSS only). The Warrens has no Elite and no Treasure. Those are content
-gaps in `resources/dungeons/*.tres`, not pricing, and repricing the shop cannot
-reach a dungeon that never offers one.
-
 ### D68 — The elite drops a relic, and escrow holds it
 
 An elite was a harder fight for more gold: a stat check, not a decision. It drops a
@@ -2701,3 +2618,96 @@ the parse error skips the `quit()`. The lookup moved to `PixelArt` (a plain
 class_name), and `tests/test_layout.gd` now greps the four classes the headless
 suite loads for bare autoload calls, ignoring comments. Verified by putting the call
 back.
+
+### D71 — The merchant sold nothing, because prices were flat and income is not
+
+Reported from play as "the merchant is bugged, it never sells anything". The
+purchase code was fine — driven headless, a buy correctly moved gold 999→959, the
+run deck 12→13, escrow_cards 0→1 and marked the entry `sold`. The bug was economic.
+
+Shop prices were **flat gold at every depth**: common 40, uncommon 63, rare 103,
+epic 179, legendary 400, heal 42, removal 55. Income is not flat — `gold_reward`
+scales with `GOLD_DEPTH_EXP` (1.8). A Crypt fight pays 5-10 gold and the shop sits
+at row 2-4 of the map, so the player arrives holding almost nothing.
+
+**Measured, 400 generated Crypt maps, first run, 0 banked gold, walking a legal
+path that takes the shop as soon as it is reachable:** median 20 gold in hand
+against a cheapest item of 40, and **nothing at all affordable on 74% of visits**.
+The 26% that could buy something had a treasure node (25-60 gold) fall first. A
+full Crypt clear earns 91 gold, so the money exists — it arrives after the shop,
+and the shop is one-shot (`_on_leave` clears the stock and the node is cleared).
+At the other end it inverts: the Maw pays 46-51 per fight against the same 40-gold
+common.
+
+**Prices are now quoted in FIGHTS.** `fight_income(difficulty)` is one average
+fight's takings, and every shop price is a multiple of it: a common is
+`SHOP_COMMON_IN_FIGHTS` (2.0), a heal 2.5, a removal 3.0 rising 2.0 per removal
+already taken. A purchase costs the same amount of *play* at every depth, and the
+price cannot drift from the income curve because it is computed from it. Common
+now runs 14g at d1 to 96g at d8; one fight pays 7g and 48g respectively.
+
+Re-measured with a natural policy over a whole run: **67-90% of runs containing a
+shop now get at least one usable purchase**, 0.7-1.1 items bought per run, flat
+across all twelve dungeons.
+
+**One copy of the rarity multiplier.** `card_price` and `fuse_gold_cost` each
+carried their own `sqrt(common / weight)`, with a comment on the second saying it
+was deliberately the same as the first — the D34 restated-table shape, and the
+reason pricing cards by depth risked silently repricing every fusion in the game.
+Extracted to `rarity_price_mult()`; depth is an argument to the shop price and
+fusion simply does not take one. Fusion costs are pinned unchanged at
+[20, 32, 52, 89, 200], and `test_shop.gd` now fails if a second copy of that
+formula appears.
+
+Anything bought OUTSIDE a dungeon has no run to take a difficulty from, so
+`card_price` defaults to `mid_difficulty()` — derived from the dungeons that exist,
+not restated. `test_shop.gd` already reasoned this way, measuring legendary
+affordability at mid depth because "pricing the rarest card against the poorest
+floor would call every legendary unobtainable"; that was the right instinct applied
+to the test instead of to the price. `power_price` moves only 80→72 at common.
+
+**The sim moved, and it moved at depth.** Measured by isolation, not by comparing
+against an older commit: one worktree at the same HEAD with *only* the three price
+formulas reverted to flat, against the tree as it stands. The first attempt did
+compare against an older commit and was worthless — D68/D69 landed in `balance.gd`
+underneath it mid-measurement, so reward changes and price changes were mixed into
+one number. 19 of 34 comparable RUN cells moved; the shallow ones by ±1-3, the deep
+ones by 7-15:
+
+```
+Endgame (Lv100)     The Maw             69% -> 54%   (-15)
+Late (Lv40+6)       The Abyssal Stair   49% -> 35%   (-14)
+Late (Lv40+6)       The Maw             44% -> 30%   (-14)
+Thorns build        The Maw             61% -> 50%   (-11)
+AoE build           The Drowned Market  62% -> 55%    (-7)
+Endgame (Lv100)     The Abyssal Stair   71% -> 64%    (-7)
+Status build        The Ember Road      43% -> 46%    (+3)
+Status build        The Foundry         65% -> 77%   (+12)
+```
+
+The cause is heal pricing specifically: healing is the only mitigation the simulator
+buys at a shop, and a 42-gold salve at d8 was under one fight's takings — free, in
+effect, exactly where survival is supposed to be the question. The two `+` outliers
+are the shallow end getting cards it could not previously afford.
+
+Every deep cell moved *toward* the documented target band (~50-70% matched, <20%
+over-reaching) rather than away: the Maw at Endgame from above the band into the
+middle of it, Late at the Maw from 44% to 30% while over-reaching. It is nonetheless
+a real difficulty change riding on a bug fix that did not ask for one, and it should
+be judged as such rather than waved through because the arrows point the right way.
+If the endgame should keep its old slack, the lever is `SHOP_HEAL_IN_FIGHTS` alone —
+the card and removal prices carry no HP curve at all.
+
+**Also fixed: the screen would not say why.** An unaffordable button read a bare
+`"40 g"`, greyed, with no hint that you had 20 and needed 40 — so the one screen
+that had to explain itself explained nothing, and it read as a broken button rather
+than an expensive one. All three now state the shortfall and carry a tooltip, the
+same shape `combat.gd:_refresh_power()` already used ("Needs %d energy, you have
+%d"). The removal button had two silent refusal reasons (no gold, deck at minimum)
+and now distinguishes them.
+
+**Found while measuring, not fixed here:** the Ossuary's encounter deck contains
+**no Shop at all** — 200 generated piles, zero shops (Combat, Elite, Event, Rest,
+Treasure, BOSS only). The Warrens has no Elite and no Treasure. Those are content
+gaps in `resources/dungeons/*.tres`, not pricing, and repricing the shop cannot
+reach a dungeon that never offers one.

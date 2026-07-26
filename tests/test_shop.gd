@@ -106,7 +106,7 @@ func _init() -> void:
 	print("  (info: %.1f shops and %.1f rests per map)" % [
 		float(shops) / trials, float(rests) / trials])
 
-	# --- prices are quoted in FIGHTS, so a shop is usable at every depth (D70) ---
+	# --- prices are quoted in FIGHTS, so a shop is usable at every depth (D71) ---
 	#
 	# They were flat gold at every depth while income scales with GOLD_DEPTH_EXP:
 	# measured over 400 generated Crypt maps, a first-run player reached the merchant

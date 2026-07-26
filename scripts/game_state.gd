@@ -261,7 +261,7 @@ func reset_run_progress() -> void:
 	var relic_hp: int = meta.relic_bonus("bonus_max_hp") if meta else 0
 	# permanent max-HP from dungeons already cleared (progression, kept on death)
 	var clears: int = meta.clear_count() if meta else 0
-	max_hp = Balance.BASE_MAX_HP + relic_hp + clears * Balance.HP_PER_DUNGEON
+	max_hp = Balance.max_hp_for(clears, relic_hp)
 	hp = max_hp
 	dungeon = 1
 	dungeon_id = ""
@@ -294,7 +294,7 @@ func refresh_max_hp() -> void:
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
 	var relic_hp: int = meta.relic_bonus("bonus_max_hp") if meta else 0
 	var clears: int = meta.clear_count() if meta else 0
-	max_hp = Balance.BASE_MAX_HP + relic_hp + clears * Balance.HP_PER_DUNGEON
+	max_hp = Balance.max_hp_for(clears, relic_hp)
 	hp = max_hp
 
 ## Build the traversal for the selected dungeon. Model comes from its data.
