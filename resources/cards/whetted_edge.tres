@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "whetted_edge"
+name = "Whetted Edge"
+description = "Deal 7 damage. Permanently +2 this combat."
+cost = 1
+type = 0
+rarity = 1
+level = 1
+damage = 7
+grows = 2

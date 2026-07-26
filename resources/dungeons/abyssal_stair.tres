@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DungeonData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "abyssal_stair"
+name = "The Abyssal Stair"
+description = "Down, and then further down. The steps are not all stone."
+traversal = 2
+difficulty = 7
+unlock_after_clears = 6
+enemy_roster = PackedStringArray("abyss_horror", "deep_warden", "drowned_thrall", "bog_lurker")
+card_pool = PackedStringArray("lifedrain", "smiths_fury")
+exclusive_cards = PackedStringArray("lifedrain", "smiths_fury")

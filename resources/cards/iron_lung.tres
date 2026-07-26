@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "iron_lung"
+name = "Iron Lung"
+description = "Heal 15. Gain 8 Block."
+cost = 2
+type = 1
+rarity = 1
+level = 1
+heal = 15
+block = 8

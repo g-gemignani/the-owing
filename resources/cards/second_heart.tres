@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "second_heart"
+name = "Second Heart"
+description = "Heal 30. Gain 1 Energy. Exhaust."
+cost = 2
+type = 1
+rarity = 4
+level = 1
+heal = 30
+energy_gain = 1
+exhaust = true

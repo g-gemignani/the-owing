@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EventData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/event_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "old_soldier"
+title = "The Old Soldier"
+description = "He is dying, and he knows it. He wants to talk, or to fight."
+choice_labels = PackedStringArray("Listen (heal 20% HP)", "Take his blade (-10 HP, gain a card)", "Duel him (elite fight)")
+choice_results = PackedStringArray("He talks until he does not.", "It is heavier than it looks.", "He was better than he looked.")
+hp_deltas = PackedInt32Array(0, -10, 0)
+gold_deltas = PackedInt32Array(0, 0, 0)
+hp_percent_deltas = PackedInt32Array(20, 0, 0)
+card_deltas = PackedInt32Array(0, 1, 0)
+relic_grants = PackedInt32Array(0, 0, 0)
+starts_fight = PackedInt32Array(0, 0, 1)

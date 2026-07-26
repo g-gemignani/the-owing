@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BuildData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/build_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "vampire"
+name = "The Red Ledger"
+description = "Take what you need out of whatever is in front of you."
+cards = PackedStringArray("leech", "lifedrain", "sanguine_feast", "exsanguinate", "bite", "blood_price", "second_heart", "iron_lung")

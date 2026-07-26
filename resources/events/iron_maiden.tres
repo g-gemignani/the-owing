@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EventData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/event_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "iron_maiden"
+title = "The Iron Cage"
+description = "Something inside is still moving."
+choice_labels = PackedStringArray("Open it (fight an elite)", "Leave it shut")
+choice_results = PackedStringArray("It was grateful, briefly.", "Wise.")
+hp_deltas = PackedInt32Array(0, 0)
+gold_deltas = PackedInt32Array(0, 0)
+hp_percent_deltas = PackedInt32Array(0, 0)
+card_deltas = PackedInt32Array(0, 0)
+relic_grants = PackedInt32Array(1, 0)
+starts_fight = PackedInt32Array(1, 0)

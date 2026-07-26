@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PowerData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/power_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "expose"
+name = "Expose"
+description = "Apply 2 Vulnerable."
+cost = 1
+rarity = 1
+level = 1
+unlock_after_clears = 1
+max_level = 10
+apply_vulnerable = 2
+type = 1

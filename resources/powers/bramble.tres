@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PowerData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/power_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "bramble"
+name = "Bramble"
+description = "Gain 3 Thorns."
+cost = 1
+rarity = 1
+level = 1
+unlock_after_clears = 2
+max_level = 10
+gain_thorns = 3
+type = 1

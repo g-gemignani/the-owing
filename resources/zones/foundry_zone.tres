@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ZoneData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "foundry_zone"
+name = "The Ashen Foundry"
+description = "Hammers, heat, and things that hit back."
+unlock_after_clears = 2
+dungeons = PackedStringArray("foundry", "ember_road", "slag_pits")
+card_pool = PackedStringArray("bite", "cheap_shot", "cut_and_run", "defend", "feint", "heavy_swing", "impervious", "iron_will", "massacre", "pandemic", "pressure", "salt_the_wound", "second_wind", "slash", "stone_skin", "strike", "survival_instinct", "terrify", "virulence", "whetted_edge")

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "massacre"
+name = "Massacre"
+description = "Deal 14 damage to ALL enemies. Exhaust."
+cost = 3
+type = 0
+rarity = 3
+level = 1
+damage = 14
+aoe = true
+exhaust = true

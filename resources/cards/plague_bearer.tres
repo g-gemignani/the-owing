@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "plague_bearer"
+name = "Plague Bearer"
+description = "Deal 4 damage. Apply 4 Poison. Exhaust."
+cost = 1
+type = 0
+rarity = 2
+level = 1
+damage = 4
+apply_poison = 4
+exhaust = true

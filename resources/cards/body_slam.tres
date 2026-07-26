@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "body_slam"
+name = "Body Slam"
+description = "Deal damage equal to your Block."
+cost = 1
+type = 0
+rarity = 1
+level = 1
+damage_from_block = true

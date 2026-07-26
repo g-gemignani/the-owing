@@ -1,0 +1,35 @@
+## A Power: an ability the player can fire ONCE PER TURN, every turn, for energy.
+##
+## Exists because a bad draw used to be a wasted turn, and the only answer the game
+## offered was deck consistency. A power puts a floor under the worst hand without
+## raising the ceiling on the best one.
+##
+## Two rules keep it a floor rather than a replacement for the deck:
+##
+## * **Once per turn.** With three energy and a one-cost power, unlimited firing
+##   makes "power, power, power" a legal turn — the power becomes both floor and
+##   ceiling, draw stops mattering, and a deckbuilder stops being one.
+## * **Priced into the ratio.** Enemy scaling keys off deck power per energy
+##   (`Balance.power_ratio`). A power is throughput from OUTSIDE the deck, exactly
+##   the hole relics had. Left unpriced it is free strength and breaks the ratchet.
+##
+## Extends CardData on purpose. A power is a card you always hold, so it inherits
+## every mechanic, every level-scaling rule and the whole `power_value()` pricing
+## model — and `CombatEngine._resolve()` applies it through the identical code path
+## as a card. Nothing can drift between the two, which is the D34 lesson applied
+## before the bug instead of after it.
+class_name PowerData
+extends CardData
+
+## Dungeon clears needed before this power can be bought at all.
+@export var unlock_after_clears: int = 0
+
+## Powers level like cards, but with gold only — there are no duplicate copies of
+## a power to spend. See Balance.power_upgrade_cost.
+@export var max_level: int = 10
+
+func level_capped() -> int:
+	return maxi(1, max_level)
+
+func at_max() -> bool:
+	return level >= level_capped()

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DungeonData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "sunken_vault"
+name = "The Sunken Vault"
+description = "Sealed for a reason. The deepest known door."
+traversal = 2
+difficulty = 5
+unlock_after_clears = 3
+enemy_roster = PackedStringArray("drowned_thrall", "deep_warden", "tomb_guard", "pale_acolyte")
+card_pool = PackedStringArray("forge_strike")
+exclusive_cards = PackedStringArray("forge_strike")

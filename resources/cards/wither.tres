@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "wither"
+name = "Wither"
+description = "Apply 2 Weak and 2 Vulnerable."
+cost = 1
+type = 1
+rarity = 1
+level = 1
+apply_weak = 2
+apply_vulnerable = 2

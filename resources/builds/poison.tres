@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BuildData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/build_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "poison"
+name = "The Long Death"
+description = "Damage that ignores Block entirely, if you live long enough to collect it."
+cards = PackedStringArray("venom_fang", "rupture", "plague_bearer", "noxious_cloud", "virulence", "blight_bloom", "spore_burst", "rot_touch", "creeping_death", "pandemic", "plague_heart", "scrape")

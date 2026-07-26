@@ -1,0 +1,618 @@
+## Single source of truth for tuning (D5). Every balance constant and formula
+## lives here so the game and the headless simulator can never drift apart.
+class_name Balance
+extends RefCounted
+
+enum Tier { NORMAL, ELITE, BOSS }
+
+# --- ascension (New Game+) ---
+## Set from the save on load. A static rather than a parameter so every existing
+## scaling formula picks it up without changing signatures.
+static var ascension: int = 0
+
+## Per-ascension difficulty step. Deliberately gentle: it multiplies an already
+## power-scaled curve, so a large step would wall the player instantly.
+const ASCENSION_STEP := 0.10
+
+static func ascension_mult() -> float:
+	return 1.0 + ASCENSION_STEP * float(maxi(0, ascension))
+
+# --- combat rules ---
+const HAND_SIZE := 5
+const MAX_ENERGY := 3
+const BASE_MAX_HP := 60
+const HP_PER_DUNGEON := 10  # max HP gained on clearing a dungeon
+
+# --- upgrade (fusion) caps ---
+## Max level per rarity. Caps are derived from drop weight: a rarity that appears
+## W/100 as often as a common gets W/100 of the level track, which makes every
+## rarity cost roughly the SAME hoarding effort to max out.
+## Floored at MIN_MAX_LEVEL so even a legendary is worth fusing at all.
+##
+## What a level COSTS lives in one place below (fuse_copy_cost / fuse_gold_cost);
+## do not restate the numbers here. A stale duplicate of a shared table is what
+## made the Crypt unplayable once already.
+const MIN_MAX_LEVEL := 5
+const COMMON_MAX_LEVEL := 100
+
+## Derived: COMMON 100, UNCOMMON 40, RARE 15, EPIC 5, LEGENDARY 5.
+static func max_level(rarity: int) -> int:
+	var w: Array = WEIGHTS[Tier.NORMAL]
+	var weight: int = w[clampi(rarity, 0, w.size() - 1)]
+	var common: int = w[0]
+	var derived := int(round(float(COMMON_MAX_LEVEL) * float(weight) / float(common)))
+	return maxi(MIN_MAX_LEVEL, derived)
+
+# --- fusion price ---
+## Fusing used to be a FLAT 2 copies per level at no gold cost, so power grew
+## LINEARLY with copies hoarded and nothing else gated it. A player who banked
+## commons walked into a dungeon with a doubled deck and outran the difficulty
+## curve. Two brakes, both here:
+##
+## * copies per level RISE with the level being bought, so the tail costs real
+##   hoarding instead of the same two cards forever;
+## * gold is spent as well, which puts fusion in direct competition with the shop
+##   instead of being free power on the side.
+const FUSE_BASE_COPIES := 3
+## Levels between each +1 to the copy cost.
+const FUSE_COPIES_STEP := 8
+const FUSE_BASE_GOLD := 20
+## Exponent on the gold price. A LINEAR gold cost was measured to stop mattering
+## after about four runs: income scales with dungeon depth, so a price that grows
+## by a flat step per level is soon rounding error. Superlinear keeps fusion
+## competing with the shop for the whole game.
+const FUSE_GOLD_EXP := 1.35
+
+## Copies burned to buy the step from `level` to `level + 1`.
+static func fuse_copy_cost(level: int) -> int:
+	return FUSE_BASE_COPIES + int(floor(float(maxi(1, level) - 1) / float(FUSE_COPIES_STEP)))
+
+## Gold burned for that same step. The rarity multiplier is the shop's, so levelling
+## a card is priced against buying one.
+static func fuse_gold_cost(rarity: int, level: int) -> int:
+	var w: Array = WEIGHTS[Tier.NORMAL]
+	var weight: float = float(w[clampi(rarity, 0, w.size() - 1)])
+	var mult := sqrt(float(w[0]) / maxf(1.0, weight))
+	var growth := pow(float(maxi(1, level)), FUSE_GOLD_EXP)
+	return int(round(FUSE_BASE_GOLD * mult * growth))
+
+## Copies needed to take a card from level 1 to `level`, walking the cost curve.
+static func copies_to_reach(level: int) -> int:
+	var total := 1  # the copy you keep
+	for l in range(1, maxi(1, level)):
+		total += fuse_copy_cost(l)
+	return total
+
+## Gold needed for that same climb.
+static func gold_to_reach(rarity: int, level: int) -> int:
+	var total := 0
+	for l in range(1, maxi(1, level)):
+		total += fuse_gold_cost(rarity, l)
+	return total
+
+# --- deck bounds ---
+const MIN_DECK_SIZE := 8
+const MAX_DECK_SIZE := 20
+
+# --- player power baseline ---
+## Enemies scale against the deck's power PER ENERGY, because that is what the
+## player can actually deliver per turn (energy is the binding constraint, not
+## deck size or raw card numbers). Two consequences, both deliberate:
+##   - a bigger deck of the same cards is not "stronger" (only more consistent)
+##   - an expensive card is only stronger if it beats the cost-efficiency curve
+## Reference deck (4 Strike @6 dmg + 4 Defend @5 block) with Block valued at
+## CardData.BLOCK_VALUE: (4x6 + 4x5x0.65) / 8 energy = 4.625 per energy.
+## Recomputed whenever the weighting changes, so the reference deck stays ratio 1.0.
+const BASELINE_CARD_POWER := 4.625
+## Only part of the player's throughput goes into damage (the rest into block),
+## so HP scaling below 1.0 keeps fight LENGTH roughly flat as decks improve.
+const HP_POWER_K := 0.5
+## Kept low deliberately: difficulty should come from choosing a deeper dungeon,
+## not from the player's own progression. Scaling incoming damage steeply with
+## deck power punishes offense-heavy decks that have no extra block to answer it.
+const DMG_POWER_K := 0.15
+const POWER_RATIO_CAP := 4.5  # room for maxed decks; sub-linear card growth keeps this reachable
+
+# --- the ratchet: a dungeon only matches you so far ---
+## Enemies used to scale against the player's power with NO upper bound, at every
+## depth. Measured at a fixed depth 3: quadrupling deck power made fights 31%
+## shorter but cost 68% MORE HP per fight, because incoming damage grew as fast as
+## kill speed. Every reward the player earned was confiscated at the door, which is
+## why a maxed deck performed WORSE than a merely good one.
+##
+## Each dungeon now matches the player only up to a ceiling set by its own
+## difficulty. Below it, enemies still answer your deck, so a dungeon at the edge
+## of your ability stays a fight. Above it, enemy stats stop moving while your
+## damage keeps climbing — so you outgrow the Crypt, exactly as you should, and
+## difficulty comes from choosing to go deeper.
+const RATIO_CEILING_BASE := 1.4
+const RATIO_CEILING_PER_DEPTH := 0.45
+
+## The power level `difficulty` will scale its enemies to match.
+static func ratio_ceiling(difficulty: int) -> float:
+	return RATIO_CEILING_BASE + RATIO_CEILING_PER_DEPTH * float(maxi(1, difficulty) - 1)
+
+## The ratio enemies actually scale against: the player's, capped by the dungeon.
+## Applied inside enemy_max_hp / enemy_damage so no caller can forget it.
+static func scaling_ratio(difficulty: int, ratio: float) -> float:
+	return soften_ratio(minf(ratio, ratio_ceiling(difficulty)))
+
+## Raw power of a deck, at fused levels. Uses CardData.power_value() so status
+## and power cards count toward scaling instead of reading as zero.
+static func deck_power(deck: Array) -> float:
+	var p := 0.0
+	for c in deck:
+		p += c.power_value()
+	return p
+
+## Total energy needed to play the whole deck (min 1 to avoid divide-by-zero).
+static func deck_cost(deck: Array) -> float:
+	var c := 0.0
+	for card in deck:
+		c += card.cost
+	return maxf(1.0, c)
+
+# --- powers (once-per-turn abilities) ---
+const POWER_DIR := "res://resources/powers/"
+const POWERS := ["bulwark", "foresight", "cleave", "blight", "expose", "bramble",
+	"kindle", "overwhelm", "siphon", "second_wind"]
+
+static func power(id: String) -> PowerData:
+	return load(POWER_DIR + id + ".tres") as PowerData
+
+static func all_powers() -> Array:
+	var out: Array = []
+	for id in POWERS:
+		var p := power(id)
+		if p != null:
+			out.append(p)
+	return out
+
+## Gold to buy a power outright. Priced off rarity like a shop card, then doubled:
+## a power is permanent, fires every turn of every fight, and is never drawn — it
+## is worth strictly more than one copy of a card of the same rarity.
+static func power_price(rarity: int) -> int:
+	return card_price(rarity) * 2
+
+## Gold to take a power from `level` to `level + 1`. Reuses the fusion gold curve
+## so the two upgrade tracks compete on equal terms rather than one being the
+## obvious dump for spare gold.
+static func power_upgrade_cost(rarity: int, level: int) -> int:
+	return fuse_gold_cost(rarity, level) * 2
+
+## Power throughput folded into the scaling ratio.
+##
+## Without this term a power would be free strength sitting outside the deck —
+## precisely the hole relics had before RELIC_POWER_PER_RATIO — and it would undo
+## the difficulty ratchet.
+##
+## The gain is NOT the power's raw value. Firing it spends energy that would
+## otherwise have played a card, so what the player actually gains is the
+## DIFFERENCE between the power and the cards it displaces:
+##
+##     gain per turn = value(power) x reliability - cost x deck value per energy
+##
+## Pricing it as pure addition (the first attempt here) charged a 6-Block ability
+## as +0.39 ratio when its real edge over an average card is nearer +0.06, which
+## would have made equipping any power actively harmful. A zero-cost power
+## displaces nothing and so is worth its full value.
+##
+## The reliability premium exists because a power is never drawn, never dead and
+## never clogs a hand — the whole reason it is worth having.
+const POWER_RELIABILITY := 1.4
+
+static func power_ratio_bonus(p, deck_per_energy: float = BASELINE_CARD_POWER) -> float:
+	if p == null:
+		return 0.0
+	# energy_gain is handled multiplicatively by throughput_multiplier; counting it
+	# here as well would charge for the same effect twice
+	var gained: float = (p.power_value() - float(p.energy_gain) * 15.0) * POWER_RELIABILITY
+	var displaced: float = float(p.cost) * deck_per_energy
+	# a power the player would simply never fire cannot make enemies tougher
+	return maxf(0.0, gained - displaced) / (float(MAX_ENERGY) * BASELINE_CARD_POWER)
+
+# --- relics ---
+const RELIC_DIR := "res://resources/relics/"
+## Relic power is divided by this to convert it into ratio points. Relics are
+## permanent and sit outside the deck, so without folding them into the ratio a
+## relic collection would outscale enemies exactly the way fusion once did.
+const RELIC_POWER_PER_RATIO := 70.0
+
+static func relic_power(relics: Array) -> float:
+	var p := 0.0
+	for r in relics:
+		if r is RelicData:
+			p += r.flat_power()
+	return p
+
+## Relics that grant energy or draw scale everything the deck does, so they act on
+## the ratio multiplicatively. Treating them as flat power undervalued them badly:
+## a +1 energy relic is a third more actions every turn of every fight.
+static func throughput_multiplier(relics: Array, equipped_power = null) -> float:
+	var energy := 0
+	var draw := 0
+	for r in relics:
+		if r is RelicData:
+			energy += r.bonus_energy
+			draw += r.extra_draw
+	# A power that hands back energy every turn scales everything the deck does, so
+	# it belongs here rather than in the additive term. Priced additively it read as
+	# +0.91 ratio — nearly triple what the identical effect costs on a relic.
+	if equipped_power != null:
+		energy += equipped_power.energy_gain
+	var m := float(MAX_ENERGY + energy) / float(MAX_ENERGY)
+	m *= 1.0 + 0.08 * float(draw)
+	return m
+
+## Beyond the cap, scaling continues at a diminishing rate instead of stopping.
+##
+## A HARD cap is itself a power-creep bug: once a deck exceeds it, every further
+## point of power is free and the endgame becomes trivial. Measured exactly that —
+## fully-equipped late decks pinned the cap and cleared the deepest dungeons 100%
+## of the time. A square-root tail keeps enemies growing forever without ever
+## running away.
+static func soften_ratio(r: float) -> float:
+	if r <= POWER_RATIO_CAP:
+		return maxf(1.0, r)
+	return POWER_RATIO_CAP + sqrt(r - POWER_RATIO_CAP)
+
+## Deck power per energy, relative to the starter deck.
+## `relics` is an Array[RelicData] the player currently holds (may be empty).
+static func power_ratio(deck: Array, relics: Array = [], equipped_power = null) -> float:
+	if deck.is_empty():
+		return 1.0
+	var per_energy := deck_power(deck) / deck_cost(deck)
+	var r := per_energy / BASELINE_CARD_POWER
+	r += relic_power(relics) / RELIC_POWER_PER_RATIO
+	r += power_ratio_bonus(equipped_power, per_energy)
+	r *= throughput_multiplier(relics, equipped_power)
+	return soften_ratio(r)
+
+# --- enemy scaling ---
+## Boss HP is high but its damage bonus is small: a long fight whose per-turn
+## damage the player can actually block, rather than an unwinnable race.
+## Enemy HP must be high enough that a fight lasts ~4+ turns — an enemy that dies
+## in 2 turns only ever attacks once, which makes attrition (the real difficulty)
+## disappear. Boss/elite multipliers are modest because the base is already large.
+const TIER_HP_MULT := {Tier.NORMAL: 1.0, Tier.ELITE: 1.3, Tier.BOSS: 1.55}
+const TIER_DMG_BONUS := {Tier.NORMAL: 0, Tier.ELITE: 1, Tier.BOSS: 2}
+const TIER_NAME := {Tier.NORMAL: "Cultist", Tier.ELITE: "Elite", Tier.BOSS: "Dungeon Boss"}
+
+## Rest node healing, as a fraction of max HP. Must stay well below the damage a
+## player accumulates over a few fights, or resting erases all attrition.
+const REST_HEAL_FRAC := 0.18
+
+# --- traversal (shared budget across models) ---
+## Every traversal model must cost the player a comparable amount, or "difficulty
+## 4" means different things in different dungeons. Models build their layout from
+## these counts (plus one boss) rather than inventing their own mix.
+const ENCOUNTER_COMBATS := 3
+const ENCOUNTER_ELITES := 1
+const ENCOUNTER_RESTS := 1
+const ENCOUNTER_SHOPS := 1
+const ENCOUNTER_EVENTS := 1
+const ENCOUNTER_TREASURES := 1
+
+## Deck model: HP paid to skip a revealed encounter (and forfeit its reward).
+const DECK_AVOID_HP_COST := 8
+
+const NODE_LABEL := {0: "Combat", 1: "Elite", 2: "Rest", 3: "BOSS", 4: "Shop",
+	5: "Event", 6: "Treasure"}
+
+## Treasure: gold found, and the chance it also holds a card.
+const TREASURE_GOLD_MIN := 25
+const TREASURE_GOLD_MAX := 60
+const TREASURE_CARD_CHANCE := 55
+## Chance a treasure also holds an Escape Rope. Ropes are FOUND, never sold:
+## a purchasable exit would let the player buy their way out of every risk, which
+## is the farming loop escrow was built to close.
+const TREASURE_ROPE_CHANCE := 18
+## Chance a cleared boss yields a rope on top of its relic.
+const BOSS_ROPE_CHANCE := 35
+
+# --- events ---
+const EVENT_DIR := "res://resources/events/"
+const EVENTS := ["shrine", "gambler", "old_soldier", "cursed_hoard", "wounded_scout", "collapsed_arch", "whispering_door", "dead_merchant", "mirror_pool", "iron_maiden", "gambling_ghost", "bloodied_altar", "forgotten_library", "starving_thing", "weeping_statue", "coin_press", "two_doors", "old_bargain", "supply_cache", "hollow_choir"]
+
+## Rough threat of a dungeon's roster, independent of its difficulty rating.
+##
+## Exists because roster choice repeatedly overrode the difficulty number: a
+## roster of hard hitters made difficulty 3 harder than 6, and a 1.1-damage
+## archetype made the *first* dungeon harder than the two after it. A number lets
+## a test catch the inversion instead of a playthrough noticing it later.
+static func roster_threat(dungeon_id: String) -> float:
+	var d := dungeon(dungeon_id)
+	if d == null or not d.has_roster():
+		return 1.0
+	var total := 0.0
+	var n := 0
+	for aid in d.enemy_roster:
+		var a := load(ENEMY_DIR + aid + ".tres") as EnemyData
+		if a == null:
+			continue
+		var t := a.dmg_mult + a.hp_mult * 0.4
+		t *= 1.0 + 0.12 * float(maxi(0, a.count_max - 1))   # more bodies, more pressure
+		# a debuffing archetype multiplies everything after it
+		for act in a.pattern:
+			if int(act) == EnemyData.Action.DEBUFF_VULN or int(act) == EnemyData.Action.DEBUFF_WEAK:
+				t *= 1.08
+				break
+		total += t
+		n += 1
+	return total / float(maxi(1, n))
+
+# --- dungeons (D6) ---
+const DUNGEON_DIR := "res://resources/dungeons/"
+## Ordered registry. The overworld will later choose from these by id.
+const DUNGEONS := ["crypt", "ossuary", "warrens", "foundry", "ember_road", "slag_pits", "fungal_deep", "rot_gardens", "sunken_vault", "drowned_market", "abyssal_stair", "the_maw"]
+
+# --- zones (themed clusters of dungeons that share a card pool) ---
+const ZONE_DIR := "res://resources/zones/"
+const ZONES := ["barrows", "foundry_zone", "rot", "deeps", "beyond"]
+
+static func zone(id: String) -> ZoneData:
+	return load(ZONE_DIR + id + ".tres") as ZoneData
+
+static func all_zones() -> Array:
+	var out: Array = []
+	for id in ZONES:
+		var z := zone(id)
+		if z != null:
+			out.append(z)
+	return out
+
+## The zone a dungeon belongs to, or null.
+# --- builds (deck archetypes) ---
+const BUILD_DIR := "res://resources/builds/"
+const BUILDS := ["poison", "thorns", "strength", "fortress", "swarm", "tempo", "vampire"]
+
+static func build(id: String) -> BuildData:
+	return load(BUILD_DIR + id + ".tres") as BuildData
+
+static func all_builds() -> Array:
+	var out: Array = []
+	for id in BUILDS:
+		var b := build(id)
+		if b != null:
+			out.append(b)
+	return out
+
+## Clears actually required to open a dungeon: its own gate or its zone's,
+## whichever is higher. Displaying only the dungeon's own number would understate
+## the requirement whenever the zone is the real blocker.
+## The final dungeon: clearing it completes a world and offers the next ascension.
+static func final_dungeon() -> String:
+	return DUNGEONS[DUNGEONS.size() - 1]
+
+static func effective_gate(dungeon_id: String) -> int:
+	var d := dungeon(dungeon_id)
+	var z := zone_of(dungeon_id)
+	return maxi(d.unlock_after_clears if d != null else 0,
+		z.unlock_after_clears if z != null else 0)
+
+## Clears needed before every gate dungeon of this build is open.
+static func clears_required_for(b: BuildData) -> int:
+	var worst := 0
+	for did in dungeons_required_for(b):
+		worst = maxi(worst, effective_gate(did))
+	return worst
+
+## Dungeons that are the ONLY source of some card in this build. Clearing them is
+## what completing the build actually requires.
+static func dungeons_required_for(b: BuildData) -> Array:
+	var needed: Array = []
+	for did in DUNGEONS:
+		var d := dungeon(did)
+		if d == null:
+			continue
+		for c in d.exclusive_cards:
+			if c in b.cards and not did in needed:
+				needed.append(did)
+	return needed
+
+static func zone_of(dungeon_id: String) -> ZoneData:
+	for z in all_zones():
+		if dungeon_id in z.dungeons:
+			return z
+	return null
+
+## Cards obtainable in a dungeon: its zone's themed pool plus its own exclusives.
+static func card_pool_for(dungeon_id: String) -> Array:
+	var out: Array = []
+	var z := zone_of(dungeon_id)
+	if z != null:
+		for c in z.card_pool:
+			if not c in out:
+				out.append(c)
+	var d := dungeon(dungeon_id)
+	if d != null:
+		for c in d.card_pool:
+			if not c in out:
+				out.append(c)
+	return out
+
+static func dungeon(id: String) -> DungeonData:
+	return load(DUNGEON_DIR + id + ".tres") as DungeonData
+
+static func all_dungeons() -> Array:
+	var out: Array = []
+	for id in DUNGEONS:
+		var d := dungeon(id)
+		if d != null:
+			out.append(d)
+	return out
+
+## Reward rarity weights, shifted toward rarer cards as the dungeon gets harder.
+## This is the "deeper dungeon, better loot" rule: the tier table sets the shape,
+## difficulty tilts it. Weights are shifted, not replaced, so a hard dungeon still
+## drops commons — it just stops being *mostly* commons.
+static func reward_weights(tier: int, difficulty: int) -> Array:
+	var base: Array = WEIGHTS[tier]
+	var tilt := clampf(0.12 * float(maxi(0, difficulty - 1)) + 0.05 * float(ascension), 0.0, 0.9)
+	var out: Array = []
+	for i in base.size():
+		# rarity index 0 loses weight, higher indices gain it
+		var rarity_bias := float(i) / float(maxi(1, base.size() - 1))  # 0..1
+		var f := (1.0 - tilt) + tilt * rarity_bias * 3.0
+		out.append(maxi(1, int(round(float(base[i]) * f))))
+	return out
+
+# --- enemy archetypes ---
+## Which archetypes can appear per tier. Bosses stay single-target for now.
+const ENEMY_DIR := "res://resources/enemies/"
+const ROSTER := {
+	Tier.NORMAL: ["cultist", "hexer", "rat_swarm", "bone_picker", "grave_moth",
+		"crypt_hound", "plague_rat", "spore_thing", "slag_wretch", "drowned_thrall"],
+	Tier.ELITE: ["brute", "warden", "hexer", "pale_acolyte", "bog_lurker",
+		"forge_hound", "rot_priest", "tomb_guard"],
+	Tier.BOSS: ["warden", "cinder_knight", "deep_warden", "abyss_horror"],
+}
+
+## Multi-enemy encounters split the tier's HP and damage budget across the group.
+## A premium is added back because focus-firing shrinks incoming damage every time
+## one dies, which otherwise makes a group strictly easier than a single enemy of
+## the same total stats.
+const MULTI_DMG_PREMIUM := 0.08   # per extra enemy
+const MULTI_HP_PREMIUM := 0.10    # per extra enemy
+
+static func multi_dmg_factor(count: int) -> float:
+	return 1.0 + MULTI_DMG_PREMIUM * float(maxi(0, count - 1))
+
+static func multi_hp_factor(count: int) -> float:
+	return 1.0 + MULTI_HP_PREMIUM * float(maxi(0, count - 1))
+
+# --- enemy status effects (elites/bosses only) ---
+## Every Nth turn an elite/boss also applies a debuff, so higher tiers threaten
+## the player's plan and not just their HP bar.
+## Kept deliberately mild: debuffs multiply damage over every remaining turn, so
+## they compound hard in the long fights that elites and bosses already produce.
+const ENEMY_DEBUFF_PERIOD := 4
+const ENEMY_VULNERABLE_STACKS := 1
+const ENEMY_WEAK_STACKS := 1
+
+## Minimum turns a basic fight should last. An enemy that dies in 2 turns only
+## ever attacks once, which silently removes attrition from the whole game.
+const MIN_FIGHT_TURNS := 3
+## Rough baseline damage a starter deck delivers per turn (energy x power, with
+## part of the budget going to block instead of damage).
+const BASELINE_TURN_DAMAGE := MAX_ENERGY * BASELINE_CARD_POWER * 0.7
+
+## Target fight length for a basic enemy, in turns. Enemy HP is derived from it:
+## the player splits ~3 energy between block and damage, so only part of their
+## throughput kills. Deriving HP from a turn budget keeps fight pacing stable
+## instead of drifting whenever another constant changes.
+const TARGET_NORMAL_TURNS := 4.0
+## Share of the energy budget a player can commit to damage while still defending.
+const OFFENSE_SHARE := 0.5
+
+static func enemy_max_hp(dungeon: int, tier: int, ratio: float) -> int:
+	# damage a baseline deck lands per turn while also blocking
+	var dps := MAX_ENERGY * BASELINE_CARD_POWER * OFFENSE_SHARE
+	var base := dps * TARGET_NORMAL_TURNS + dungeon * 5.0
+	base *= float(TIER_HP_MULT[tier])
+	base *= 1.0 + HP_POWER_K * (scaling_ratio(dungeon, ratio) - 1.0)
+	base *= ascension_mult()
+	return int(round(base))
+
+## Enemy attack for turn `turn` (1-based). `roll` in [0,3] keeps randomness
+## caller-side.
+##
+## Structural note: without escalation, defending is a dominant strategy. Block is
+## ~5 per energy, so 3 energy absorbs ~15 — a player who simply blocks every turn
+## takes zero damage and wins slowly, and no amount of tuning the base number
+## changes that, because there is no cost to stalling. ESCALATION makes each extra
+## turn more dangerous than the last, so the player must actually race: block only
+## what they must, and commit the rest to ending the fight. It is also what makes
+## persistent block (Barricade) valuable rather than merely convenient.
+static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn: int = 1) -> int:
+	var d := 7.5 + roll + 0.6 * dungeon
+	d += float(TIER_DMG_BONUS[tier])
+	d *= 1.0 + DMG_POWER_K * (scaling_ratio(dungeon, ratio) - 1.0)
+	d *= minf(ESCALATION_MAX, 1.0 + ESCALATION_PER_TURN * float(maxi(0, turn - 1)))
+	d *= ascension_mult()
+	return int(round(d))
+
+## Enemy damage grows this much per turn elapsed (compounding pressure), up to
+## ESCALATION_MAX. The cap matters: stronger decks face more enemy HP, so their
+## fights run longer, and uncapped escalation would punish progression — the
+## exact inversion this curve is supposed to avoid.
+## SUNDER bypasses Block, so it must hit for LESS than a normal swing — otherwise
+## it is strictly better than attacking and the enemy should simply always use it.
+## Measured at full damage: block-heavy builds fell from 74% to 32% run completion
+## and AoE decks from 92% to 32%. It is meant to punish over-blocking, not to
+## delete defensive play.
+const SUNDER_DAMAGE_FRAC := 0.55
+
+const ESCALATION_PER_TURN := 0.06
+const ESCALATION_MAX := 1.6
+
+## Map node type chances (percent), rolled per non-boss, non-first row.
+const NODE_CHANCE_REST := 14
+const NODE_CHANCE_SHOP := 12
+const NODE_CHANCE_ELITE := 18
+const NODE_CHANCE_EVENT := 12
+const NODE_CHANCE_TREASURE := 8
+
+# --- shops (gold sink) ---
+## Card prices are DERIVED from drop weight, like upgrade caps: a rarity that
+## drops W/100 as often as a common costs sqrt(100/W) times as much. sqrt rather
+## than linear on purpose — linear would price a legendary at ~4000g, roughly 20
+## runs of income, which reads as unobtainable rather than aspirational.
+const SHOP_BASE_PRICE := 40
+const SHOP_CARD_OFFERS := 3
+## Healing sold as a fraction of max HP, priced per point of HP restored.
+const SHOP_HEAL_FRAC := 0.35
+const SHOP_HEAL_GOLD_PER_HP := 2
+
+static func card_price(rarity: int) -> int:
+	var w: Array = WEIGHTS[Tier.NORMAL]
+	var weight: float = float(w[clampi(rarity, 0, w.size() - 1)])
+	var common: float = float(w[0])
+	return int(round(SHOP_BASE_PRICE * sqrt(common / maxf(1.0, weight))))
+
+static func heal_price(max_hp: int) -> int:
+	return int(round(max_hp * SHOP_HEAL_FRAC * SHOP_HEAL_GOLD_PER_HP))
+
+static func heal_amount(max_hp: int) -> int:
+	return int(round(max_hp * SHOP_HEAL_FRAC))
+
+# --- rewards ---
+const TIER_GOLD_MULT := {Tier.NORMAL: 1, Tier.ELITE: 2, Tier.BOSS: 4}
+
+## Reward must climb at least as fast as risk, or the optimal play is to farm the
+## easiest dungeon forever.
+##
+## This became urgent the moment enemies stopped matching the player without limit
+## (see RATIO_CEILING_BASE). Once a strong deck can outgrow the Crypt, a LINEAR
+## gold curve made grinding it strictly optimal: measured d1 -> d8 as 10x the HP
+## lost per fight for 1.8x the gold. Superlinear depth pay keeps going deeper the
+## rational choice as well as the interesting one. The exponent is set so mid-depth
+## income is roughly unchanged — the fusion prices were tuned against it.
+const GOLD_DEPTH_EXP := 1.8
+
+static func gold_reward(dungeon: int, tier: int, roll: int) -> int:
+	var base := 4.0 + pow(float(maxi(1, dungeon)), GOLD_DEPTH_EXP) + float(roll)
+	return int(round(base)) * int(TIER_GOLD_MULT[tier])
+
+## Reward rarity weights by tier (index = CardData.Rarity).
+const WEIGHTS := {
+	Tier.NORMAL: [100, 40, 15, 5, 1],
+	Tier.ELITE: [40, 60, 40, 15, 3],
+	Tier.BOSS: [10, 30, 50, 30, 10],
+}
+
+# --- death penalty (D3, retuned by D20) ---
+## Cards permanently lost on death, by dungeon difficulty. Retuned downward when
+## run-escrow landed: forfeiting everything earned in the run is now the main
+## sting, so stacking the old full card loss on top was double punishment.
+static func cards_lost_on_death(dungeon: int) -> int:
+	return maxi(1, int(ceil(float(dungeon) / 2.0)))
+
+
+## Floor on total collection size. DERIVED from MIN_DECK_SIZE, never a loose
+## number: if the collection can fall below the minimum legal deck, the player
+## cannot build a deck, cannot enter a dungeon, and therefore cannot earn cards —
+## an unrecoverable softlock. Any future sink on the collection must respect this.
+const MIN_KEEP := MIN_DECK_SIZE
+static func gold_loss_fraction(dungeon: int) -> float:
+	return clampf(0.25 + 0.1 * (dungeon - 1), 0.25, 0.8)

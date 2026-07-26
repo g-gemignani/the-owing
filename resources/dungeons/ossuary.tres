@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DungeonData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "ossuary"
+name = "The Ossuary"
+description = "Stacked neatly, floor to ceiling. Someone was tidy."
+traversal = 1
+difficulty = 2
+unlock_after_clears = 0
+enemy_roster = PackedStringArray("ossuary_wretch","marrow_priest","bone_picker")
+card_pool = PackedStringArray("cleave", "focus")
+exclusive_cards = PackedStringArray("cleave", "focus")

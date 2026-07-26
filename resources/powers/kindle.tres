@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PowerData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/power_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "kindle"
+name = "Kindle"
+description = "Gain 1 Strength."
+cost = 1
+rarity = 2
+level = 1
+unlock_after_clears = 2
+max_level = 10
+gain_strength = 1
+type = 2

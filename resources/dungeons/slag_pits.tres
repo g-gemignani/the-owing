@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="DungeonData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/dungeon_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "slag_pits"
+name = "The Slag Pits"
+description = "Molten channels and the shapes that wade them."
+traversal = 1
+difficulty = 4
+unlock_after_clears = 3
+enemy_roster = PackedStringArray("forge_hound", "cinder_knight", "brute", "slag_wretch")
+card_pool = PackedStringArray("caltrops", "entrench")
+exclusive_cards = PackedStringArray("caltrops", "entrench")

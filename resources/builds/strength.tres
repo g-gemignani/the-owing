@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BuildData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/build_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "strength"
+name = "The Rising Arm"
+description = "Every hit teaches the next one."
+cards = PackedStringArray("inflame", "forge_strike", "smiths_fury", "berserker_rage", "heavy_swing", "bloodlust", "demon_form", "perfected_strike", "searing_blow", "whetted_edge")

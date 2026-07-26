@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="RelicData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/relic_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "leather_wrap"
+name = "Leather Wrap"
+description = "Start each combat with 4 Block."
+rarity = 0
+bonus_max_hp = 0
+start_block = 4
+start_strength = 0
+start_dexterity = 0
+bonus_energy = 0
+extra_draw = 0
+heal_after_combat = 0
+gold_percent = 0

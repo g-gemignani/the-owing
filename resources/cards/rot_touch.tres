@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rot_touch"
+name = "Rot Touch"
+description = "Deal 5 damage. Apply 2 Poison."
+cost = 1
+type = 0
+rarity = 0
+level = 1
+damage = 5
+apply_poison = 2

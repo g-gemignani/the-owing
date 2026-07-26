@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PowerData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/power_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "foresight"
+name = "Foresight"
+description = "Draw 1 card. Free."
+cost = 0
+rarity = 0
+level = 1
+unlock_after_clears = 0
+max_level = 10
+draw = 1
+type = 1

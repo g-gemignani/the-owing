@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "rot_priest"
+name = "Rot Priest"
+hp_mult = 0.85
+dmg_mult = 0.8
+count_min = 1
+count_max = 1
+pattern = PackedInt32Array(1, 0, 2, 0)
+debuff_stacks = 2
+block_amount = 5
+strength_gain = 2

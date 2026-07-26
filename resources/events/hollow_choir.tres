@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EventData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/event_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "hollow_choir"
+title = "The Hollow Choir"
+description = "They are singing your name, slightly wrong."
+choice_labels = PackedStringArray("Sing back (-12% HP)", "Cover your ears (heal 10%)", "Listen")
+choice_results = PackedStringArray("They correct themselves, and reward you.", "The song passes.", "You learn something you cannot use yet.")
+hp_deltas = PackedInt32Array(0, 0, 0)
+gold_deltas = PackedInt32Array(0, 0, 0)
+hp_percent_deltas = PackedInt32Array(-12, 10, 0)
+card_deltas = PackedInt32Array(1, 0, 0)
+relic_grants = PackedInt32Array(0, 0, 0)
+starts_fight = PackedInt32Array(0, 0, 0)

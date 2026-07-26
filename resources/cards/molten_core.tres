@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "molten_core"
+name = "Molten Core"
+description = "Gain 3 Strength and 3 Thorns."
+cost = 2
+type = 2
+rarity = 3
+level = 1
+gain_strength = 3
+gain_thorns = 3

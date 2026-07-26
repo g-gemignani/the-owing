@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "iron_wave"
+name = "Iron Wave"
+description = "Deal 5, gain 5 block."
+cost = 1
+type = 0
+level = 1
+damage = 5
+block = 5
+draw = 0

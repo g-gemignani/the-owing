@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="EventData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/event_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "coin_press"
+title = "The Coin Press"
+description = "Still warm. Still working."
+choice_labels = PackedStringArray("Run it (+70 gold, -8 HP)", "Break it for parts (gain a card)", "Leave")
+choice_results = PackedStringArray("Fresh coin, wrong faces.", "Good steel in there.", "It keeps stamping.")
+hp_deltas = PackedInt32Array(-8, 0, 0)
+gold_deltas = PackedInt32Array(70, 0, 0)
+hp_percent_deltas = PackedInt32Array(0, 0, 0)
+card_deltas = PackedInt32Array(0, 1, 0)
+relic_grants = PackedInt32Array(0, 0, 0)
+starts_fight = PackedInt32Array(0, 0, 0)

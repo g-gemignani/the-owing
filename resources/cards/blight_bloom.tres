@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "blight_bloom"
+name = "Blight Bloom"
+description = "Apply 4 Poison to ALL enemies."
+cost = 2
+type = 1
+rarity = 2
+level = 1
+apply_poison = 4
+aoe = true

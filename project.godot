@@ -1,0 +1,31 @@
+; Engine configuration file.
+; Slay-like combat prototype.
+
+config_version=5
+
+[application]
+
+config/name="Deckcrawl"
+run/main_scene="res://scenes/MainMenu.tscn"
+config/features=PackedStringArray("4.7")
+
+[autoload]
+
+UITheme="*res://scripts/ui_theme.gd"
+SettingsState="*res://scripts/settings_state.gd"
+Audio="*res://scripts/audio.gd"
+MetaState="*res://scripts/meta_state.gd"
+GameState="*res://scripts/game_state.gd"
+
+[rendering]
+
+; Pixel art: nearest-neighbour, or scaling blurs every sprite into mush.
+textures/canvas_textures/default_texture_filter=0
+
+[display]
+
+window/size/viewport_width=1280
+window/size/viewport_height=720
+window/size/mode=3
+window/stretch/mode="canvas_items"
+window/stretch/aspect="expand"

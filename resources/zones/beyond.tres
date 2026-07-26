@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ZoneData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "beyond"
+name = "Beyond the Stair"
+description = "Past the last door anyone mapped. Nothing here was built for people."
+unlock_after_clears = 8
+dungeons = PackedStringArray("the_maw")
+card_pool = PackedStringArray("body_slam", "deep_breath", "defend", "execute", "footwork", "iron_lung", "molten_core", "perfected_strike", "rot_touch", "shiv", "shrug_it_off", "strike", "sword_dance", "undying", "wither")

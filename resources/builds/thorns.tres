@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BuildData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/build_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "thorns"
+name = "The Bramble Wall"
+description = "Let them come to you, and make the coming expensive."
+cards = PackedStringArray("riposte", "caltrops", "spiked_guard", "bramble_armour", "iron_will", "juggernaut", "thorn_crown", "molten_core")

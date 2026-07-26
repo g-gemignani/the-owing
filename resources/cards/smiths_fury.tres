@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="CardData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/card_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "smiths_fury"
+name = "Smith's Fury"
+description = "Gain 2 Strength. Draw 1."
+cost = 1
+type = 2
+rarity = 1
+level = 1
+gain_strength = 2
+draw = 1

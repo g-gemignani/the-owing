@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="ZoneData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/zone_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "barrows"
+name = "The Hollow Barrows"
+description = "Cold stone and old debts. Where everyone starts."
+unlock_after_clears = 0
+dungeons = PackedStringArray("crypt", "ossuary", "warrens")
+card_pool = PackedStringArray("adrenaline", "anvil_stance", "bash", "berserker_rage", "black_tide", "brace", "bramble_armour", "bulwark", "clear_mind", "creeping_death", "cull", "defend", "exsanguinate", "jab", "noxious_cloud", "pummel", "searing_blow", "sidestep", "strike")

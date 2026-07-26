@@ -1,0 +1,12 @@
+# Godot text resources are line-ending sensitive on some tools; keep them LF.
+*.gd      text eol=lf
+*.tres    text eol=lf
+*.tscn    text eol=lf
+*.godot   text eol=lf
+*.sh      text eol=lf
+*.md      text eol=lf
+
+# Binary assets: never touch, never diff as text.
+*.png     binary
+*.ogg     binary
+*.wav     binary

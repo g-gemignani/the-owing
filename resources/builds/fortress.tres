@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BuildData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/build_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "fortress"
+name = "The Closed Door"
+description = "Nothing gets through. Eventually, something gets out."
+cards = PackedStringArray("guard", "shield_wall", "entrench", "bulwark", "impervious", "barricade", "last_stand", "body_slam", "anvil_stance", "survival_instinct")

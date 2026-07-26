@@ -15,3 +15,18 @@ export_credentials.cfg
 .mono/
 data_*/
 mono_crash.*.json
+
+# Exported builds
+/build/
+export_presets.cfg
+
+# direnv / nix -------------------------------------------------------------
+.direnv/
+
+# OS / editor cruft --------------------------------------------------------
+*~
+.DS_Store
+
+# Save data lives in Godot's user:// dir, never the repo — but tests and tools
+# write sandboxed files here if run with an overridden path.
+t_*.json

@@ -1,0 +1,159 @@
+## Headless test: relics (Phase 7) — ownership, persistence, scaling, effects.
+## Run: godot --headless --script tests/test_relic.gd
+extends SceneTree
+
+const CARD_DIR := "res://resources/cards/"
+
+func _init() -> void:
+	# sandbox: tests must never write over the player's real save or settings
+	var Meta_ = load("res://scripts/meta_state.gd")
+	Meta_.path_prefix = "t_test_relic_"
+	_cleanup_sandbox()   # a flush after a previous run can outlive its cleanup
+	Meta_.writes_disabled = false
+	load("res://scripts/settings_state.gd").path_override = "user://t_test_relic_settings.json"
+	var fails := 0
+	var Meta = load("res://scripts/meta_state.gd")
+	var m = Meta.new()
+	m.new_save()
+
+	# --- every catalogued relic loads and is meaningful ---
+	for id in m.RELIC_CATALOG:
+		var r := load(m.RELIC_CATALOG[id]) as RelicData
+		if r == null:
+			fails += 1; print("FAIL relic missing: %s" % id); continue
+		if r.id != id:
+			fails += 1; print("FAIL relic id mismatch: %s vs %s" % [r.id, id])
+		if r.power_value() <= 0.0:
+			fails += 1; print("FAIL %s has no power_value (breaks enemy scaling)" % id)
+		if r.description.strip_edges() == "":
+			fails += 1; print("FAIL %s has no description" % id)
+
+	# --- flat_power must exclude throughput, power_value must include it ---
+	var battery := load(m.RELIC_CATALOG["ancient_battery"]) as RelicData
+	if battery.flat_power() != 0.0:
+		fails += 1; print("FAIL energy relic leaks into flat_power: %.1f" % battery.flat_power())
+	if battery.power_value() <= 0.0:
+		fails += 1; print("FAIL energy relic has no total worth")
+
+	# --- throughput scales multiplicatively ---
+	if abs(Balance.throughput_multiplier([]) - 1.0) > 0.001:
+		fails += 1; print("FAIL empty throughput multiplier != 1")
+	var mult: float = Balance.throughput_multiplier([battery])
+	var want: float = float(Balance.MAX_ENERGY + 1) / float(Balance.MAX_ENERGY)
+	if abs(mult - want) > 0.001:
+		fails += 1; print("FAIL energy multiplier %.3f (expect %.3f)" % [mult, want])
+
+	# --- relics raise the enemy scaling ratio ---
+	var deck := _deck({"strike": 4, "defend": 4})
+	var base_ratio: float = Balance.power_ratio(deck)
+	var with_relic: float = Balance.power_ratio(deck, [battery])
+	if with_relic <= base_ratio:
+		fails += 1; print("FAIL relics do not raise ratio (%.2f vs %.2f)" % [with_relic, base_ratio])
+
+	# --- ownership rules ---
+	if not m.add_relic("iron_heart"):
+		fails += 1; print("FAIL could not add relic")
+	if m.add_relic("iron_heart"):
+		fails += 1; print("FAIL duplicate relic accepted")
+	if m.add_relic("not_a_relic"):
+		fails += 1; print("FAIL unknown relic accepted")
+	if not m.has_relic("iron_heart"):
+		fails += 1; print("FAIL has_relic false after add")
+	if "iron_heart" in m.unowned_relics():
+		fails += 1; print("FAIL owned relic still in unowned pool")
+
+	# --- relic_bonus sums the right field ---
+	var ih := load(m.RELIC_CATALOG["iron_heart"]) as RelicData
+	if m.relic_bonus("bonus_max_hp") != ih.bonus_max_hp:
+		fails += 1; print("FAIL relic_bonus wrong: %d" % m.relic_bonus("bonus_max_hp"))
+
+	# --- persistence ---
+	m.save_game()
+	var m2 = Meta.new()
+	m2.load_game()
+	if not m2.has_relic("iron_heart"):
+		fails += 1; print("FAIL relics not persisted")
+
+	# --- relics are NOT lost on death (unlike cards/gold) ---
+	m2.add_gold(200)
+	for i in 12:
+		m2.add_card("strike")
+	var before: int = m2.relics.size()
+	for i in 5:
+		m2.penalize_death(4)
+	if m2.relics.size() != before:
+		fails += 1; print("FAIL death removed relics (%d -> %d)" % [before, m2.relics.size()])
+
+	# --- grant_relic hands out unowned relics, then runs dry ---
+	var m3 = Meta.new()
+	m3.new_save()
+	var granted := {}
+	for i in m3.RELIC_CATALOG.size():
+		var got: String = m3.grant_relic(Balance.Tier.BOSS)
+		if got == "":
+			fails += 1; print("FAIL grant returned empty while relics remained"); break
+		if granted.has(got):
+			fails += 1; print("FAIL granted duplicate relic: %s" % got); break
+		granted[got] = true
+	if m3.grant_relic(Balance.Tier.BOSS) != "":
+		fails += 1; print("FAIL granted a relic when all are owned")
+
+	# --- engine applies relic effects ---
+	var kite := load(m.RELIC_CATALOG["kite_shield"]) as RelicData
+	var whet := load(m.RELIC_CATALOG["whetstone"]) as RelicData
+	var lens := load(m.RELIC_CATALOG["scholars_lens"]) as RelicData
+	var eng := CombatEngine.new()
+	eng.setup(deck, 60, 60, 1, Balance.Tier.NORMAL, "cultist", [battery, kite, whet, lens])
+	if eng.energy != Balance.MAX_ENERGY + 1:
+		fails += 1; print("FAIL energy relic not applied: %d" % eng.energy)
+	if eng.hand.size() != Balance.HAND_SIZE + 1:
+		fails += 1; print("FAIL draw relic not applied: %d cards" % eng.hand.size())
+	if eng.player.strength < whet.start_strength:
+		fails += 1; print("FAIL start_strength not applied")
+	if eng.player.block < kite.start_block:
+		fails += 1; print("FAIL start_block not applied: %d" % eng.player.block)
+
+	# start_block must re-apply next turn (block otherwise expires)
+	eng.end_turn()
+	if eng.player.block < kite.start_block:
+		fails += 1; print("FAIL start_block not re-applied after turn: %d" % eng.player.block)
+
+	# no relics -> baseline energy and hand
+	var plain := CombatEngine.new()
+	plain.setup(deck, 60, 60, 1, Balance.Tier.NORMAL, "cultist")
+	if plain.energy != Balance.MAX_ENERGY or plain.hand.size() != Balance.HAND_SIZE:
+		fails += 1; print("FAIL baseline changed without relics")
+
+	if fails == 0:
+		print("RELIC TEST: PASS (ownership, persistence, scaling, effects, death-safety)")
+	else:
+		print("RELIC TEST: FAIL (%d)" % fails)
+	_cleanup_sandbox()
+	quit()
+
+func _deck(loadout: Dictionary) -> Array[CardData]:
+	var deck: Array[CardData] = []
+	for id in loadout:
+		for i in int(loadout[id]):
+			deck.append((load(CARD_DIR + id + ".tres") as CardData).duplicate())
+	return deck
+
+## Remove this test's sandboxed files so a test run leaves no residue in the
+## player's data directory.
+func _cleanup_sandbox() -> void:
+	# stop any surviving instance from re-writing what we are about to delete
+	load("res://scripts/meta_state.gd").writes_disabled = true
+	var d := DirAccess.open("user://")
+	if d == null:
+		return
+	d.list_dir_begin()
+	var f := d.get_next()
+	var doomed: Array[String] = []
+	while f != "":
+		if f.begins_with("t_"):
+			doomed.append(f)
+		f = d.get_next()
+	d.list_dir_end()
+	for x in doomed:
+		# absolute removal: the relative form silently no-ops here
+		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + x))

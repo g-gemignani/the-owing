@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BuildData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/build_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "swarm"
+name = "The Wide Cut"
+description = "One swing, many answers."
+cards = PackedStringArray("cleave", "whirlwind", "riptide", "black_tide", "massacre", "smoke_bomb", "hex", "sword_dance", "cull", "pressure")

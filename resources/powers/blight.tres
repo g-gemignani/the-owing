@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="PowerData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/power_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "blight"
+name = "Blight"
+description = "Apply 3 Poison."
+cost = 1
+rarity = 1
+level = 1
+unlock_after_clears = 1
+max_level = 10
+apply_poison = 3
+type = 1

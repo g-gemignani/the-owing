@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/enemy_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "market_ghoul"
+name = "Market Ghoul"
+hp_mult = 0.95
+dmg_mult = 1.0
+count_min = 1
+count_max = 3
+pattern = PackedInt32Array(0, 0)
+debuff_stacks = 1
+block_amount = 5
+strength_gain = 1
