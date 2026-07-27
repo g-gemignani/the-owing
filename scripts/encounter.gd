@@ -86,7 +86,7 @@ func _pick_event() -> EventData:
 	var pool := Balance.EVENTS.duplicate()
 	pool.shuffle()
 	for id in pool:
-		var e := load(Balance.EVENT_DIR + id + ".tres") as EventData
+		var e := Balance.event(id)
 		if e != null and e.choice_count() > 0:
 			return e
 	return null

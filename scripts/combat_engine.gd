@@ -140,7 +140,7 @@ func _spawn_enemies(forced_archetype: String) -> void:
 			if pool.is_empty():
 				pool = roster
 			id = pool[randi() % pool.size()]
-	var arch := load(Balance.ENEMY_DIR + id + ".tres") as EnemyData
+	var arch := Balance.enemy(id)
 	if arch == null:
 		arch = EnemyData.new()
 
@@ -798,7 +798,7 @@ func load_state(d: Dictionary, catalog: Dictionary, p_relics: Array = []) -> voi
 		var c := Combatant.new()
 		c.load_state(e.get("combatant", {}))
 		enemies.append(c)
-		var arch := load(Balance.ENEMY_DIR + String(e.get("archetype", "cultist")) + ".tres") as EnemyData
+		var arch := Balance.enemy(String(e.get("archetype", "cultist")))
 		archetypes.append(arch if arch != null else EnemyData.new())
 		base_damage.append(int(e.get("base_damage", 5)))
 		enemy_turns.append(int(e.get("turns", 0)))

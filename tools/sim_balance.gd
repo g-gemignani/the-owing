@@ -63,7 +63,23 @@ func _init() -> void:
 		print("")
 	print("Target: RUN completion ~50-70%% at matched progression; <20%% when over-reaching.")
 	_avoid_calibration()
+	_print_budget()
 	quit()
+
+## What the run cost, by phase. Anything dominating here is where to look next.
+func _print_budget() -> void:
+	var total := 0
+	for k in _spent:
+		total += int(_spent[k])
+	if total <= 0:
+		return
+	print("\n=== where the time went ===")
+	var keys: Array = _spent.keys()
+	keys.sort_custom(func(a, b): return int(_spent[a]) > int(_spent[b]))
+	for k in keys:
+		print("   %-12s %7.1f s  %3.0f%%" % [
+			k, float(_spent[k]) / 1e6, 100.0 * float(_spent[k]) / float(total)])
+	print("   %-12s %7.1f s  (measured phases only)" % ["TOTAL", float(total) / 1e6])
 
 ## Is paying HP to skip a fight priced, or is it a cheat?
 ##
@@ -79,6 +95,7 @@ func _avoid_calibration() -> void:
 	print("\n=== Avoid calibration (%d trials per cell) ===" % CALIBRATION_TRIALS)
 	print("Deck dungeons only — the other models have nothing to dodge.")
 	print("A price is right when SMART >= both fixed lines of play.\n")
+	var t_cal := Time.get_ticks_usec()
 	for profile in _profiles():
 		var deck: Array[CardData] = profile["deck"]
 		for dungeon_id in profile["dungeons"]:
@@ -99,6 +116,7 @@ func _avoid_calibration() -> void:
 				cells[2]["complete"] * 100.0, cells[2]["avoid_rate"] * 100.0])
 			if cells[2]["complete"] > cells[1]["complete"] + 0.05:
 				print("      ^ ALWAYS-AVOID beats the smart line: the dodge is underpriced")
+	_tick("avoid_calibration", t_cal)
 
 ## Simulate a full dungeon: walk a random path through the real generated map,
 ## fighting with persistent HP, resting where offered. Returns completion rate.
@@ -187,7 +205,9 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 				Traversal.Enc.EVENT:
 					# HP/gold effects only. Card and relic grants are skipped: they
 					# would mutate the very deck this profile is measuring.
+					var t_ev := Time.get_ticks_usec()
 					var res := _sim_event(hp, max_hp, gold)
+					_tick("events", t_ev)
 					hp = int(res["hp"])
 					gold = int(res["gold"])
 					tv.clear_pending()
@@ -209,8 +229,11 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					# ends on its own boss rather than a roster enemy with boss
 					# multipliers (D41). Leaving them out measured a weaker player
 					# against a different finale.
+					var t_su := Time.get_ticks_usec()
 					eng.setup(run_deck, hp, max_hp, difficulty, tier, "", relics, roster,
 						power, dd.boss if dd != null else "")
+					_tick("fight_setup", t_su)
+					var t_fi := Time.get_ticks_usec()
 					var g2 := 0
 					while not eng.over() and g2 < 200:
 						g2 += 1
@@ -218,6 +241,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						if eng.over():
 							break
 						eng.end_turn()
+					_tick("fight_play", t_fi)
 					fights += 1
 					if eng.lost():
 						alive = false
@@ -233,7 +257,9 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						cost_est[enc_kind] = prev + (float(hp_before - hp) - prev) / float(n)
 						cost_n[enc_kind] = n
 						gold += Balance.gold_reward(difficulty, tier, randi() % 6)
+						var t_rw := Time.get_ticks_usec()
 						var won_card := _reward_card(dungeon_id, reward_level)
+						_tick("rewards", t_rw)
 						if won_card != null:
 							run_deck.append(won_card)
 						tv.clear_pending()
@@ -253,7 +279,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 ## that does not cost HP if one exists, else accept the HP cost.
 func _sim_event(hp: int, max_hp: int, gold: int) -> Dictionary:
 	var pool := Balance.EVENTS
-	var e := load(Balance.EVENT_DIR + pool[randi() % pool.size()] + ".tres") as EventData
+	var e := Balance.event(String(pool[randi() % pool.size()]))
 	if e == null or e.choice_count() == 0:
 		return {"hp": hp, "gold": gold}
 	var best := -1
@@ -480,36 +506,59 @@ func _profiles() -> Array:
 
 ## One reward card from this dungeon's pool, at the level the player's cards sit at.
 ## Rarity is tilted by depth exactly as the reward screen tilts it.
-func _reward_card(dungeon_id: String, level: int) -> CardData:
+##
+## The table is built ONCE per dungeon. Rolling it used to load every card in the
+## pool every time — nineteen resource lookups at 0.12 ms each, so a single reward
+## cost 2.3 ms against 0.35 ms for an entire simulated fight, and the tool spent
+## most of its life in ResourceLoader rather than in the game.
+static var _reward_tables := {}
+
+## Where the tool's own time goes, printed at the end of a report. Added after a
+## round of optimisation guessed wrong twice: caching the content accessors won 350x
+## on one call and 3x overall, which means the guess about what dominated was off.
+## A profiler that ships with the tool is cheaper than re-deriving this every time.
+static var _spent := {}
+
+static func _tick(bucket: String, from: int) -> void:
+	_spent[bucket] = int(_spent.get(bucket, 0)) + (Time.get_ticks_usec() - from)
+
+func _reward_table(dungeon_id: String) -> Dictionary:
+	if _reward_tables.has(dungeon_id):
+		return _reward_tables[dungeon_id]
 	var dd := Balance.dungeon(dungeon_id)
-	var pool: Array = Balance.card_pool_for(dungeon_id)
-	if pool.is_empty():
-		return null
 	var wtbl: Array = Balance.reward_weights(Balance.Tier.NORMAL,
 		dd.difficulty if dd != null else 1)
-	var loaded: Array = []
+	var ids: Array = []
 	var weights: Array = []
 	var total := 0
-	for id in pool:
-		var c := load(CARD_DIR + id + ".tres") as CardData
+	for id in Balance.card_pool_for(dungeon_id):
+		var c := Balance.card(id)
 		if c == null:
 			continue
-		loaded.append(c)
+		ids.append(id)
 		var w: int = wtbl[clampi(c.rarity, 0, wtbl.size() - 1)]
 		weights.append(w)
 		total += w
-	if loaded.is_empty():
+	var table := {"ids": ids, "weights": weights, "total": total}
+	_reward_tables[dungeon_id] = table
+	return table
+
+func _reward_card(dungeon_id: String, level: int) -> CardData:
+	var table := _reward_table(dungeon_id)
+	var ids: Array = table["ids"]
+	if ids.is_empty():
 		return null
-	var roll := randi() % maxi(1, total)
-	for i in loaded.size():
+	var weights: Array = table["weights"]
+	var roll := randi() % maxi(1, int(table["total"]))
+	var pick: int = ids.size() - 1
+	for i in ids.size():
 		roll -= int(weights[i])
 		if roll < 0:
-			var pick := (loaded[i] as CardData).duplicate() as CardData
-			pick.level = level
-			return pick
-	var last := (loaded[loaded.size() - 1] as CardData).duplicate() as CardData
-	last.level = level
-	return last
+			pick = i
+			break
+	var card := Balance.card(String(ids[pick])).duplicate() as CardData
+	card.level = level
+	return card
 
 ## The ability the player carries. Every save has one — the starter kit grants
 ## Bulwark — and the sim measured runs without it: less throughput than the player
@@ -548,7 +597,12 @@ func _measure(deck: Array[CardData], dungeon: int, tier: int, hp_mult: float,
 	var turns_total := 0
 	var hp_lost_total := 0
 	var max_hp := int(Balance.max_hp_for(dungeon - 1) * hp_mult)
-	for t in TRIALS:
+	# A THIRD of the run trials. These columns are a full-HP indicator, not the
+	# metric that decides anything — the report says so itself — and at parity they
+	# cost as much as the run simulation they sit beside. A hundred fights pins a
+	# win rate to a few points, which is all this column is read to that precision.
+	var trials: int = maxi(40, TRIALS / 3)
+	for t in trials:
 		var eng := CombatEngine.new()
 		eng.setup(deck, max_hp, max_hp, dungeon, tier, "", relics, roster, power)
 		var guard := 0
@@ -563,11 +617,11 @@ func _measure(deck: Array[CardData], dungeon: int, tier: int, hp_mult: float,
 		turns_total += eng.turn
 		hp_lost_total += max_hp - eng.player.hp
 	return {
-		"win_rate": float(wins) / TRIALS,
-		"avg_turns": float(turns_total) / TRIALS,
+		"win_rate": float(wins) / trials,
+		"avg_turns": float(turns_total) / trials,
 		# HP lost as a fraction of max: if this is ~0, attrition is broken and
 		# individual fights are meaningless regardless of win rate.
-		"hp_lost_pct": float(hp_lost_total) / TRIALS / max_hp,
+		"hp_lost_pct": float(hp_lost_total) / trials / max_hp,
 	}
 
 ## Greedy policy: finish the enemy if possible; otherwise block when the

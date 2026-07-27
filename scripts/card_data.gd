@@ -295,7 +295,23 @@ func hit_damage() -> int:
 ## Tuning value of this card, used by Balance.power_ratio so enemy scaling keeps
 ## pace with status/power cards. Without this, a strong effect card would read as
 ## "0 power" and the difficulty curve would silently fall behind.
+## Memoised per instance, keyed on the level it was computed at.
+##
+## `power_ratio` sums this over the whole deck at the start of every fight, which
+## measured 31% of combat setup — for a number that cannot change unless the card
+## levels up. Everything below reads static fields and `level`; nothing reads the
+## per-combat `growth`, so the level is the whole key.
+var _power_cache := -1.0
+var _power_cache_level := -1
+
 func power_value() -> float:
+	if _power_cache_level == level and _power_cache >= 0.0:
+		return _power_cache
+	_power_cache_level = level
+	_power_cache = _power_value_uncached()
+	return _power_cache
+
+func _power_value_uncached() -> float:
 	# multi-hit and AoE multiply the damage a single card delivers
 	var dmg := float(eff_damage()) * float(maxi(1, hits))
 	if aoe:

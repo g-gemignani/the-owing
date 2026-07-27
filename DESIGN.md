@@ -940,6 +940,8 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 ## 8. Changelog
 
+- **The simulator was spending its life in ResourceLoader (D76).** The full report had stopped finishing — 32 minutes and abandoned — so D72 was tuned at reduced precision. Profiled rather than guessed: a single reward roll cost ten times an entire simulated fight, because every content accessor (`dungeon()`, `zone_of()`, and the card pool built from them) did a `load()` per call, and the reward screen in the *game* did the same on every victory. Caching those, building the reward table once per dungeon, and memoising `power_value()` per level cut the report to a fraction of its runtime. The tool now prints where its own time goes.
+
 - **A tuning pass on a corrected instrument (D75).** Everything tuned before D72 was set against a simulator that modelled a weaker player than the game provides. Re-tuned: the Abyssal Stair no longer out-punishes the Maw a full depth below it, mid-game ceilings now sit above the decks that visit them (so a matched deck is no longer pinned where enemies stop scaling), and relics are priced 40% higher after a relic deck out-cleared two stronger-looking ones at the same dungeon. `DMG_POWER_K` was tried as a global lever and rejected with numbers — it crushed the already-hard cells to fix the soft ones.
 
 - **A fourth way to walk a dungeon: an isometric floor (D74).** From play, and not as a bug report: the graph model is the best of the three and that is the problem, because it is the one that reads most like the game this one stands next to. All three existing models abstract a *route*; none of them is a *place*. `TraversalIso` carves a floor of rooms out of a 6x6 plate, lights the room you stand in and its neighbours, and hides the stair down — so the run is a question of coverage, not of route. The torch pays for one tidy tour and every step past it costs HP, which is the mirror of the deck model's priced dodge: there you pay to see less of a dungeon, here you pay to see more. It walks the same encounter budget as the other three (9.2 against 9.2), the contract test caught a pacing deadlock that only fired 3 runs in 360, and it is plugged into the Warrens so the three opening dungeons teach three different models.
@@ -2982,21 +2984,23 @@ is to price that thing, not to raise the tide.
 The simulator also gained `--trials=N`, because a tuning pass needs many runs of the
 report and one at full precision, not fifteen at full precision.
 
-**Measured at 120 trials per cell (about +/- 5 points), after the change:**
+**Measured after the change.** The figures below are the 400-trial confirmation run
+that D76 made affordable; every cell landed within 8 points of the 120-trial numbers
+this pass was actually tuned against, so the tuning holds at full precision.
 
 | deck | | |
 |---|---|---|
-| Starter, 0 clears | Crypt 99% | Ossuary 75% |
-| Early, 1 clear | Crypt 100% | **Foundry 61%** |
-| Mid Lv15, 3 clears | Foundry 99% | Ember Road 98% |
-| Status Lv15 | Foundry 88% | Ember Road 62% |
-| Barricade Lv15 | Foundry 50% | Sunken Vault 52% |
-| Poison Lv15 | Fungal Deep 63% | Rot Gardens 68% |
-| AoE Lv15 | Rot Gardens 68% | Drowned Market 28% |
-| Thorns Lv15 | Abyssal Stair 32% | The Maw 57% |
-| Relic build, 4 relics | Foundry 100% | **Sunken Vault 89%** |
-| Late Lv40, 6 relics | Abyssal Stair 32% | The Maw 27% |
-| Endgame Lv100, 7 relics | Abyssal Stair 70% | The Maw 67% |
+| Starter, 0 clears | Crypt 98% | Ossuary 80% |
+| Early, 1 clear | Crypt 100% | **Foundry 62%** |
+| Mid Lv15, 3 clears | Foundry 98% | Ember Road 100% |
+| Status Lv15 | Foundry 82% | Ember Road 71% |
+| Barricade Lv15 | Foundry 44% | Sunken Vault 62% |
+| Poison Lv15 | Fungal Deep 70% | Rot Gardens 63% |
+| AoE Lv15 | Rot Gardens 68% | Drowned Market 34% |
+| Thorns Lv15 | Abyssal Stair 33% | The Maw 54% |
+| Relic build, 4 relics | Foundry 100% | **Sunken Vault 92%** |
+| Late Lv40, 6 relics | Abyssal Stair 36% | The Maw 31% |
+| Endgame Lv100, 7 relics | Abyssal Stair 73% | The Maw 68% |
 
 The opening stays easy, which is what a player reported and what D71 established the
 tool had been lying about. The Foundry is still the one early wall. The deep end
@@ -3008,3 +3012,72 @@ each fight, and higher ceilings mean longer fights — so the numbers above carr
 uncertainty of 120 trials, and the tool needs profiling before the next pass. That
 is a real cost of D71's fidelity, and it is worth stating rather than hiding: a
 measurement nobody can afford to run is one that stops being run.
+
+### D76 — The simulator was spending its life in ResourceLoader
+
+D75 had to be tuned at 120 trials per cell because the full 400-trial report had
+stopped finishing: it ran for 32 minutes and was abandoned. A measurement nobody can
+afford to run is one that stops being run, so this is the pass that made it
+affordable — profiled, not guessed, and the first guess was wrong.
+
+**What it actually cost, measured per operation:**
+
+| | cost |
+|---|---|
+| an entire simulated fight | 0.35 ms |
+| ...of which combat setup | 0.13 ms |
+| **one reward roll** | **3.52 ms** |
+
+A reward roll cost **ten times an entire fight**. Splitting it showed two separate
+culprits, not one:
+
+* `Balance.card_pool_for()` — **1.04 ms per call**, because it calls
+  `Balance.dungeon()` and `zone_of()`, and *every one of those accessors did a
+  `load()` on every call*. Six resource lookups to answer a question about static
+  content.
+* loading the 19 cards in the pool to weight them — **2.58 ms**, at 0.136 ms per
+  `load()`.
+
+`load()` returns the same cached instance for a path, so the cost was pure
+ResourceLoader path resolution — tolerable once, ruinous in a loop. And the loop was
+not only in the tool: the game's reward screen rebuilt the same pool and reloaded
+the same nineteen cards on **every victory**.
+
+**The fixes, in order of what they bought:**
+
+1. `Balance._cached()` behind `dungeon()`, `zone()`, `build()`, `power()`, and new
+   `card()`, `enemy()`, `event()` accessors, plus a memo on `card_pool_for()`.
+   Semantically identical — `load()` already returned the shared instance — so this
+   introduced no aliasing that was not already there. `card_pool_for` went
+   **1.044 ms → 0.003 ms**.
+2. The simulator builds its reward table (ids, weights, total) **once per dungeon**
+   instead of per roll. Rewards fell from ~90% of a run's cost to 3%.
+3. `CardData.power_value()` memoised per level. `power_ratio()` sums it over the
+   whole deck at the start of every fight, which was 31% of combat setup — for a
+   number that cannot change unless the card levels up. Setup: 0.13 → 0.10 ms.
+4. `Balance.enemy()` replacing a per-fight archetype `load()`: setup 0.10 →
+   0.03 ms, and fight_setup across a whole report fell 6.5 s → 2.0 s.
+5. The per-fight diagnostic columns run a **third** of the run trials. The report
+   says itself that they are full-HP indicators rather than the metric that decides
+   anything, and at parity they cost as much as the run simulation beside them.
+
+**The tool now profiles itself.** Guessing was wrong twice — the content-accessor
+cache won 350x on one call but only 3x overall, which meant the model of where the
+time went was off — so every phase is timed and printed at the end of a report:
+
+    === where the time went ===
+       fight_play          19.6 s   67%
+       avoid_calibration    6.7 s   23%
+       fight_setup          2.0 s    7%
+       rewards              0.9 s    3%
+
+Two thirds of it is now simulating combat, which is the work the tool exists to do.
+It also gained `--trials=N`, so a tuning pass can iterate at low precision and
+confirm once at full.
+
+**The full report went from 32 minutes (abandoned) to 64 seconds** — at least 30x —
+which is what let D72's tuning be confirmed at 400 trials instead of left provisional
+at 120. That confirmation immediately caught a stale number of its own:
+`MAX_ACHIEVABLE_RATIO` still said 6.0 while a maxed loadout now measures 6.09, since
+D72 repriced relics. A constant whose comment says "measured" has to be re-measured
+when the thing it measures moves.

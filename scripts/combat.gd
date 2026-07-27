@@ -941,7 +941,9 @@ func _roll_rewards(n: int) -> Array[CardData]:
 		var weights: Array = []
 		var total := 0
 		for id in pool:
-			var c := load(MetaState.CATALOG[id]) as CardData
+			# Balance.card, not load(): the same shared instance, without paying
+			# ResourceLoader's path resolution nineteen times per reward screen
+			var c := Balance.card(id)
 			loaded.append(c)
 			var w: int = wtbl[clampi(c.rarity, 0, wtbl.size() - 1)]
 			weights.append(w)

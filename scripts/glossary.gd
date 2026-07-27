@@ -40,7 +40,7 @@ func _ready() -> void:
 
 	_section(list, "Statuses on enemies")
 	for aid in ["cultist", "hexer", "warden"]:
-		var a := load(Balance.ENEMY_DIR + aid + ".tres") as EnemyData
+		var a := Balance.enemy(aid)
 		if a != null:
 			_entry(list, a.name, "Acts on a fixed, visible cycle. Learn the pattern and you can plan around it.")
 			break

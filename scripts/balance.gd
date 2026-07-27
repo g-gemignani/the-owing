@@ -166,7 +166,11 @@ const RATIO_CEILING_PER_DEPTH := 0.90
 ## The strongest ratio a fully-built player can reach: maxed card levels plus a
 ## full relic set. Measured with tools/sim_balance.gd, not guessed. The deepest
 ## dungeon must scale past this or the endgame stops resisting.
-const MAX_ACHIEVABLE_RATIO := 6.0
+##
+## Re-measured at 6.09 after D75 repriced relics — a constant whose comment says
+## "measured" has to be re-measured when the thing it measures moves, or it becomes
+## the fourth restated number in this file to quietly go stale.
+const MAX_ACHIEVABLE_RATIO := 6.1
 
 ## The power level `difficulty` will scale its enemies to match.
 static func ratio_ceiling(difficulty: int) -> float:
@@ -197,8 +201,48 @@ const POWER_DIR := "res://resources/powers/"
 const POWERS := ["bulwark", "foresight", "cleave", "blight", "expose", "bramble",
 	"kindle", "overwhelm", "siphon", "second_wind"]
 
+
+# --- resource caches ---------------------------------------------------------
+#
+# `load()` already returns the SAME instance for a path, so these dictionaries
+# change nothing about aliasing — they only skip ResourceLoader's path resolution,
+# measured at 0.136 ms per call. Tolerable once, ruinous in a loop:
+# `card_pool_for()` performed six of them per call, cost 1.04 ms, and is called on
+# every reward, every shop roll and every simulated encounter. The balance
+# simulator was spending ninety per cent of its time in resource lookups — a
+# reward roll cost ten times an entire simulated fight.
+#
+# Safe because every one of these is immutable content read straight off disk. The
+# only thing given up is picking up a `.tres` edit without restarting, which is not
+# something a running game does anyway.
+const CARD_DIR := "res://resources/cards/"
+
+static var _res_cache := {}
+static var _pool_cache := {}
+
+static func _cached(path: String):
+	if _res_cache.has(path):
+		return _res_cache[path]
+	var r = load(path)
+	_res_cache[path] = r
+	return r
+
+## A card resource by id, shared. Callers that mutate it — setting a level, a
+## growth — must `duplicate()` first, exactly as they had to when this was a bare
+## `load()`, because that returned the same shared instance too.
+static func card(id: String) -> CardData:
+	return _cached(CARD_DIR + id + ".tres") as CardData
+
+## An enemy archetype by id, shared. Loaded once per fight before this existed,
+## which was a fifth of combat setup.
+static func enemy(id: String) -> EnemyData:
+	return _cached(ENEMY_DIR + id + ".tres") as EnemyData
+
+static func event(id: String) -> EventData:
+	return _cached(EVENT_DIR + id + ".tres") as EventData
+
 static func power(id: String) -> PowerData:
-	return load(POWER_DIR + id + ".tres") as PowerData
+	return _cached(POWER_DIR + id + ".tres") as PowerData
 
 static func all_powers() -> Array:
 	var out: Array = []
@@ -441,7 +485,7 @@ const ZONE_DIR := "res://resources/zones/"
 const ZONES := ["barrows", "foundry_zone", "rot", "deeps", "beyond"]
 
 static func zone(id: String) -> ZoneData:
-	return load(ZONE_DIR + id + ".tres") as ZoneData
+	return _cached(ZONE_DIR + id + ".tres") as ZoneData
 
 static func all_zones() -> Array:
 	var out: Array = []
@@ -457,7 +501,7 @@ const BUILD_DIR := "res://resources/builds/"
 const BUILDS := ["poison", "thorns", "strength", "fortress", "swarm", "tempo", "vampire"]
 
 static func build(id: String) -> BuildData:
-	return load(BUILD_DIR + id + ".tres") as BuildData
+	return _cached(BUILD_DIR + id + ".tres") as BuildData
 
 static func all_builds() -> Array:
 	var out: Array = []
@@ -551,6 +595,8 @@ static func zone_of(dungeon_id: String) -> ZoneData:
 
 ## Cards obtainable in a dungeon: its zone's themed pool plus its own exclusives.
 static func card_pool_for(dungeon_id: String) -> Array:
+	if _pool_cache.has(dungeon_id):
+		return _pool_cache[dungeon_id]
 	var out: Array = []
 	var z := zone_of(dungeon_id)
 	if z != null:
@@ -562,10 +608,11 @@ static func card_pool_for(dungeon_id: String) -> Array:
 		for c in d.card_pool:
 			if not c in out:
 				out.append(c)
+	_pool_cache[dungeon_id] = out
 	return out
 
 static func dungeon(id: String) -> DungeonData:
-	return load(DUNGEON_DIR + id + ".tres") as DungeonData
+	return _cached(DUNGEON_DIR + id + ".tres") as DungeonData
 
 static func all_dungeons() -> Array:
 	var out: Array = []
