@@ -49,12 +49,18 @@ const ART := "res://assets/art/"
 ## resolving a source filename to a catalogue id.
 const Cut := preload("res://tools/cutout_lib.gd")
 
-## family -> [subdirectory, default canvas, anchor-to-bottom]
+## family -> [subdirectory, default canvas, anchor-to-bottom, FILLED]
+##
+## `filled` is the odd one out and it is not a preference. Three of these families are
+## a subject on a field that has to be cut out of it; `cards` is a PICTURE that fills
+## its frame edge to edge, which is what its own brief asks for. Sending it through the
+## matte asks for a flat border on art that deliberately bleeds to every edge, so the
+## matte refuses and the whole tier fails at 0/12 (D118).
 const FAMILIES := {
-	"enemies": ["enemies", 256, true],
-	"relics": ["relics", 128, false],
-	"powers": ["powers", 128, false],
-	"cards": ["cards", 320, false],
+	"enemies": ["enemies", 256, true, false],
+	"relics": ["relics", 128, false, false],
+	"powers": ["powers", 128, false, false],
+	"cards": ["cards", 320, false, true],
 }
 ## Bosses are drawn bigger because they are RENDERED bigger (combat.gd TIER_SIZE is
 ## 1.34x): a 256px boss upscaled to the biggest thing on screen is a soft boss.
@@ -105,7 +111,8 @@ func _init() -> void:
 			failed += 1
 			continue
 		var canvas: Vector2i = wanted[id]
-		var note := Cut.cut(img, canvas, bool(FAMILIES[family][2]))
+		var note := Cut.fill(img, canvas) if bool(FAMILIES[family][3]) \
+			else Cut.cut(img, canvas, bool(FAMILIES[family][2]))
 		if note != "":
 			print("FAIL  %-22s %s" % [path.get_file(), note])
 			failed += 1

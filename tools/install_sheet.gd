@@ -66,7 +66,35 @@ const SETS := {
 	"symbols": [64, true],
 	"intents": [96, false],
 	"powers": [128, false],
+	# Taller than they are wide, because these are standing figures anchored by their
+	# feet — a square canvas would centre a person in it and `iso_run.gd` positions
+	# sprites by their bottom edge, so the standing point would float.
+	"iso_figures": [0, false],
+	"iso_furniture": [0, false],
 }
+
+## Non-square canvases, by set name. `SETS` carries one number because every set had
+## one until Tier 8; rather than widen four rows that do not need it, the exceptions
+## live here.
+const TALL := {
+	"iso_figures": Vector2i(128, 192),
+	"iso_furniture": Vector2i(128, 192),
+}
+
+## Sets whose subject STANDS on something, so it is anchored to the bottom of its
+## canvas rather than centred in it.
+##
+## Every set here until Tier 8 was an icon — a symbol, a telegraph, a sigil — and an
+## icon is centred, so this file passed `anchor_bottom: false` to `Cut.cut` and had no
+## reason to think about it. An isometric figure is not an icon: `iso_run.gd` places
+## sprites by their BOTTOM EDGE, so a figure centred on a 128x192 canvas stands on
+## empty pixels and hovers by however much margin the trim left above its head.
+##
+## `install_cutouts.gd` already knew this and passes `true` for the `enemies` family,
+## which is why the thirty-five combat plates measure 0.0% empty space below the feet.
+## The two tools disagreed only because no bottom-anchored set had ever come in on a
+## sheet before (D122).
+const FOOTED := ["iso_figures", "iso_furniture"]
 
 var _dry := false
 
@@ -121,7 +149,7 @@ func _init() -> void:
 		targets = kept
 		print("--only: %d of %s's targets, so the grid below is sized for those" % [
 			targets.size(), set_name])
-	var canvas := Vector2i.ONE * int(SETS[set_name][0])
+	var canvas: Vector2i = TALL.get(set_name, Vector2i.ONE * int(SETS[set_name][0]))
 	var mono: bool = bool(SETS[set_name][1])
 
 	var sheet := Cut.load_image(sheet_path)
@@ -176,7 +204,7 @@ func _init() -> void:
 		var cy := src / cols
 		var cell := sheet.get_region(Rect2i(cx * cw, cy * ch, cw, ch))
 		var note := Cut.cut_mono(cell, canvas) if mono \
-			else Cut.cut(cell, canvas, false)
+			else Cut.cut(cell, canvas, set_name in FOOTED)
 		if note != "":
 			print("FAIL  r%dc%d -> %-24s %s" % [cy, cx, rel.get_file(), note])
 			failed += 1
@@ -225,6 +253,26 @@ func _ids(set_name: String) -> Array:
 			for pid in Balance.POWERS:
 				var p := Balance.power(pid)
 				out.append(["powers/%s.png" % pid, p.name if p != null else pid])
+		# Two columns, one row per figure: LEFT faces the camera (`_s`), RIGHT is the
+		# same figure from behind (`_n`). Emitted as a pair because the reader is
+		# row-major like every other sheet here, so the caller passes `--cols=2`.
+		"iso_figures":
+			out.append(["iso/hero_s.png", "hero, facing you"])
+			out.append(["iso/hero_n.png", "hero, from behind"])
+			for fam in Balance.ISO_FAMILIES:
+				out.append(["iso/mon_%s_s.png" % fam, "%s, facing you" % fam])
+				out.append(["iso/mon_%s_n.png" % fam, "%s, from behind" % fam])
+			for i in Balance.ISO_WANDERERS:
+				out.append(["iso/wander_%d_s.png" % i, "wanderer %d, facing you" % i])
+				out.append(["iso/wander_%d_n.png" % i, "wanderer %d, from behind" % i])
+		# The three fight tiers come FIRST, so the three that have to read as escalating
+		# sit next to each other on the sheet and are drawn against each other.
+		"iso_furniture":
+			for e in [["combat", "ordinary fight"], ["elite", "harder fight"],
+					["boss", "the floor's boss"], ["shop", "merchant's stall"],
+					["rest", "campfire"], ["event", "rune-stone"],
+					["treasure", "shut chest"]]:
+				out.append(["iso/%s.png" % String(e[0]), String(e[1])])
 	# `nodes`, `tiles` and `dice` used to be here — the graph map's icons, the dice
 	# track's, and six die faces. All three models went in D94 and the manifest stopped
 	# asking for the art in D111. An installer for files nothing loads is a way to

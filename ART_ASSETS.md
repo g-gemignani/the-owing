@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**184 files wanted · 138 already present · 46 to provide.**
+**211 files wanted · 198 already present · 13 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -182,7 +182,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 5 — dungeon battle backdrops
 
-*12 files, 0 still to provide.* Every dungeon has one now. Match `bg_crypt.png`: symmetrical one-point perspective, 20-35% luminance, light source kept OUT of the top and bottom 34% where the combat text sits. NO text painted into the image — `bg_warrens.png` has a 'THE WARRENS' sign in it, which a rename or a translation turns into a lie.
+*12 files, 0 still to provide.* Every dungeon has one now. Match `bg_crypt.png`: symmetrical one-point perspective, 20-35% luminance, light source kept OUT of the top and bottom 34% where the combat text sits. NO text painted into the image — `bg_warrens.png` came back with a 'THE WARRENS' sign in it, which a rename or a translation turns into a lie, and it took a re-roll to get out (D122).
 
 | ? | file | size | what it is |
 |---|---|---|---|
@@ -224,71 +224,119 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `bg_victory.png` | 1280x720 | Dawn, or a door out. The payoff of the whole meta layer, currently a five-line text list. |
 | x | `bg_defeat.png` | 1280x720 | Where the run ended. Quiet, not gory. |
 
+## Tier 5d — meta-screen backdrops
+
+*4 files, 4 still to provide.* Twelve screens, four paintings. The grouping is by PLACE and the argument for it is in `META_BG` in the tool; these are the screens that passed nothing to `UI.screen()` and were rendering the procedural tiling pattern (D123).
+
+| ? | file | size | what it is |
+|---|---|---|---|
+|   | `bg_table.png` | 1280x720 | Deck builder, Collection, Builds, Packs and the starter kit. One place, five screens: every one of them is a list of cards you own with something to do to them. |
+|   | `bg_reliquary.png` | 1280x720 | Relics and Powers. Both screens are the same claim — this is what you have earned and cannot lose — and they are the same list in code, so they are the same room. |
+|   | `bg_ledger.png` | 1280x720 | Glossary, Save Slots and Settings — the game's own machinery rather than the character's. Not a place in the fiction, which is why it is a desk and not a room. |
+|   | `bg_world.png` | 1280x720 | The Overworld hub. Alone because it is what every other screen is reached from, and because it is the one screen already carrying five paintings of its own (D96). |
+
 ## Tier 6a — relic icons
 
-*30 files, 24 still to provide.* Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.
+*30 files, 0 still to provide.* Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.
 
 | ? | file | size | what it is |
 |---|---|---|---|
 | x | `relics/ancient_battery.png` | 128x128 | Ancient Battery — +1 Energy each turn. |
-|   | `relics/balanced_grip.png` | 128x128 | Balanced Grip — Start each combat with 1 Dexterity. |
+| x | `relics/balanced_grip.png` | 128x128 | Balanced Grip — Start each combat with 1 Dexterity. |
 | x | `relics/bone_charm.png` | 128x128 | Bone Charm — Whenever an enemy dies, draw 1. |
 | x | `relics/bulwark_plate.png` | 128x128 | Bulwark Plate — Start each combat with 18 Block. |
 | x | `relics/chipped_whetstone.png` | 128x128 | Chipped Whetstone — Every 2nd turn, gain 1 Strength. |
 | x | `relics/coin_purse.png` | 128x128 | Coin Purse — Gain 40% more gold. |
-|   | `relics/crown_of_thorns.png` | 128x128 | Crown of Thorns — Whenever an enemy dies, deal 4 to all enemies. |
+| x | `relics/crown_of_thorns.png` | 128x128 | Crown of Thorns — Whenever an enemy dies, deal 4 to all enemies. |
 | x | `relics/duelists_glove.png` | 128x128 | Duelist's Glove — Every 3rd card you play in a turn, deal 5 to all. |
-|   | `relics/eternal_furnace.png` | 128x128 | Eternal Furnace — Every 3rd turn, deal 6 to all enemies. |
-|   | `relics/field_kit.png` | 128x128 | Field Kit — Play 2 cards in a turn to draw 1. |
-|   | `relics/giants_marrow.png` | 128x128 | Giant's Marrow — +40 max HP. |
-|   | `relics/healing_idol.png` | 128x128 | Healing Idol — Heal 6 HP after each victory. |
-|   | `relics/hearth_stone.png` | 128x128 | Hearth Stone — +25 max HP. |
-|   | `relics/iron_heart.png` | 128x128 | Iron Heart — +20 max HP. |
-|   | `relics/iron_ration.png` | 128x128 | Iron Ration — +15 max HP. |
-|   | `relics/keen_lens.png` | 128x128 | Keen Lens — Draw 1 extra card each turn. |
-|   | `relics/kite_shield.png` | 128x128 | Kite Shield — Start each combat with 8 Block. |
-|   | `relics/leather_wrap.png` | 128x128 | Leather Wrap — Start each combat with 4 Block. |
-|   | `relics/lucky_penny.png` | 128x128 | Lucky Penny — Every 4th turn, gain 1 Energy. |
-|   | `relics/merchants_seal.png` | 128x128 | Merchant's Seal — Gain 60% more gold. |
-|   | `relics/padded_vest.png` | 128x128 | Padded Vest — Start each combat with 6 Block. |
-|   | `relics/reliquary_heart.png` | 128x128 | Reliquary Heart — Below 50% HP, gain 3 Strength. Once per combat. |
-|   | `relics/scholars_lens.png` | 128x128 | Scholar's Lens — Every 3rd turn, draw 2. |
-|   | `relics/surgeons_thread.png` | 128x128 | Surgeon's Thread — Below 40% HP, heal 12. Once per combat. |
-|   | `relics/tin_cup.png` | 128x128 | Tin Cup — Gain 20% more gold. |
-|   | `relics/tower_shield.png` | 128x128 | Tower Shield — Start each combat with 12 Block. |
-|   | `relics/warlords_banner.png` | 128x128 | Warlord's Banner — Start each combat with 3 Strength. |
-|   | `relics/weighted_soles.png` | 128x128 | Weighted Soles — Unspent Block converts to 4 Block next turn. |
-|   | `relics/whetstone.png` | 128x128 | Whetstone — Start each combat with 2 Strength. |
-|   | `relics/worn_boots.png` | 128x128 | Worn Boots — +10 max HP. |
+| x | `relics/eternal_furnace.png` | 128x128 | Eternal Furnace — Every 3rd turn, deal 6 to all enemies. |
+| x | `relics/field_kit.png` | 128x128 | Field Kit — Play 2 cards in a turn to draw 1. |
+| x | `relics/giants_marrow.png` | 128x128 | Giant's Marrow — +40 max HP. |
+| x | `relics/healing_idol.png` | 128x128 | Healing Idol — Heal 6 HP after each victory. |
+| x | `relics/hearth_stone.png` | 128x128 | Hearth Stone — +25 max HP. |
+| x | `relics/iron_heart.png` | 128x128 | Iron Heart — +20 max HP. |
+| x | `relics/iron_ration.png` | 128x128 | Iron Ration — +15 max HP. |
+| x | `relics/keen_lens.png` | 128x128 | Keen Lens — Draw 1 extra card each turn. |
+| x | `relics/kite_shield.png` | 128x128 | Kite Shield — Start each combat with 8 Block. |
+| x | `relics/leather_wrap.png` | 128x128 | Leather Wrap — Start each combat with 4 Block. |
+| x | `relics/lucky_penny.png` | 128x128 | Lucky Penny — Every 4th turn, gain 1 Energy. |
+| x | `relics/merchants_seal.png` | 128x128 | Merchant's Seal — Gain 60% more gold. |
+| x | `relics/padded_vest.png` | 128x128 | Padded Vest — Start each combat with 6 Block. |
+| x | `relics/reliquary_heart.png` | 128x128 | Reliquary Heart — Below 50% HP, gain 3 Strength. Once per combat. |
+| x | `relics/scholars_lens.png` | 128x128 | Scholar's Lens — Every 3rd turn, draw 2. |
+| x | `relics/surgeons_thread.png` | 128x128 | Surgeon's Thread — Below 40% HP, heal 12. Once per combat. |
+| x | `relics/tin_cup.png` | 128x128 | Tin Cup — Gain 20% more gold. |
+| x | `relics/tower_shield.png` | 128x128 | Tower Shield — Start each combat with 12 Block. |
+| x | `relics/warlords_banner.png` | 128x128 | Warlord's Banner — Start each combat with 3 Strength. |
+| x | `relics/weighted_soles.png` | 128x128 | Weighted Soles — Unspent Block converts to 4 Block next turn. |
+| x | `relics/whetstone.png` | 128x128 | Whetstone — Start each combat with 2 Strength. |
+| x | `relics/worn_boots.png` | 128x128 | Worn Boots — +10 max HP. |
 
 ## Tier 6b — power icons
 
-*10 files, 10 still to provide.* A power is fired once per turn, every turn, so its icon is seen constantly. Several currently share one monochrome glyph.
+*10 files, 0 still to provide.* A power is fired once per turn, every turn, so its icon is seen constantly. Several currently share one monochrome glyph.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-|   | `powers/bulwark.png` | 128x128 | Bulwark — Gain 6 Block. |
-|   | `powers/foresight.png` | 128x128 | Foresight — Draw 1 card. Free. |
-|   | `powers/scythe.png` | 128x128 | Scythe — Deal 4 damage to ALL enemies. |
-|   | `powers/blight.png` | 128x128 | Blight — Apply 3 Poison. |
-|   | `powers/expose.png` | 128x128 | Expose — Apply 2 Vulnerable. |
-|   | `powers/bramble.png` | 128x128 | Bramble — Gain 3 Thorns. |
-|   | `powers/kindle.png` | 128x128 | Kindle — Gain 1 Strength. |
-|   | `powers/overwhelm.png` | 128x128 | Overwhelm — Deal 7 damage. |
-|   | `powers/siphon.png` | 128x128 | Siphon — Deal 3 damage. Heal for it. |
-|   | `powers/push_on.png` | 128x128 | Push On — Gain 1 Energy. Costs 5 HP. |
+| x | `powers/bulwark.png` | 128x128 | Bulwark — Gain 6 Block. |
+| x | `powers/foresight.png` | 128x128 | Foresight — Draw 1 card. Free. |
+| x | `powers/scythe.png` | 128x128 | Scythe — Deal 4 damage to ALL enemies. |
+| x | `powers/blight.png` | 128x128 | Blight — Apply 3 Poison. |
+| x | `powers/expose.png` | 128x128 | Expose — Apply 2 Vulnerable. |
+| x | `powers/bramble.png` | 128x128 | Bramble — Gain 3 Thorns. |
+| x | `powers/kindle.png` | 128x128 | Kindle — Gain 1 Strength. |
+| x | `powers/overwhelm.png` | 128x128 | Overwhelm — Deal 7 damage. |
+| x | `powers/siphon.png` | 128x128 | Siphon — Deal 3 damage. Heal for it. |
+| x | `powers/push_on.png` | 128x128 | Push On — Gain 1 Energy. Costs 5 HP. |
 
 ## Tier 7 — identity and shell
 
-*7 files, 6 still to provide.* Two of these are downloads, not drawings.
+*7 files, 3 still to provide.* Two of these are downloads, not drawings.
 
 | ? | file | size | what it is |
 |---|---|---|---|
 |   | `fonts/display.ttf` | - | Display face for titles and card names. Needs an OFL/SIL licence, recorded like the Kenney ones. THE GAME HAS NO CUSTOM FONT — everything is Godot's default. |
 |   | `fonts/body.ttf` | - | Body face for rules text. Must stay legible at 12px, since card text shrinks to fit. |
-| x | `main_menu.jpg` | 1280x720 | The title screen backdrop. `main_menu.gd` passes it to `UI.screen()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. |
-|   | `ui/logo.png` | 1600x480 | The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself. |
-|   | `ui/boot_splash.png` | 1280x720 | Boot splash. None configured. |
-|   | `ui/cursor.png` | 64x64 | Optional pointer. |
-|   | `ui/cursor_press.png` | 64x64 | Optional pressed pointer. |
+|   | `main_menu.jpg` | 1280x720 | The title screen backdrop. `main_menu.gd` passes it to `UI.screen()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. |
+| x | `ui/logo.png` | 1600x480 | The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself. |
+| x | `ui/boot_splash.png` | 1280x720 | Boot splash. None configured. |
+| x | `ui/cursor.png` | 64x64 | Optional pointer. |
+| x | `ui/cursor_press.png` | 64x64 | Optional pressed pointer. |
+
+## Tier 8a — isometric figures
+
+*16 files, 0 still to provide.* Every one of these exists and is a flat near-black silhouette; the floor is the screen a run is mostly spent on.
+
+| ? | file | size | what it is |
+|---|---|---|---|
+| x | `iso/hero_s.png` | 128x192 | The player, facing the camera. |
+| x | `iso/hero_n.png` | 128x192 | The player, walking away. |
+| x | `iso/mon_swarm_s.png` | 128x192 | A swarm, facing the camera. It IS the fight this tile becomes, so it must match the arena's swarm (D85). |
+| x | `iso/mon_swarm_n.png` | 128x192 | The same swarm, from behind. |
+| x | `iso/mon_brute_s.png` | 128x192 | A brute, facing the camera. It IS the fight this tile becomes, so it must match the arena's brute (D85). |
+| x | `iso/mon_brute_n.png` | 128x192 | The same brute, from behind. |
+| x | `iso/mon_caster_s.png` | 128x192 | A caster, facing the camera. It IS the fight this tile becomes, so it must match the arena's caster (D85). |
+| x | `iso/mon_caster_n.png` | 128x192 | The same caster, from behind. |
+| x | `iso/wander_0_s.png` | 128x192 | Wanderer design 0, facing the camera — something else walking the floor. |
+| x | `iso/wander_0_n.png` | 128x192 | Wanderer design 0, from behind. |
+| x | `iso/wander_1_s.png` | 128x192 | Wanderer design 1, facing the camera — something else walking the floor. |
+| x | `iso/wander_1_n.png` | 128x192 | Wanderer design 1, from behind. |
+| x | `iso/wander_2_s.png` | 128x192 | Wanderer design 2, facing the camera — something else walking the floor. |
+| x | `iso/wander_2_n.png` | 128x192 | Wanderer design 2, from behind. |
+| x | `iso/wander_3_s.png` | 128x192 | Wanderer design 3, facing the camera — something else walking the floor. |
+| x | `iso/wander_3_n.png` | 128x192 | Wanderer design 3, from behind. |
+
+## Tier 8b — isometric furniture
+
+*7 files, 0 still to provide.* What a tile IS, read off the floor before you walk into it.
+
+| ? | file | size | what it is |
+|---|---|---|---|
+| x | `iso/combat.png` | 128x192 | An ordinary fight waiting on this tile. |
+| x | `iso/elite.png` | 128x192 | A harder fight — bigger than `combat.png` at a glance. |
+| x | `iso/boss.png` | 128x192 | The floor's boss — unmistakably the biggest of the three. |
+| x | `iso/shop.png` | 128x192 | A merchant's stall, nobody behind it. |
+| x | `iso/rest.png` | 128x192 | A campfire. A light source, so it is the one thing here that glows. |
+| x | `iso/event.png` | 128x192 | A standing rune-stone. Something to read, not to fight. |
+| x | `iso/treasure.png` | 128x192 | A chest, shut. |
 

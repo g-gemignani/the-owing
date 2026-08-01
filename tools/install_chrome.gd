@@ -173,6 +173,43 @@ var KIT := {
 		"matte": false,
 		"stretch": true,
 	},
+
+	# --- identity and shell (Tier 7) -------------------------------------------
+	# Same reason as the HUD block above: loose `ui/` paintings with no catalogue
+	# behind them. Added in D122, when the tier was finally generated.
+	"logo": {
+		# Matted, not stretched. The cartouche is a SHAPE on a field and the title
+		# screen draws it over a backdrop, so the field has to go; and the source
+		# banner will not land on 10:3 exactly, so trimming to the subject's own
+		# bounding box and fitting is the only way the ornament keeps its proportions.
+		# Stretching here would squash the carved border on one axis and not the other,
+		# which is the `card_back` mistake (D109) with a worse aspect gap to hide it.
+		"canvas": Vector2i(1600, 480),
+		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
+		"matte": true,
+		"stretch": false,
+	},
+	"boot_splash": {
+		# A SCENE, so opaque and stretched, like `card_back`: it fills its frame edge
+		# to edge and there is no field to cut. 16:9 both sides, so the stretch is a
+		# resize and not a distortion.
+		"canvas": Vector2i(1280, 720),
+		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
+		"matte": false,
+		"stretch": false,
+	},
+	"cursor": {
+		"canvas": Vector2i(64, 64),
+		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
+		"matte": true,
+		"stretch": false,
+	},
+	"cursor_press": {
+		"canvas": Vector2i(64, 64),
+		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
+		"matte": true,
+		"stretch": false,
+	},
 }
 
 var _dry := false

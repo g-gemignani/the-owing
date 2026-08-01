@@ -10,9 +10,21 @@
 ## 16x16 fallback tile, which is indistinguishable from "the art was never made".
 ##
 ## Run: godot --headless --script tools/install_backdrops.gd -- <src_dir>
+##
+## **It installs what the directory HAS, not what the table lists.** It used to walk
+## the table and print MISS for every row the folder did not answer, which was right
+## exactly once — for the single delivery of nine that the table was written from.
+## A re-roll is one or three files, and against the old loop that read as six failures
+## and an exit code of 1 (D122). The end-of-run report is what catches an incomplete
+## set, and it reads `Balance.DUNGEONS` rather than this table, so nothing is lost by
+## letting a partial folder be a partial folder.
 extends SceneTree
 
-## source basename (without extension) -> dungeon id
+## source basename (without extension) -> dungeon id, for the ones that DIFFER. A file
+## already named for its dungeon needs no row here and never did: the fallback below
+## is identity, checked against `Balance.DUNGEONS` like everything else. This table is
+## the record of one batch of human filenames, not the list of what may be installed —
+## a re-roll should just be called `abyssal_stair.png` and skip it entirely.
 const MAP := {
 	"foundry": "foundry",
 	"ember road": "ember_road",
@@ -39,19 +51,23 @@ func _init() -> void:
 	if not src.ends_with("/"):
 		src += "/"
 
+	var sources := _sources(src)
+	if sources.is_empty():
+		print("no .png in %s" % src)
+		quit(2)
+		return
+
 	var wrote := 0
 	var failed := 0
-	for base in MAP:
-		var did: String = MAP[base]
+	for base in sources:
+		# The table first, then the file's own name. An unlisted basename that IS a
+		# dungeon id is the normal case for anything generated after the first batch.
+		var did: String = MAP.get(base, base)
 		if not (did in Balance.DUNGEONS):
-			print("FAIL '%s' is not a dungeon id — refusing to write bg_%s.png" % [did, did])
+			print("FAIL '%s' names no dungeon — add a row to MAP or rename the file. Refusing to guess." % base)
 			failed += 1
 			continue
 		var from: String = src + String(base) + ".png"
-		if not FileAccess.file_exists(from):
-			print("MISS %s" % from)
-			failed += 1
-			continue
 		var img := Image.load_from_file(from)
 		if img == null:
 			print("FAIL could not read %s" % from)
@@ -75,9 +91,27 @@ func _init() -> void:
 	for did in Balance.DUNGEONS:
 		if not FileAccess.file_exists(OUT_DIR + "bg_" + did + ".png"):
 			missing.append(did)
-	print("wrote %d, failed %d" % [wrote, failed])
+	print("read %d source(s), wrote %d, failed %d" % [sources.size(), wrote, failed])
 	if missing.is_empty():
 		print("every dungeon now has a painted backdrop")
 	else:
 		print("STILL MISSING (%d): %s" % [missing.size(), ", ".join(missing)])
 	quit(1 if failed > 0 else 0)
+
+## Every .png basename in the folder, sorted. Sorted so the log reads the same twice
+## running — `DirAccess` hands files back in whatever order the filesystem stored them,
+## and a mapping report you cannot diff against the last run is a report nobody checks.
+func _sources(dir_path: String) -> Array[String]:
+	var out: Array[String] = []
+	var d := DirAccess.open(dir_path)
+	if d == null:
+		print("cannot open %s" % dir_path)
+		return out
+	d.list_dir_begin()
+	var f := d.get_next()
+	while f != "":
+		if f.to_lower().ends_with(".png"):
+			out.append(f.get_basename())
+		f = d.get_next()
+	out.sort()
+	return out

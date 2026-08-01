@@ -76,6 +76,36 @@ static func cut(img: Image, canvas: Vector2i, anchor_bottom: bool) -> String:
 	return place(img, a, canvas, anchor_bottom)
 
 
+## A FILLED rectangle, not a cutout: no matte, no trim, no alpha.
+##
+## Card illustrations are the one family that is a picture rather than a subject —
+## the brief says "a filled 4:3 rectangle, not a cutout" and means it, because the
+## art is a band across the top of a card face, not an object standing on a floor.
+## Running them through `cut` asks the matte to find a flat border on a painting that
+## deliberately bleeds to every edge, and it correctly refuses: "background is not
+## flat (28% of the border agrees, need 80%)". Every card family failed that way, and
+## the failure looked like a bad generation rather than a mis-routed installer (D118).
+##
+## Cover-crop rather than squash: scale to the LARGER ratio and centre-crop the
+## overflow, so a source that is a few percent off 4:3 loses a sliver instead of
+## stretching the subject.
+static func fill(img: Image, canvas: Vector2i) -> String:
+	if img.get_width() <= 0 or img.get_height() <= 0:
+		return "empty image"
+	img.convert(Image.FORMAT_RGBA8)
+	var s: float = maxf(float(canvas.x) / float(img.get_width()),
+		float(canvas.y) / float(img.get_height()))
+	var nw := maxi(canvas.x, int(round(img.get_width() * s)))
+	var nh := maxi(canvas.y, int(round(img.get_height() * s)))
+	img.resize(nw, nh, Image.INTERPOLATE_LANCZOS)
+	var ox := (nw - canvas.x) / 2
+	var oy := (nh - canvas.y) / 2
+	var dst := img.get_region(Rect2i(ox, oy, canvas.x, canvas.y))
+	img.copy_from(dst)
+	last_bbox = Rect2i(0, 0, canvas.x, canvas.y)
+	return ""
+
+
 ## The same, for a symbol that has to stay TINTABLE.
 ##
 ## `Icons` tints these by rarity and fades them for spent states, and that behaviour is

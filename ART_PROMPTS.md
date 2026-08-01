@@ -8,7 +8,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**52 files can be generated.** The rest of the list cannot, and the sections below
+**63 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -27,7 +27,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 52 times.
+   improve it between images. Its job is to be identical 63 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -65,56 +65,15 @@ Nothing to generate here — all 6 present.
 
 *4 of these 9 files are NOT for a generator: computed by `tools/gen_ui_kit.gd`* — `bar_frame.png`, `bar_hp_fill.png`, `bar_hp_loss.png`, `bar_block_fill.png`
 
-Bar housings and fills are computed for the same reason as Tier 0 — a fill is a strip tiled along its length. The orbs and rings are cutouts: one object, centred, transparent, no ground shadow.
-
-**1 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
-
-| save as | size | what is wrong with the one we have |
-|---|---|---|
-| `ui/target_ring.png` | 256x256 | the middle is not empty: a warm bloom fills the ring, so the reticle covers the enemy it is supposed to mark, and where the same bloom spills across the four gaps it holds a wedge of background the matte cannot reach (D112) |
-
-| save as | size | subject |
-|---|---|---|
-| `ui/target_ring.png` | 256x256 | A ring of worn iron broken into four arcs with gaps between them, the inner edge notched like a sight. Face-on. The middle is EMPTY and so are the four gaps — plain flat field showing through, the same colour as the field outside the ring, with no glow, no light and nothing behind it. An enemy is drawn inside this ring and has to be visible through it. |
+Nothing to generate here — all 5 present.
 
 ## Tier 1c — intent telegraphs
 
-One symbol per cell, centred, filling ~70% of its cell, on a flat even field. These are read in under a second on a crowded screen, so silhouette beats detail: a shape that survives being described in three words. Each symbol is one solid shape in a value clearly separated from that field — a dark shape on a dark field is not a read at 96px, and the silhouette is the whole job. Keeping the seven mutually distinguishable AS SILHOUETTES is the actual requirement, and it is the one that is lost when they are asked for one at a time — each request is blind to the other six. A symbol painted onto its own stone tile installs as an opaque plaque instead of a cutout, because the tile is then the subject and only the gutter between tiles is field (D112).
-
-**Generate this tier as ONE image, not 7.** A 3x3 grid at 768x768 or larger: seven symbols and two spare cells. The grid is a LAYOUT and not something drawn — no tile, no plaque, no panel, no border and no mortar line anywhere in the image; ONE flat even colour runs edge to edge behind all nine cells, and that colour is the only background there is. Fill the first seven cells in order, left to right then top to bottom, and leave the last two as bare flat colour. Draw exactly seven symbols and no more: a skipped cell in the middle of the run, or an eighth symbol invented to fill a spare one, puts every symbol after it on the wrong meaning. Nothing touches a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- intents <sheet.png>`
-Cells in the order of the table below, left to right then top to bottom.
-
-**7 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
-
-*All 7 have the same defect: drawn on its own stone tile, so the matte keeps the tile and the icon installs as an opaque plaque rather than a cutout; the symbol on it is dark violet on dark violet as well, which at 96px over a dark backdrop is not a read. One defect across the whole sheet — re-roll all seven together (D112).*
-
-| save as | size | subject |
-|---|---|---|
-| `ui/intent_attack.png` | 96x96 | One heavy blade driving down, point toward the viewer. |
-| `ui/intent_attack_multi.png` | 96x96 | Three narrow blades fanned side by side, driving down together. |
-| `ui/intent_block.png` | 96x96 | A slab shield face-on, broad and flat, its rim raised. |
-| `ui/intent_buff.png` | 96x96 | A blunt arrow rising out of a clenched fist. |
-| `ui/intent_debuff.png` | 96x96 | A blunt arrow driving down into an open, sagging hand. |
-| `ui/intent_poison.png` | 96x96 | One fat droplet falling, a bubble rising through it. |
-| `ui/intent_unknown.png` | 96x96 | A closed eye, the lid drawn down. Nothing to read. |
+Nothing to generate here — all 7 present.
 
 ## Tier 1d — status symbols
 
-OVERRIDE THE PALETTE LINE IN THE PREAMBLE: these are SINGLE-COLOUR — flat white glyphs on a flat near-black field, no gradient, no interior shading, no ink outline (the shape IS the ink). `Icons` tints them by rarity and fades them for spent states, and that behaviour is load-bearing: a coloured icon cannot be tinted, only muddied. The installer takes alpha from LUMINANCE and throws the colour away, so an anti-aliased edge survives and a hue does not. Read at 48px: one idea per symbol, no scene, no object in a setting.
-
-**Generate these as ONE image, not 2.** A 2x1 grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is a RE-ROLL of 2 of this tier's 21 files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- symbols <sheet.png> --only=sym_dexterity,sym_energy`
-
-**2 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
-
-| save as | size | what is wrong with the one we have |
-|---|---|---|
-| `ui/sym_dexterity.png` | 64x64 | the blow goes the wrong way. The brief asks for 'a tilted buckler GLANCING a blow aside' and the arrow points INTO the disc instead of away from it, so the picture says the hit landed — the opposite of what Dexterity does. The disc also reads as a plate or a frisbee rather than a shield, having no rim and no boss, and at 28px it is a blob with a spike on it |
-| `ui/sym_energy.png` | 64x64 | the point of light is off-centre. The brief asks for an orb 'lit from within by one point of light at its CENTRE'; what came back is a solid white disc with a small dot up and to the right, which the eye reads as a specular highlight — so it is a billiard ball or a pearl, not something lit from inside. The silhouette is also a plain circle, which is the one shape a 21-symbol set cannot afford to spend on an abstraction |
-
-| save as | size | subject |
-|---|---|---|
-| `ui/sym_dexterity.png` | 64x64 | A tilted buckler glancing a blow aside. |
-| `ui/sym_energy.png` | 64x64 | A round orb with one point of light at its centre. |
+Nothing to generate here — all 21 present.
 
 ## Tier 1e — combat VFX
 
@@ -124,7 +83,49 @@ Nothing to generate here.
 
 ## Tier 2 — enemies
 
-Nothing to generate here — all 35 present.
+Subject alone on a FLAT, EVEN field of a single colour that appears nowhere in the subject — that field is what `tools/install_cutouts.gd` mattes away, and it refuses any image whose border is not flat rather than cutting a hole in a painted wall. Full body, feet included, nothing cropped by the frame edge. No ground, no floor, no shadow, no pedestal, no background scenery. Facing the viewer, lit from above-front. One monster per image. Generate at 1024x1024 and let the installer scale down: the boss files are rendered at 1.34x the ordinary size and an upscaled boss is a soft boss.
+
+**35 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+
+*All 35 have the same defect: a procedural SILHOUETTE from `tools/gen_enemy_art.gd`, not a painting: measured luma 0.17-0.23 with a flat empty interior behind a one-sided rim light, so at the 240px it draws at, in front of a painted room, it is a dark shape with no face, no weapon and no material. It was the right placeholder — it replaced 41 unlabelled 16x16 tiles handed out by sort order — but it reads as finished art and is not (D122).*
+
+| save as | size | subject |
+|---|---|---|
+| `enemies/abyss_horror.png` | 512x512 | **The Maw Itself.** The BOSS of The Maw. Tanky — draw it heavy. In a fight it attacks, makes you vulnerable and empowers itself. |
+| `enemies/bellows_brute.png` | 256x256 | **Bellows Brute.** Appears in: The Ember Road. Tanky — draw it heavy. Hits hard. In a fight it attacks and defends. |
+| `enemies/bellows_master.png` | 512x512 | **The Bellows-Master.** The BOSS of The Ember Road. In a fight it attacks and empowers itself. |
+| `enemies/bog_lurker.png` | 256x256 | **Bog Lurker.** Appears in: The Rot Gardens, The Sunken Vault, The Drowned Market, The Abyssal Stair, The Maw. Tanky — draw it heavy. In a fight it attacks and defends. |
+| `enemies/bone_picker.png` | 256x256 | **Bone Picker.** Appears in: The Crypt, The Ossuary, The Warrens. Fights in groups of 1-2, so it must read at small size. In a fight it attacks. |
+| `enemies/brood_mother.png` | 512x512 | **The Brood-Mother.** The BOSS of The Warrens. Tanky — draw it heavy. In a fight it attacks and empowers itself. |
+| `enemies/brute.png` | 256x256 | **Brute.** Appears in: The Foundry, The Slag Pits. Tanky — draw it heavy. Hits hard. In a fight it attacks and defends. |
+| `enemies/cinder_knight.png` | 512x512 | **The Cinder Knight.** The BOSS of The Slag Pits. Tanky — draw it heavy. In a fight it attacks, defends and empowers itself. |
+| `enemies/crypt_hound.png` | 256x256 | **Crypt Hound.** Appears in: The Crypt. In a fight it attacks. |
+| `enemies/cultist.png` | 256x256 | **Cultist.** Appears in: The Crypt, The Foundry. In a fight it attacks and empowers itself. |
+| `enemies/deep_warden.png` | 512x512 | **The Deep Warden.** The BOSS of The Sunken Vault. Tanky — draw it heavy. In a fight it attacks, defends and empowers itself. |
+| `enemies/drowned_thrall.png` | 256x256 | **Drowned Thrall.** Appears in: The Sunken Vault, The Drowned Market, The Abyssal Stair, The Maw. Fights in groups of 1-3, so it must read at small size. In a fight it attacks. |
+| `enemies/ember_hound.png` | 256x256 | **Ember Hound.** Appears in: The Ember Road. Fights in groups of 2-2, so it must read at small size. Hits hard. In a fight it attacks and empowers itself. |
+| `enemies/false_step.png` | 512x512 | **The False Step.** The BOSS of The Abyssal Stair. Hits hard. In a fight it attacks, makes you vulnerable and empowers itself. |
+| `enemies/forge_hound.png` | 256x256 | **Forge Hound.** Appears in: The Foundry, The Slag Pits. Fights in groups of 1-2, so it must read at small size. Hits hard. In a fight it attacks and empowers itself. |
+| `enemies/fungal_host.png` | 256x256 | **Fungal Host.** Appears in: The Fungal Deep. Fights in groups of 2-3, so it must read at small size. In a fight it attacks. |
+| `enemies/grave_moth.png` | 256x256 | **Grave Moth.** Appears in: The Warrens. Fights in groups of 2-3, so it must read at small size. In a fight it attacks. |
+| `enemies/grave_sexton.png` | 512x512 | **The Grave-Sexton.** The BOSS of The Crypt. In a fight it attacks, defends and empowers itself. |
+| `enemies/hexer.png` | 256x256 | **Hexer.** Appears in: The Warrens. In a fight it attacks, makes you vulnerable and weakens you. |
+| `enemies/last_vendor.png` | 512x512 | **The Last Vendor.** The BOSS of The Drowned Market. Tanky — draw it heavy. In a fight it attacks, weakens you and defends. |
+| `enemies/market_ghoul.png` | 256x256 | **Market Ghoul.** Appears in: The Drowned Market. Fights in groups of 1-3, so it must read at small size. In a fight it attacks. |
+| `enemies/marrow_abbot.png` | 512x512 | **The Marrow-Abbot.** The BOSS of The Ossuary. Tanky — draw it heavy. In a fight it attacks, makes you vulnerable and defends. |
+| `enemies/marrow_priest.png` | 256x256 | **Marrow Priest.** Appears in: The Ossuary. In a fight it makes you vulnerable, attacks and weakens you. |
+| `enemies/maw_tender.png` | 256x256 | **Maw Tender.** Appears in: The Abyssal Stair, The Maw. Tanky — draw it heavy. In a fight it attacks, empowers itself and defends. |
+| `enemies/mycelial_lord.png` | 512x512 | **The Mycelial Lord.** The BOSS of The Fungal Deep. Tanky — draw it heavy. In a fight it makes you vulnerable, attacks and defends. |
+| `enemies/ossuary_wretch.png` | 256x256 | **Ossuary Wretch.** Appears in: The Ossuary. Fights in groups of 2-3, so it must read at small size. In a fight it attacks. |
+| `enemies/pale_acolyte.png` | 256x256 | **Pale Acolyte.** Appears in: The Sunken Vault, The Drowned Market. In a fight it attacks, makes you vulnerable and empowers itself. |
+| `enemies/plague_rat.png` | 256x256 | **Plague Rat.** Appears in: The Warrens, The Rot Gardens. Fights in groups of 2-3, so it must read at small size. Fragile — draw it slight. In a fight it attacks. |
+| `enemies/rat_swarm.png` | 256x256 | **Rat.** Appears in: The Warrens. Fights in groups of 2-3, so it must read at small size. Fragile — draw it slight. In a fight it attacks. |
+| `enemies/rot_priest.png` | 256x256 | **Rot Priest.** Appears in: The Fungal Deep, The Rot Gardens. In a fight it makes you vulnerable, attacks and weakens you. |
+| `enemies/slag_wretch.png` | 256x256 | **Slag Wretch.** Appears in: The Foundry, The Ember Road, The Slag Pits. Fights in groups of 1-2, so it must read at small size. Hits hard. In a fight it attacks. |
+| `enemies/spore_thing.png` | 256x256 | **Spore Thing.** Appears in: The Fungal Deep, The Rot Gardens. Fights in groups of 1-2, so it must read at small size. In a fight it attacks. |
+| `enemies/the_gardener.png` | 512x512 | **The Gardener.** The BOSS of The Rot Gardens. Tanky — draw it heavy. In a fight it attacks, makes you vulnerable and defends. |
+| `enemies/tomb_guard.png` | 256x256 | **Tomb Guard.** Appears in: The Sunken Vault. Tanky — draw it heavy. In a fight it attacks and defends. |
+| `enemies/warden.png` | 512x512 | **The Forge-Warden.** The BOSS of The Foundry. In a fight it attacks, defends and empowers itself. |
 
 ## Tier 3 — card illustrations
 
@@ -132,21 +133,7 @@ Nothing to generate here — all 12 present.
 
 ## Tier 5 — dungeon battle backdrops
 
-Full-bleed 16:9, opaque, no transparency and no cutout. Symmetrical one-point perspective, vanishing point centred, foreground framing elements at the left and right thirds — every dungeon reuses that skeleton so twelve rooms feel like one dungeon. THE GROUND IS THE PART THAT MATTERS, so compose it first: the back wall meets the floor a little over two thirds down, and from there the floor is unbroken open ground all the way to the bottom edge of the frame. Figures are stood on that floor just under the junction, so the band from two thirds down to three quarters down the frame must be plain walkable ground — nothing rising through it, no water, no rubble pile, no undergrowth, no altar, no steps, no pit, and no darkness the eye reads as a hole. If the ground starts lower than that band, whatever is standing on it appears to hover in mid-air. Keep the light source OUT of the top and bottom 34%, where the combat text sits. Empty room: no figures, no creatures, and nothing anywhere in the image that reads as writing.
-
-**3 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
-
-| save as | size | what is wrong with the one we have |
-|---|---|---|
-| `bg_warrens.png` | 1280x720 | has the words THE WARRENS painted into the wall, which a rename or a translation turns into a lie |
-| `bg_drowned_market.png` | 1280x720 | has FIGURES in it — robed shapes at the far end of the room — and the brief for this tier says an empty room, no figures, no creatures |
-| `bg_abyssal_stair.png` | 1280x720 | no floor where the fight is: the paved ground starts ~75% down, below the 72% standing line, so its enemies stand in the tunnel mouth (D109) |
-
-| save as | size | subject |
-|---|---|---|
-| `bg_warrens.png` | 1280x720 | The Warrens (difficulty 2, The Hollow Barrows). Overrun. Nothing here fights alone, and the tunnels double back.  Its boss is The Brood-Mother. Light: cold cyan. |
-| `bg_drowned_market.png` | 1280x720 | The Drowned Market (difficulty 6, The Sunken Deeps). Stalls, still stocked. Vendors, still present.  Its boss is The Last Vendor. Light: deep blue. |
-| `bg_abyssal_stair.png` | 1280x720 | The Abyssal Stair (difficulty 7, The Sunken Deeps). Down, and then further down. The steps are not all stone.  Its boss is The False Step. Light: deep blue. |
+Nothing to generate here — all 12 present.
 
 ## Tier 5b — zone backdrops
 
@@ -156,60 +143,26 @@ Nothing to generate here — all 5 present.
 
 Nothing to generate here — all 6 present.
 
-## Tier 6a — relic icons
+## Tier 5d — meta-screen backdrops
 
-One OBJECT, three-quarter view, centred, on a flat even field for the matte. Lit from upper-left. No hand holding it, no pedestal, no ground, no shadow, no background scenery. It is seen at 48px in a row of thirty, so the whole job is silhouette and one memorable colour — a beautifully rendered trinket that reads as a brown smudge has failed. Paint what the relic IS, not what it does.
+Full-bleed 16:9, opaque. One thing about these decides the whole composition and it is what separates them from Tier 5c: a shop or an event puts its prose in the top half and framed buttons below it, so there is a half of the frame nothing is written on, and those six are composed for it. These twelve are LISTS — a title on the top edge, rows down the middle, a button on the bottom edge. MEASURED off the 1280x720 captures of seven of them, UI ink runs from row 24 to row 684-688: **3% to 96% of the frame height, on every one of the seven**, against a backdrop whose brightest pixel in an empty patch is 26/255. There is no band of the frame text does not cross. On top of that `UI.screen()` lays a near-opaque scrim over the top of the image and fades it out about two thirds down (`SCENE_HOLD`/`SCENE_END` in `scripts/ui.gd`), leaving a light flat dim below — so the picture effectively SHOWS in the bottom third, and the bottom third is where the rows are. Compose for that and not against it: put the light source and everything worth looking at in the upper third, where the scrim will hold it back, and make the bottom half ONE continuous surface at one even value — a table top, a wall face, a floor — with no object, no edge and no highlight crossing it. A backdrop whose lower half has anything going on in it is a backdrop nobody can read a list over. Keep the whole image at the low end of the 20-35% luminance band. Empty rooms: no figures, and nothing anywhere that reads as writing.
 
-**24 to generate, 6 already present.** Style block above, then one of these as the last line:
+**4 to generate.** Style block above, then one of these as the last line:
 
 | save as | size | subject |
 |---|---|---|
-| `relics/balanced_grip.png` | 128x128 | Balanced Grip — Start each combat with 1 Dexterity. |
-| `relics/crown_of_thorns.png` | 128x128 | Crown of Thorns — Whenever an enemy dies, deal 4 to all enemies. |
-| `relics/eternal_furnace.png` | 128x128 | Eternal Furnace — Every 3rd turn, deal 6 to all enemies. |
-| `relics/field_kit.png` | 128x128 | Field Kit — Play 2 cards in a turn to draw 1. |
-| `relics/giants_marrow.png` | 128x128 | Giant's Marrow — +40 max HP. |
-| `relics/healing_idol.png` | 128x128 | Healing Idol — Heal 6 HP after each victory. |
-| `relics/hearth_stone.png` | 128x128 | Hearth Stone — +25 max HP. |
-| `relics/iron_heart.png` | 128x128 | Iron Heart — +20 max HP. |
-| `relics/iron_ration.png` | 128x128 | Iron Ration — +15 max HP. |
-| `relics/keen_lens.png` | 128x128 | Keen Lens — Draw 1 extra card each turn. |
-| `relics/kite_shield.png` | 128x128 | Kite Shield — Start each combat with 8 Block. |
-| `relics/leather_wrap.png` | 128x128 | Leather Wrap — Start each combat with 4 Block. |
-| `relics/lucky_penny.png` | 128x128 | Lucky Penny — Every 4th turn, gain 1 Energy. |
-| `relics/merchants_seal.png` | 128x128 | Merchant's Seal — Gain 60% more gold. |
-| `relics/padded_vest.png` | 128x128 | Padded Vest — Start each combat with 6 Block. |
-| `relics/reliquary_heart.png` | 128x128 | Reliquary Heart — Below 50% HP, gain 3 Strength. Once per combat. |
-| `relics/scholars_lens.png` | 128x128 | Scholar's Lens — Every 3rd turn, draw 2. |
-| `relics/surgeons_thread.png` | 128x128 | Surgeon's Thread — Below 40% HP, heal 12. Once per combat. |
-| `relics/tin_cup.png` | 128x128 | Tin Cup — Gain 20% more gold. |
-| `relics/tower_shield.png` | 128x128 | Tower Shield — Start each combat with 12 Block. |
-| `relics/warlords_banner.png` | 128x128 | Warlord's Banner — Start each combat with 3 Strength. |
-| `relics/weighted_soles.png` | 128x128 | Weighted Soles — Unspent Block converts to 4 Block next turn. |
-| `relics/whetstone.png` | 128x128 | Whetstone — Start each combat with 2 Strength. |
-| `relics/worn_boots.png` | 128x128 | Worn Boots — +10 max HP. |
+| `bg_table.png` | 1280x720 | A long stone bench seen end-on from slightly above, its far end lost in the dark, with a few cards lying FACE DOWN on it beside a stub of candle and a shallow iron bowl of tokens. Card backs only — plain, worn, no faces, no marks, no pips. The candle is the only light source and it sits in the UPPER THIRD, well off centre. The near half of the bench fills the whole bottom half of the frame and is one unbroken slab of worn stone at one even value: no objects on it, no edge crossing it, no highlight, no grain that changes value — rows of text run down over that half from side to side. Nobody in frame. |
+| `bg_reliquary.png` | 1280x720 | A shallow niche cut into a stone wall, seen head-on, holding a row of iron pegs and one narrow shelf with three unremarkable objects on it: a ring, a knuckle bone, a stoppered jar. One cold flame in a wall bracket in the UPPER THIRD is the only light source. Below the niche the bare wall face and the floor under it fill the whole bottom half of the frame as one flat, evenly dark surface — no carving, no moulding, no bracket, no object and no highlight anywhere in it, because thirty rows of text run down over it. Nobody in frame. |
+| `bg_ledger.png` | 1280x720 | A writing desk set against a stone wall, seen head-on, with a SHUT ledger and an inkpot on it and a shelf of more shut ledgers above. Every book closed: no open page, no writing, no marking on any cover or spine. One candle on the shelf, in the UPPER THIRD, is the only light source. The front of the desk and the floor before it fill the whole bottom half of the frame as one flat, evenly dark surface with no drawer, no handle, no object and no highlight in it, because a column of text and controls runs down over it. Nobody in frame. |
+| `bg_world.png` | 1280x720 | A stone gatehouse arch seen head-on from inside it, the road out running away through the opening into fog. NOTHING beyond the arch resolves — no landmark, no tower, no ridge, no landscape of any kind, only depth and haze. One cold flame in a bracket on the arch, in the UPPER THIRD, is the only light source. The gateway flagstones fill the whole bottom half of the frame as one flat, evenly dark surface: no rubble, no puddle, no rut, no highlight, because rows of text with painted thumbnails beside them run down over it. Nobody in frame. |
+
+## Tier 6a — relic icons
+
+Nothing to generate here — all 30 present.
 
 ## Tier 6b — power icons
 
-A SIGIL, not an object: a carved or inlaid emblem, roughly circular, centred in its cell, on a flat even field for the matte. Unlike the relics these are abstract — the power is an ability, not a thing you picked up — and unlike the Tier 1d symbols they are full-colour and never tinted. Ten of them are pressed in the same corner of the same screen all game, so being distinguishable from each other at a glance is the requirement, which is why they are drawn together.
-
-**Generate this tier as ONE image, not 10.** A 4x3 grid at 1024x768 or larger: ten sigils and two spare cells. Fill the first ten cells in order, left to right then top to bottom, and leave the last two as bare background. Draw exactly ten sigils and no more: an extra one invented to fill a spare cell puts every sigil after it on the wrong meaning. Flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- powers <sheet.png>`
-Cells in the order of the table below, left to right then top to bottom.
-
-**10 to generate.** Style block above, then one of these as the last line:
-
-| save as | size | subject |
-|---|---|---|
-| `powers/bulwark.png` | 128x128 | Bulwark — Gain 6 Block. |
-| `powers/foresight.png` | 128x128 | Foresight — Draw 1 card. Free. |
-| `powers/scythe.png` | 128x128 | Scythe — Deal 4 damage to ALL enemies. |
-| `powers/blight.png` | 128x128 | Blight — Apply 3 Poison. |
-| `powers/expose.png` | 128x128 | Expose — Apply 2 Vulnerable. |
-| `powers/bramble.png` | 128x128 | Bramble — Gain 3 Thorns. |
-| `powers/kindle.png` | 128x128 | Kindle — Gain 1 Strength. |
-| `powers/overwhelm.png` | 128x128 | Overwhelm — Deal 7 damage. |
-| `powers/siphon.png` | 128x128 | Siphon — Deal 3 damage. Heal for it. |
-| `powers/push_on.png` | 128x128 | Push On — Gain 1 Energy. Costs 5 HP. |
+Nothing to generate here — all 10 present.
 
 ## Tier 7 — identity and shell
 
@@ -217,22 +170,85 @@ Cells in the order of the table below, left to right then top to bottom.
 
 The fonts are licensed downloads (OFL/SIL), recorded like the Kenney ones. The logo is the one asset in the game that must carry text and the one place a generator is reliably wrong — generate the ornament and set the wordmark yourself.
 
-**4 to generate.** Style block above, then one of these as the last line:
-
-| save as | size | subject |
-|---|---|---|
-| `ui/logo.png` | 1600x480 | An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind. |
-| `ui/boot_splash.png` | 1280x720 | A shut iron door at the foot of a stair, one lantern burning above it, seen head-on. Nobody in frame. |
-| `ui/cursor.png` | 64x64 | A slim iron spike pointing up and to the left. One solid shape. |
-| `ui/cursor_press.png` | 64x64 | The same iron spike, shorter and driven in, its tip flared. |
-
-**1 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
-
-| save as | size | what is wrong with the one we have |
-|---|---|---|
-| `main_menu.jpg` | 1280x720 | off-style: it carries NO ink outline, and the ink outline is the first line of the style block. Measured as the share of pixels that are a local luminance minimum by >0.08 against both neighbours 2px out, it reads 1.2% against 2.8-12.2% across the twelve dungeons — 2.3x below even bg_crypt, the style bible and the most open room in the set. Flat vector silhouettes for the firs and the mountains, no outline anywhere. Its palette and value are NOT the problem and re-rolling for them would be chasing the wrong fault: mean luminance 20.2% sits inside the 20-35% band and saturation matches the dungeons. It is also the one .jpg in the tree, so the re-roll lands as main_menu.png and four references move with it (D114) |
+**1 to generate, 4 already present.** Style block above, then one of these as the last line:
 
 | save as | size | subject |
 |---|---|---|
 | `main_menu.jpg` | 1280x720 | A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. One cold cyan flame in a stone bowl beside them is the only light source. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white. |
+
+## Tier 8a — isometric figures
+
+A small figure seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field for the matte. It is composited onto a lit stone floor at about 90px tall and anchored BY ITS FEET, so the feet must be the lowest painted pixel and there must be no ground, no shadow, no plinth and no scenery under it. The whole tier's defect is that the current set is unlit: every figure measures luma 0.16-0.21 against a floor of 0.43-0.49, so they read as holes cut in the ground rather than as people standing on it. So these must be MID-VALUE AND LIT — clearly lighter than the floor across most of their body, lit from the upper left, with real interior: cloth, metal, skin, a face. A rim light alone is what is already there and is not enough.
+
+**Generate this tier as ONE image, not 16.** Two columns and one row per figure. The LEFT column faces the camera, the RIGHT column is the SAME figure from behind, same size, same colours, same silhouette width — it is one character turned around, not a second character. Flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- iso_figures <sheet.png>`
+Cells in the order of the table below, left to right then top to bottom.
+
+**16 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+
+| save as | size | what is wrong with the one we have |
+|---|---|---|
+| `iso/hero_s.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/hero_n.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/mon_swarm_s.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/mon_swarm_n.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/mon_brute_s.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/mon_brute_n.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/mon_caster_s.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) AND it is the same drawing as the hero: 81.9% silhouette overlap measured against `hero_s.png`, because `gen_iso_markers.gd` builds the hero on the caster's plan and tells them apart by HUE — which at luma 0.20 on a 0.45 floor is not a distinction anybody can see |
+| `iso/mon_caster_n.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/wander_0_s.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/wander_0_n.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/wander_1_s.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/wander_1_n.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/wander_2_s.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/wander_2_n.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/wander_3_s.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/wander_3_n.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+
+| save as | size | subject |
+|---|---|---|
+| `iso/hero_s.png` | 128x192 | The player, facing the camera. |
+| `iso/hero_n.png` | 128x192 | The player, walking away. |
+| `iso/mon_swarm_s.png` | 128x192 | A swarm, facing the camera. It IS the fight this tile becomes, so it must match the arena's swarm (D85). |
+| `iso/mon_swarm_n.png` | 128x192 | The same swarm, from behind. |
+| `iso/mon_brute_s.png` | 128x192 | A brute, facing the camera. It IS the fight this tile becomes, so it must match the arena's brute (D85). |
+| `iso/mon_brute_n.png` | 128x192 | The same brute, from behind. |
+| `iso/mon_caster_s.png` | 128x192 | A caster, facing the camera. It IS the fight this tile becomes, so it must match the arena's caster (D85). |
+| `iso/mon_caster_n.png` | 128x192 | The same caster, from behind. |
+| `iso/wander_0_s.png` | 128x192 | Wanderer design 0, facing the camera — something else walking the floor. |
+| `iso/wander_0_n.png` | 128x192 | Wanderer design 0, from behind. |
+| `iso/wander_1_s.png` | 128x192 | Wanderer design 1, facing the camera — something else walking the floor. |
+| `iso/wander_1_n.png` | 128x192 | Wanderer design 1, from behind. |
+| `iso/wander_2_s.png` | 128x192 | Wanderer design 2, facing the camera — something else walking the floor. |
+| `iso/wander_2_n.png` | 128x192 | Wanderer design 2, from behind. |
+| `iso/wander_3_s.png` | 128x192 | Wanderer design 3, facing the camera — something else walking the floor. |
+| `iso/wander_3_n.png` | 128x192 | Wanderer design 3, from behind. |
+
+## Tier 8b — isometric furniture
+
+A small object or prop seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field for the matte, anchored by its base. Same lighting and same value rule as Tier 8a: clearly lighter than the floor, lit from the upper left, real material. No ground, no shadow, no scenery.
+
+**Generate this tier as ONE image, not 7.** One row of seven, in the order of the table below. Flat even background, nothing touching a cell edge. THE THREE FIGHT MARKERS ARE THE WHOLE POINT OF THIS SHEET and they are why it is drawn as a set: today `combat`, `elite` and `boss` are the same silhouette to the pixel, so the floor cannot tell you whether the room ahead is a trash fight or the thing that ends the run, and that is the one decision the map exists to support. Give the three visibly ESCALATING silhouettes — bigger, taller, more of it — not three tints of one shape. Install: `godot --headless --script tools/install_sheet.gd -- iso_furniture <sheet.png>`
+Cells in the order of the table below, left to right then top to bottom.
+
+**7 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+
+| save as | size | what is wrong with the one we have |
+|---|---|---|
+| `iso/combat.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) AND `combat.png`, `elite.png` and `boss.png` are the SAME SILHOUETTE — 100% overlap, measured, all three built on `gen_iso_markers.gd`'s brute plan and separated only by hue. So the floor cannot tell you whether the room ahead is a trash fight or the thing that ends the run, which is the one decision the map exists to support |
+| `iso/elite.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) AND identical in silhouette to `combat.png` and `boss.png` — see the note on `combat.png` |
+| `iso/boss.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) AND identical in silhouette to `combat.png` and `elite.png` — see the note on `combat.png` |
+| `iso/shop.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/rest.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/event.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+| `iso/treasure.png` | 128x192 | flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122) |
+
+| save as | size | subject |
+|---|---|---|
+| `iso/combat.png` | 128x192 | An ordinary fight waiting on this tile. |
+| `iso/elite.png` | 128x192 | A harder fight — bigger than `combat.png` at a glance. |
+| `iso/boss.png` | 128x192 | The floor's boss — unmistakably the biggest of the three. |
+| `iso/shop.png` | 128x192 | A merchant's stall, nobody behind it. |
+| `iso/rest.png` | 128x192 | A campfire. A light source, so it is the one thing here that glows. |
+| `iso/event.png` | 128x192 | A standing rune-stone. Something to read, not to fight. |
+| `iso/treasure.png` | 128x192 | A chest, shut. |
 

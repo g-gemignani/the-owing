@@ -30,6 +30,11 @@ extends SceneTree
 
 const ART := "res://assets/art/"
 
+## The isometric floor, for its `WANDER_DESIGNS` count only. The screen that DRAWS a
+## set is the one allowed to say how big it is; a second copy of that number here is
+## the D34 bug, and the shape it takes is a painted file nothing ever loads.
+# (the wanderer count now lives in `Balance.ISO_WANDERERS`)
+
 ## How a file gets MADE. The manifest lists what is wanted; this says by what.
 enum Kind {
 	PAINT,    ## image generator, subject on a flat field -> tools/install_cutouts.gd
@@ -52,37 +57,103 @@ enum Kind {
 ## about half the time; four of the six backdrops it flagged as 14-21 points off were
 ## checked by eye and are fine (D109). A generated re-roll list built on that would
 ## throw away good paintings, so this is a hand-kept list of things somebody LOOKED at.
-## Shared, because the seven intent telegraphs have ONE defect between them: they came
-## on a sheet, and the sheet was drawn as nine stone tiles instead of seven symbols on
-## a field. Seven copies of the same sentence is what a shared constant is for.
-const REDO_TILED := "drawn on its own stone tile, so the matte keeps the tile and the icon installs as an opaque plaque rather than a cutout; the symbol on it is dark violet on dark violet as well, which at 96px over a dark backdrop is not a read. One defect across the whole sheet — re-roll all seven together (D112)"
+##
+## A `REDO_TILED` constant used to sit here, holding the one defect the seven intent
+## telegraphs shared — the sheet came back as nine stone tiles instead of seven symbols
+## on a field. It went out with them in D122, along with the three dungeon backdrops:
+## the table is meant to shrink, and a shared constant with no rows left pointing at it
+## is the shrinking not finishing.
+## Shared across all sixteen Tier 8a figures and all seven Tier 8b props, because they
+## have ONE defect between them and it is a lighting decision, not twenty-three
+## drawings that each went wrong. Measured off the installed files (D122):
+## every figure reads luma 0.16-0.21 while the floors they stand on read 0.43-0.49, so
+## a figure is 2.5x DARKER than its own ground and the eye takes it for a hole in the
+## floor rather than a person on it. Interiors are empty — a thin rim light down one
+## side and flat black behind it — so at the ~90px they draw at there is no face, no
+## cloth, no metal and nothing to recognise.
+const REDO_ISO := "flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122)"
+
+## The same defect, on the thirty-five combat plates. `tools/gen_enemy_art.gd` filled a
+## directory that had been empty since the painted backdrops landed, and it was the
+## right call at the time — it replaced 41 unlabelled 16x16 tiles assigned by sort
+## order, where a boss was whichever tile the index fell on. But what it draws is a
+## SILHOUETTE, and a silhouette is a placeholder that reads as finished: measured at
+## luma 0.17-0.23 with an empty interior, so a Cultist and an Ember Hound are two dark
+## shapes on a painted room, and the fight screen is the one the game is mostly spent on.
+##
+## This is also the case the REDO table was built for and nearly missed. Every one of
+## the thirty-five EXISTS, so Tier 2 printed "all 35 present" and the prompt sheet said
+## nothing about them — "the moment something lands, correct or not, the sheet stops
+## mentioning it and the defect has nowhere to be recorded except a person's memory".
+## `gen_enemy_art.gd` stays as the fallback: `PixelArt.enemy_art()` prefers a painted
+## file, so these can be replaced one at a time (D122).
+const REDO_SILHOUETTE := "a procedural SILHOUETTE from `tools/gen_enemy_art.gd`, not a painting: measured luma 0.17-0.23 with a flat empty interior behind a one-sided rim light, so at the 240px it draws at, in front of a painted room, it is a dark shape with no face, no weapon and no material. It was the right placeholder — it replaced 41 unlabelled 16x16 tiles handed out by sort order — but it reads as finished art and is not (D122)"
 
 const REDO := {
-	"ui/intent_attack.png": REDO_TILED,
-	"ui/intent_attack_multi.png": REDO_TILED,
-	"ui/intent_block.png": REDO_TILED,
-	"ui/intent_buff.png": REDO_TILED,
-	"ui/intent_debuff.png": REDO_TILED,
-	"ui/intent_poison.png": REDO_TILED,
-	"ui/intent_unknown.png": REDO_TILED,
-	"ui/target_ring.png":
-		"the middle is not empty: a warm bloom fills the ring, so the reticle covers the enemy it is supposed to mark, and where the same bloom spills across the four gaps it holds a wedge of background the matte cannot reach (D112)",
-	# Two of the twenty-one status symbols, and the only two that cannot be NAMED by
-	# somebody who is not told what they are. They were installed and unread until
-	# D116, so nothing had ever looked at them at the size they are drawn (D117).
-	"ui/sym_energy.png":
-		"the point of light is off-centre. The brief asks for an orb 'lit from within by one point of light at its CENTRE'; what came back is a solid white disc with a small dot up and to the right, which the eye reads as a specular highlight — so it is a billiard ball or a pearl, not something lit from inside. The silhouette is also a plain circle, which is the one shape a 21-symbol set cannot afford to spend on an abstraction",
-	"ui/sym_dexterity.png":
-		"the blow goes the wrong way. The brief asks for 'a tilted buckler GLANCING a blow aside' and the arrow points INTO the disc instead of away from it, so the picture says the hit landed — the opposite of what Dexterity does. The disc also reads as a plate or a frisbee rather than a shield, having no rim and no boss, and at 28px it is a blob with a spike on it",
-	"bg_abyssal_stair.png":
-		"no floor where the fight is: the paved ground starts ~75% down, below the 72% standing line, so its enemies stand in the tunnel mouth (D109)",
-	"bg_drowned_market.png":
-		"has FIGURES in it — robed shapes at the far end of the room — and the brief for this tier says an empty room, no figures, no creatures",
-	"bg_warrens.png":
-		"has the words THE WARRENS painted into the wall, which a rename or a translation turns into a lie",
-	"main_menu.jpg":
-		"off-style: it carries NO ink outline, and the ink outline is the first line of the style block. Measured as the share of pixels that are a local luminance minimum by >0.08 against both neighbours 2px out, it reads 1.2% against 2.8-12.2% across the twelve dungeons — 2.3x below even bg_crypt, the style bible and the most open room in the set. Flat vector silhouettes for the firs and the mountains, no outline anywhere. Its palette and value are NOT the problem and re-rolling for them would be chasing the wrong fault: mean luminance 20.2% sits inside the 20-35% band and saturation matches the dungeons. It is also the one .jpg in the tree, so the re-roll lands as main_menu.png and four references move with it (D114)",
+	# `ui/target_ring.png` was here — a warm bloom filled the ring, so the reticle
+	# covered the enemy it marks. Re-rolled in D122 as four arcs on a flat field with
+	# the gaps left open, so the matte reaches the middle through them: the disc inside
+	# the arcs now measures 0.00% alpha, which is the check the old one failed and no
+	# corner test would have caught.
+	# `ui/sym_energy.png` and `ui/sym_dexterity.png` were here — the two of the
+	# twenty-one that could not be NAMED by somebody who was not told what they are.
+	# Re-rolled together as one 2x1 sheet and installed in D122. Energy is a hollow
+	# ring with the star at its dead centre, so the light is INSIDE it rather than a
+	# highlight sitting on top, and flame tongues break the bare circle the old one
+	# spent its whole silhouette on; Dexterity's arrow now points AWAY from the shield,
+	# so the picture says the blow missed. Both measure ink luminance 1.00 with all
+	# four corners clear, matching the nineteen already on disk, and both were looked
+	# at rendered down to the 28px they are drawn at — which is the check D117 says
+	# was never done on the originals.
+	# The three dungeon backdrops were here — no floor under the fight on the Abyssal
+	# Stair, figures in the Drowned Market, painted words in the Warrens. All three
+	# re-rolled and installed in D122, so all three lines came out.
+	# Tier 8 — everything standing on the isometric floor. The other twenty carry
+	# REDO_ISO through `REDO_DIRS` below; these three have a second, worse fault on
+	# top of it and say so.
+	"iso/mon_caster_s.png":
+		"%s AND it is the same drawing as the hero: 81.9%% silhouette overlap measured against `hero_s.png`, because `gen_iso_markers.gd` builds the hero on the caster's plan and tells them apart by HUE — which at luma 0.20 on a 0.45 floor is not a distinction anybody can see" % REDO_ISO,
+	# The three fight markers are the worst of it, and the reason this tier is worth
+	# doing before anything else on the list: the floor is where you decide what to
+	# walk into, and it currently cannot answer the question.
+	"iso/combat.png":
+		"%s AND `combat.png`, `elite.png` and `boss.png` are the SAME SILHOUETTE — 100%% overlap, measured, all three built on `gen_iso_markers.gd`'s brute plan and separated only by hue. So the floor cannot tell you whether the room ahead is a trash fight or the thing that ends the run, which is the one decision the map exists to support" % REDO_ISO,
+	"iso/elite.png":
+		"%s AND identical in silhouette to `combat.png` and `boss.png` — see the note on `combat.png`" % REDO_ISO,
+	"iso/boss.png":
+		"%s AND identical in silhouette to `combat.png` and `elite.png` — see the note on `combat.png`" % REDO_ISO,
+	"main_menu.png":
+		"still off-style after one re-roll, which is the point of this line. Not enough ink: the share of pixels that are a local luminance minimum by >0.08 against both neighbours 2px out reads 1.2% against 2.8-12.2% across the twelve dungeons. The D122 re-roll led with that fault, named the ink outline six times, came back visibly carrying contour lines — and measured 1.2% again, unchanged. Do NOT re-roll it for palette or value: mean luminance sits inside the 20-35% band and saturation matches the dungeons. Do NOT dismiss the number as an artefact of a dark picture either; that was tested. Normalising every image to its own 1st-99th percentile and re-running the same test puts it at 3.6% against 5.1-15.4% for the dungeons, still last, on a range only slightly narrower than theirs. The next attempt needs the ink to be HEAVIER and more continuous than the last one, not merely present (D114, D122)",
 }
+
+## A defect that belongs to a whole DIRECTORY rather than to one file.
+##
+## `REDO` above is deliberately hand-kept, one line of evidence per file, and that is
+## the right shape while a defect is a defect. It is the wrong shape when an entire
+## family was produced by one generator and shares one fault: thirty-five identical
+## strings do not read as thirty-five findings, they read as noise, and the next person
+## editing one of them has to check all thirty-five for drift.
+##
+## Consulted AFTER `REDO`, never instead of it — so a single file can still carry its
+## own worse fault on top of its family's, which is what the three iso fight markers
+## and the caster do. Removing a family is removing one line here, the same way
+## removing a file is removing one line up there.
+const REDO_DIRS := {
+	"enemies/": REDO_SILHOUETTE,
+	"iso/": REDO_ISO,
+}
+
+## The defect recorded against a file, or "" if there is none. Every reader goes
+## through this rather than indexing `REDO`, so the directory rule cannot be honoured
+## in one place and forgotten in another — which is exactly how the prompt sheet and
+## the asset sheet would start disagreeing about what is wrong.
+func _redo(rel: String) -> String:
+	if REDO.has(rel):
+		return String(REDO[rel])
+	for prefix in REDO_DIRS:
+		if rel.begins_with(String(prefix)):
+			return String(REDO_DIRS[prefix])
+	return ""
 
 ## Fixed assets: nothing in `resources/` implies these, so they are listed.
 ## [path, size, brief] — or [path, size, brief, kind] where the row differs from its
@@ -252,6 +323,51 @@ const SCENE_BG := [
 	["defeat", "Where the run ended. Quiet, not gory."],
 ]
 
+## Scene backdrops for the META screens — the twelve that pass nothing to
+## `UI.screen()` and so fall through to `PixelArt.backdrop()`, the procedural tiling
+## pattern: glossary, powers, builds, settings, deck builder, overworld, packs,
+## pause, collection, starter kit, relics, save slots.
+##
+## FOUR paintings for twelve screens, and the grouping IS the decision here. One file
+## per screen is the obvious shape and it is wrong twice: it asks for twelve paintings
+## where four do the job, and it asserts twelve different PLACES when the fiction has
+## four. The deck builder, the collection, the builds tracker, the packs screen and
+## the starter kit are one action seen five ways — you are stood at a table with your
+## cards out — and a separate room each would say they are five errands in five
+## places, which is not what the meta loop is. Relics and Powers are both "what you
+## have earned and cannot lose", and they are already each other's sibling in code:
+## two read-mostly lists of owned things off `MetaState`.
+##
+## The two that stay alone stay alone for a reason rather than being left over. The
+## Overworld is the hub every other screen is reached FROM, so its backdrop is doing
+## navigation work rather than dressing, and it has a constraint none of the others
+## has (see its subject). The ledger group is the game's own machinery — how it works,
+## which save, which settings — the one set here that is not about the character at
+## all, and dressing a settings page as a card table would be a lie about what the
+## screen does.
+##
+## The cost of sharing is that five screens look alike, and that is accepted: each
+## carries its own title and its own list, so the backdrop is the thing they have in
+## common and it is TRUE that they have it in common. The cost of not sharing is eight
+## more paintings and eight more chances for the wording to drift, which is the fault
+## D114 is about.
+##
+## [id, brief, subject]
+const META_BG := [
+	["table",
+		"Deck builder, Collection, Builds, Packs and the starter kit. One place, five screens: every one of them is a list of cards you own with something to do to them.",
+		"A long stone bench seen end-on from slightly above, its far end lost in the dark, with a few cards lying FACE DOWN on it beside a stub of candle and a shallow iron bowl of tokens. Card backs only — plain, worn, no faces, no marks, no pips. The candle is the only light source and it sits in the UPPER THIRD, well off centre. The near half of the bench fills the whole bottom half of the frame and is one unbroken slab of worn stone at one even value: no objects on it, no edge crossing it, no highlight, no grain that changes value — rows of text run down over that half from side to side. Nobody in frame."],
+	["reliquary",
+		"Relics and Powers. Both screens are the same claim — this is what you have earned and cannot lose — and they are the same list in code, so they are the same room.",
+		"A shallow niche cut into a stone wall, seen head-on, holding a row of iron pegs and one narrow shelf with three unremarkable objects on it: a ring, a knuckle bone, a stoppered jar. One cold flame in a wall bracket in the UPPER THIRD is the only light source. Below the niche the bare wall face and the floor under it fill the whole bottom half of the frame as one flat, evenly dark surface — no carving, no moulding, no bracket, no object and no highlight anywhere in it, because thirty rows of text run down over it. Nobody in frame."],
+	["ledger",
+		"Glossary, Save Slots and Settings — the game's own machinery rather than the character's. Not a place in the fiction, which is why it is a desk and not a room.",
+		"A writing desk set against a stone wall, seen head-on, with a SHUT ledger and an inkpot on it and a shelf of more shut ledgers above. Every book closed: no open page, no writing, no marking on any cover or spine. One candle on the shelf, in the UPPER THIRD, is the only light source. The front of the desk and the floor before it fill the whole bottom half of the frame as one flat, evenly dark surface with no drawer, no handle, no object and no highlight in it, because a column of text and controls runs down over it. Nobody in frame."],
+	["world",
+		"The Overworld hub. Alone because it is what every other screen is reached from, and because it is the one screen already carrying five paintings of its own (D96).",
+		"A stone gatehouse arch seen head-on from inside it, the road out running away through the opening into fog. NOTHING beyond the arch resolves — no landmark, no tower, no ridge, no landscape of any kind, only depth and haze. One cold flame in a bracket on the arch, in the UPPER THIRD, is the only light source. The gateway flagstones fill the whole bottom half of the frame as one flat, evenly dark surface: no rubble, no puddle, no rut, no highlight, because rows of text with painted thumbnails beside them run down over it. Nobody in frame."],
+]
+
 ## Pasted at the top of EVERY generation request, unchanged. The single biggest lever
 ## on coherence is not the model, it is that this block and one reference image are
 ## identical across 113 calls — the twelve backdrops agree with each other because
@@ -374,6 +490,8 @@ func _init() -> void:
 		"The fonts are licensed downloads (OFL/SIL), recorded like the Kenney ones. The logo is the one asset in the game that must carry text and the one place a generator is reliably wrong — generate the ornament and set the wordmark yourself.")
 	for e in SHELL:
 		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
+
+	_iso()
 
 	if _fatal != "":
 		push_error("art_manifest: %s" % _fatal)
@@ -502,7 +620,7 @@ func _backdrop_gap() -> String:
 
 func _backdrops() -> void:
 	_section("Tier 5 — dungeon battle backdrops",
-		"%s Match `bg_crypt.png`: symmetrical one-point perspective, 20-35%% luminance, light source kept OUT of the top and bottom 34%% where the combat text sits. NO text painted into the image — `bg_warrens.png` has a 'THE WARRENS' sign in it, which a rename or a translation turns into a lie." % _backdrop_gap(),
+		"%s Match `bg_crypt.png`: symmetrical one-point perspective, 20-35%% luminance, light source kept OUT of the top and bottom 34%% where the combat text sits. NO text painted into the image — `bg_warrens.png` came back with a 'THE WARRENS' sign in it, which a rename or a translation turns into a lie, and it took a re-roll to get out (D122)." % _backdrop_gap(),
 		Kind.SCENE,
 		"Full-bleed 16:9, opaque, no transparency and no cutout. Symmetrical one-point perspective, vanishing point centred, foreground framing elements at the left and right thirds — every dungeon reuses that skeleton so twelve rooms feel like one dungeon. THE GROUND IS THE PART THAT MATTERS, so compose it first: the back wall meets the floor a little over two thirds down, and from there the floor is unbroken open ground all the way to the bottom edge of the frame. Figures are stood on that floor just under the junction, so the band from two thirds down to three quarters down the frame must be plain walkable ground — nothing rising through it, no water, no rubble pile, no undergrowth, no altar, no steps, no pit, and no darkness the eye reads as a hole. If the ground starts lower than that band, whatever is standing on it appears to hover in mid-air. Keep the light source OUT of the top and bottom 34%, where the combat text sits. Empty room: no figures, no creatures, and nothing anywhere in the image that reads as writing.")
 	for did in Balance.DUNGEONS:
@@ -533,11 +651,18 @@ func _backdrops() -> void:
 	for e in SCENE_BG:
 		_add("bg_%s.png" % String(e[0]), "1280x720", String(e[1]))
 
+	_section("Tier 5d — meta-screen backdrops",
+		"Twelve screens, four paintings. The grouping is by PLACE and the argument for it is in `META_BG` in the tool; these are the screens that passed nothing to `UI.screen()` and were rendering the procedural tiling pattern (D123).",
+		Kind.SCENE,
+		"Full-bleed 16:9, opaque. One thing about these decides the whole composition and it is what separates them from Tier 5c: a shop or an event puts its prose in the top half and framed buttons below it, so there is a half of the frame nothing is written on, and those six are composed for it. These twelve are LISTS — a title on the top edge, rows down the middle, a button on the bottom edge. MEASURED off the 1280x720 captures of seven of them, UI ink runs from row 24 to row 684-688: **3% to 96% of the frame height, on every one of the seven**, against a backdrop whose brightest pixel in an empty patch is 26/255. There is no band of the frame text does not cross. On top of that `UI.screen()` lays a near-opaque scrim over the top of the image and fades it out about two thirds down (`SCENE_HOLD`/`SCENE_END` in `scripts/ui.gd`), leaving a light flat dim below — so the picture effectively SHOWS in the bottom third, and the bottom third is where the rows are. Compose for that and not against it: put the light source and everything worth looking at in the upper third, where the scrim will hold it back, and make the bottom half ONE continuous surface at one even value — a table top, a wall face, a floor — with no object, no edge and no highlight crossing it. A backdrop whose lower half has anything going on in it is a backdrop nobody can read a list over. Keep the whole image at the low end of the 20-35% luminance band. Empty rooms: no figures, and nothing anywhere that reads as writing.")
+	for e in META_BG:
+		_add("bg_%s.png" % String(e[0]), "1280x720", String(e[1]), null, String(e[2]))
+
 func _relics() -> void:
 	_section("Tier 6a — relic icons",
 		"Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.",
 		Kind.PAINT,
-		"One OBJECT, three-quarter view, centred, on a flat even field for the matte. Lit from upper-left. No hand holding it, no pedestal, no ground, no shadow, no background scenery. It is seen at 48px in a row of thirty, so the whole job is silhouette and one memorable colour — a beautifully rendered trinket that reads as a brown smudge has failed. Paint what the relic IS, not what it does.")
+		"One OBJECT, three-quarter view, centred, on a flat even field for the matte. Lit from upper-left. No hand holding it, no pedestal, no ground, no shadow, no background scenery. It is drawn at 22px in a row of thirty — MEASURED off the built screen, not the 48 this brief used to claim, which was written before anything was on it and before the row pitch was known (D121). At 22px the whole job is silhouette and one memorable colour: two or three big shapes, one clear outline, no small detail and no fine text-like ornament, because none of it survives. A beautifully rendered trinket that reads as a brown smudge has failed. Paint what the relic IS, not what it does.")
 	for rid in MetaState.RELIC_CATALOG:
 		var r := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
 		if r == null:
@@ -555,6 +680,57 @@ func _powers() -> void:
 		if p == null:
 			continue
 		_add("powers/%s.png" % pid, "128x128", "%s — %s" % [p.name, p.description])
+
+## Tier 8 — everything that STANDS on the isometric floor.
+##
+## These files all exist. They are computed by `tools/gen_iso_markers.gd`, and the
+## reason is worth restating because it is easy to read this tier as a plan being
+## reversed: D89 threw out the downloaded figure packs because they could not be
+## COMMITTED — the monsters shipped with no licence file and the hero's store page
+## says non-commercial. Authoring them in code was the answer to a redistribution
+## problem, not a judgement that painted figures were wrong. Painting our own clears
+## the same bar, so this tier is the licence question already answered rather than
+## re-opened, and `gen_iso_markers.gd` stays as the fallback the way `Icons` does for
+## the powers: a floor with no painted figure installed must still draw something.
+##
+## **The facings are the part that cannot be generated one file at a time.** `_s`
+## faces the camera and `_n` is the SAME figure turned away — `iso_run.gd` swaps
+## between them as she walks — so the two have to be one drawing seen twice. Asked
+## for separately they come back as two different characters. Hence one sheet, two
+## columns, and the column is the facing.
+func _iso() -> void:
+	_section("Tier 8a — isometric figures",
+		"Every one of these exists and is a flat near-black silhouette; the floor is the screen a run is mostly spent on.",
+		Kind.PAINT,
+		"A small figure seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field for the matte. It is composited onto a lit stone floor at about 90px tall and anchored BY ITS FEET, so the feet must be the lowest painted pixel and there must be no ground, no shadow, no plinth and no scenery under it. The whole tier's defect is that the current set is unlit: every figure measures luma 0.16-0.21 against a floor of 0.43-0.49, so they read as holes cut in the ground rather than as people standing on it. So these must be MID-VALUE AND LIT — clearly lighter than the floor across most of their body, lit from the upper left, with real interior: cloth, metal, skin, a face. A rim light alone is what is already there and is not enough.",
+		"Two columns and one row per figure. The LEFT column faces the camera, the RIGHT column is the SAME figure from behind, same size, same colours, same silhouette width — it is one character turned around, not a second character. Flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- iso_figures <sheet.png>`")
+	_add("iso/hero_s.png", "128x192", "The player, facing the camera.")
+	_add("iso/hero_n.png", "128x192", "The player, walking away.")
+	for fam in Balance.ISO_FAMILIES:
+		_add("iso/mon_%s_s.png" % fam, "128x192",
+			"A %s, facing the camera. It IS the fight this tile becomes, so it must match the arena's %s (D85)." % [fam, fam])
+		_add("iso/mon_%s_n.png" % fam, "128x192", "The same %s, from behind." % fam)
+	# Read off the screen that draws them rather than restated here. Four is not a
+	# number this file gets to have an opinion about: `iso_run.gd` indexes wanderer
+	# art with `design % WANDER_DESIGNS`, so a fifth painted file it does not know
+	# about is a file nothing ever asks for (D34).
+	for i in Balance.ISO_WANDERERS:
+		_add("iso/wander_%d_s.png" % i, "128x192",
+			"Wanderer design %d, facing the camera — something else walking the floor." % i)
+		_add("iso/wander_%d_n.png" % i, "128x192", "Wanderer design %d, from behind." % i)
+
+	_section("Tier 8b — isometric furniture",
+		"What a tile IS, read off the floor before you walk into it.",
+		Kind.PAINT,
+		"A small object or prop seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field for the matte, anchored by its base. Same lighting and same value rule as Tier 8a: clearly lighter than the floor, lit from the upper left, real material. No ground, no shadow, no scenery.",
+		"One row of seven, in the order of the table below. Flat even background, nothing touching a cell edge. THE THREE FIGHT MARKERS ARE THE WHOLE POINT OF THIS SHEET and they are why it is drawn as a set: today `combat`, `elite` and `boss` are the same silhouette to the pixel, so the floor cannot tell you whether the room ahead is a trash fight or the thing that ends the run, and that is the one decision the map exists to support. Give the three visibly ESCALATING silhouettes — bigger, taller, more of it — not three tints of one shape. Install: `godot --headless --script tools/install_sheet.gd -- iso_furniture <sheet.png>`")
+	_add("iso/combat.png", "128x192", "An ordinary fight waiting on this tile.")
+	_add("iso/elite.png", "128x192", "A harder fight — bigger than `combat.png` at a glance.")
+	_add("iso/boss.png", "128x192", "The floor's boss — unmistakably the biggest of the three.")
+	_add("iso/shop.png", "128x192", "A merchant's stall, nobody behind it.")
+	_add("iso/rest.png", "128x192", "A campfire. A light source, so it is the one thing here that glows.")
+	_add("iso/event.png", "128x192", "A standing rune-stone. Something to read, not to fight.")
+	_add("iso/treasure.png", "128x192", "A chest, shut.")
 
 ## The zone a dungeon belongs to, as an ID — `Balance.zone_of()` returns the resource
 ## and the accent table is keyed by id.
@@ -592,7 +768,7 @@ func _emit_prompts() -> void:
 	# prompt, sent again.
 	var todo := 0
 	for r in _rows:
-		if _generable(r[4]) and (not bool(r[3]) or REDO.has(String(r[0]))):
+		if _generable(r[4]) and (not bool(r[3]) or _redo(String(r[0])) != ""):
 			todo += 1
 	print("<!-- GENERATED by tools/art_manifest.gd — do not edit by hand.")
 	print("     Regenerate: godot --headless --script tools/art_manifest.gd -- --prompts > ART_PROMPTS.md -->")
@@ -661,7 +837,7 @@ func _emit_prompt_section(s: Array) -> void:
 		var r: Array = _rows[i]
 		if not _generable(r[4]):
 			blocked.append(r)
-		elif REDO.has(String(r[0])):
+		elif _redo(String(r[0])) != "":
 			# Present but wrong. Asked for again, and listed separately from the ones
 			# that were never drawn, because the two need different care: a re-roll is
 			# replacing something that already passed once.
@@ -745,7 +921,7 @@ func _emit_prompt_section(s: Array) -> void:
 		print("")
 		var reasons := {}
 		for r in redone:
-			reasons[String(REDO[String(r[0])])] = true
+			reasons[_redo(String(r[0]))] = true
 		if reasons.size() == 1 and redone.size() > 1:
 			# One defect across the whole set — said once. A seven-row table repeating
 			# one sentence seven times is a table nobody finishes reading, and the
@@ -763,7 +939,7 @@ func _emit_prompt_section(s: Array) -> void:
 			print("|---|---|---|")
 			for r in redone:
 				print("| `%s` | %s | %s |" % [String(r[0]), String(r[1]),
-					String(REDO[String(r[0])]).replace("|", "\\|")])
+					_redo(String(r[0])).replace("|", "\\|")])
 		print("")
 		_prompt_table(redone)
 

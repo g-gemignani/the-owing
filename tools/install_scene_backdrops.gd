@@ -28,6 +28,21 @@ const MAP := {
 	"defeat": "defeat",
 }
 
+## Tier 5d, the four META-screen backdrops, written as `bg_<id>.png` like the six
+## above and resolved by the same `PixelArt.scene_art()`. They are a separate table
+## for one reason: a missing source in `MAP` prints MISS and fails the run, which is
+## right for the six because they were commissioned and delivered as a set — a MISS
+## there means the batch is short and you want to know. These four will land one at a
+## time, and a table that fails three ways every time one file arrives is a table
+## whose exit code stops meaning anything. Queued only when a source is present, the
+## same way the title art is (see `BARE_MAP` below and the note on it).
+const META_MAP := {
+	"table": "table",
+	"reliquary": "reliquary",
+	"ledger": "ledger",
+	"world": "world",
+}
+
 ## The same for Tier 5b, the ZONE establishing shots, written as `bg_zone_<id>.png`.
 ##
 ## The prefix is not decoration. `foundry` is both a zone (`foundry_zone`) and a
@@ -42,6 +57,23 @@ const ZONE_MAP := {
 	"rot": "rot",
 	"deeps": "deeps",
 	"beyond": "beyond",
+}
+
+## And the title art, which takes NO prefix — it is not a `bg_` file. It rides this
+## installer because it is the same job (full-bleed 16:9, opaque, letterbox stripped,
+## cropped rather than squashed) and because it had no installer at all: it predates
+## them, which is how it ended up the one .jpg in `assets/art/` and off the re-roll
+## list until D114. Landing here writes `main_menu.png`; `PixelArt.title_art_path()`
+## prefers the PNG, so the swap takes effect on install, and the superseded .jpg is
+## deleted below rather than left to shadow it.
+const BARE_MAP := {
+	"main_menu": "main_menu",
+	"title": "main_menu",
+}
+
+## Files a successful install supersedes: same stem, older extension.
+const SUPERSEDES := {
+	"main_menu": ["res://assets/art/main_menu.jpg", "res://assets/art/main_menu.jpg.import"],
 }
 
 const OUT_DIR := "res://assets/art/"
@@ -81,6 +113,21 @@ func _init() -> void:
 		jobs.append([base, "bg_" + String(MAP[base])])
 	for base2 in ZONE_MAP:
 		jobs.append([base2, "bg_zone_" + String(ZONE_MAP[base2])])
+	# The title art is optional in any given batch, and so is every other job here —
+	# a missing source prints MISS and counts a failure. That is right for the six
+	# scene backdrops, which are a set, and wrong for this one, which is normally
+	# absent. Only queue it when a source is actually present.
+	for base3 in BARE_MAP:
+		for ext in [".jpg", ".jpeg", ".png"]:
+			if FileAccess.file_exists(src + base3 + ext):
+				jobs.append([base3, String(BARE_MAP[base3])])
+				break
+	# Same rule, same reason, for the four meta-screen backdrops — see `META_MAP`.
+	for base4 in META_MAP:
+		for ext2 in [".jpg", ".jpeg", ".png"]:
+			if FileAccess.file_exists(src + base4 + ext2):
+				jobs.append([base4, "bg_" + String(META_MAP[base4])])
+				break
 	for job in jobs:
 		var base: String = job[0]
 		var stem: String = job[1]
@@ -112,6 +159,13 @@ func _init() -> void:
 			continue
 		print("OK    %s.png  <- %s" % [stem, path.get_file()])
 		wrote += 1
+		# An older file with the same stem and a different extension is not harmless:
+		# it is a second answer to "where is the title art", and whichever the loader
+		# picks, somebody is looking at the wrong picture.
+		for dead in SUPERSEDES.get(stem, []):
+			if FileAccess.file_exists(String(dead)):
+				DirAccess.remove_absolute(ProjectSettings.globalize_path(String(dead)))
+				print("      removed superseded %s" % String(dead).get_file())
 
 	print("install_scene_backdrops: %d written, %d failed" % [wrote, failed])
 	quit(1 if failed > 0 else 0)

@@ -32,6 +32,16 @@ const SHOTS := [
 	# picture of it there is, and it is the one that made the rock look broken (D77).
 	# The second capture is the same screen a third of the way through a floor.
 	["IsoRunExplored", "res://scenes/IsoRun.tscn", "iso_walked"],
+	# One walked floor per TERRAIN, because the iso materials are not one set of
+	# textures — `tools/gen_iso_art.gd` builds four, each sampled from the floor band
+	# of the backdrops of the dungeons that use it. Every other capture here enters
+	# `DUNGEONS[0]`, which is the Crypt, which is `stone`; so for as long as this list
+	# had one iso row, three of the four floors had never been photographed at all and
+	# a fault in any of them was invisible to the harness (D122). The dungeons named
+	# are one per terrain, and the terrain, not the dungeon, is what is being looked at.
+	["IsoEarth", "res://scenes/IsoRun.tscn", "iso_walked", "", "warrens"],
+	["IsoMoss", "res://scenes/IsoRun.tscn", "iso_walked", "", "fungal_deep"],
+	["IsoSand", "res://scenes/IsoRun.tscn", "iso_walked", "", "drowned_market"],
 	["Combat", "res://scenes/Combat.tscn", "combat"],
 	# The hand is the one part of the game with three states worth photographing
 	# rather than one. At rest the cards hang off the bottom edge on purpose; the
@@ -39,6 +49,16 @@ const SHOTS := [
 	# screen — which is precisely how a layout gets shipped half-checked (D104).
 	["CombatHover", "res://scenes/Combat.tscn", "combat", "hover"],
 	["CombatInspect", "res://scenes/Combat.tscn", "combat", "inspect"],
+	# A GROUP fight, because `_place_slots` does something to a group that it does not
+	# do to a single enemy: it shrinks the flanks (`lerpf(0.88, 1.0, ...)`) and spreads
+	# them across the full width, and the flanks are the only enemies that ever stand
+	# over the left and right thirds of the backdrop. `tests/test_art.gd` measures the
+	# floor and says in its own comments that the number is wrong about half the time
+	# and that "whether a specific enemy hovers is a question for tools/screenshots.gd,
+	# where you can see it" — so this is that capture (D122). `ember_hound` because it
+	# is the one archetype whose spawn count cannot roll: `count_min` and `count_max`
+	# are both 2, so this frames the same fight every run instead of a coin flip.
+	["CombatGroup", "res://scenes/Combat.tscn", "combat_group"],
 	["Shop", "res://scenes/Shop.tscn", "shop"],
 	["Encounter", "res://scenes/Encounter.tscn", "event"],
 	["Chest", "res://scenes/Chest.tscn", "chest"],
@@ -47,6 +67,12 @@ const SHOTS := [
 	["Packs", "res://scenes/Packs.tscn", "packs"],
 	["Powers", "res://scenes/Powers.tscn", ""],
 	["Glossary", "res://scenes/Glossary.tscn", ""],
+	# Settings was missing from this table until D123 went looking for it. Nothing was
+	# wrong with the screen — it simply had never been photographed, so "check the
+	# captures" was checking sixteen screens and calling it all of them. That is the
+	# same blind spot the three iso terrains had (D122): a harness is only as honest
+	# as its list, and an absent row looks exactly like a passing one.
+	["Settings", "res://scenes/Settings.tscn", ""],
 	["Victory", "res://scenes/Victory.tscn", "combat"],
 	["Defeat", "res://scenes/Defeat.tscn", "defeat"],
 ]
@@ -73,7 +99,8 @@ func _ready() -> void:
 		if only.size() > 0 and not only.has(String(shot[0])):
 			continue
 		await _capture(String(shot[0]), String(shot[1]), String(shot[2]),
-			String(shot[3]) if shot.size() > 3 else "")
+			String(shot[3]) if shot.size() > 3 else "",
+			String(shot[4]) if shot.size() > 4 else "")
 
 	print("SHOTS: ", ProjectSettings.globalize_path(OUT))
 	# Same sandbox rule as the test suite: no `t_*` file may survive the run —
@@ -152,13 +179,22 @@ func _run_state() -> Array[CardData]:
 			deck.append((load(MetaState.CATALOG[cid]) as CardData).duplicate())
 	return deck
 
-func _setup(need: String) -> void:
+func _setup(need: String, dungeon: String = "") -> void:
 	GameState.reset_run_progress()
 	var did: String = Balance.DUNGEONS[0]
 	match need:
 		# deepest dungeon, or the capture only ever shows worn chests: a vault
 		# cannot roll at depth 1 and that is exactly the screen worth looking at
 		"chest": did = Balance.DUNGEONS[Balance.DUNGEONS.size() - 1]
+	# A row that names its own dungeon overrides both. Refused rather than ignored if
+	# the id is not real: falling back to `DUNGEONS[0]` would hand back a picture of
+	# the Crypt under a filename saying `IsoEarth`, which is worse than no capture —
+	# the whole point of these rows is that the terrain is the subject.
+	if dungeon != "":
+		if not (dungeon in Balance.DUNGEONS):
+			push_error("screenshots: '%s' is not a dungeon id" % dungeon)
+			return
+		did = dungeon
 	GameState.select_dungeon(did)
 	GameState.enter_dungeon(_run_state())
 
@@ -174,6 +210,13 @@ func _setup(need: String) -> void:
 	match need:
 		"combat":
 			GameState.pending = {"type": GameState.NodeType.COMBAT, "row": 1, "col": 0, "cleared": false}
+			GameState.combat_state = {}
+		# `enemy` is the forced-archetype key `combat.gd` already reads (it is how the
+		# iso floor makes the tile you saw and the fight you get the same creature,
+		# D85), so this poses a group WITHOUT a second code path in the scene.
+		"combat_group":
+			GameState.pending = {"type": GameState.NodeType.COMBAT, "row": 1, "col": 0,
+				"cleared": false, "enemy": "ember_hound"}
 			GameState.combat_state = {}
 		"shop":
 			GameState.pending = {"type": GameState.NodeType.SHOP, "row": 1, "col": 0, "cleared": false}
@@ -218,8 +261,9 @@ func _setup(need: String) -> void:
 		_:
 			GameState.pending = {"type": GameState.NodeType.COMBAT, "row": 1, "col": 0, "cleared": false}
 
-func _capture(name: String, path: String, need: String, after: String = "") -> void:
-	_setup(need)
+func _capture(name: String, path: String, need: String, after: String = "",
+		dungeon: String = "") -> void:
+	_setup(need, dungeon)
 	var packed := load(path) as PackedScene
 	if packed == null:
 		print("MISS ", name)

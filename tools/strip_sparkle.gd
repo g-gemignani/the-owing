@@ -64,6 +64,22 @@ const MAX_SIDE := 90
 ## Jacobi sweeps for the fill. The hole is ~55px across; far past convergence.
 const SWEEPS := 600
 
+## Fewest images the intersection is allowed to run on. It was 4, chosen when the only
+## caller was the batch of twelve; a RE-ROLL is three or fewer, and three re-rolled
+## backdrops share a frame exactly as well as twelve do (D122).
+##
+## Lowering it costs less than it looks like, because the count is not what protects
+## the art. Two other things do, and both still hold at three: MAX_PIXELS/MAX_SIDE
+## refuse anything that is not a small compact blob, and `--dry` writes the mask over
+## a real image so the box is approved by eye before a pixel moves. What the count
+## buys is only how quickly the intersection sheds coincidences — at three, two rooms
+## that happen to be lit in the same corner still get thinned by the third, and if
+## they do not, the bounds refuse the result rather than erasing a brazier.
+##
+## Two is where it stops: an intersection of two is "these two agree", which is a
+## coincidence rather than a pattern, and one is no intersection at all.
+const MIN_FRAMES := 3
+
 var _dry := false
 
 func _init() -> void:
@@ -74,8 +90,9 @@ func _init() -> void:
 		if not String(a).begins_with("--"):
 			src = String(a)
 	var paths := _source_dir(src) if src != "" else _dungeon_backdrops()
-	if paths.size() < 4:
-		print("need several images sharing one frame to isolate the stamp; found %d" % paths.size())
+	if paths.size() < MIN_FRAMES:
+		print("need at least %d images sharing one frame to isolate the stamp; found %d" % [
+			MIN_FRAMES, paths.size()])
 		quit(2)
 		return
 

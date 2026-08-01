@@ -96,6 +96,42 @@ const BAR := {
 	"block_fill": Color(0.42, 0.60, 0.86),
 }
 
+## Containers: the panel a screen is built in, the recessed well a log or list sits
+## in, and the tooltip that floats over both. All three are `_frame()` like the
+## button — what differs is the carve depth and which palette the face comes from.
+##
+## **The carve is much shallower than the slice, deliberately.** `UITheme` cuts the
+## panel 64/64/64/64 and the tooltip 24/24/24/24, which are the numbers ART_ASSETS
+## specced and not numbers this file gets to pick. Drawing a 64px-deep carve to
+## "fill" that margin is the D83 failure with new numbers: a 90px-tall PanelContainer
+## cannot fit 128px of border and would squash it. Everything past the carve is flat
+## face, so a cut anywhere between the carve and the slice lands on one colour and
+## the strips stay constant along the axis they are stretched on — which is the only
+## property a nine-slice actually has to have.
+const PANEL := Vector2i(256, 256)
+const PANEL_BORDER := 22
+const PANEL_RADIUS := 16
+## The inset is a hole, not a plate: same geometry, but lit from BELOW and filled
+## with the recessed colour, so a list well reads as cut into the panel rather than
+## laid on it. Same inversion `bar_frame` uses, and for the same reason.
+const INSET := Vector2i(128, 128)
+const INSET_BORDER := 12
+const INSET_RADIUS := 10
+## **RADIUS MUST NOT EXCEED BORDER.** The corner is rounded by following the curve
+## inward from the edge, so a radius deeper than the carve bends into the top and
+## side strips — and a strip that varies along the axis it is stretched on is not a
+## nine-slice, it is a smear waiting to happen (D83). Drawn at radius 12 on a 10px
+## carve the tooltip measured 1.51 of variation across its top strip where a frame
+## that satisfies the contract measures 0.0000. Checked, not assumed.
+##
+## The tooltip floats over arbitrary art, so it is the one frame that cannot borrow
+## its contrast from what is behind it. Face is darker than the panel's and the ink
+## heavier: measured, white text on it reads 15:1 against the 9:1 the panel gives.
+const TOOLTIP := Vector2i(128, 128)
+const TOOLTIP_BORDER := 12
+const TOOLTIP_RADIUS := 10
+const TOOLTIP_FACE := Color(0.055, 0.050, 0.080)
+
 ## The five rarities, as `Icons.RARITY_COLOURS`. Restated here and asserted equal by
 ## `tests/test_art.gd` rather than imported: this is a `--script` tool and an
 ## autoload reference makes it unloadable (D19).
@@ -222,6 +258,25 @@ func _init() -> void:
 		_strip(SLIDER_TRACK.x, _groove_line(SLIDER_TRACK.y, SLIDER_INSET), false))
 	wrote += _save("scrollbar_track.png",
 		_strip(SCROLLBAR_TRACK.y, _groove_line(SCROLLBAR_TRACK.x, SCROLLBAR_INSET), true))
+
+	# --- containers ----------------------------------------------------------
+	#
+	# `UITheme` already asks for all three by name and skips each one while its file
+	# is absent, so these land one at a time without a code change.
+	var panel: Dictionary = (FRAME["normal"] as Dictionary).duplicate()
+	panel["face"] = (FACES[variant] as Dictionary)["normal"]
+	wrote += _save("frame_panel.png",
+		_frame(PANEL.x, PANEL.y, panel, PANEL_BORDER, PANEL_RADIUS, Color(0, 0, 0, 0)))
+
+	var inset: Dictionary = (FRAME["pressed"] as Dictionary).duplicate()
+	inset["face"] = inset["inner"]
+	wrote += _save("frame_inset.png",
+		_frame(INSET.x, INSET.y, inset, INSET_BORDER, INSET_RADIUS, Color(0, 0, 0, 0)))
+
+	var tip: Dictionary = (FRAME["normal"] as Dictionary).duplicate()
+	tip["face"] = TOOLTIP_FACE
+	wrote += _save("frame_tooltip.png",
+		_frame(TOOLTIP.x, TOOLTIP.y, tip, TOOLTIP_BORDER, TOOLTIP_RADIUS, Color(0, 0, 0, 0)))
 
 	# --- the vitals bar ------------------------------------------------------
 	#
