@@ -152,11 +152,45 @@ var walk_mons := {}
 ## anything that deserves a beat: a descent, a fight, or something new in sight.
 var walk_more := false
 
-var status_label: Label
+## The header used to be nine statistics concatenated into ONE Label, and it failed
+## twice over (D114). Mechanically: an unbounded run-on overflows 1280x720 at some
+## content length and always did, wrapping in the middle of "AT RISK: 0 cards, 0 gold"
+## — a Label breaks at a space and cannot tell a separator from a space inside a
+## phrase. Editorially: the dungeon's name, the tile count and the thing the entire run
+## is staked on were the same size in the same grey, which is a debug print, not a HUD.
+##
+## So the header is three tiers of importance and every fact is its OWN Label inside a
+## flow container. A row that runs out of width now breaks BETWEEN facts, because there
+## is nothing inside one left to break — which is what makes it safe for the longest
+## dungeon name and the biggest numbers instead of tuned until one capture fits.
+var vitals_box: HFlowContainer   ## tier 1: where you are, and whether you are alive
+var floor_box: HFlowContainer    ## tier 3: the floor's bookkeeping
+var risk_frame: PanelContainer   ## tier 2: the only framed thing up there
+var risk_label: Label
+var ropes_label: Label
 var log_label: Label      ## what just happened
 var hint_label: Label     ## what the floor is asking for now
 var floor_view: Control
 var moves_box: HBoxContainer
+
+## Header ink. The tiers differ by SIZE and by colour, not by position alone, so the
+## reading order survives a row wrapping.
+const STAT_INK := Color(0.93, 0.93, 0.97)
+const FLOOR_INK := Color(0.70, 0.72, 0.82)
+## HP is the one vital with a state. Below a third of a bar it stops being bookkeeping
+## and becomes the next decision, so it is the only chip that changes colour.
+const HURT_INK := Color(1.0, 0.46, 0.42)
+const HURT_AT := 3        ## hp * HURT_AT <= max_hp
+## The at-risk frame, lit and unlit. Everything found this run is forfeit unless the
+## boss falls or a rope is spent, so it gets the emphasis — but it is DIM while the
+## escrow is empty, because an alarm that is on from the first step of every run is
+## wallpaper by the third and stops being read at all.
+const RISK_LIT := Color(1.0, 0.78, 0.42)
+const RISK_COLD := Color(0.70, 0.72, 0.80)
+
+## The two states of that frame, built once. Swapped by `_refresh`.
+var risk_sb_lit: StyleBoxFlat
+var risk_sb_cold: StyleBoxFlat
 
 func _ready() -> void:
 	_load_art()
@@ -198,10 +232,54 @@ func _build_ui() -> void:
 	# this screen cannot be the one that forgets the backdrop again (D56).
 	var root := UI.screen(self, "")
 
-	status_label = Label.new()
-	status_label.add_theme_font_size_override("font_size", UITheme.title_font())
-	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	root.add_child(status_label)
+	# Two deliberate rows rather than one line, and no taller than the one line was
+	# once it had wrapped: the header shares 720px with the floor viewport and the
+	# button row, and the floor is already the thinnest thing on the screen.
+	var header := VBoxContainer.new()
+	header.add_theme_constant_override("separation", UITheme.sep(2))
+	root.add_child(header)
+
+	var top := HBoxContainer.new()
+	top.add_theme_constant_override("separation", UITheme.sep(14))
+	header.add_child(top)
+
+	vitals_box = HFlowContainer.new()
+	vitals_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vitals_box.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	vitals_box.add_theme_constant_override("h_separation", UITheme.sep(18))
+	top.add_child(vitals_box)
+
+	# The at-risk figure is the only framed thing in the header, pinned to the far end
+	# of the top row where the eye lands second. It carries the rope count inside the
+	# same frame because a rope is the only answer to it, and because the two are
+	# otherwise read a second apart at opposite ends of a line.
+	#
+	# `SHRINK_END` against a flow container is also what makes the pinning safe: an
+	# HFlowContainer asks for the width of its WIDEST chip, not the sum, so the frame
+	# can never be pushed off the right edge by a long line of vitals — the vitals wrap
+	# under themselves instead.
+	risk_frame = PanelContainer.new()
+	risk_frame.size_flags_horizontal = Control.SIZE_SHRINK_END
+	risk_frame.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	risk_sb_lit = _risk_style(Color(0.34, 0.10, 0.09, 0.82), Color(0.92, 0.44, 0.30, 0.90))
+	risk_sb_cold = _risk_style(Color(0.14, 0.15, 0.21, 0.60), Color(0.42, 0.44, 0.52, 0.60))
+	top.add_child(risk_frame)
+	UI.hoverable(risk_frame, "AT RISK: found this run, but only kept if you beat the boss or use an Escape Rope.")
+
+	var stake := HBoxContainer.new()
+	stake.add_theme_constant_override("separation", UITheme.sep(14))
+	risk_frame.add_child(stake)
+	risk_label = Label.new()
+	risk_label.add_theme_font_size_override("font_size", UITheme.title_font())
+	stake.add_child(risk_label)
+	ropes_label = Label.new()
+	ropes_label.add_theme_font_size_override("font_size", UITheme.title_font())
+	stake.add_child(ropes_label)
+
+	floor_box = HFlowContainer.new()
+	floor_box.add_theme_constant_override("h_separation", UITheme.sep(16))
+	header.add_child(floor_box)
+	UI.hoverable(floor_box, "This floor: how deep you are, how much of its encounter quota you have cleared, and how much of its ground you have seen.")
 
 	log_label = Label.new()
 	log_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -244,13 +322,40 @@ func _build_ui() -> void:
 	spacer_bot.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(spacer_bot)
 
+	# Collection and Menu SIDE BY SIDE, not stacked (D114). Two full-width bars cost
+	# 100px of a 720px frame between them, and captured at the shipped size rather than
+	# on a taller desktop, Menu was sliced in half by the bottom edge — the column had
+	# been overflowing for as long as the header wrapped. Neither button is pressed
+	# often enough on this screen to have earned the whole width, and nothing here is
+	# allowed to take the missing height off the floor viewport.
+	var foot := HBoxContainer.new()
+	foot.add_theme_constant_override("separation", UITheme.sep(10))
+	root.add_child(foot)
+
 	var coll := Button.new()
 	UITheme.style_button(coll)
 	coll.text = "Collection"
+	coll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	coll.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
-	root.add_child(coll)
+	foot.add_child(coll)
 	# same Callable on the button and on Escape, so the two cannot drift apart
-	UI.exit_button(root, "Menu", func(): UI.goto(self, "res://scenes/PauseMenu.tscn"))
+	var menu := UI.exit_button(foot, "Menu", func(): UI.goto(self, "res://scenes/PauseMenu.tscn"))
+	menu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+## The at-risk frame in one of its two states. Local to this screen rather than in
+## UITheme: it is one HUD element with a lit and an unlit face, not a style the rest
+## of the game shares.
+func _risk_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.border_color = border
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(4)
+	sb.content_margin_left = UITheme.px(12)
+	sb.content_margin_right = UITheme.px(12)
+	sb.content_margin_top = UITheme.px(2)
+	sb.content_margin_bottom = UITheme.px(2)
+	return sb
 
 # --- geometry -----------------------------------------------------------------
 
@@ -788,6 +893,78 @@ func _on_floor_input(event: InputEvent) -> void:
 
 # --- state --------------------------------------------------------------------
 
+## Break one of the model's pre-joined header lines back into its phrases.
+##
+## `TraversalIso.status()` and `GameState.risk_line()` both hand back a string that has
+## already been glued together with runs of spaces, and that gluing is the whole defect:
+## nothing downstream can then break the line anywhere except inside a phrase. Splitting
+## on the runs gives each fact back its own Label. What this really wants is for those
+## two to return their parts — the seam is described in D114 — but they are read by other
+## screens and this one is not allowed to change them.
+##
+## Runs of two or more, so it does not matter that one joins with three spaces and the
+## other with four; a phrase's own spaces are single.
+func _phrases(line: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	for p in line.split("  ", false):
+		var s: String = String(p).strip_edges()
+		if s != "":
+			out.append(s)
+	return out
+
+## Lay `parts` out along one header row, reusing the Labels already in it.
+##
+## A pool rather than the free-and-rebuild `moves_box` uses: the header
+## is rewritten on every step, and a step is a TURN, so freeing Labels leaves a frame in
+## which the container has both the old set and the new one — a flicker on the one line
+## the player reads constantly. Extra Labels are hidden, and a hidden child is not laid
+## out, so a row whose fact count varies (a floor with nothing prowling, a run with no
+## keys) closes up cleanly.
+func _fill_row(box: Container, parts: PackedStringArray, size: int, ink: Color) -> void:
+	while box.get_child_count() < parts.size():
+		var made := Label.new()
+		made.add_theme_font_size_override("font_size", size)
+		box.add_child(made)
+	for i in box.get_child_count():
+		var lbl := box.get_child(i) as Label
+		lbl.visible = i < parts.size()
+		if lbl.visible:
+			lbl.text = parts[i]
+			# re-asserted every time, so a chip that went red last step goes back
+			lbl.add_theme_color_override("font_color", ink)
+
+func _refresh_header(tv: TraversalIso) -> void:
+	var dd := GameState.dungeon_data()
+	_fill_row(vitals_box, PackedStringArray([
+		"%s (d%d)" % [dd.name if dd != null else "Dungeon", GameState.dungeon],
+		"HP %d/%d" % [GameState.hp, GameState.max_hp],
+		"Deck %d" % GameState.run_deck.size(),
+		"Gold %d" % MetaState.gold]), UITheme.title_font(), STAT_INK)
+	if GameState.hp * HURT_AT <= GameState.max_hp:
+		(vitals_box.get_child(1) as Label).add_theme_color_override("font_color", HURT_INK)
+
+	var risk := _phrases(GameState.risk_line())
+	risk_label.text = risk[0] if risk.size() > 0 else "AT RISK: nothing"
+	ropes_label.text = "Ropes %d" % MetaState.item_count("escape_rope")
+	# Lit only when there is something in escrow. The four lists are read directly
+	# rather than sniffed out of the formatted line, which would be a second place
+	# deciding what "at risk" means.
+	var staked: bool = not (GameState.escrow_cards.is_empty() and GameState.escrow_gold == 0
+		and GameState.escrow_relics.is_empty() and GameState.escrow_packs.is_empty())
+	risk_frame.add_theme_stylebox_override("panel", risk_sb_lit if staked else risk_sb_cold)
+	var stake_ink := RISK_LIT if staked else RISK_COLD
+	risk_label.add_theme_color_override("font_color", stake_ink)
+	ropes_label.add_theme_color_override("font_color", stake_ink.darkened(0.18))
+
+	# Keys arrive on the tail of `risk_line()` but are NOT at risk in the same sense —
+	# they are spent on this floor or wasted, as GameState says where it builds the
+	# line — so they belong with the floor's bookkeeping rather than inside a frame
+	# that means "this can be taken off you".
+	var below := _phrases(tv.status())
+	for i in range(1, risk.size()):
+		below.append(risk[i])
+	_fill_row(floor_box, below, UITheme.font(), FLOOR_INK)
+
 func _refresh() -> void:
 	var tv := GameState.traversal as TraversalIso
 	if tv == null:
@@ -795,14 +972,7 @@ func _refresh() -> void:
 		call_deferred("_leave")
 		return
 
-	var dd := GameState.dungeon_data()
-	status_label.text = "%s (d%d)    HP %d/%d    Deck %d    Gold %d    %s" % [
-		dd.name if dd != null else "Dungeon", GameState.dungeon,
-		GameState.hp, GameState.max_hp, GameState.run_deck.size(),
-		MetaState.gold, tv.status()]
-	UI.hoverable(status_label, "AT RISK: found this run, but only kept if you beat the boss or use an Escape Rope.")
-	status_label.text += "    %s    Ropes %d" % [
-		GameState.risk_line(), MetaState.item_count("escape_rope")]
+	_refresh_header(tv)
 
 	if tv.is_complete():
 		call_deferred("_leave")
