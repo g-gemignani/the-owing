@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D108 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D112 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -434,9 +434,35 @@ These are failure modes that have actually bitten this project. Treat each as a 
   intent telegraphs that each read as "angry shape" have failed even if each is
   individually good, and a request for one is blind to the other six — so the icon tiers
   are generated as one gridded sheet and sliced (D91). That buys consistency of hand and
-  pays for it in positional assignment, the hazard `PixelArt.enemy_sprite()` already
-  demonstrates. It is survivable only because the order is generated into the prompt and
+  pays for it in positional assignment — the hazard the deleted `PixelArt.enemy_sprite()`
+  demonstrated for years, handing each archetype whichever CC0 tile the sort order
+  reached. It is survivable only because the order is generated into the prompt and
   read back by the installer from the same table, and printed on every run to be checked.
+  **Printed to be checked is not checked**, and D112 is what that costs: the sheet prompt
+  said "a single grid image containing 21 cells" and never once said *5x5*, or that four
+  cells were spare, because the line in ART_PROMPTS.md carrying the grid also carried the
+  `Install:` command and the parser dropped the whole line. Both sheets came back with the
+  right drawings in the wrong boxes — one with 25 glyphs where 21 were asked for — and
+  reading-order assignment would have shipped 18 correct pictures on 18 wrong meanings.
+  A positional contract has to state the positions.
+
+- **A file that exists is invisible to a list of what is missing.** ART_PROMPTS.md asks
+  for what is absent, which is right, and is why a file that landed *wrong* had nowhere to
+  be recorded: the moment it appears on disk the sheet stops mentioning it and the defect
+  lives only in somebody's memory. `art_manifest.gd`'s `REDO` table is the fix — a
+  hand-kept list of files that exist and are wrong, each with the evidence, each line
+  deleted when the re-roll lands (D109, D112). It deliberately detects nothing: the one
+  measurement available guessed wrong about half the time, and a re-roll list built on a
+  bad measurement throws away good paintings.
+
+- **A generated document is only as current as the tool that writes it, and a tool
+  advertises a deleted screen forever.** `art_manifest.gd` briefed 26 icons for the graph
+  map, the dice track and the deck reveal through the entire life of a tree in which none
+  of those three models existed — D94 deleted the models and nobody re-read the file that
+  sells them (D111). Generation stops a list drifting from the *catalogue*; nothing stops
+  the tool's own prose drifting from the *code*. So when a feature is deleted, grep
+  `tools/` for it — and treat the totals as the tell: 209 files wanted did not move when
+  a fifth of the shopping list stopped having a screen to land on.
 
 ## Layout
 
@@ -446,14 +472,16 @@ resources/   all content as .tres: cards, enemies, relics, powers, events, dunge
              zones, builds
 scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      pixel/ (CC0 Kenney) and art/ (generated backdrops + painted UI frames)
-tests/       34 suites + run.sh; export.sh and export_ready.sh need templates
+tests/       37 suites + run.sh; export.sh and export_ready.sh need templates
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
              screenshots.gd (renders every screen to PNG), art_manifest.gd,
              install_backdrops.gd, install_scene_backdrops.gd,
              install_cutouts.gd (mattes/trims/anchors enemies, relics, powers — D90),
              install_sheet.gd (slices an icon-set sheet into its files — D91),
-             install_chrome.gd (the five loose ui/ control cutouts, which have no
-             catalogue to resolve names against — D105),
+             install_chrome.gd (the loose ui/ paintings — control chrome, the combat
+             HUD and the card back — which have no catalogue to resolve names
+             against, so its table IS the catalogue; per-file crop/matte/stretch,
+             plus a luminance-alpha mode for the two blooms — D105, D112),
              cutout_lib.gd (the shared matte/trim/anchor, incl. trapped-pocket
              fill — D92; NOT a class_name),
              gen_ui_kit.gd (COMPUTES the nine-slice button frames — D83),
@@ -464,8 +492,8 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              PARSES the sheet rather than restating it, and refuses any
              text-only model because the style reference is mandatory — D100.
              `--browser` prints the same prompts for pasting into a chat UI
-             by hand, 58 pastes for the 111 files still wanted, no key — D102)
-DESIGN.md    the full reasoning, decision by decision (D1–D108)
+             by hand, no key — it prints its own paste count — D102)
+DESIGN.md    the full reasoning, decision by decision (D1–D112)
 ART.md       the art brief: the diagnosis, the style, the reasoning
 ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
              whether it exists yet. Never edit by hand; regenerate it.

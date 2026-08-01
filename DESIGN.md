@@ -30,7 +30,7 @@ This is four systems bolted together. Each is individually solved; the risk is i
 | Enemy archetypes | Data-driven, cycling action patterns per archetype | `[x]` |
 | Multi-enemy encounters | Groups sharing one budget, player targeting | `[x]` |
 | Reward | Pick 1-of-3, rarity-weighted by encounter tier | `[x]` |
-| Traversal models | Pluggable per dungeon: node graph, deck, dice board | `[x]` |
+| Traversal | One model: an isometric crawl, walked by all 12 dungeons. The `Traversal` seam stays (D13); the graph, deck and dice models lost to it in D88 and were deleted in D94 | `[x]` |
 | Meta collection | Persistent card ownership + fusion/leveling | `[x]` |
 | Upgrade caps | Max level per rarity (common 100), derived from drop weight | `[x]` |
 | Gold currency | Persistent: earned in combat, lost on death, spent at shops | `[x]` |
@@ -63,7 +63,7 @@ This is four systems bolted together. Each is individually solved; the risk is i
 | Tier | Singleton | Holds | Persists? | On death |
 |---|---|---|---|---|
 | **Meta** | `MetaState` | card collection `id→{count,level}`, **relics**, `gold`, `highest_dungeon` | disk (`user://save.json`) | gold+cards partly lost (D3); **relics kept** |
-| **Run** | `GameState` | run deck instance, HP, map graph, position, dungeon tier | memory only | wiped |
+| **Run** | `GameState` | run deck instance, HP, the generated floors, position, dungeon tier | memory only | wiped |
 
 Autoload order matters: `MetaState` loads before `GameState` (GameState builds its deck from the collection).
 
@@ -88,7 +88,7 @@ Overworld.tscn  (zones: travel + what each zone's card pool holds)
     ├─ rest tile ──▶ heal inline, stay on the floor
     ├─ shop tile ──▶ Shop.tscn (buy cards / healing for gold) ──▶ back to the floor
     └─ "Collection" button ──▶ Collection.tscn (fuse) ──▶ back
-    └─ boss cleared ──▶ dungeon marked cleared + relic ──▶ DungeonSelect
+    └─ boss cleared ──▶ dungeon marked cleared + relic ──▶ ZoneView
   Combat defeat ──▶ death penalty ──▶ run reset ──▶ Overworld
   any run view ──▶ "Menu" ──▶ PauseMenu.tscn (Resume / Collection / Settings /
                               Abandon run / Save and quit)
@@ -108,12 +108,20 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `scripts/traversal.gd` | Traversal contract: options/select/complete + shared encounter budget. |
 | `scripts/traversal_iso.gd` | The one model: an isometric building of rooms and corridors over several floors (D79, D88). Three others — graph, deck, dice — were deleted in D94. |
 | `scripts/run_flow.gd` | Shared encounter routing used by every traversal view. |
+| `scripts/packs_screen.gd` | Sealed packs: what is unopened, and opening it (D80/D81). |
+| `scripts/powers_screen.gd` | Power roster: buy, level, equip the one carried into a run. |
+| `scripts/chest_screen.gd` | The chest a crawl tile opens. |
+| `scripts/glossary.gd` | Generated from the data, so a mechanic cannot exist unexplained. |
+| `scripts/starter_kit.gd` | The three 12-card openings a new save picks between. |
+| `scripts/card_filter.gd` | The sort/rarity/type filter shared by collection and builder. |
+| `scripts/victory.gd`, `scripts/defeat.gd` | End-of-run screens; defeat names what was left behind (D59). |
+| `scripts/art_palette.gd`, `scripts/art_shapes.gd` | Shared by the art generators: the palette, and the silhouette primitives the enemy plates and iso markers both build from. |
 | `scripts/build_data.gd` | Build Resource: a named archetype and its defining cards. |
 | `scripts/builds_screen.gd` | Build tracker: progress and where the missing cards are. |
 | `scripts/icons.gd` | Placeholder art lookup, rarity colours, card styling. |
 | `scripts/zone_data.gd` | Zone Resource: themed card pool + the dungeons it contains. |
 | `scripts/dungeon_data.gd` | Dungeon Resource: difficulty, unlock gate, enemy roster, card pool, exclusives. |
-| `scripts/dungeon_select.gd` | Dungeon choice screen — the seam the overworld will replace. |
+| `scripts/overworld.gd` + `scripts/zone_view.gd` | Dungeon choice, in two steps: pick a zone, then a dungeon within it. These replaced the old `dungeon_select.gd`, which was always described as the seam the overworld would take over. |
 | `scripts/relic_data.gd` | Relic Resource: run/combat/turn/reward effects + tuning weight. |
 | `scripts/enemy_data.gd` | Enemy archetype Resource: stat shares, action pattern, group size. |
 | `scripts/combatant.gd` | HP, block and status effects; owns the block-expiry / `retain_block` rule. |
@@ -137,7 +145,7 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `scripts/zone_view.gd` | Dungeons within one zone. |
 | `scripts/relics_screen.gd` | Relic inventory. |
 | `scripts/pause_menu.gd` | In-run menu, incl. abandon-run confirmation. |
-| `scripts/ui_theme.gd` | Fullscreen + **single-knob UI scaling** (`UI_SCALE`); builds the global Theme and size helpers. |
+| `scripts/ui_theme.gd` | Fullscreen, the global Theme (buttons, panels, dropdowns, sliders, scrollbars, checkboxes) and the size helpers. The interface is a **fixed** 1280x720 since D65; `UI_SCALE` is a constant `1.0` and nothing varies it. |
 | `scenes/*.tscn` | Thin Control roots; all UI built in code. |
 | `resources/cards/*.tres` | Card definitions (data, not code). |
 | `resources/enemies/*.tres` | Enemy archetypes (data, not code). |
@@ -147,9 +155,10 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `resources/zones/*.tres` | Zone definitions (data, not code). |
 | `resources/builds/*.tres` | Build archetypes (data, not code). |
 | `scripts/audio.gd` | Sound autoload: buses, voice pool, event -> stream. |
-| `scripts/pixel_art.gd` | Authored 16x16 symbol glyphs + CC0 pixel sprite lookup. |
-| `assets/pixel/` | CC0 pixel art (Kenney Tiny Dungeon, UI RPG Expansion) + licences. |
-| `test_*.gd` | Headless regression tests (map, meta, death, deck, balance, status). |
+| `scripts/pixel_art.gd` | Authored 16x16 symbol glyphs, the card sheet, and the lookup for every painted asset (backdrops, enemy plates, the UI kit). |
+| `assets/pixel/` | What is left of the CC0 pixel art: the 1-Bit card sheet and five Pattern Pack zone tiles, each with its licence. The Tiny Dungeon enemy sprites went in D89 and the UI RPG frames in D83. |
+| `assets/art/` | Everything painted or generated for this project: 23 backdrops, 35 enemy plates, the iso floor, the computed UI kit. Not CC0 — see its README. |
+| `tests/test_*.gd` + `tests/*Test.tscn` | 37 suites. Script tests inspect files; scene tests measure a built tree, because size, position and visibility do not exist until one is. |
 | `tools/sim_balance.gd` | Headless balance simulator (see Balance workflow). |
 
 ### Menus, slots and settings (D19)
@@ -219,43 +228,54 @@ dungeon pools carry the exclusives — so a poison deck is something you travel 
 
 | Zone | Unlock | Dungeons | Theme |
 |---|---|---|---|
-| The Hollow Barrows | — | Crypt (d1), Warrens (d2) | martial basics, defence |
-| The Ashen Foundry | 2 clears | Foundry (d3), Slag Pits (d4) | strength, thorns, growth |
-| The Verdant Rot | 4 clears | Rot Gardens (d5) | poison, AoE debuffs |
-| The Sunken Deeps | 6 clears | Sunken Vault (d5), Abyssal Stair (d7) | epics and legendaries |
+| The Hollow Barrows | — | Crypt, Ossuary, Warrens | martial basics, defence |
+| The Ashen Foundry | 2 clears | Foundry, Ember Road, Slag Pits | strength, thorns, growth |
+| The Verdant Rot | 4 clears | Fungal Deep, Rot Gardens | poison, AoE debuffs |
+| The Sunken Deeps | 6 clears | Sunken Vault, Drowned Market, Abyssal Stair | epics and legendaries |
+| Beyond the Stair | 8 clears | The Maw | the last door anyone mapped |
+
+Zone membership is the authority and lives in `resources/zones/*.tres`; the difficulty
+of a dungeon lives on the dungeon. Neither is restated here — a dungeon listed in two
+zones, or in none, is caught by `tests/test_content.gd` rather than by this table.
 
 One pool helper feeds rewards, shop stock *and* event card grants, so exclusivity holds everywhere.
 
-### Traversal is pluggable (D13)
+### Traversal is a seam, and there is one model behind it (D13, D88, D94)
 
-A dungeon is not required to navigate like a graph. `DungeonData.traversal` selects a model, and
-everything else — combat, cards, relics, shops, meta, deck-building — talks only to the `Traversal`
-interface (`options()` / `select()` / `clear_pending()` / `is_complete()`).
+Everything else — combat, cards, relics, shops, meta, deck-building — talks only to the `Traversal`
+interface (`options()` / `select()` / `clear_pending()` / `is_complete()`), and `TraversalIso` is the
+only implementation. Four models were built against this seam; D88 measured the other three
+discounting their own attrition budgets and moved every dungeon onto the crawl, and D94 deleted them.
+`DungeonData` no longer carries a `traversal` field — a dungeon differs from its neighbour by its
+floor's shape and surface (`Balance.ISO_STYLE_OF` / `ISO_TERRAIN_OF`), not by its model.
 
-Two rules make this cheap rather than a maintenance tax:
+**The seam is kept deliberately, and so is the plural in the tests.** Two rules made it cheap rather
+than a maintenance tax, and both still hold:
 
 1. **Implementations are pure logic** (no UI, no autoloads). The balance simulator drives them
    directly, so **one generic walker measures every model**. A per-model walker would be the first
    thing to rot when a model is added.
 2. **Every model spends a comparable attrition budget** (`Balance.ENCOUNTER_*`). Otherwise
    "difficulty 3" means different things in different dungeons and the scaling model decouples.
-   `tests/test_traversal.gd` asserts this, plus termination and exactly-one-boss, for *every* registered
-   model — adding a model means adding its `Kind` to one array in that test.
+   `tests/test_traversal.gd` asserts this, plus termination and exactly-one-boss, and still loops over
+   an array of models rather than over one — that is the wiring a second one would need.
 
-Views are per model (a dice board should not render like a graph); shared encounter routing lives in
-`RunFlow` so a new view does not re-derive how a rest heals or which scene a shop opens.
+Shared encounter routing lives in `RunFlow`, so a new view does not re-derive how a rest heals or
+which scene a shop opens.
 
-Current assignment doubles as the teaching order, since `unlock_after_clears` already sequences
-dungeons: Crypt = graph, Warrens = deck, Foundry = graph, Sunken Vault = **dice board**.
+**A model's encounter count must be derived, not structural.** The graph visited one node per row, so
+its row count *was* its encounter count — hardcoded at 6, it silently broke the budget contract the
+moment new encounter types entered the mix, and had to derive from the budget instead.
 
-**A model's encounter count must be derived, not structural.** The graph visits one node per row, so
-its row count *is* its encounter count — it was hardcoded at 6 and silently broke the budget contract
-the moment new encounter types entered the mix. `TraversalGraph.rows()` now derives from the budget.
+**The budget is an average, not a per-run guarantee**, so `tests/test_traversal.gd` asserts the *mean*
+encounters and keeps only a loose per-run bound to catch runaway generation.
 
-**The budget is an average, not a per-run guarantee.** The dice board has real variance by design (a
-lucky sequence skips content; an unlucky one grinds through it), so `tests/test_traversal.gd` asserts the
-*mean* encounters per model and keeps only a loose per-run bound to catch runaway generation.
-Measured: graph 9.0, deck 9.0, dice 8.7 against a budget of 9.
+**And equal encounter counts are not equal cost**, which is the lesson the other three died of: all
+four passed the count assertion at 13.2 while the fights actually *met* were graph 4.5–5.1, dice
+3.5–4.1, deck 4.9, against iso's 5.9–6.0. A model's skip is part of its price and no budget assertion
+can see it (D88). The crawl prices a slip-past of its own, and `avoid_cost` takes the rung count from
+the traversal that generates it rather than from a global constant, because a ladder tuned for N rungs
+is wrong the moment something changes N (D99).
 
 ### Run earnings are escrowed (D20)
 
@@ -349,16 +369,20 @@ to that fuzz list.
 
 ### Pixel art (D29)
 
-The game is pixel art throughout. Assets are split by whether *meaning* has to be exact:
+> **Largely superseded.** The game was pixel art throughout when this was written. It is
+> now painted: 23 generated backdrops, 35 generated enemy plates, a computed UI kit and a
+> generated isometric floor. Two rows below survive — the authored glyphs and the card
+> sheet — and the *reasoning* survives all of it, which is why the section is kept. What
+> replaced each row is named in the right-hand column.
 
-| What | Source | Why |
+| What | Source | Status |
 |---|---|---|
-| Enemy sprites (28) | Kenney **Tiny Dungeon**, CC0 | any distinct sprite works for an enemy |
-| UI panels / buttons | Kenney **UI Pack RPG Expansion**, CC0 | pixel-styled frames |
-| Effect symbols (13) | **authored in `pixel_art.gd`** as 16x16 bitmaps | a shield must read as a shield |
-| Backdrops (5, one per zone) | Kenney **Pattern Pack Pixel**, CC0 | genuinely seamless tiles |
-| Sound (23 events) | Kenney **Interface / RPG / Jingles**, CC0 | named files, so mapping is exact |
-| Card illustrations (100) | Kenney **1-Bit Pack** sheet, CC0 | 992 usable tiles; monochrome, so tintable |
+| Enemy sprites (28→41) | Kenney **Tiny Dungeon**, CC0 | **gone (D89)** — 35 generated plates, keyed by archetype id |
+| UI panels / buttons | Kenney **UI Pack RPG Expansion**, CC0 | **gone (D83)** — computed by `tools/gen_ui_kit.gd` |
+| Effect symbols (13) | **authored in `pixel_art.gd`** as 16x16 bitmaps | still here; 21 painted replacements are Tier 1d of the art list |
+| Backdrops (5, one per zone) | Kenney **Pattern Pack Pixel**, CC0 | still here as the fallback; the zone screens draw painted establishing shots (D83d) |
+| Sound (23 events) | Kenney **Interface / RPG / Jingles**, CC0 | still here — named files, so mapping is exact |
+| Card illustrations (100) | Kenney **1-Bit Pack** sheet, CC0 | still here, and **the worst-looking thing in the game**: a 16x16 tile magnified ten times across a card face. Twelve family illustrations are Tier 3. |
 
 The packs ship *unlabelled* spritesheets (`tile_0093.png`) and there is no way to tell a sword tile from
 a barrel tile without looking at it. Picking symbols from them would have been guesswork presented as
@@ -366,10 +390,14 @@ art, so the twelve glyphs that carry meaning — attack, block, poison, thorns, 
 skull, campfire, rope, chest, book — are authored as bitmap strings instead. They are monochrome, so
 callers tint them (rarity colour, faded board spaces).
 
-Enemy sprites are assigned by **position in a sorted archetype list**, not by hashing the id: hashing
+Enemy sprites were assigned by **position in a sorted archetype list**, not by hashing the id: hashing
 collided and left 28 enemies sharing only 17 sprites, so different enemies looked identical. Position
-guarantees distinctness while sprites last, stays stable across runs, and `PixelArt.OVERRIDES` lets any
-one of them be corrected by eye later.
+guaranteed distinctness while sprites lasted, stayed stable across runs, and `PixelArt.OVERRIDES` let
+any one of them be corrected by eye. All of it went in D89 — the plate is named for the archetype, so
+adding a 36th enemy no longer reshuffles every face downstream, and `PixelArt.OVERRIDES` and
+`PixelArt.enemy_sprite()` no longer exist. Positional assignment survives in exactly one place, the
+gridded icon sheets, and only because the order is generated into the prompt and read back by the
+installer from the same table (D91).
 
 Two things that are invisible headlessly and are therefore asserted by `tests/test_art.gd`:
 **nearest-neighbour filtering** (`default_texture_filter=0` — the default is linear, which turns every
@@ -426,7 +454,10 @@ indistinguishable from "nothing was meant to play"**. So every declared event mu
 non-empty stream, unused files are flagged, and the volume curve is asserted to mute at 0, be
 unattenuated at 100, and rise monotonically between.
 
-Still missing: animation.
+Still missing: **art-driven** animation. Combat has tweened feedback — floating damage numbers, a hit
+shake, a screen flash scaled to the hit — but no impact sprite, no death effect and no card-play
+flourish. Those are the six FX sheets in Tier 1e, and the manifest says plainly that eight frames of
+one effect evolving is the thing an image model does not hold: it is a shader or a particle system.
 
 Older note — all lookups still go through `scripts/icons.gd`:
 - call sites ask for **meaning** (`"boss"`, `"poison"`, `"gold"`) rather than filenames, so swapping art
@@ -437,11 +468,13 @@ Older note — all lookups still go through `scripts/icons.gd`:
 - `rarity_colour()` / `style_card_button()` carry rarity as **colour**, which is the thing a player reads
   at a glance — text alone made every card look identical.
 
-Still placeholder: no animation, no sound, no backgrounds, no enemy portraits.
+*That note ended "Still placeholder: no animation, no sound, no backgrounds, no enemy portraits." Sound
+landed in D32, backgrounds in D73/D83b/D83d, enemy plates in D89. Animation is the one still true, in
+the narrowed sense above.*
 
 ### Conventions
 - UI is built programmatically in `_ready()` — no editor scene wiring. Keeps everything diffable and reviewable in code.
-- **All UI sizes come from `UITheme`** (`font()`, `title_font()`, `sep()`, `card_size()`, `px()`), never hardcoded pixels — so one constant rescales the whole interface. Game starts fullscreen; `Ctrl +/-/0` rescale live, `F11` toggles fullscreen, `Esc` leaves it.
+- **All UI sizes come from `UITheme`** (`font()`, `title_font()`, `sep()`, `card_size()`, `px()`), never hardcoded pixels. The layout is designed at a fixed 1280x720 and the engine's `canvas_items` stretch scales the whole canvas to the window, so nothing reflows (D65). Game starts fullscreen; `F11` toggles it, `Esc` leaves it. There is no live rescale and no scale setting — `UI_SCALE` is `1.0` and nothing varies it.
 - **Rules in the engine, numbers in Balance, UI in the scene.** Combat scripts must not contain tuning constants or rules logic — otherwise the simulator stops predicting the real game.
 - Cards are `.tres` data files; adding a card = new file + entry in `MetaState.CATALOG`.
 - Any script a headless `--script` test loads directly must fetch autoloads via `get_node_or_null("/root/MetaState")`, not the global identifier (globals aren't registered in `--script` mode).
@@ -462,15 +495,19 @@ Still placeholder: no animation, no sound, no backgrounds, no enemy portraits.
 
 - **D4 — Deck construction.** Per-dungeon decks. At each dungeon entry a deck-builder screen assembles a run deck from owned cards (up to `count` copies of each, at their fused level), with named loadouts saved persistently in `MetaState.decks` and reused across dungeons. Minimum deck size `MIN_DECK_SIZE` (8). Rewards still permanently grow the collection mid-run; each dungeon you re-pick from the collection. Boss clear and death both return to the builder.
 
-- **D5 — Power curve & scaling.** Enemies scale against **deck power per energy** (`Balance.power_ratio`), not deck size or raw card totals, because energy is the binding constraint on player throughput. Consequences, all deliberate: a bigger deck of the same cards is more *consistent* but not stronger; an expensive card only helps if it beats the cost-efficiency curve; fusing raises the ratio and enemies keep pace. `HP_POWER_K` ≈ 1.0 keeps fight *length* roughly constant as decks improve; `DMG_POWER_K` is held near it (0.85) because letting incoming damage lag behind block makes progressed decks invulnerable. All tuning lives in `scripts/balance.gd`; rules live in `scripts/combat_engine.gd`; both are exercised by the simulator so the game and the tuning model cannot drift.
+- **D5 — Power curve & scaling.** Enemies scale against **deck power per energy** (`Balance.power_ratio`), not deck size or raw card totals, because energy is the binding constraint on player throughput. Consequences, all deliberate: a bigger deck of the same cards is more *consistent* but not stronger; an expensive card only helps if it beats the cost-efficiency curve; fusing raises the ratio and enemies keep pace. `HP_POWER_K` keeps fight *length* roughly constant as decks improve, and `DMG_POWER_K` cannot lag too far behind it or progressed decks become invulnerable. **The two values are not restated here** — they have moved four times since this was written (most recently in D109's level-curve rework, which shifted the whole difficulty axis) and a number copied into prose is a number that goes stale silently. Read them from `scripts/balance.gd`, where each carries the measurement that set it; `HP_POWER_K_HIGH` was added later still, because power above the floor needed a second slope or more power made the game *easier* at the top. All tuning lives in `balance.gd`; rules live in `scripts/combat_engine.gd`; both are exercised by the simulator so the game and the tuning model cannot drift.
 
 - **D7 — Block lifetime.** Block absorbs the incoming hit and then **expires at the start of the next turn**, so defence is a per-turn decision rather than an accumulating wall. The legendary **Barricade** removes the expiry, turning block into a resource that compounds across turns — the payoff for a rare card, and the reason `retain_block` is modelled as a persistent combatant flag rather than a card effect applied once.
 
 - **D18 — Rarity means two things.** With 100 cards, rarity has to be defined, not felt. It governs
   *power* and *growth*, and the second one was inverted: level caps derive from drop weight (common
-  100, legendary 5), so a single flat `LEVEL_GAIN` made a maxed common reach 3.5x while a maxed
-  legendary reached 1.5x — grinding commons beat every legendary. `LEVEL_GAIN_BY_RARITY` now scales
-  gain against track length so the maxed multiplier *ascends*: 3.5 / 3.8 / 4.2 / 4.6 / 5.0.
+  100, legendary 5), so a single flat gain made a maxed common reach 3.5x while a maxed
+  legendary reached 1.5x — grinding commons beat every legendary. The fix was to scale gain against
+  track length so the maxed multiplier *ascends* with rarity rather than inverting.
+
+  *(The constant that did it, `LEVEL_GAIN_BY_RARITY`, was replaced in D109 by
+  `LEVEL_RATE_BY_RARITY` and a per-card budget spread across the track. The invariant is
+  unchanged and still asserted — a maxed legendary must out-multiply a maxed common.)*
 
   Design rules per tier, enforced by `tests/test_rarity.gd`:
 
@@ -527,61 +564,25 @@ Still placeholder: no animation, no sound, no backgrounds, no enemy portraits.
 
 - **D8 — Upgrade ceiling.** Each card has a max level by rarity: **common 100**, uncommon 40, rare 15, epic 5, legendary 5. Derived, not hand-picked: giving each rarity a track proportional to its drop weight (`WEIGHTS[NORMAL]` = 100/40/15/5/1) makes every rarity cost roughly the same hoarding effort, floored at `MIN_MAX_LEVEL` (5) so even a legendary is worth fusing. Prices for a level live only in `Balance.fuse_copy_cost` / `fuse_gold_cost` — a maxed common now costs **862 copies**, not 199.
 
-  Level scaling had to become **sub-linear (sqrt, `LEVEL_GAIN` 0.25)** for this to work at all: the old linear `+3/level` would put a maxed Strike at ~300 damage, far beyond anything `power_ratio` can scale enemies to, collapsing the curve. sqrt puts a maxed card at ~3.5x base (Strike 6 → 21) — early levels feel substantial, late ones incremental. Status magnitudes grow slower still (`sqrt/2`), because a stack multiplies every later action instead of adding once. Consequence worth remembering: **Lv2 is early-game on a 100-level track**, so "mid progression" now means roughly Lv15 and deep play Lv40.
+  Level scaling had to become **sub-linear** for this to work at all: the old linear `+3/level` would put a maxed Strike at ~300 damage, far beyond anything `power_ratio` can scale enemies to, collapsing the curve. Consequence worth remembering: **Lv2 is early-game on a 100-level track**, so "mid progression" means roughly Lv15 and deep play Lv40.
+
+  **Superseded by D109.** The sqrt curve (`LEVEL_GAIN` 0.25) that first solved this was *shape*-correct and step-wrong: rounding ate 77% of every individual level-up, so most levels cost gold and copies and bought the player nothing, and eight cards changed at no level at all. `LEVEL_GAIN` and `LEVEL_GAIN_BY_RARITY` are gone; `CardData` now spends a per-card budget across the track (`_headline_budget` / `_spread`, front-loaded by `FRONTLOAD_EXP`) so that **every** step moves a number. `tests/test_levels.gd` walks all 3,859 of them. Read D109 before touching any of it — the analytic retune that came first satisfied every predicate in `test_balance.gd` and turned the game into a walkover.
 
 ### Open
-- **D18 — Rarity means two things.** With 100 cards, rarity has to be defined, not felt. It governs
-  *power* and *growth*, and the second one was inverted: level caps derive from drop weight (common
-  100, legendary 5), so a single flat `LEVEL_GAIN` made a maxed common reach 3.5x while a maxed
-  legendary reached 1.5x — grinding commons beat every legendary. `LEVEL_GAIN_BY_RARITY` now scales
-  gain against track length so the maxed multiplier *ascends*: 3.5 / 3.8 / 4.2 / 4.6 / 5.0.
 
-  Design rules per tier, enforced by `tests/test_rarity.gd`:
+*This heading held a verbatim second copy of D18, D17, D14 and D13 from "Resolved"
+above — an editing accident, not four re-opened questions. All four are resolved, and
+the copy is deleted rather than kept: two statements of one decision drift, and the
+reader cannot tell which is current. D6's stub here ("how are exclusive cards
+declared?") is answered in its own Resolved entry: a card is exclusive by being in
+exactly one dungeon pool, with no tag and no table.*
 
-  | Rarity | Count | Role | Growth |
-  |---|---|---|---|
-  | Common | 32 | one simple number, no rider | 100 levels do the work |
-  | Uncommon | 28 | two effects, or a good rate | 40 levels |
-  | Rare | 22 | enables a build | 15 levels |
-  | Epic | 12 | large swing, usually paid for | 5 levels, steep gain |
-  | Legendary | 6 | changes a rule for the combat | 5 levels, steepest |
+What is actually open is one thing, and it is the largest item in the plan:
 
-  Both ladders are asserted: average power per energy among *repeatable* cards (one-shots cannot be
-  rate-compared, and legendaries are almost all one-shots), and average total power across every card.
-  The test found real problems rather than confirming intent: two stat-identical card pairs, four epics
-  priced *below* rares of the same cost, and three legendaries below epics — all fixed by changing the
-  cards, not the assertion. Buff weights were then recalibrated against measured run completion after
-  an initial repricing inflated buff decks' *priced* power without changing their real power, pushing
-  enemy scaling past them (thorns builds fell 69% to 46%).
-
-- **D17 — Card mechanics.** The card vocabulary went from 9 cards to **47** on ten new mechanics:
-  multi-hit, AoE, exhaust, retain, poison (ignores Block, ticks at end of turn), thorns, Block-scaled
-  damage, per-combat growth, healing and energy gain. Lineage is drawn from Slay the Spire, Monster
-  Train, Hearthstone, Dicey Dungeons and Darkest Dungeon rather than one source.
-
-  Every mechanic **must** be priced in `CardData.power_value()` or enemy scaling silently falls behind
-  the player's options. Two pricings were measurably wrong on the first pass and were corrected against
-  the simulator: poison was priced like immediate damage (it is back-loaded and wasted when a fight
-  ends early → 3.0 to 2.0 per stack, poison builds 40% → 63%), and AoE was priced near
-  "damage × enemies" when the average encounter holds only ~1.3 living enemies (1.6 to 1.35 ×,
-  AoE builds 41% → 58%). Exhaust applies a 0.65 discount because one use per combat is a real cost.
-
-- **D14 — Non-combat encounters.** Events are data (`EventData`) with 2-3 choices and *declarative*
-  effects (HP flat/percent, gold, card gain/loss, relic, start-a-fight). Effects are applied centrally
-  in `encounter.gd`, never inside the data, so run rules are enforced in one place: an event can never
-  kill you (HP clamps at 1), never drive gold negative, and never remove a card below the collection
-  floor that prevents softlocks. `tests/test_event.gd` additionally requires every event to offer at least
-  one cost-free option — an event should be a decision, not a tax — and asserts `Traversal.Enc` stays
-  in lockstep with `GameState.NodeType`, since combat routes on those raw values.
-
-- **D13 — Pluggable traversal.** Traversal is a strategy per dungeon rather than one global model.
-  The deck model's texture is deliberately the *inverse* of the graph's: the graph commits you to a
-  route before you know what is on it, while the deck reveals each encounter and asks whether it is
-  worth fighting (facing it earns the reward; avoiding it costs HP and forfeits the loot). Remaining
-  counts are public so avoiding is a calculated risk, not a blind one. Traversals never touch run
-  resources — the view pays the HP — which keeps them pure and simulator-drivable.
-
-- **D6 — Dungeon identity.** How exclusive cards and per-dungeon loot pools are declared (tags on `CardData`? per-dungeon pool tables?).
+- **The open world.** Cities, NPCs and quests that hand out relics — Phase 10, `[ ]`,
+  deliberately deferred last because it is the expensive, peripheral system and every
+  city and quest is bespoke. The seam it needs already exists: a city node only has to
+  call `GameState.select_dungeon(id)`.
 
 ---
 
@@ -5957,3 +5958,229 @@ card granted half what it now grants) or in the archetype cards themselves.
 rename moved the *cards* `cleave → reap` and `second_wind → stitch` and dragged the power
 ids along with them. Two of the ten powers had been failing to load and `Balance.power()`
 was handing back `null`. `tests/test_levels.gd` checks the list against disk now.
+
+### D109 — The monsters were not floating; they were standing on a gold lozenge
+
+**Reported as a backdrop problem, and the backdrops were mostly innocent.** The ask was
+to re-roll every battle backdrop because enemies did not look planted. `tests/test_art.gd`
+appeared to agree — it measures each backdrop's wall/floor junction and printed six of
+twelve as 14 to 21 points off the 68% the brief specifies. That test says in its own
+comments that the number is confidently wrong about half the time, and it is right about
+itself. Checked by eye:
+
+| dungeon | measured | actually |
+|---|---|---|
+| fungal_deep | 78% | ~68%. The measurement found the bright slime pool, not the junction. |
+| rot_gardens | 86% | ~68%. Found the glowing mushrooms. |
+| drowned_market | 86% | ~68%. Found the lit aisle. |
+| the_maw | 82% | ~70%. Borderline, fine. |
+| abyssal_stair | 89% | ~75%. Genuinely wrong — the paved ground starts under the standing line. |
+
+So one backdrop of twelve has the defect that was reported, and re-rolling all six would
+have thrown away four good paintings. **A measurement that is unreliable must not be
+allowed to drive a work list**, which is why the re-roll list added here is hand-kept.
+
+**What was actually wrong is one line of `combat.gd`.** The ground mark under each enemy
+is a rounded Panel centred ON the standing line, so its upper half lies across the feet —
+correct for a contact shadow, which is what it is at `Color(0, 0, 0, 0.72)`. For the
+TARGETED enemy the same filled box was recoloured to `Color(1.0, 0.82, 0.40, 0.85)`:
+85%-opaque gold, 62% of the enemy's width, painted over its ankles. In a one-enemy fight
+the enemy is always the target, so the effect is permanent — a monster with no feet
+sitting on a bright solid lozenge. It is now a RING for the target and stays filled for
+the shadow: two styleboxes on the same node, and which one shows is the targeting cue.
+The floor reads through it and the feet are back.
+
+**Three prompt-sheet defects came out of the same look.**
+
+*The shape of a request is per FILE, not per tier.* `gen_pollinations.py` took the
+generation size from `TIER_RULES`, so Tier 0's six paintable files were all asked for as
+"a square 1:1 image" — including `card_back.png`, which is **320x448** because the card is
+150x214. A square card back has to be squashed or cropped to fit the thing it is the back
+of. Tier 7 had the same fault less visibly: a 10:3 wordmark, a 16:9 splash and a 64x64
+cursor, all requested at 10:3. ART_PROMPTS.md now carries each row's target size and the
+aspect is derived from it; a tier whose files agree with their tier keeps its old wording
+exactly, so this changed two tiers and nothing else.
+
+*A sheet that only lists what is ABSENT cannot describe what is WRONG.* The moment a file
+lands, correct or not, it disappears from ART_PROMPTS.md — so a bad asset has nowhere to
+be recorded except somebody's memory, and `bg_warrens.png` has had THE WARRENS painted
+into its wall for long enough that the defect is written down in the tier's own note and
+still shipped. A `REDO` table names files that exist and are wrong, each with its evidence,
+and they are emitted in their own table with the reason beside them: a re-roll with no
+stated defect is how a bad file gets replaced by a differently bad file. It shrinks to
+empty, which is what makes it a work list rather than a catalogue.
+
+*Two of the new re-roll lines never reached the paste, for two different silly reasons.*
+The filter that strips operator prose (D102) works per sentence and drops anything
+containing "below" — so the single most important sentence in the rewritten backdrop
+brief, the one naming the band that must be plain walkable ground, was deleted on its way
+out. And the re-roll header wrapped onto a second line, which the same parser recognises
+as art direction by its first character, so "subject line; what is already there is not a
+constraint on what comes back" was being pasted into a generator as composition advice.
+Both are the same lesson as D102 itself: the filter is a heuristic over prose, so prose
+written for it has to be checked THROUGH it. The `--browser` output is the only place
+either of these was visible.
+
+**Also fixed while in there:** the sheet told you "no installer covers these" for the
+backdrops. They install with `tools/install_backdrops.gd`, but they live at the root of
+`assets/art/` rather than in a family directory, and the hint rule matched on the
+directory name. It now recognises the `bg_` prefix the loader itself resolves them by.
+
+---
+
+### D111 — The tool was still selling three screens that had been deleted eleven decisions ago
+
+An audit of every markdown file in the tree against the code it describes. Most of what
+it turned up was ordinary rot — counts that had moved, a symbol renamed — but one item
+was a different shape and is the reason this entry exists.
+
+**`tools/art_manifest.gd` was briefing 26 files of art for the graph map, the dice board
+and the deck reveal.** All three traversal models were deleted in D94. The manifest is
+*generated*, and generated for exactly this reason (D101: "a prompt naming an enemy the
+game no longer has produces a painting with nowhere to go") — but generation only
+protects the half of the sheet that comes from `resources/`. The tiers that come from
+hand-written tables inside the tool are as static as any hand-typed list, and nothing
+looks at them when a feature is deleted. So `ART_ASSETS.md` and `ART_PROMPTS.md`
+faithfully regenerated a shopping list containing `ui/node_frame_available.png`,
+`ui/die_4.png` and a reveal frame for a card nothing reveals, every time, for eleven
+decisions. `ART.md` §Tier 4 said "nothing left to draw here" the whole time and lost.
+
+**The counts were the tell and nobody read them.** 209 files wanted did not move when a
+fifth of the list stopped having a screen to land on. It is now 183 wanted, 74 present.
+`tools/install_sheet.gd` had three matching dead modes (`nodes`, `tiles`, `dice`) reading
+`Manifest.ENCOUNTERS`, which meant deleting the table broke the installer — a useful
+accident, because `test_compile` would have caught it and nothing else would have.
+
+**What the rest of the audit found**, grouped by the code change that orphaned it:
+
+| the change | what still described the old world |
+|---|---|
+| D65 removed UI scaling | BUILD.md said Settings exposes `UI_SCALE`; ART.md said `UITheme.scale` runs 0.6–3.0; DESIGN.md §Conventions said `Ctrl +/-/0` rescale live. `UI_SCALE` is a `const 1.0` and `settings_state.gd` says in a comment that it is read by nobody. |
+| D94 deleted three traversal models | DESIGN.md §2 listed them as a shipped system, §3 said `DungeonData.traversal` selects one (no such field), and named which dungeon used which. |
+| D89 deleted the CC0 enemy sprites | CONTRIBUTING.md told you to add a boss by pinning a sprite in `PixelArt.OVERRIDES`; AGENTS.md and two asset READMEs cited `PixelArt.enemy_sprite()`. Neither symbol exists, and `assets/pixel/` no longer holds an enemy. |
+| D83/D105/D107 styled every control | Four documents said `OptionButton`, `HSlider`, `VScrollBar` and `CheckBox` were "unstyled today". `UITheme` wires all four. |
+| D95 moved two screens into `UI.screen()` | REVIEW.md's defect 9 and §2.2 still called them the only flat-black screens. |
+
+Plus the ordinary drift: three "34 suites" against 37, three different decision ranges
+(D92, D108, D109) against D109, and a README crediting two Kenney packs whose licence
+files are no longer in the tree because their assets are not either.
+
+**Two rules come out of this.**
+
+**A generated document is only as current as the tool that writes it.** Regenerating
+proves the file matches the *tool*; it proves nothing about whether the tool matches the
+*game*. When a feature is deleted, grep `tools/` for it — the installers and the manifest
+are code that nothing else references, so no compile error and no test will find them.
+
+**Do not restate a number that something else owns.** Every count this audit corrected
+was a number copied out of a directory listing or a constant into prose, and every one
+of them was wrong. The two that were *right* — the content totals in AGENTS.md, and
+ART.md's own note that no total is authoritative because ART_ASSETS.md is generated —
+are right for structural reasons, not because anyone maintained them. D34 said this
+about lookup tables; it is equally true of a sentence.
+
+**Deliberately not done:** the duplicated `D109` heading (the level curve, and the gold
+targeting lozenge) and the two things both calling themselves `D110` were left alone —
+a concurrent session was writing them as this ran, and renumbering another session's
+in-flight entry is how you get three of them.
+
+### D112 — The sheet prompt never said 5x5, and 21 correct drawings landed on 21 wrong meanings
+
+A batch of Gemini output arrived for four tiers at once — the loose `ui/` chrome and HUD
+(tier 0 and 1b), the seven intent telegraphs (1c) and the twenty-one status symbols (1d).
+34 files installed. Three separate things were wrong with the pipeline that took them,
+and the third one is the expensive one.
+
+**The sheets came back with the right pictures in the wrong boxes.** `install_sheet.gd`
+assigns cells to names by reading order, and says so loudly on every run: *"a set
+installed one cell out is 21 correct icons on 21 wrong meanings."* Both sheets were more
+than one cell out. Tier 1c put its seven symbols in cells 0-3, 5, 6 and 8 of a 3x3,
+skipping the middle. Tier 1d drew **25** glyphs where 21 were asked for — the 21, plus a
+spiked ring, a sword-and-arrows, a duplicate buckler and a duplicate die — so everything
+from cell 3 on was shifted. Straight install would have wired 18 of 21 symbols to the
+wrong meaning, and `sym_strength` would have been a cracked shield.
+
+**The cause was in the parser, not the generator.** ART_PROMPTS.md carries the grid on
+the same line as the install command:
+
+```
+**Generate this tier as ONE image, not 21.** A 5x5 grid at 1280x1280 or larger
+(21 glyphs, 4 cells spare — leave them empty), ... Install: `godot ... install_sheet.gd`
+```
+
+`gen_pollinations.py` matched `install_` on that line, took the command, and `continue`d
+— dropping the grid with it. So what reached the model was *"A single grid image
+containing 21 cells, in this exact order"*, with no rows, no columns and no spare-cell
+rule anywhere in the prompt. A model handed no geometry picks its own and then fills
+whatever the subject list did not reach. **The line was half operator prose and half art
+direction, and the half that got thrown away was the load-bearing half** — the same
+mistake as D102, in the opposite direction: D102 was pasting the operator's half INTO the
+prompt, this was dropping the artist's half OUT of it. The parser now keeps the text
+before `Install:`, strips the bold count, and `compose_sheet` states the grid before the
+cell list. All three sheet tiers had their notes rewritten to say the geometry, the fill
+order, and that an invented extra shifts every subject after it.
+
+**Recovering the two sheets took a `--cells=` argument**, an explicit source cell per
+target in target order:
+
+```
+install_sheet.gd -- symbols sheet.png --cells=0,1,2,5,6,7,8,11,9,10,13,14,15,16,17,18,19,21,22,23,24
+```
+
+It is an argument and not a table, because the next misaligned sheet is misaligned
+differently and a stored permutation would be right once and quietly wrong afterwards.
+It refuses a list that is not exactly as long as the set — a permutation one entry short
+is the same shift it exists to undo. Both sets were then verified by eye against a
+contact sheet in name order, which is the only check that actually closes this loop.
+
+**The watermark is not backdrops-only, and the sheet said it was.** ART_PROMPTS.md told
+the operator to run `strip_sparkle.gd` on backdrops and nothing else. That is right for a
+matted cutout — the stamp is in a corner, the corner is field, the matte takes it and
+`despeckle` drops the remnant, which `cutout_lib.gd` already explains. It is wrong for
+everything installed OPAQUE or as a bloom: `card_back` fills its frame, so its corner is
+painting, and both glows are black where the stamp is brightest. Those three would have
+shipped the stamp. `intent_unknown` did ship it on the first attempt — the tile is one
+opaque component, so the stamp joined the subject and no island test could see it.
+
+Two things about stripping this batch are worth keeping. It needs **four images that
+still agree on where the stamp is**, so it runs on the whole staging directory before
+anything crops — and a batch of two sheets is short, which was solved by staging them
+with three still-unstripped files from the same session. And the intersection is only
+reliable where the stamp is *lit in every frame*: on the symbols sheet the stamp sits
+half over a white glyph, where it is DARKER than its surroundings, and the intersection
+collapsed from 64x64 to 41x41 — a mask that would have inpainted the middle of the chest.
+That sheet was left unstripped and came out clean anyway, because `cut_mono` normalises
+a faint grey sparkle to zero alpha.
+
+**What the batch is, and what is still wrong with it.** `install_chrome.gd` grew from
+five names to eleven and is no longer "control chrome" — it is every loose `ui/` painting
+with no catalogue behind it. It also grew a fourth column: a **glow** mode taking alpha
+from luminance rather than from a flood fill, because a bloom's own falloff ends in the
+same black its field is, so a matte at `TOL` walks up the gradient and leaves a
+hard-edged disc — a ring, in the one asset whose entire job is to have no edge. Two
+defects out of D105 are closed: `dropdown_arrow` and `slider_grabber` came back on flat
+fields and their hand-measured crop rectangles are gone. Three are open and in `REDO`:
+
+| file | what is wrong |
+|---|---|
+| `ui/target_ring.png` | a warm bloom fills the ring, so the reticle covers the enemy it marks, and where the bloom spills through the four gaps it holds a wedge of background the border fill cannot reach |
+| `ui/dropdown_arrow.png` | a cyan bloom on the FIELD under the chevron; the matte can only stop where the bloom stops being field-coloured, so it installs as a chevron on a hard-edged opaque disc taking a third of a 32px icon |
+| the seven `ui/intent_*.png` | drawn as nine stone tiles rather than seven symbols on a field, so the tile is the subject and only the gutter between tiles is field — they install as opaque plaques, dark violet on dark violet |
+
+**All three are the same defect wearing three hats, and it is D105's:** something was
+painted onto the field. The matte cannot tell a bloom on the background from the
+background, and it should not try — loosening `TOL` to eat a gradient is how it starts
+eating grey armour on a grey field. So the fix is always in the prompt, and the prompt
+now says it for all three: the field stays flat and empty, and anything painted on it is
+cut away with it and leaves a hard edge where it was cut.
+
+`ui/card_back.png` is the one that got *better* between attempts and shows the D109
+size column working: the first take came back square, which the recipe would have
+stretched 1.4x vertically into the sigil; the second came at 864x1216, 0.7105 against the
+card's 0.7143, and the stretch is half a percent.
+
+**Deliberately not done:** the intents and the two bloomed cutouts are installed rather
+than held back. Nothing loads any of them yet — intent still renders as the string
+`hit 5` — so an opaque plaque on disk costs nothing, and a file that is present and
+listed in `REDO` is a defect with evidence attached, where a file that was never saved is
+a defect nobody can look at.
