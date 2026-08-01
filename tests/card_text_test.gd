@@ -11,6 +11,13 @@
 ## is the opening hand, not the hand — and the fan gives every extra card its width out
 ## of the card before it, so the size that had never been measured was the dangerous one.
 ##
+## Since D117 a resting card in a crowded hand may show its cost and its effect
+## symbol INSTEAD of a name too narrow to render legibly, so "the name is visible and
+## clear of the next card" is no longer the only acceptable answer — but "neither" is
+## still a failure, and which of the two answers a hand gives is asserted at both hand
+## sizes. See `_check_fan()`; skipping a hidden name is how this file would have gone
+## quietly vacuous at the one size it was written for.
+##
 ## A SCENE, not a `--script` test: line counts only exist once a tree has been laid
 ## out, and autoloads are absent in headless script runs.
 ## Run: godot --headless res://tests/CardTextTest.tscn
@@ -22,6 +29,13 @@ extends Node
 const SANDBOX := "t_cardtext_"
 
 var _fails := 0
+## What the last `_check_fan()` found the resting hand doing about names: how many
+## cards showed one, and how many showed the D117 substitute (cost + effect symbol)
+## because the fan had squeezed the strip past `UI.CARD_NAME_MIN_W`. Counted rather
+## than asserted inside the fan check, because the two hand sizes want opposite
+## answers and only the caller knows which hand it built.
+var _named := 0
+var _swapped := 0
 
 func _ready() -> void:
 	# Headless defaults to a SQUARE 1280x1280 viewport. Every geometry check below
@@ -164,6 +178,17 @@ func _check_live_hand() -> void:
 	var vp := get_viewport().get_visible_rect()
 	var cards := _hand_cards(inst)
 	_check_fan(inst, cards, "a dealt hand of %d" % cards.size())
+	# The OTHER direction of the D117 switch. The hand combat deals has ~101px of step
+	# and an 85px name slot, which is more than twice the width the substitution is for,
+	# so every card here must still be showing its name. Without this the threshold
+	# could drift to "always" — a hand that never names a card would otherwise pass
+	# every check in this suite, because the new branch answers all of them.
+	print("  a dealt hand of %d: of the %d cards a neighbour overlaps, %d show a name and %d show cost+symbol" % [
+		cards.size(), _named + _swapped, _named, _swapped])
+	if _swapped > 0:
+		_fails += 1
+		print("FAIL %d of %d cards in the DEALT hand gave up their names; at this step the name fits" % [
+			_swapped, cards.size()])
 	# Everything in the bottom band has to be ON the screen. `PRESET_BOTTOM_LEFT`
 	# puts a box's TOP edge on the bottom of the frame, so the entire HUD and both
 	# controls rendered below it — and nothing in the suite noticed, because every
@@ -350,6 +375,17 @@ func _check_fan(inst: Node, cards: Array[Control], tag: String) -> void:
 	#
 	# The last card is drawn on top of the rest, so it is the one card allowed the
 	# whole face; everything before it is measured against its right-hand neighbour.
+	#
+	# A card is allowed to answer this in EITHER of two ways, and the one thing it may
+	# not do is answer in neither. Since D117 a strip too narrow to hold a name at a
+	# legible size shows the card's cost and its effect symbol instead — so an unnamed
+	# card is not automatically a defect. But "no visible name" used to `continue`
+	# here, which means the moment the layout started hiding names this whole check
+	# went silently vacuous at exactly the hand sizes it was written to protect. Hiding
+	# the subject is not passing: whichever way the card answers, something that
+	# identifies it has to be visible AND clear of the next card.
+	_named = 0
+	_swapped = 0
 	for k in maxi(0, cards.size() - 1):
 		var holder3: Control = cards[k]
 		if not holder3.has_meta("name_label"):
@@ -357,17 +393,46 @@ func _check_fan(inst: Node, cards: Array[Control], tag: String) -> void:
 			print("FAIL [%s] card %s exposes no name label to measure" % [
 				tag, holder3.get_meta("card_id")])
 			continue
+		var cid: String = holder3.get_meta("card_id")
 		var nm: Control = holder3.get_meta("name_label")
-		if nm == null or not nm.visible:
-			continue
 		# Tolerance is a whole character of the smallest font the fitter will use: the
 		# holders are rotated, and get_global_rect() is axis-aligned, so both edges
 		# carry a little slop. The defect this guards against is ~35% of a card wide.
+		# The same number bounds the substitute below, because "inside the strip the
+		# player can see" is the same measurement in both cases: not under the next card.
 		var covered := (cards[k + 1] as Control).get_global_rect().position.x
-		if nm.get_global_rect().end.x > covered + 7.0:
+		if nm != null and nm.visible:
+			_named += 1
+			if nm.get_global_rect().end.x > covered + 7.0:
+				_fails += 1
+				print("FAIL [%s] the name on %s runs to x %.0f, under the next card at x %.0f" % [
+					tag, cid, nm.get_global_rect().end.x, covered])
+			continue
+		_swapped += 1
+		var cst: Label = holder3.get_meta("cost_label", null)
+		var glyph: TextureRect = holder3.get_meta("crowd_symbol", null)
+		if cst == null or not cst.visible or cst.text == "":
 			_fails += 1
-			print("FAIL [%s] the name on %s runs to x %.0f, under the next card at x %.0f" % [
-				tag, holder3.get_meta("card_id"), nm.get_global_rect().end.x, covered])
+			print("FAIL [%s] %s shows no name and no cost either — nothing identifies it" % [
+				tag, cid])
+		elif cst.get_global_rect().end.x > covered + 7.0:
+			_fails += 1
+			print("FAIL [%s] the cost on %s runs to x %.0f, under the next card at x %.0f" % [
+				tag, cid, cst.get_global_rect().end.x, covered])
+		if glyph == null or not glyph.visible or glyph.texture == null:
+			_fails += 1
+			print("FAIL [%s] %s hid its name and put no effect symbol in the strip" % [tag, cid])
+		elif glyph.size.x < 8.0 or glyph.size.y < 8.0:
+			# A symbol placed in a box too small to read is the same defect as no symbol,
+			# and it is the mistake this session made twice in the measuring instrument
+			# itself (a 16px window over a 64px glyph). The box is measured.
+			_fails += 1
+			print("FAIL [%s] the symbol on %s is a %.0fx%.0f box, too small to identify it" % [
+				tag, cid, glyph.size.x, glyph.size.y])
+		elif glyph.get_global_rect().end.x > covered + 7.0:
+			_fails += 1
+			print("FAIL [%s] the symbol on %s runs to x %.0f, under the next card at x %.0f" % [
+				tag, cid, glyph.get_global_rect().end.x, covered])
 
 	# ...and the hand must not run under the things parked in both bottom corners
 	for zone in [["the vitals", inst.status_label], ["End Turn", inst.end_btn],
@@ -472,20 +537,89 @@ func _check_large_hand() -> void:
 		print("FAIL only %d cards in the large hand, expected %d — the size the rest of this check measures is not the size it claims" % [
 			cards.size(), want])
 	_check_fan(inst, cards, "a played-up hand of %d" % cards.size())
-	# How the fan SURVIVES eleven cards, reported rather than asserted, because it is
-	# the number the next person will want and it is not a pass/fail: the step drops to
-	# 41.6px, so `fit_name` hands the name a 24px slot and the fitter buys the fit with
-	# type size. Measured at 7-9px for a hand of eleven, against the 14px floor this
-	# suite puts under HOVERED text. Nothing is clipped and nothing is covered — the
-	# name is inside its slot, legally, and too small to read at arm's length. An
-	# assertion here would be a design change (a cap on hand width, or a second row),
-	# and that belongs to whoever owns the layout, not to the test that found it.
+	# How the fan survives eleven cards, and now an assertion rather than a report.
+	#
+	# What this used to say: the step drops to 41.6px, so `fit_name` hands the name a
+	# 24px slot, the fitter buys the fit with type size, and the names come out at
+	# 7-9px against the 14px floor this suite puts under card text. Nothing clipped,
+	# nothing covered — legally inside its slot and unreadable at arm's length. It
+	# declined to assert on the grounds that the fix was a design change.
+	#
+	# It was, and D117 made it: below `UI.CARD_NAME_MIN_W` of name slot a resting card
+	# shows its cost and its effect symbol instead of a name it cannot render legibly.
+	# So the hand that produced the defect is the hand that has to show the swap. Both
+	# directions are pinned — the dealt hand above must NOT swap, this one must — or the
+	# threshold could drift to "always" or to "never" and nothing here would notice.
+	var slots := ""
+	for h in cards:
+		slots += "%.0f " % float(h.get_meta("rest_w"))
+	print("  name slots across a %d-card hand: %s(threshold %.0f)" % [
+		cards.size(), slots, UITheme.px(UI.CARD_NAME_MIN_W)])
+	print("  a played-up hand of %d: of the %d cards a neighbour overlaps, %d show a name and %d show cost+symbol" % [
+		cards.size(), _named + _swapped, _named, _swapped])
+	if _swapped == 0:
+		_fails += 1
+		print("FAIL every card in a %d-card hand still claims to show its name; at this step it renders too small to read" % cards.size())
+	# The fan hands its TOPMOST card the whole face, so the switch has to be per card
+	# and not per hand: the last card is never crowded and must keep its name however
+	# many cards are in front of it.
+	var last: Label = (cards[cards.size() - 1] as Control).get_meta("name_label")
+	if last == null or not last.visible:
+		_fails += 1
+		print("FAIL the topmost card of a %d-card hand dropped its name, and nothing covers it" % cards.size())
+	# Whatever names DO survive a crowded hand have to be worth reading, which is the
+	# whole point of the swap: any card still showing one has the width for it. This is
+	# what catches a threshold that drifts DOWNWARD without reaching "never" — set it
+	# to 26px and most of this hand keeps a 7px name while a couple still swap, which
+	# the count above would happily pass.
 	var tiniest := 999
 	for h in cards:
 		var nm2: Label = h.get_meta("name_label")
 		if nm2 != null and nm2.visible:
 			tiniest = mini(tiniest, nm2.get_theme_font_size("font_size"))
-	print("  smallest resting card NAME in a %d-card hand: %dpx" % [cards.size(), tiniest])
+	print("  smallest resting card NAME in a %d-card hand: %s" % [cards.size(),
+		"none — every card swapped" if tiniest == 999 else "%dpx" % tiniest])
+	if tiniest != 999 and tiniest < 14:
+		_fails += 1
+		print("FAIL a card in a %d-card hand still shows a %dpx name — below the floor the swap exists to keep" % [
+			cards.size(), tiniest])
+	# The swap is a RESTING decision, and this is the sentence that says so: opening a
+	# card in the most crowded hand the game can deal must put the name back and take
+	# the substitute away, because a lifted card is clear of its neighbours and short of
+	# nothing. Driven through the card's own hover wiring, on a card the fan crowded.
+	var mid: Control = cards[cards.size() / 2]
+	var mid_btn: Button = null
+	for ch in mid.get_children():
+		if ch is Button:
+			mid_btn = ch
+	if mid_btn == null:
+		_fails += 1; print("FAIL no button to hover on the middle card of a large hand")
+	else:
+		var nm3: Label = mid.get_meta("name_label")
+		var sym3: TextureRect = mid.get_meta("crowd_symbol", null)
+		if nm3 != null and nm3.visible:
+			_fails += 1
+			print("FAIL the middle card of a %d-card hand was not crowded, so hovering it proves nothing" % cards.size())
+		mid_btn.mouse_entered.emit()
+		await get_tree().process_frame
+		if nm3 == null or not nm3.visible:
+			_fails += 1
+			print("FAIL hovering %s in a %d-card hand still hides its name" % [
+				mid.get_meta("card_id"), cards.size()])
+		elif nm3.get_theme_font_size("font_size") < 14:
+			_fails += 1
+			print("FAIL hovering %s gives its name back at only %dpx" % [
+				mid.get_meta("card_id"), nm3.get_theme_font_size("font_size")])
+		if sym3 != null and sym3.visible:
+			_fails += 1
+			print("FAIL the opened %s shows the crowded symbol over its name strip as well" % mid.get_meta("card_id"))
+		mid_btn.mouse_exited.emit()
+		await get_tree().process_frame
+		# ...and back again, or the hand would be readable exactly once
+		if nm3 != null and nm3.visible:
+			_fails += 1
+			print("FAIL %s kept its name after the mouse left a %d-card hand" % [
+				mid.get_meta("card_id"), cards.size()])
 	inst.queue_free()
 	await get_tree().process_frame
 

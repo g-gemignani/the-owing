@@ -537,6 +537,48 @@ static func card_picker(host: Control, deck: Array, title: String,
 	col.add_child(cancel)
 	return veil
 
+## The narrowest name strip that is still a name strip — D117.
+##
+## The fan gives a resting card `step = (room - card) / (n - 1)` of visible width and
+## `fit_name` below turns that into a name slot of `step - 2*pad`. At the hand size a
+## real build reaches — 11 cards, from HAND_SIZE plus Keen Lens plus Scholar's Lens
+## plus a fused See It Coming — the step is 41-42px, so the slot is 25-26px, and
+## `fit_label` buys the fit by shrinking the type: names came out at 7-9px, "Two
+## Quick" at 7px over two lines, against the 14px floor CardTextTest enforces on
+## card text. Inside its slot, legally, and unreadable at arm's length.
+##
+## The number is measured, not chosen. Every one of the 100 card names was fitted
+## into the 28px-tall strip at every slot width, and the width at which each one
+## first holds 14px recorded: 22px for the shortest name in the game ("Jab"), 119px
+## for the longest ("Something Worse"), median 69px. Read the other way, that curve
+## says how much of the deck a given slot can still name:
+##
+##     slot 86px (a 5-card hand)   76 of 100 names at >= 14px
+##     slot 52px (7 cards)         26
+##     slot 35px (9 cards)         13
+##     slot 34px                   13
+##     slot 33px                    9
+##     slot 29px (10 cards)         5
+##     slot 25px (11 cards)         1
+##
+## 34px is where that crosses one name in ten: at 33px only nine names in the game
+## can be shown at the floor, so the strip has stopped being a way to name a card and
+## become a place where names go to be too small to read. Below 34px of slot — a step
+## of 34 + 2*pad = 50px, which a hand of ten or more produces — the card shows its
+## cost and its effect symbol instead. A 25px strip cannot hold a name at a legible
+## size, but it holds a cost numeral and a ~28px glyph comfortably, and since D116
+## that glyph is painted art that states what the card actually does rather than the
+## 16x16 CC0 tile that read as noise. "Attack, costs 1" at a glance beats four
+## legible letters of a name; this is a better read of a crowded hand, not a
+## consolation prize for one.
+##
+## Deliberately a WIDTH and not "did the fitter end up under the floor": that test is
+## per-name, and it would fire on the 24 longest names in the 5-card hand the game
+## deals — a hand that has been reviewed and screenshotted at 10-16px names and is
+## not what this is about. The switch is still per-card, because the fan hands every
+## card its own visible width and only the topmost one gets the whole face.
+const CARD_NAME_MIN_W := 34.0
+
 ## `live` is the CombatEngine when this card is being shown inside a fight, and
 ## null everywhere else. With it, the face and the hover both quote the damage and
 ## Block the card would actually produce this turn — Strength and Dexterity are
@@ -677,7 +719,10 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# clean off the bottom of a 211px card. Every region is placed by hand against
 	# the card's known size, so nothing can be pushed anywhere.
 	var cost := _card_label(holder, str(card.eff_cost()), Color(1.0, 0.86, 0.45))
-	_badge_bed(holder, pad, pad, badge_w, badge_h)
+	# The bed is kept rather than dropped because a crowded card narrows this badge to
+	# what the next card leaves of it, and the plate has to move with the numeral —
+	# see `lay_rest` and CARD_NAME_MIN_W.
+	var cost_bed := _badge_bed(holder, pad, pad, badge_w, badge_h)
 	_place(cost, pad, pad, badge_w, badge_h)
 
 	var sym := Icons.tex(Icons.for_card(card))
@@ -708,7 +753,14 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# it is on the card at rest and on hover and in every menu — which is the whole
 	# point of the shape, and what makes a hand readable without touching the mouse.
 	var body := UITheme.font()
-	fit_label(cost, Vector2(badge_w, badge_h), body, 7)
+	# The cost badge at a given width, in one place because it is laid out three times:
+	# here, narrowed when the fan crowds this card past CARD_NAME_MIN_W, and back to
+	# full when the card is opened. Numeral and plate always move together.
+	var lay_cost := func(w2: float) -> void:
+		_place(cost_bed, pad, pad, w2, badge_h)
+		_place(cost, pad, pad, w2, badge_h)
+		fit_label(cost, Vector2(w2, badge_h), body, 7)
+	lay_cost.call(badge_w)
 	fit_label(desc, Vector2(inner.x - pad, text_h - roundf(pad * 0.5)), int(body * 0.92), 7)
 
 	# The headline number, in the PICTURE's bottom corners.
@@ -748,6 +800,28 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 
 	var rest_y := pad + art_h
 	var rest_h := name_h
+	# What the name strip shows instead of a name once the fan has squeezed it past
+	# CARD_NAME_MIN_W: the same effect glyph as the corner badge, drawn big in the
+	# strip where the name was. Built here and hidden, rather than moved from the
+	# corner, so that opening the card is still a matter of showing the whole face
+	# instead of putting a symbol back where it came from.
+	#
+	# `sym` is null only if a card's effect has neither painted art nor a fallback
+	# glyph, which no card in the catalogue currently is. When it happens there is
+	# nothing better to show than the name, however small — a tiny name identifies a
+	# card and an empty strip does not — so `crowd == null` keeps today's behaviour.
+	var crowd: TextureRect = null
+	if sym != null:
+		crowd = TextureRect.new()
+		crowd.texture = sym
+		crowd.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		crowd.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		crowd.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		crowd.visible = false
+		holder.add_child(crowd)
+		# a starting box only; `lay_rest` re-places it into the width that actually
+		# survives the fan on the frame it is first shown
+		_place(crowd, pad, rest_y, inner.x, rest_h)
 	# The RESTING title takes a width that can shrink; the open one always gets the
 	# whole face. In a hand the neighbour to the right is drawn on top of this card
 	# and hides its right-hand edge — and the name is the only thing a resting card
@@ -764,6 +838,24 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	holder.set_meta("open", false)
 	var lay_rest := func() -> void:
 		var w: float = holder.get_meta("rest_w")
+		# The swap, and the ONLY place it is decided: a resting state, per card, off the
+		# width this card was handed. The fan gives its topmost card the whole face, so
+		# the last card in a hand keeps its name however crowded the hand is, and every
+		# surface that does not overlap cards at all never comes near the threshold.
+		if crowd != null and w < UITheme.px(CARD_NAME_MIN_W):
+			title.visible = false
+			crowd.visible = true
+			# Both of the two things left have to be inside the strip the player can
+			# actually see, which is why the cost badge narrows: at 150px wide the badge
+			# is 35px and runs past a 41px step, under the next card. Symmetric with the
+			# glyph below it, so the pair reads as one column.
+			lay_cost.call(minf(badge_w, w))
+			_place(crowd, pad, rest_y, w, rest_h)
+			return
+		title.visible = true
+		if crowd != null:
+			crowd.visible = false
+		lay_cost.call(badge_w)
 		_place(title, pad, rest_y, w, rest_h)
 		fit_label(title, Vector2(w, rest_h), body, 7)
 	_place(title, pad, rest_y, title_w, rest_h)
@@ -777,6 +869,13 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	var show_all := func(open: bool) -> void:
 		holder.set_meta("open", open)
 		if open:
+			# The whole face, including everything the resting state may have swapped
+			# out: an opened card is lifted clear of its neighbours, so it is never
+			# short of width and the D117 substitution has no business here.
+			title.visible = true
+			if crowd != null:
+				crowd.visible = false
+			lay_cost.call(badge_w)
 			_place(title, pad, rest_y, title_w, rest_h)
 			title.add_theme_font_size_override("font_size", open_px)
 		else:
@@ -795,6 +894,13 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		if not bool(holder.get_meta("open")):
 			lay_rest.call())
 	holder.set_meta("name_label", title)   # so tests can measure what a resting hand shows
+	# ...and what it shows INSTEAD when the strip is too narrow for a name (D117).
+	# Exposed as well as the name because "the name is hidden" has to be a testable
+	# statement about what replaced it: a check that skips a hidden name goes silently
+	# vacuous at exactly the hand size it was written for.
+	holder.set_meta("cost_label", cost)
+	if crowd != null:
+		holder.set_meta("crowd_symbol", crowd)
 
 	# Re-read the live numbers without rebuilding the widget. The combat screen
 	# diffs its hand instead of destroying it every action (that is what allows a
