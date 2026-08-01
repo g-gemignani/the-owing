@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D96 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D108 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -42,7 +42,7 @@ Two-tier state makes this work:
 ## Content at a glance
 
 100 cards · 35 enemy archetypes (6 painted, 29 on generated plates) · 12 bosses (one named per dungeon) · 30 relics ·
-10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 34 test
+10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 37 test
 suites. All content is `.tres` data plus one catalogue line; adding more is a data
 task, not a code task.
 
@@ -83,6 +83,17 @@ task, not a code task.
 - **A run is a risk with an arc.** You commit a deck, earn cards that dilute it, and
   can thin or sharpen it at shops and rests (D46). Death forfeits the run's takings;
   the meta layer is what survives.
+
+- **The voice is content, and it belongs on the things the player handles.** Plain
+  Anglo-Saxon, concrete nouns, mortuary and debt imagery, understatement — *"Cold stone
+  and old debts"*, *"His pack is intact. He is not."*, The Grave-Sexton, The False Step.
+  It was the strongest writing in the project and it was confined to flavour text, where
+  it did no work, while thirty-six cards wore another game's names (D98). Cards now come
+  from the same register. **Borrowed genre grammar is fine; a borrowed proper noun is
+  not** — Block and Energy and intents are how the genre speaks, but a card called
+  Bludgeon that deals exactly 32 and exhausts is somebody's specific design, and the
+  constant is the tell. When new content needs a name, take it from `resources/events/`
+  and the boss roster, not from the game this one is shaped like.
 
 - **Every traversal model must cost the same, and charge for the right thing.** A model
   spends the attrition budget it is given or a difficulty rating stops meaning one thing
@@ -171,7 +182,20 @@ task, not a code task.
   plus 1.1 dodged. Iso met 5.9–6.0, because stripping a floor misses nothing. So moving
   every dungeon onto it handed each a full extra fight and the Foundry fell from 63% to 0%
   (D88). Deleting a skip is a difficulty change that **no budget assertion can see**, which
-  is why iso now prices a slip-past of its own, reusing the deck's tuned number.
+  is why iso prices a slip-past of its own. It reused the deck's tuned number, and that was
+  the wrong instinct twice over — see the next entry.
+
+- **A ladder tuned for N rungs is wrong the moment something changes N, and nothing tells
+  you.** The dodge price was a fixed per-rung climb, tuned so that FOUR dodges came to ~70%
+  of a health bar — four being the *global default* encounter mix. Encounter mixes then
+  became per-dungeon (D84) and the crawl started taking wanderers out of the combat budget
+  (D88), and a wanderer cannot be slipped past. Measured, the crawl offers **two or three**
+  dodges, never four: the real bill was 25–46% of a bar, and exactly 25% in six of twelve
+  dungeons. `test_traversal.gd` asserted "at least half a bar" and passed for two years,
+  because it counted the rungs from the same global constant the price did. **Two things
+  deriving a number from the same stale source agree with each other and with nothing
+  else.** `avoid_cost` now takes the count from the traversal that generates it, and solves
+  the base so the whole ladder lands on the target however many rungs there are (D99).
 
 - **A harness that selects by name goes quiet when the name changes.** The avoid calibration
   filtered on `Kind.DECK` and matched nothing the moment every dungeon became isometric — so
@@ -179,7 +203,32 @@ task, not a code task.
   rows on the exact turn a new model inherited the mechanic. It asks the model for the
   behaviour now, by walking a floor and looking (D88). The same filter sat in
   `tests/test_traversal.gd`, silently skipping the dodge-pricing block for every dungeon in
-  the game, and was only found when D94 deleted the name it was filtering on.
+  the game, and was only found when D94 deleted the name it was filtering on. Unskipping it
+  did not make it right: it then passed on the wrong rung count (D99, above). **A test that
+  starts running after years of being skipped has never been checked against reality — read
+  it, do not just watch it go green.**
+
+- **Profile before optimising, and measure the ratio, not the clock.** `sim_balance.gd`
+  took nineteen minutes, and the obvious suspect — combat, the thing it exists to
+  measure — was 4% of it. 95% was the avoid calibration, and inside that it was the
+  crawl: floods over the floor, four per step, each using `Array.pop_front` (which
+  shifts the whole queue, so every flood was O(n²)) and allocating a fresh neighbour
+  Array per cell visited. Packed arrays, a read cursor, inlined neighbours, one shared
+  flood per step instead of two, and a memo on `options()` took the whole report to
+  **420s from 1142s (2.7x)** with `fight_play` unmoved at 49s — which is the proof the
+  diagnosis was right. Two cautions learned the hard way: single wall-clock readings on
+  a loaded machine drifted 40% and pointed the wrong way twice, so `tools/bench_iso.gd`
+  reports the **minimum** of interleaved batches; and the one hot spot left alone is
+  entrance selection, which floods from every candidate tile. The cheap version picks a
+  *different* tile, and regenerating every floor in the game to save 10% of a run is not
+  an optimisation, it is a content change wearing one (D99).
+
+- **A memo is only as good as its dirty flag, and a stale one is silent.** `options()`
+  caches because a step built the list twice. Nothing crashes when an invalidation is
+  missed — the player is simply offered moves for a floor they have left. So
+  `test_traversal.gd` walks every dungeon comparing the cached list against a freshly
+  computed one at every step, and that assertion was verified by deleting an
+  `_invalidate()` and watching it fail (D99).
 
 - **An invariant about the members of a set says nothing until something checks the set is
   not empty.** The iso model's sealed rooms asserted "a vault has exactly one way in" and
@@ -246,6 +295,17 @@ task, not a code task.
 
 These are failure modes that have actually bitten this project. Treat each as a rule.
 
+- **A green suite can hide the whole feature being broken.** Every suite checked the
+  ENDPOINTS of the level curve — a maxed card is stronger than a level-1 card, and not
+  absurdly stronger — and none ever asked about a step in the middle. 77% of every
+  level-up in the game bought the player nothing, for gold and copies, and eight cards
+  changed nothing at any level (D109). **When a system is a curve, test a step, not its
+  ends.** `tests/test_levels.gd` walks all 3,859 of them.
+- **And a suite that guards a SHAPE cannot see the height.** The D109 retune satisfied
+  every predicate in `tests/test_balance.gd` while turning the game into a walkover —
+  Barricade at the Foundry went 24% to 100% run completion. Constants whose comments say
+  "measured" must be re-measured with `tools/sim_balance.gd`, against a baseline from
+  the tree you started from. The analytic version was elegant and wrong.
 - **Booting is not playability.** A scene that loads can still be a black screen. 34
   suites once passed while the first dungeon was unplayable. `tests/test_compile.gd`
   and `tests/PlayableTest.tscn` exist because of this — run them.
@@ -283,6 +343,30 @@ These are failure modes that have actually bitten this project. Treat each as a 
   on flat black when the backdrops landed (D95). A helper whose whole value is uniformity
   needs a check that everyone is inside it — the boilerplate it replaces is, by
   construction, easy to write again by accident.
+- **A card is two parts, and the bottom one is allowed off the screen.** The face is a
+  picture band over a text band (the Slay the Spire shape), which makes it taller than
+  fits above a hand — so 74% of it shows and the rest hangs off, and hovering computes the
+  lift that brings the whole card back (D104). The invariant that replaces "the card is on
+  screen" is **the identifying part is on screen**: picture, name, cost, headline number,
+  all in the top half by construction. Anything moved into the bottom corners is a thing
+  the player in a fight cannot see.
+- **A guard that outlives its design is worse than no guard.** Two of `CardTextTest`'s
+  assertions were the old card stated as rules — *no rules text while resting*, *every card
+  inside the frame* — and both were exactly backwards after D104. Re-aim them at the new
+  invariant, computed from the same constants the layout uses; deleting them would have
+  left the peek free to take any value at all.
+- **Some defects live in the PAIR, and no per-item assertion can see one.** `CardTextTest`
+  checked every card was on screen, fanned, arced, clear of both corners and never under
+  14px — and passed on a hand where three of five names were hidden under the next card,
+  because overlap is a fact about two cards and every check was about one (D97). D84 is
+  the same shape one layer up. When something is laid out *relative to* something else,
+  assert the relationship, and prove the assertion by disabling the fix and watching it
+  fail: a new check that has never been red is a comment.
+- **The capture approves a change as well as condemning one.** D56 exists because renders
+  find what tests cannot. It runs in both directions: forcing card names never to break
+  mid-word passed every measurement and looked worse than the defect, because the font
+  had to shrink too far — reverted on sight of the render, and a broken word is now the
+  accepted cost (D97). Measure, then look, then decide; the render can veto.
 - **`load()` returns non-null for a script that failed to parse.** Never use it as a
   "does this compile" check. `get_instance_base_type() == ""` is the honest probe.
 - **`--headless --import` does not compile scripts** and its viewport defaults to a
@@ -311,6 +395,26 @@ These are failure modes that have actually bitten this project. Treat each as a 
   reference — the coherence comes from the ask being the same, not from the model
   (D90). Which files may be generated at all is in `ART_PROMPTS.md`, and it is a real
   question: nine-slices are computed (D83) and animations are not stills.
+- **A prompt sheet is read by two audiences and only one of them paints.** The per-tier
+  prose in ART_PROMPTS.md mixes art direction with notes to the operator — which files are
+  computed, which installer takes the sheet, why a decision was made — and pasting it whole
+  sent "DO NOT GENERATE the nine-slices … they come out of `tools/gen_ui_kit.gd`" to the
+  generator (D102). Filtered per sentence, not per tier: the two kinds share a paragraph.
+- **A brief and a prompt are different sentences.** "Why is this file wanted" belongs in
+  ART_ASSETS.md; "what do I draw" belongs in ART_PROMPTS.md. One string served both and
+  the prompts lost — they quoted the UI text they were replacing at a style block that
+  bans text, and named card families by their membership lists instead of painting the
+  effect (D101). `_add()` takes a separate `subject` for the prompt sheet now. **A
+  generator can only draw an object**: "Block." and "A choice with consequences" are
+  rules, and a rule prompts a diagram.
+- **Regenerate the generated docs in the commit that changes what they describe.** Both
+  art documents spent two commits asking for 35 enemy paintings that were already
+  installed (D101). A generated file is only current if regenerating is part of the
+  change, and the counts in it are the tell.
+- **A generator that cannot accept a reference image cannot do this job.** The style
+  reference is the constraint that actually holds, so a text-only endpoint is not a
+  cheaper option, it is a different pipeline with no style bible. Check the model's
+  input modalities before its price (D100).
 
 - **A safeguard's cost is usually the mirror-image defect.** The matte floods in from the
   frame edge and stays connected so a field-coloured patch inside the subject is never
@@ -348,11 +452,20 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              install_backdrops.gd, install_scene_backdrops.gd,
              install_cutouts.gd (mattes/trims/anchors enemies, relics, powers — D90),
              install_sheet.gd (slices an icon-set sheet into its files — D91),
+             install_chrome.gd (the five loose ui/ control cutouts, which have no
+             catalogue to resolve names against — D105),
              cutout_lib.gd (the shared matte/trim/anchor, incl. trapped-pocket
              fill — D92; NOT a class_name),
              gen_ui_kit.gd (COMPUTES the nine-slice button frames — D83),
-             strip_sparkle.gd (removes the generator's corner watermark — D83c)
-DESIGN.md    the full reasoning, decision by decision (D1–D96)
+             strip_sparkle.gd (removes the generator's corner watermark — D83c),
+             bench_iso.gd (how long is a floor to generate and to walk — the crawl is
+             most of the simulator's runtime, so check here before a full report),
+             gen_pollinations.py (drives ART_PROMPTS.md through Pollinations;
+             PARSES the sheet rather than restating it, and refuses any
+             text-only model because the style reference is mandatory — D100.
+             `--browser` prints the same prompts for pasting into a chat UI
+             by hand, 58 pastes for the 111 files still wanted, no key — D102)
+DESIGN.md    the full reasoning, decision by decision (D1–D108)
 ART.md       the art brief: the diagnosis, the style, the reasoning
 ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
              whether it exists yet. Never edit by hand; regenerate it.

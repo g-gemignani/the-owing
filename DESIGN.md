@@ -5017,3 +5017,930 @@ the world "must be deliberate", and quiet is not the same as easy to hit by acci
 
 33/34 suites green; `test_relic` fails identically on the unmodified tree (a draw relic,
 unrelated).
+
+### D97 — The one thing a resting card shows was the one thing the fan covered
+
+`REVIEW.md`'s highest-priority defect, and the reason it survived so long is worth as
+much as the fix.
+
+**The defect.** A card at rest deliberately shows only its name, its cost and its
+headline number; the rules text arrives on hover. That is a good trade and D50's
+reasoning for it stands. But the hand is a fan — cards overlap by design, because nine
+side by side would either run off the frame or shrink past reading — and the neighbour
+to the right is drawn *on top*. So the visible strip of every card except the last is
+`step` wide, while the name was being laid out across the full `inner.x`. A captured
+five-card hand read:
+
+```
+Smith's Fu    Prepare    Bludgeo    Bite    Shiv
+```
+
+Three of five unidentifiable without hovering each one. The resting state's entire
+purpose is scanning a hand at a glance, and it could not be done.
+
+**Why nothing caught it.** `CardTextTest` already measured a great deal about this
+hand: every card on screen, the fan tilted through at least three angles, the middle
+riding higher than the ends, nothing overlapping the vitals or the End Turn button or
+the power orb, no label under 14px hovered. Every one of those passed on a hand nobody
+could read. The checks were about *the card*, and the defect is about **the pair** —
+it only exists in the relationship between a card and the one drawn over it, and no
+single-card assertion can see a relationship. That is the same shape as D84 (four
+models passing an encounter-count assertion while one of them ran 7.2 fights against a
+budget of 4): the quantity being checked was real, and was not the quantity that
+mattered.
+
+**The fix, and where it had to live.** `card_button()` cannot know the answer — it also
+builds reward cards, shop rows and deck lists, none of which overlap, and the fan's
+step changes every time the hand size changes. So the card exposes `fit_name`, and
+`_place_hand()` calls it with the width the next card leaves uncovered (`step`, or the
+full face for the last card, which is on top of everything). The resting title re-fits
+into that; the open layout is untouched, because a hovered card is lifted clear of its
+neighbours and genuinely does have the whole face.
+
+The mutable width lives in a meta rather than a local because **a GDScript lambda
+captures locals by value**, and `show_all` and `fit_name` both have to see the same
+current number. The metas were already the convention here for exactly this reason.
+
+**The assertion, and proving it was not vacuous.** `CardTextTest` now walks consecutive
+pairs and fails if a resting card's name label runs past the left edge of the card in
+front of it. It passed the moment it was written, which proves nothing — so the fix was
+disabled and the test re-run. It reported four failures, by 28-31px each:
+
+```
+FAIL the name on defend runs to x 512, under the next card at x 481
+FAIL the name on jab runs to x 623, under the next card at x 594
+FAIL the name on twin_strike runs to x 735, under the next card at x 707
+FAIL the name on twin_strike runs to x 847, under the next card at x 820
+```
+
+Re-enabled, green. **A new assertion that has never been seen to fail is a comment.**
+
+**TRIED AND REVERTED: refusing to break inside a word.** Narrowing the strip made
+`AUTOWRAP_WORD_SMART` reachable in a way it had not been at full card width — it splits
+a word too long for the box rather than overflowing it, so "Footwork" rendered as
+"Footwor" / "k". `fit_label` could not see this: both halves are perfectly visible
+lines, so its height check was satisfied at the largest font. A `whole_words` option
+was added that additionally required every single word to fit the width, measured with
+`get_string_size` (safe on one word, where the existing docstring's warning about
+`get_multiline_string_size` does not apply, because a single word has no line break to
+disagree about).
+
+It worked and it looked worse: forcing the longest word to fit drove the font down far
+enough that the fix was more conspicuous than the defect. **Reverted on sight of the
+render.** Two-word names wrap at the space and read fine; a long single word breaking
+is accepted. `fit_label` is back to four parameters and `_words_fit` is gone. This is
+D56's rule doing its job in the other direction — the capture is what approves a change,
+not only what condemns one.
+
+**Not addressed here.** The review's other two P0 items are untouched: there is still no
+card art (`assets/art/cards/` does not exist, so every face wears a 16x16 CC0 tile
+stretched ten times), and ~36 card names are still Slay the Spire's, fourteen of them
+with the effect and the constant as well.
+
+### D98 — Thirty-six card names that belonged to another game
+
+`REVIEW.md`'s third P0 item, and the one that was pure data. Of 100 cards, **30 carried
+Slay the Spire card names verbatim** — Adrenaline, Barricade, Bash, Battle Trance,
+Bludgeon, Body Slam, Caltrops, Cleave, Dagger Throw, Defend, Demon Form, Entrench,
+Finisher, Footwork, Heavy Blade, Impervious, Inflame, Iron Wave, Juggernaut, Perfected
+Strike, Prepared, Pummel, Rupture, Searing Blow, Second Wind, Shiv, Shrug It Off,
+Strike, Twin Strike, Whirlwind — with six more a letter away (Berserker Rage, Dodge
+Roll, Cut and Run, Terrify, Blood Price, Slash).
+
+**Why this was worth doing before anything cheaper.** Genre grammar is not the problem;
+every deckbuilder since 2017 uses Block and Energy and intents, and this one should. The
+problem is that the borrowing is concentrated in **the first twenty minutes**, which is
+the window where a player decides what your game is. The pitch — "Slay-the-Spire-shaped
+combat, but the meta layer is different" — is a much weaker claim than this project has
+earned, and the opening hand was arguing for the weaker one.
+
+**Where the replacements came from.** Not invented from nothing: the game already has a
+voice, and it was confined to flavour text where it did no work. The events and the boss
+roster read plain, concrete and Anglo-Saxon, with mortuary and debt imagery and a lot of
+understatement — *"Cold stone and old debts"*, *"His pack is intact. He is not."*,
+*"Nothing here was built for people"*, The Grave-Sexton, The False Step, The Last Vendor.
+Every new name is drawn from that register, and several are direct echoes: `blood_price`
+(pay 5 HP, deal 16) is now **Old Debt**, which is the Barrows' own description.
+
+```
+strike            -> Hack             barricade      -> Set Stone
+defend            -> Cover            impervious     -> Shut Out
+bash              -> Stave In         entrench       -> Double Down
+slash             -> Gash             shrug_it_off   -> Take It
+heavy_blade       -> Dead Weight      dodge_roll     -> Give Ground
+cleave            -> Reap             juggernaut     -> Bristle
+twin_strike       -> Two Quick        caltrops       -> Sharp Ground
+whirlwind         -> Clear the Room   footwork       -> Light on It
+bludgeon          -> All You Have     inflame        -> Work Up
+finisher          -> Last Word        demon_form     -> Something Worse
+pummel            -> Keep Hitting     berserker_rage -> Red Mind
+searing_blow      -> Grinding Down    battle_trance  -> See It Coming
+perfected_strike  -> Drilled          prepared       -> Read Ahead
+iron_wave         -> Shoulder         adrenaline     -> Kick
+body_slam         -> Ram              second_wind    -> Stitch
+shiv              -> Nick             terrify        -> Put the Fear
+dagger_throw      -> Thrown Iron      rupture        -> Split
+blood_price       -> Old Debt         cut_and_run    -> In and Out
+```
+
+**IDs were not touched, and that is the whole reason this was safe.** A card's `id` is
+the key it is stored under in `MetaState.collection`, in every saved deck and in every
+dungeon's exclusive-card list; renaming one would silently orphan a player's collection.
+Only the `name` field moved. Nothing in `scripts/` or `tests/` compares a card name to a
+string literal — checked before starting, and it is why "Found only here: Read Ahead"
+updated itself on the zone screen with no code change.
+
+**Two powers went with them.** `powers/cleave` and `powers/second_wind` carried the same
+two borrowed names, and renaming the cards while leaving the powers would have left the
+vocabulary half-imported: **Scythe** and **Push On**. `CardData`'s schema default
+`name = "Strike"` was updated to `"Hack"` in the same pass — never rendered, since every
+`.tres` sets its own, but a default naming a card that no longer exists is a small lie
+with a long life.
+
+**NOT done, and it is the more serious half.** Fourteen of these copy the effect **and
+the tuned constant**, not just the name: All You Have still deals 32 and exhausts, Shut
+Out still gives exactly 30 Block, Reap 8 to all, Two Quick 5 twice, Take It 8 Block and
+a card, Light on It 2 Dexterity, Work Up 2 Strength, Hack 6, Cover 5, plus Kick, Keep
+Hitting, Ram, Double Down and Set Stone reading word-for-word. **The numbers are the
+tell** — a constant arrived at independently does not land on 32. Changing them is a
+balance change and needs `tools/sim_balance.gd`, which a concurrent session is currently
+running calibration passes on, so it was deliberately left alone rather than half-done.
+Renaming without re-tuning is the cosmetic half of this fix; the entry exists partly so
+the other half is not mistaken for finished.
+
+34/34 suites green, and the combat, zone and shop screens re-rendered and read.
+
+---
+
+### D99 — A ladder built for four rungs on a staircase with two
+
+`tools/sim_balance.gd` flagged one cell on the D94 run: at the Fungal Deep with the
+poison build, slipping past *every* fight cleared more often than choosing when to. A
+dominant strategy is a removed decision (D20), so the price was wrong. Chasing it found
+something bigger than one cell.
+
+**The measurement first.** The flag itself was mostly noise — 150 trials read 77% smart
+against 86% avoid, and 600 trials read 84% against 85%. What was not noise was the shape
+underneath it: **always-avoid cleared 85% while always-face cleared 71%.** Declining
+every fight in the dungeon beat having them, and the price was supposed to make that
+ruinous.
+
+**The defect.** `avoid_cost` was `6 + depth` per rung with each dodge 50% dearer than the
+last, tuned so that FOUR dodges came to ~70% of a health bar. Four is
+`ENCOUNTER_COMBATS + ENCOUNTER_ELITES`, the *global default* encounter mix. Two later
+changes moved the real number and neither came back here:
+
+* **D84** made encounter mixes per-dungeon. Six of the twelve no longer ask for 3+1.
+* **D88** put every dungeon on the crawl, which takes wanderers **out** of the combat
+  budget — and a wanderer walks to you, so it can never be slipped past.
+
+Counting what the crawl actually lays down:
+
+    dungeon          offers   real bill    as tuned
+    crypt              2      15 / 60 HP    25%   (target 70%)
+    warrens            2      18 / 70 HP    26%
+    fungal_deep        2      23 / 90 HP    26%
+    rot_gardens        2      25 /100 HP    25%
+    sunken_vault       2      25 /100 HP    25%
+    drowned_market     2      28 /110 HP    25%
+    abyssal_stair      2      30 /120 HP    25%
+    ossuary/foundry/ember_road/slag_pits/the_maw   3    45-46%
+
+**Dodging an entire dungeon cost a quarter of a health bar.** Not one dungeon in twelve
+charged what the price was designed to charge.
+
+**And the test agreed with it, because it made the same mistake.** `test_traversal.gd`
+asserts the ladder totals at least half a bar — and computed its rung count from
+`ENCOUNTER_COMBATS + ENCOUNTER_ELITES`, the same global constant the price was tuned
+against. Two things deriving a number from one stale source agree with each other and
+with nothing else. It had been green throughout. Worse, this block had *just* started
+running: D94 removed a `Kind.DECK` filter that had been skipping it entirely since D88,
+so its first act on being restored was to pass for a second wrong reason. **A test that
+starts running after years of being skipped has never been checked against reality.**
+
+**The fix is to size the ladder to the staircase.** `Balance.avoid_cost` now takes how
+many dodges the dungeon offers and solves for the base that lands the *whole* ladder on
+`AVOID_TOTAL_FRACTION` (0.70) of the depth-derived bar. A dungeon offering two charges
+more per dodge than one offering four, which is the answer a fixed rung cannot give.
+`TraversalIso` counts its own dodgeable fights at generation (`dodgeable`, serialized
+with the rest of the floor) and hands the number over; nothing derives it twice.
+
+`AVOID_STEP` goes 0.5 → **1.0**: the second slip costs twice the first, the third three
+times it. The steeper climb is what keeps the first rung affordable while a *two*-rung
+ladder still reaches 70% — at +50% a two-dodge dungeon had to charge 28% of the bar up
+front, past the point where anyone would take the first one. Every dungeon now lands on
+70% with a first dodge at 11-23%.
+
+This is the lever D88 named and left: *"a steeper rise than `DECK_AVOID_STEP`'s +50%…
+left failing and visible rather than quietly tuned."* It was the right lever. What D88
+missed is that the rung count was wrong too, which is why a steeper rise alone would have
+overshot the three-rung dungeons.
+
+**Measured after (100-trial report, 150-trial calibration).** Not one cell reports
+ALWAYS-AVOID beating SMART — the flag that started this is gone everywhere, not just at
+the Fungal Deep, which now reads face 72 / smart 71 / **avoid 37**. Dodging is not
+decoration either: choosing beats never-dodging by 13 points at the Ossuary, 13 at the
+Foundry on an Early deck, 18 at the Drowned Market late, 20 at the Maw at endgame. The
+matched-progression band still sits at 56-75% and the over-reach cells under 25%.
+
+**The reprice exposed a real flaw in the driver, which is the honest order for that to
+happen in.** SMART's "this fight might end the run, pay the known price instead" branch
+never checked that the known price was the *cheaper* one. While the dodge was underpriced
+every dodge was cheaper than every fight and the guard was free; at the new prices the
+driver was paying 23 of its last 30 HP at the Sunken Vault to skip a fight averaging 20,
+and SMART came in 14 points below never dodging at all. Fixed, and the Maw went 32 → 40,
+the Sunken Vault 59 → 69. **A harness is only evidence if its driver is as competent as
+the thing it judges (D26).**
+
+**Four cells still report ALWAYS-FACE beating SMART, and they are printed rather than
+tuned away.** Dodging forfeits the reward, and the reward joins the run deck — so at
+depth, where the boss is decided by deck power, declining a fight can be right on HP and
+wrong on the run. `cost_est` only knows HP, so the driver cannot see that trade. That is
+the driver's ceiling, not the price's, and the calibration now says so on every run in its
+own words. Raising `FACE_BIAS` until the line disappears would be fitting the policy to
+the scoreboard.
+
+**Also here.** `sim_balance.gd` grew `--only=`, `--profile=`, `--calibration-only` and
+`--cal-trials=`. The calibration is 95% of a full run's wall clock, and a price is tuned
+by changing a constant and measuring again; without narrowing, that loop is the whole
+report, which in practice means the constant gets guessed. Guessing at this price is what
+D57 was.
+
+---
+
+#### And then: why nineteen minutes at all
+
+Narrowing the report made the loop bearable; it did not make the tool fast. Profiling it
+put the answer somewhere unexpected — **the thing the simulator exists to measure was 4%
+of its runtime.**
+
+    avoid_calibration  1083.4 s   95%
+    fight_play            49.4 s    4%
+    fight_setup            5.8 s    1%
+
+The calibration phase wraps the fights inside it, so a thousand of those 1083 seconds were
+spent *not fighting*: generating floors and walking them. Four faults, none of them subtle
+once looked at:
+
+* **`Array.pop_front()` as a BFS queue.** It shifts every remaining element, so each flood
+  over a 144-cell floor was quadratic. Three flood functions, all of them.
+* **`_neighbours()` inside the flood's inner loop**, allocating a fresh `Array` for every
+  cell visited — around 144 allocations per flood.
+* **Two floods from the same tile per step.** `_reveal_around(pos)` and `_floor_turn()`
+  both flood from the player, one after the other, in the same `select()`.
+* **Two option lists per step.** The caller builds one to choose from and `select()`
+  builds it again to resolve the index it was handed. Each build is another flood.
+
+Fixed by, respectively: a read cursor instead of `pop_front`; the four neighbours stepped
+inline; one flood computed in `select` and passed to both callers; and a memo on
+`options()` dropped by every mutator. The four grids (`enc`, `seen`, `walked`, `room_of`)
+became `PackedInt32Array`/`PackedByteArray` — `enc[n] == WALL` is the innermost line of
+every flood, and JSON round-trips packed arrays unchanged, so the save format did not move.
+`_reveal_around` also stopped scanning the whole grid for "which tiles share my room": a
+floor's rooms do not move, so they are bucketed once per floor.
+
+**Measured, same configuration, same cells, same numbers out:**
+
+    before   avoid_calibration 1083.4 s   fight_play 49.4 s   TOTAL 1141.8 s
+    after    avoid_calibration  361.7 s   fight_play 49.9 s   TOTAL  420.2 s
+
+**2.7x overall, 3.0x on the calibration, with `fight_play` unmoved** — which is the proof
+that the diagnosis was right rather than a coincidence, and also says where the next
+bottleneck is: combat has gone from 4% to 12% of the run.
+
+**Two things about measuring this were harder than doing it.** Wall-clock readings on this
+machine drifted 40% between identical runs and sent the work the wrong way twice — one
+change read as a 40% *regression* that was pure load. `tools/bench_iso.gd` therefore
+reports the **minimum** of several interleaved batches, because load can only make a batch
+slower, and the load-independent check is a count: floods per step went 4.09 → 3.09 and
+option builds 2.00 → 1.00, exactly as intended.
+
+**The one hot spot deliberately left alone** is entrance selection, which floods from
+*every* candidate chamber tile — around forty per floor, the most expensive thing in
+generation. The cheap answer is a double sweep, two floods instead of forty, and it picks
+a **different tile**: it would move every entrance in the game, reshape every floor, and
+invalidate every balance number measured against them. Regenerating the content to save
+10% of a run is not an optimisation, it is a content change wearing one. What made it
+affordable was making each of its forty floods cheap.
+
+**The memo needed its own guard.** Nothing crashes when an invalidation is missed — the
+player is handed a list of moves for a floor they have already left, which is the quietest
+kind of wrong. `test_traversal.gd` now walks every dungeon comparing the cached list
+against a freshly computed one at every step. Verified by deleting an `_invalidate()` and
+watching it fail; the first version of that assertion also failed on all twelve dungeons
+for a reason of its own, having used different `Dictionary.get` defaults on the two sides
+so that every option without an `hp_cost` differed from itself.
+
+34/34 suites green.
+
+### D101 — The prompt sheet was describing the wiring, not the picture
+
+**One string was doing two jobs and failing the second.** `_add()` took a single
+`brief`, and it fed both documents: ART_ASSETS.md, where it answers *why is this file
+wanted*, and ART_PROMPTS.md, where it has to answer *what do I draw*. Those are
+different sentences, and the shopping list's version was winning. So the prompt for an
+energy orb read "One unspent energy. Replaces the text 'Energy 3/3'", and the prompt for
+a die read "A die showing 3. The two dice are currently the text 'dice: [3, 2]'" —
+**quoting UI text at a style block whose FORBIDDEN line bans text**, and describing a
+Label the generator cannot see. `_add()` now takes an optional `subject` that goes only
+to the prompt sheet, falling back to the brief where the brief is already visual. Both
+documents still come out of the same tables; they just stop sharing a sentence.
+
+**Tier 3 was asking for a table of contents.** The twelve card families were emitted as
+their own membership lists — `28 cards: Stave In, Bite, Old Debt, All You Have, ...` —
+while the recipe two paragraphs above said *paint the EFFECT, not any one card's
+fiction*. A list of card names is neither. `Icons.card_family` is a mechanical fact: it
+knows a card applies poison, it cannot know what poison looks like. So `CARD_ART` is the
+one piece of authored art direction in the file, twelve lines, and poison is now "a
+green fume settling low across the frame, beading on cold stone."
+
+**The guard matters more than the twelve lines.** A hand-kept table keyed by family id is
+the stale-list habit this project keeps paying for (D34), so `_cards()` **discovers** the
+families from the catalogue and refuses to emit at all when one has no line — exit 1, the
+family named, nothing on stdout. The tempting fallback is the membership list, and that is
+precisely the defect: a 13th family would otherwise ship 99 good prompts and one bad one,
+which is the failure nobody re-reads. Verified by deleting the poison line: exit 1, no
+half-written sheet. Same split applied to the 21 status symbols and the 7 encounter kinds,
+where "Block." and "A choice with consequences" name a rule rather than a shape — a rule
+prompts a diagram.
+
+**Regenerating surfaced a staler thing than the prompts.** ART_ASSETS.md was last built at
+8c55002 and `3c85d43` landed six painted enemies after it, so both documents still asked
+for all **35 enemy files that were already committed** — 34 present became 69, and 175 to
+provide became 140. The sheet that exists so a prompt cannot name an enemy the game no
+longer has was itself asking for files the game already had. Not regenerating after
+installing art is the habit to break.
+
+**And it exposed what the presence check cannot see.** Those 35 files are 6 paintings and
+29 procedural plates from `gen_enemy_art.gd` — bimodal on disk, 129-577KB against
+9-16KB — and `ResourceLoader.exists()` cannot tell them apart. So the regenerated Tier 2
+now reads "Nothing to generate here — all 35 present", and the 29 placeholders will never
+be prompted for again. The stale sheet was accidentally more useful than the current one
+on exactly this point. **A file existing is not the same as the art being done**, and the
+manifest has no way to say so today; a `Kind`-style marker for "present but provisional"
+is the shape of the fix, and it is not written yet. Left flagged rather than papered over
+with a file-size threshold, which would be a guess wearing a check's clothes.
+
+116 files can now be generated, down from 151, and every one of them names an object.
+34/34 suites green.
+
+### D102 — The prompt sheet was still pasting the operator's half of the page
+
+**The free-tier survey came back with one name, and it was the one already wired.** The
+question was which free image endpoints could replace Pollinations. Cloudflare Workers AI
+has the most generous free tier by a distance — 10,000 neurons a day, no card, and FLUX.1
+Schnell at 4.8 neurons per 512x512 tile, so thousands of images — but its whole image
+catalogue is text-to-image, and a text-only endpoint cannot take `bg_crypt.png` (D100).
+Together's free `FLUX.1-schnell-Free` was deprecated 2025-12-23. Gemini's image models
+have no free API tier at all. Hugging Face's included credit is sized to prove an
+integration works, not to paint 116 files. **The constraint that decides this is
+reference-image support, not price**, and it disqualifies almost everything a search for
+"free image API" returns. So Pollinations stays, and the fallback for when it rate-limits
+is not another endpoint — it is a person, in a browser, with the reference image attached
+by hand.
+
+**That fallback needed the prompts, and asking for them found the bug.** `--browser`
+composes the same prompts from the same parse and prints them for copy-paste, adding only
+the three things an HTTP body carries that a chat box cannot: the reference image, the
+size (as words — a chat UI has no `size` parameter), and the filename the installers
+expect. 63 pastes cover all 116 files, because the four sheet tiers are one paste each.
+Both routes now build their jobs through one `build_jobs()`, since a browser prompt that
+differs from the posted one is the second dialect rule 1 exists to prevent.
+
+**A tier's prose was going to the generator whole, and only some of it was art
+direction.** `compose()` pasted the whole per-tier preamble, but that paragraph is written
+for someone *reading ART_PROMPTS.md*. So every tier 0 request opened with **"DO NOT
+GENERATE the nine-slices and tileable strips in this tier … They come out of
+`tools/gen_ui_kit.gd`"** — an instruction not to generate, sent to a generator, citing a
+Godot script and D83 at it. Tier 4 was worse: each single-sheet request carried "**This
+tier is THREE sheets, not one**", contradicting the ask in the same prompt. Tier 1d
+explained that the installer takes alpha from luminance; tier 7 explained the font
+licensing. This is D101's defect one level up — that fix split the per-file *brief* from
+the *subject*, and left the per-tier paragraph doing both jobs.
+
+**Filtered per sentence, because the two kinds share a paragraph.** A tier-level keep/drop
+flag would lose "OVERRIDE THE PALETTE LINE … these are SINGLE-COLOUR", which sits two
+sentences from the luminance explanation and is the most load-bearing line in tier 1d.
+`art_direction()` drops sentences carrying markers that never appear in real art
+direction: a backtick, a `(D##)` reference, `.gd`, a cross-tier "Tier N", "below",
+"computed", "installer", "generator", "licensed", "request". Tiers 0 and 7 correctly
+reduce to nothing — their subjects were always self-contained — and the seven others keep
+only shape, framing and lighting. The fix lands on the API route too; it was never a
+browser-only problem.
+
+**Tier 4's installer was invisible to the parser.** The Install: line is found by looking
+for a line with both `install_` and `godot` in it, and tier 4 names
+`install_sheet.gd -- nodes|tiles|dice` mid-paragraph without the word `godot`, so the one
+tier that installs as three separate sheets was the one tier that printed no command.
+`install_hints()` derives it instead: for a group tier each group label *is* the set name,
+and for the rest the target directory is matched against `install_cutouts.gd`'s FAMILIES.
+The loose `ui/` cutouts in tiers 0, 1b and 7 have no installer, and the sheet says that
+plainly rather than inventing one.
+
+### D103 — The fourteen constants, and three of them measured worse before one measured right
+
+D98 renamed the borrowed cards and said plainly that the rename was the cosmetic half:
+fourteen of them still carried Slay the Spire's **effect and its tuned constant**, and
+the constant is the real fingerprint — a number arrived at independently does not land
+on 32. This is the other half, done the way tuning is supposed to be done here.
+
+**Eleven changed, three deliberately not.** Ram (damage = your Block), Double Down
+(double your Block) and Set Stone (Block stops expiring) share only a *cost* with their
+originals, and 1/2/3 energy are the costs any designer lands on for those effects. Once
+the name differs there is no identity left to buy, and changing a cost is pure balance
+risk. They keep what they have.
+
+**Method: baseline first.** A before-reading was taken at 120 trials *before touching a
+value*, because an after-reading on its own says nothing. Four rounds followed, each one
+read against that baseline.
+
+**Round 1 — eleven values changed. Two cells collapsed.**
+
+```
+Status build    @ Foundry     57% -> 19%     Barricade build @ Sunken Vault  36% -> 14%
+Status build    @ Ember Road  56% -> 27%     Maxed commons   @ Sunken Vault  64% -> 43%
+```
+
+Both failures were the same mistake from opposite directions, and both are the D28
+signal — *a deck performing unlike its own ratio*:
+
+* **Cost is mispriced against a three-energy turn.** `footwork` and `inflame` went
+  1 -> 2 energy. `power_value()` divides by cost, so the ratio duly fell (Status 3.15 ->
+  2.99) and enemies scaled *down* — yet the build lost two thirds of its clear rate. A
+  2-cost buff in a 3-energy game does not cost 2/1 of a 1-cost buff, it costs the turn.
+  Status runs `inflame x2 + footwork x1`, Barricade runs `footwork x2`; the two profiles
+  that collapsed are exactly the two that hold those cards.
+* **A base bump is over-credited at high card level.** `strike` 6 -> 7 and `defend`
+  5 -> 6 pushed Maxed commons (`strike x8 + defend x8` at Lv100) from ratio 4.09 to 4.77,
+  +17%, so enemies scaled 17% — but level scaling is **sqrt**, so +1 on the base delivers
+  far less than 17% at Lv100. Priced power outran delivered power and the cell fell 21
+  points.
+
+**Round 2 — corrected the costs, overcorrected the basics.** Costs back to 1 (Status
+Foundry 19% -> 57%, exactly baseline; Barricade Vault 14% -> 37%: diagnosis confirmed).
+But `strike` 5 / `defend` 4, chosen to push the ratio the other way, put **Starter at the
+Ossuary on 11%** — a fresh save could not clear the second dungeon. The starter deck is
+`strike x4 + defend x4` and nothing else, and at d1-d2 the **ratio floor** means the
+dungeon does not scale down to meet you (D36, working as designed). Maxed commons went
+the other way to 90%.
+
+**Round 3 — the basics are a local optimum.** 7/6 over-scaled, 5/4 gutted the opening,
+6/5 sat in band. Both directions measured worse, so `strike` and `defend` were **reverted
+to 6 and 5 and left there**. That is a fingerprint knowingly kept: the de-identifying
+value of a basic attack's constant is the lowest in the set — the card is called Hack now,
+and "1 energy, 6 damage" is the most generic line in the genre — while its balance
+leverage is the highest, because every deck is mostly these two cards.
+
+**Round 4 — break the constant upward, not downward.** Round 3 still left one real
+regression: AoE at the Rot Gardens, 62% -> 42%. That build runs `cleave x3` *and*
+`shrug_it_off x3` and both had been cut, so six of its fifteen cards were nerfed at once.
+`cleave` 8 -> **9** instead of 7 removes the fingerprint just as well and gives the
+archetype its power back. **Nothing says a de-fingerprinting change has to be a nerf.**
+
+**Result, against the baseline, 120 trials both sides:**
+
+```
+                    round 3          round 4 (kept)
+mean delta          +0.6             +0.7
+max |delta|         20               12
+cells >= 15 points  3                0
+```
+
+Thirty-four cells, none moved more than 12 points, mean drift under one point. That is
+the target: the fingerprints are gone and **the difficulty curve is where it was**.
+
+Confirmed at **400 trials**, and this is the table of record:
+
+```
+Starter   Crypt 100  Ossuary  67  Warrens 100      AoE       Rot    64  Market 36
+Early     Crypt 100  Warrens 100  Foundry  24      Thorns    Slag   99  Stair  15  Maw 29
+Mid       Warrens 100 Foundry  96  Ember   100      Maxed     Foundry 100 Vault 71
+Status    Warrens 100 Foundry  66  Ember    62      Relic     Warrens 100 Foundry 100 Vault 84
+Barricade Warrens  99 Foundry  18  Vault    30      Late      Market 82  Stair  20  Maw 12
+Poison    Fungal   69 Rot      67                   Endgame   Stair  62  Maw    67
+                                                    Deep      Foundry 100 Vault 64
+```
+
+**Final values.** cleave 8->9 · twin_strike 5->6 · pummel 2x4->3x3 · bludgeon 32->28 ·
+shrug_it_off 8->7 · impervious 30->26 · footwork 2->3 dex · inflame 2->3 str ·
+adrenaline draw 2->1. `strike` and `defend` unchanged at 6 and 5, on purpose, above.
+
+**A correction to REVIEW.md, which this run disproves.** The review's appendix reported
+the simulator as effectively unrunnable — two attempts abandoned — and filed "re-time
+`sim_balance`" as a finding, on the strength of `8514f38`'s profile putting a full
+400-trial report at ~53 seconds of measured work. **It runs.** A 120-trial report takes
+**7m40s-8m25s** here and the full 400-trial report finishes in about nine minutes. The
+original abandonments were a concurrent session competing for all sixteen cores, and,
+twice, my own `timeout` being shorter than the report plus a pipe into `grep -c` that
+threw the partial output away on kill. The ~53s figure is still unexplained and the tool
+is still slower than it should be — but "slow" and "cannot be run" are different
+findings, and the review made the wrong one. **A tool that looks broken under contention
+should be re-measured on a quiet machine before it is written up.**
+
+### D104 — The card was one part pretending to be two
+
+**The picture and the words were fighting over the same rectangle.** A card was
+150x132 with the illustration full-bleed behind the text at 55% alpha and a scrim over
+the lower half to keep the words legible. That is not an illustration, it is a wash: the
+brief for Tier 3 even had to ask for a *quiet dark bottom third*, which is a painting
+being told to get out of the way of something. And because the face had one region, the
+name and the rules text could not both be in it — so the rules text was hidden until you
+hovered, and a resting card showed a name, a cost and a headline number. The request was
+for the Slay the Spire / Hearthstone shape, picture on top and text below, and the
+interesting part is what it costs: **a two-part card is taller, and a taller card does
+not fit above the bottom of the screen.**
+
+**So it does not fit, on purpose.** `HAND_PEEK = 0.74` — a card in hand shows 74% of
+itself and the rest hangs off the bottom edge. That is the trade that buys the height:
+150x132 became 150x214 with the width untouched, because every number in the fan is a
+width (step, overlap, the reserves either side) and leaving those alone meant the hand
+still lays out the same. The picture band is 47% of the card, the name strip 13%, and the
+rules text takes what is left — 69px against the ~40px the old face could spare, which is
+what makes the text permanent rather than a hover disclosure.
+
+**What hangs off has to be the part you do not need.** A hand is scanned for cost, name,
+picture and the headline number, so all four are in the top half by construction: the cost
+badge sits over the picture's top-left, and the damage and Block numerals moved from the
+card's bottom corners — where they had been perfectly readable and would now be under the
+screen edge — to the picture's bottom corners. Each sits on a dark plate, because a
+numeral over a painting is at the mercy of whatever the painting put in that corner.
+
+**Hovering brings the whole card back, and the lift is computed, not chosen.** The old
+lift was `height * 0.34`, a constant that happened to look right. It cannot be a constant
+now: the card hangs off the bottom by design, the fan's outer cards hang lower than its
+middle ones, and hover scales about the bottom-centre pivot so the bottom edge does not
+move and all the growth goes upward. Each card solves for the lift that puts its own
+bottom edge 10px inside the frame. Measured at 1280x720: the outermost card rests at
+y 568-782 and opens at 400-710.
+
+**A taller card is a WIDER card when it is tilted.** The outermost cards turn 0.075 rad
+about their bottom centre, so the top corner swings out by `height * sin(tilt)` — 10px at
+132 tall, 16px at 214. The fan's left reserve was measured off the vitals box and was
+correct for the old card; the new one put its corner 1.8px inside the vitals, which
+`CardTextTest` caught and no amount of looking at the render would have. Both reserves now
+carry the swing.
+
+**The test had to be re-aimed, not relaxed.** Two of its assertions were the old design
+stated as rules: *a resting card must not show its rules text* (now exactly backwards),
+and *every card is inside the frame* (now false by design, and deleting it would have left
+the peek free to take any value at all). They became: the rules text is on the card in
+both states, and **the identifying part of the card — picture band plus name strip — is
+above the screen edge**, computed from the same constants the layout uses. Plus a new one
+the old suite had no reason to want: hovering any card in hand must put the whole of it,
+at the hovered scale, inside the frame. That one is checked on every card rather than a
+sample, because the card most at risk is the outermost and a sample would take the middle.
+
+**Reading a card and hovering a card are different needs.** Hover ends the moment you look
+away, so you cannot hold a card open and read an enemy's intent, and comparing two cards
+means holding one in your head. `UI.inspect_card` holds one card up at 360px over a dimmed
+screen, with the per-rule prose beside it. Right-click opens it on any card face anywhere —
+hand, reward, shop. The collection, the deck builder and the fuse prices are LISTS, though,
+and a list row has no card to right-click: their row thumbnails became buttons that open
+the same overlay, in the same 28px the plain `TextureRect` occupied, so no row got wider.
+The fuse rows pass what the next level buys, which is the one screen where the card being
+priced was never shown.
+
+**Tier 3's brief changed with the shape.** The prompt sheet still asked for a quiet dark
+bottom third — a rule that existed because text was written over the picture, and nothing
+is written over it now. It asks for an edge-to-edge picture and names the four corners
+that carry a numeral. Regenerating also surfaced two files the last change left stale:
+`powers/cleave.png` and `powers/second_wind.png` were still being asked for after the
+powers were renamed to Scythe and Push On (D98), so 116 generatable files were really 114.
+
+**And the render vetoed two things the measurements liked.** Both assertions passed and
+both looked wrong. The fallback card art is a 16x16 atlas slice, and giving it the whole
+picture band meant `KEEP_ASPECT_CENTERED` scaled sixteen pixels to 101 — a 6x blow-up, in
+a branch whose own comment said not to do that. It is an emblem at 62% of the band now,
+NEAREST-filtered, so it reads as pixel art rather than as a smear. And the collection's new
+thumbnail shipped as `flat = true`, which is the plain `TextureRect` it replaced wearing a
+click handler: the only clue it could be pressed was the tooltip, which you have to hover
+to find. It has a thin rarity-coloured edge that brightens under the cursor — not
+`UITheme.style_button`, which forces a minimum height and would have made every row in a
+thirty-row list taller. D56 again: measure, then look, then decide.
+
+### D105 — Three of the five were painted into a wall, and the prompt is why
+
+**The control chrome arrived, and the matte refused most of it.** Five Tier 0 files came
+back from the browser sheet — `dropdown_arrow`, `slider_grabber`, `scrollbar_grabber`,
+`checkbox_on`, `checkbox_off`. `ui_theme.gd` has been reaching for all five by name since
+the kit was specced, each one silently switching on the moment its file exists, so
+installing them was supposed to be a matte and a copy. It was not. `slider_grabber` was a
+bar of iron mounted on a lit stone wall with mortar lines running behind it: 14% of its
+border agrees with itself, against the 80% `cutout_lib.gd` requires, and the matte refused
+it rather than cutting a hole in the wall — which is the refusal working, not failing.
+
+**`dropdown_arrow` is the one worth writing down, because it looks cuttable and is not.**
+Its field averages `(0.104, 0.102, 0.159)` and its worst border pixel sits 0.143 away from
+that, so the border check passes. But the chevron is painted half in shadow, and its
+darkest arm sits **0.049** from the same field — the subject is closer to the background
+than parts of the background are to each other. There is no tolerance that separates them,
+and the flood fill walks straight through the arms; the first install dropped 761 islands
+and produced a chevron with its top bitten off. Luminance cannot rescue it either, and for
+a reason that generalises: the style block mandates *a dark ink outline on every form*, and
+here the outline is DARKER than the field, so any brightness matte cuts the outline off the
+shape it belongs to. Both files install **opaque**, cropped to the object's own edge. The
+arrow gets away with it because the field it keeps is `#1a1a29`, near enough to the
+chrome's own dark to vanish against it.
+
+**The prompt was the defect, not the matte.** `gen_pollinations.py` filters each tier's
+prose per sentence, dropping the operator-facing half so a generator is not told which
+files not to generate (D102). Tier 0's prose was *entirely* operator-facing — nine-slices,
+`gen_ui_kit.gd`, a D-number, the word "below" — so every sentence was filtered and the five
+subjects went out with **no art direction at all**. Tier 1b's survives ("one object,
+centred, transparent, no ground shadow") and Tier 6b's says "on a flat even field for the
+matte" in the subject line itself; Tier 0 alone said nothing, and got back what nothing
+asks for. It now carries a sentence written to survive the filter, naming `card_back` as
+the one Tier 0 file that fills its frame instead of standing on a field — the tier is mixed
+and a blanket rule would have mis-aimed the tablet.
+
+**`install_chrome.gd`, because there is no catalogue to resolve against.**
+`install_cutouts.gd` maps a source filename to an archetype, a relic or a card id, and
+chrome has no such list — the catalogue is the set of names `ui_theme.gd` hardcodes. So the
+recipe table in the new tool IS that catalogue, and it carries the three columns chrome
+needs and cutouts do not: a crop rectangle (a socket is painted in a wall because that is
+where sockets live), a matte flag, and a stretch flag. The stretch flag exists for exactly
+one file: `scrollbar_grabber` is nine-sliced 8/8/8/8 by the theme, so it has to reach all
+four canvas edges or the slice margins bite into transparent gutter and the thumb renders
+narrower than its own bar. `Cut.place()` preserves aspect on purpose — a stretched monster
+is a deformed monster — so filling had to be written beside it rather than into it.
+
+**What is left.** Both checkboxes and the scrollbar thumb are good. The two opaque files
+are honest placeholders: a re-roll under the fixed prompt comes back cuttable, at which
+point they move to `"matte": true` and nothing else changes. Worth noting for whoever does
+it — the generated `checkbox_on` is DARKER than `checkbox_off`, because the peg sits over
+the socket's glow. The peg reads unmistakably, so the pair is legible, but a checked box
+that dims when you check it is backwards and the re-roll should say so.
+
+### D106 — The ids were still the other game's words, and the saves paid for fixing it
+
+D98 renamed the cards and D103 re-tuned their constants, but both stopped at the
+`name` field. The **ids and filenames were untouched on purpose** — an id is the key a
+card is stored under in `MetaState.collection`, in every saved deck and in each
+dungeon's `card_pool`, so renaming one orphans a real save. The result was a game that
+was clean and a repo that was not: 36 files still called `bludgeon.tres`,
+`perfected_strike.tres`, `shrug_it_off.tres`.
+
+**Why that was worth spending a save wipe on.** Nothing in the UI renders a raw id, and
+the generated art briefs come from `name`, so no player would ever have seen one. But
+the tree is the artifact a collaborator reads, and — the concrete reason — the art
+manifest specifies card illustrations as `cards/<card_id>.png`, so leaving the ids
+alone would have baked the borrowed vocabulary into the asset filenames the moment the
+art lands. A rename after that is a rename of art files too.
+
+**No migration. The saves were deleted instead.** `SAVE_VERSION` has a working
+`_migrate()` and a 36-entry remap would have been perhaps fifteen lines, but this is a
+prototype with no players, and an explicit wipe is honest where a migration is a
+permanent piece of code carried for the benefit of nobody. `save.json`, `save.run.json`,
+`save_1.json` and seven `.bak` files were removed; `settings.json` was kept, because
+settings are not saves. **Left alone deliberately:** a `t_headless_save_0.json` sandbox
+belonging to a concurrently running suite — deleting another session's live sandbox is
+exactly the failure the new `run.sh` header warns about.
+
+**The rename itself.** 36 cards and 2 powers, 87 files rewritten, 38 `git mv`s. Matching
+was on **quoted tokens** (`"strike"`) and resource paths (`cards/strike.tres`), never
+bare substrings: a naive pass would have rewritten `perfected_strike` and `twin_strike`
+while replacing `strike`. Longest ids were substituted first for the same reason. A
+collision check ran first (36 new ids against the 64 untouched ones — none clashed), and
+afterwards every `id` field was re-verified against its filename, which is what
+`test_content` asserts anyway.
+
+`hack cover stave_in gash dead_weight reap two_quick clear_the_room all_you_have
+last_word keep_hitting grinding_down drilled shoulder ram nick thrown_iron old_debt
+split in_and_out set_stone shut_out double_down take_it give_ground bristle
+sharp_ground light_on_it work_up something_worse red_mind see_it_coming read_ahead
+kick stitch put_the_fear` — plus powers `scythe` and `push_on`.
+
+**A reporting failure worth recording, because it is the reason this happened at all.**
+The D103 summary listed the changed values as "cleave 8→9, twin_strike 5→6" and so on.
+Those are **ids**, which is what the edit script keyed on — the displayed names are
+Reap and Two Quick. It read as though the rename had not happened, and the question
+"why are you still saying cleave?" is what surfaced the id problem. **When two names
+exist for one object, a summary that quotes the internal one is worse than useless: it
+is evidence of a bug that isn't there, and it hides one that is.**
+
+### D103 — CORRECTION: its absolute table is superseded
+
+D103's 400-trial "table of record" was measured at roughly 11:30. A concurrent session
+then rewrote the card level curve — `card_data.gd` at 12:22 (257 lines) and `balance.gd`
+at 12:33, taking `HP_POWER_K` 0.5 → 0.217, `DMG_POWER_K` 0.15 → 0.065 and
+`HP_POWER_K_HIGH` 0.5 → 0.38. **Those numbers no longer describe this game and must not
+be quoted.**
+
+What survives is the part that matters: D103's conclusion was a *comparison*, and both
+sides of it — the pre-change baseline and the four iteration rounds — were measured
+under the same constants within a single afternoon. "The de-fingerprinting moved no cell
+more than 12 points" is still true of the change it describes. The absolute clear rates
+are not. They need re-measuring once the level curve settles, and until then
+`tests/test_balance.gd` and `tests/test_upgrade.gd` are red on that work, not on this.
+
+### D107 — A theme icon is not authored at 2x, and a checked box has a fourth state
+
+**The grey box around the art is the crop, and it is only on the two that could not be
+cut.** D105 installed `dropdown_arrow` and `slider_grabber` opaque because no matte can
+separate them from the wall they were painted on. In a still that looked acceptable; in
+the game it does not. The slider grabber carries a pale violet-grey strip along its left,
+top and right — the wall the rectangle kept, sitting on a dark track — and it reads as a
+sprite someone forgot to cut out, which is exactly what it is. The two checkboxes are
+fine: a checkbox IS a tile, so the tile's own edge is a border rather than a leftover.
+The fix is not in the installer; it is the re-roll the D105 prompt change makes possible.
+
+**Screens are photographed under a plain `Node`, and that hid all of it.** The first look
+at this used `tools/screenshots.gd`, which showed every widget wearing Godot's DEFAULT
+chrome — no painted arrow, no painted thumb — and the obvious conclusion was that the
+theme had not applied. It had. `Screenshots.tscn`'s root is a plain `Node`, and a theme
+owner does not propagate to Controls through one, so every captured screen loses the root
+Window's theme. The buttons in those captures look painted only because `style_button()`
+sets per-node overrides, which owe nothing to propagation. Anything themed by TYPE —
+checkboxes, sliders, scrollbars, the dropdown arrow — has never appeared in a single
+screenshot this harness has taken. Worth fixing before the next art review reads one.
+
+**A nine-slice is authored at 2x for free. An icon is not.** ART_ASSETS says to author UI
+at 2x and let the canvas stretch scale it, and for a nine-slice that is true — the slice
+margins are in texture pixels and the frame scales around them. Godot blits a theme ICON
+at its own pixel size, so `checkbox_on` at the specced 64x64 drew a 64px block in a row
+built for a 16px font, taking the row from 31px to 80px. `icon_max_width` caps it at 26,
+on `"CheckBox"` and deliberately not on `"Button"`: a constant resolves off the control's
+own type first, so the cap reaches every checkbox state without shrinking the relic, power
+and card-thumbnail icons, which are meant to be bigger than a tick.
+
+**The label was hidden by the state nobody sets.** A checkbox is a TOGGLE, so a checked
+one draws `pressed`, and hovering a checked one asks for **`hover_pressed`** — which was
+set on neither `"Button"` nor `"CheckBox"`. It fell through to the engine default, an
+empty box with no content margin. So hovering a ticked row did not light it, it deleted
+the frame, and the 22px of `KIT_PAD_X` that frame was carrying went with it: the label
+slid left, under an icon that had not moved, and the F of "Fullscreen" was painted over by
+an opaque stone corner. The theme now fills the whole state family from one source —
+`hover_pressed` from `hover` — on `"CheckBox"` and on `"Button"`, because every toggle in
+the game had the same hole and only the checkbox had an icon big enough to show it.
+
+**Two of the three only looked wrong once they were on a real screen.** The 8x contact
+sheet in D105 showed the checkbox tile and called it good, and it is; what it could not
+show is a 64px tile in a 31px row, or a state that only exists under the mouse. A capture
+of the asset is not a capture of the widget.
+
+### D108 — The card brief described a card that had already changed twice
+
+**Asked whether the Tier 3 prompts were right, and they were not.** D104 rewrote the card
+into two parts and rewrote this brief with it, but the brief was written from the intent
+rather than from the code, and four claims in it are false against what `ui.gd` actually
+draws. Measured off the shipped constants, the picture band is `inner.x` x `art_h` =
+134x101 at the 150x214 card, and four things are drawn over it:
+
+| what | corner | size, as a fraction of the band |
+|---|---|---|
+| cost numeral | top left | 26% x 20%, on a 72%-opaque plate |
+| effect symbol | top right | 26% x 20% |
+| damage numeral | bottom left | 42% x 20%, on a plate |
+| Block numeral | bottom right | 42% x 20%, on a plate |
+
+Against that, the brief said *"nothing is written over it"*; said *"two corners carry a
+small number each"* and then listed three positions and then called them *"those four
+spots"*; never mentioned the **top-right effect symbol** at all; and called the bottom
+pair *small* when each is nearly half the band's width. It also said *"keep detail away
+from the outer eighth, which the band crops"*. The band is 1.327:1 and the source is
+1.333:1, so `STRETCH_KEEP_ASPECT_COVERED` crops **0.5%** — the brief was throwing away a
+quarter of every illustration to avoid a crop of a quarter of a percent.
+
+**The scrim was the omission that mattered most.** `CARD_SCRIM_START` is 0.58 and it
+deepens to 62% black by 0.92 of the band, so the bottom two fifths of every card picture
+is progressively darkened and the bottom eighth is nearly gone. Twelve paintings composed
+with their subject low — which is the natural reading of "one clear shape, centred" in a
+4:3 frame — would each have lost their subject to a shadow the brief never mentioned. The
+brief now names the shadow and says to weight the subject into the upper middle.
+
+**Same failure as D105, one tier over, and the same lesson.** A prompt is part of the
+pipeline, not documentation of it: it goes stale exactly like a duplicated lookup table
+(D34), and it fails silently and expensively, because what comes back is a good painting
+of the wrong thing. The numbers in this brief are now the numbers in `UITheme` and
+`UI.CARD_SCRIM_*`; nothing here should be restated from memory again.
+
+**Not changed: the tier still produces a PICTURE, not a card.** The frame, the name strip,
+the rules text and all four numerals are drawn by the game over a 4:3 image. That was
+right and stays right — a generator asked for a whole card would return one with baked
+text, which the style block already forbids in every image for this reason.
+
+### D109 — Seventy-seven per cent of every level-up bought nothing, and the fix moved the whole difficulty axis
+
+The report was one card: *the first power still gives 8 Block going from level 2 to 3.*
+Bulwark's ten levels read **6, 8, 8, 9, 9, 9, 10, 10, 10, 11**. Five of its nine
+level-ups changed no number at all.
+
+**It was not one card.** Swept across the whole game before touching anything:
+
+| | dead level-ups | of | |
+|---|---|---|---|
+| commons | 2,715 | 3,168 | **86%** |
+| uncommons | 712 | 1,092 | 65% |
+| rares | 112 | 308 | 36% |
+| epics | 12 | 48 | 25% |
+| legendaries | 8 | 24 | 33% |
+| **cards, total** | **3,559** | **4,640** | **77%** |
+| powers | 44 | 63 | 70% |
+
+Eight cards changed nothing at **any** level — Focus, Read Ahead, See It Coming, Kick,
+Abyssal Gift, Ram, Double Down, Set Stone — and two powers joined them: Foresight read
+"Draw 1" at all ten levels, Push On "+1 Energy, costs 5 HP" at all ten. Fusion charged
+copies **and** gold for every one of those.
+
+**The cause was one line meeting integer arithmetic.** Growth was
+`base + round(base * rate * sqrt(level - 1))`: a shape chosen for feel, then rounded to
+an int. Any step smaller than half a point vanishes. A common card's entire track was
+**+15 damage spread over 99 levels**, so 84 of them landed on the number below. Statuses
+were worse — a common gained **+5 across a hundred levels**, so `_status_growth` returned
+`base + 1` for levels 2 through 9 inclusive.
+
+**Why no test caught it.** Every suite checked the *endpoints*: a maxed card is stronger
+than a level-1 card (true), a maxed card is not absurdly stronger (true). Nothing ever
+asked about a step in the middle. `tests/test_levels.gd` now walks all 3,859 of them.
+
+#### The constraint is arithmetic, so one of two things had to give
+
+A track can never be longer than the number of integer steps it has to give. Commons
+have 99 steps and a +15 budget. Either the track shortens to fit the budget, or the
+budget grows to fit the track. Asked, and the answer was **grow the numbers**: keep the
+100/40/15/5/5 caps, put a floor of **+1 per level** under every track, and pay for it
+downstream. A maxed common Hack goes from 21 damage to **107**.
+
+`CardData._spread` makes that structural rather than tuned: the step is `1 + (a
+front-loaded share of the surplus)`, and *two reals a whole point apart cannot round to
+the same integer*. It is a guarantee, not a calibration.
+
+**Three things the +1 floor cannot apply to, and what they got instead.**
+
+* **Statuses.** A stack multiplies every later action; 100 Vulnerable is not a strong
+  card, it is a fight that ends before it starts. They keep a budget for the whole
+  track (4→8 by rarity), and a card whose *only* axis is a status gets a track short
+  enough to spend it — Expose sells five levels, not ten.
+* **Draw.** The most valuable single point in the game. Budgets of 1–3, so Focus sells
+  one level and Foresight one. Short and honest beats a hundred levels of "Draw 1".
+* **Cards with no number at all.** Set Stone is `retain_block` and nothing else. Energy
+  cost became the last-resort axis: a card comes down to 1, a card already at 1 can
+  reach 0. It is opened **only** for cards with nothing else to grow, because a card
+  that got both cheaper and bigger every level would double-dip on `power_ratio`, which
+  is power *per energy*.
+
+`PowerData` now derives its cap from the same rule instead of the hand-authored 10, and
+overrides `level_cap()` rather than only `level_capped()` — the getters spread their
+budget across `level_cap()` steps, so a power that stops at 10 has to say 10 *there*, or
+it arrives at its last level having collected a tenth of its growth.
+
+#### And then the part that took the rest of the afternoon
+
+A maxed common went 21 → 107 damage, so the strongest reachable deck went **ratio 6.1 →
+31.7**. Every constant in the ratchet is a slope against ratio or a point on it.
+
+**First attempt: map the axis through one factor.** Elegant, and it passed every
+predicate in `tests/test_balance.gd`. Measured against a HEAD baseline at 120 trials it
+had turned the game into a walkover:
+
+| profile / dungeon | baseline | after |
+|---|---|---|
+| Barricade / The Foundry | 24% | **100%** |
+| Thorns / The Abyssal Stair | 6% | **97%** |
+| AoE / The Drowned Market | 42% | **97%** |
+| Poison / The Rot Gardens | 60% | **100%** |
+
+**The lesson, and it is the same one as D45.** That suite guards the *shape* of the
+curve, and the shape was intact — what moved was its height, which only the simulator
+sees. **A constant whose comment says "measured" has to be measured by the thing that
+measures play.** The green suite is what let a 70-point swing through.
+
+The specific mechanism was `soften_ratio`. It is a sqrt, so the wider the raw range the
+more it eats: at the old range it turned 7.1 into 6.1, but at the new one it turned 31.7
+into 13.8 — enemies were being scaled for **less than half the deck they were facing**.
+`POWER_RATIO_CAP` moved above the reachable maximum, making the knee a backstop rather
+than a working part.
+
+**Second attempt: anchor on measured cells.** Enemy HP fitted to hold fight *length* at
+the Mid and Thorns anchors (`HP_POWER_K` 0.5 → 0.68, `HP_POWER_K_HIGH` 0.5 → 0.52),
+enemy damage and pierce fitted as far as the maxed-deck guard permits (`DMG_POWER_K`
+0.15 → 0.060, `PIERCE_PER_RATIO` 0.5 → 0.020), ceilings re-pitched to clear 31.7
+(`RATIO_CEILING_PER_DEPTH` 0.90 → 4.55). Fight lengths now land within ~0.5 turns of
+baseline on every profile and the early game is unchanged within noise.
+
+#### What is still open, because it should not be buried
+
+**Fused archetype decks remain easier than baseline by a mean of 14 points**, worst at
+Barricade (+67 at the Foundry, +49 at the Sunken Vault). The mechanism is not in
+`balance.gd` at all: a Lv15 Cover now grants **20 Block where it used to grant 10**, so a
+block deck's defensive pool doubled, while enemy damage growth is bounded *above* by the
+D36 guard that a maxed deck must not be punished for its own power.
+
+Both obvious levers were tried and measured worse:
+
+* `DMG_POWER_K` at 0.09 and beyond fails the maxed-deck guard outright (a maxed deck
+  loses 40.7 HP a fight at depth 6 against a starter's 34.0).
+* `ESCALATION_PER_TURN` 0.06 → 0.10 was aimed at block decks, on the theory that
+  escalation punishes long fights. It moved the fused profiles by 1.5 points and took
+  the **unfused** Early deck at the Foundry from 32% to 8% — it punishes a slow deck,
+  and a weak deck is slow for a different reason than a defensive one.
+
+So it is not a ratchet problem and one more pass over these numbers will not fix it. It
+belongs in `CardData.power_value`'s Block pricing (0.65 per point, set when a Lv15 block
+card granted half what it now grants) or in the archetype cards themselves.
+
+**One bug found on the way in, unrelated but in the way.** `Balance.POWERS` listed
+`"reap"` and `"stitch"` while the files were `scythe.tres` and `push_on.tres` — the D106
+rename moved the *cards* `cleave → reap` and `second_wind → stitch` and dragged the power
+ids along with them. Two of the ten powers had been failing to load and `Balance.power()`
+was handing back `null`. `tests/test_levels.gd` checks the list against disk now.

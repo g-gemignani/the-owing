@@ -26,7 +26,7 @@ Everything below was measured or looked at, not inferred from the docs:
 | 34/34 test suites | `tests/run.sh` — all green, zero sandbox strays |
 | 20 screens | `tools/Screenshots.tscn` rendered at the shipped 1280×720, every PNG inspected |
 | art coverage | `tools/art_manifest.gd` regenerated: **209 files wanted, 69 present, 140 missing** |
-| balance | `tools/sim_balance.gd` — attempted twice, abandoned both times; see the appendix |
+| balance | `tools/sim_balance.gd` at 400 trials (see the appendix — the original "could not be run" note was wrong, and the table has since been superseded by an in-flight level-curve rework) |
 | content | all 100 cards, 30 relics, 10 powers, 20 events, 35 enemies, 12 dungeons read as data |
 | code | 13,969 lines in `scripts/`, 8,015 in `tests/`, 4,996 in `tools/`, 6,683 lines of docs |
 
@@ -492,10 +492,11 @@ Two costs worth naming:
    specifies them and `PixelArt.painted_card_art()` already prefers them. This
    changes the look of the whole game. *(the single highest-leverage art job in the
    list)*
-3. **Rename the ~36 borrowed card names, and re-tune the 14 that copy the effect and
-   the constant too.** Data-only edit. Removes the criticism this game will get most
-   often, and the writing voice to do it with is already in `resources/events/`.
-   *(a day; re-run `sim_balance` after the re-tune)*
+3. ~~**Rename the ~36 borrowed card names, and re-tune the 14 that copy the effect and
+   the constant too.**~~ **DONE** — renamed in D98, re-tuned in D103. Eleven of the
+   fourteen constants moved; `strike`/`defend` were measured at three values and kept
+   at 6/5 on the numbers, and three mechanic-only cards were left alone. Verified to
+   move no cell more than 12 points against a pre-change baseline.
 4. **Fix defects 3, 4, 5, 7, 9, 10** — all small, all visible.
 
 ### P1 — the next tier
@@ -524,29 +525,52 @@ Two costs worth naming:
     drop their 26 map icons from the art manifest in the same pass.
 15. Give the mechanics on 1–3 cards either a family or a funeral.
 16. Split `DESIGN.md` by system, or give it an index.
-17. **Re-time `sim_balance.gd`.** See the appendix — a full report no longer finishes
-    in anything like the 53 seconds `8514f38` measured, which is the exact failure
-    mode D75 named.
+17. **Profile `sim_balance.gd` again.** It runs fine (~8 min at 120 trials, ~9 at 400)
+    — the appendix's original "cannot be run" claim was wrong and is corrected there —
+    but that is still far off the ~53s of measured work `8514f38` profiled, and the gap
+    is unexplained.
 
 ---
 
 ## Appendix — balance
 
-**A fresh run was attempted and abandoned, twice.** At 400 trials it was still running
-after ~15 minutes with nothing flushed; restarted at 100 trials it was still running
-at ~8 minutes, by which point a concurrent session had begun modifying
-`tools/sim_balance.gd`, `scripts/balance.gd` and every dungeon `.tres` underneath it,
-so any number it produced would have described a tree that no longer existed. It was
-killed rather than reported.
+> **CORRECTED 2026-08-01, after D103.** This section originally reported the simulator
+> as effectively unrunnable — two attempts abandoned — and filed "re-time it" as a
+> finding. **That was wrong, and the error was mine.** On a quiet machine a 120-trial
+> report takes 7m40s–8m25s and a full 400-trial report finishes in about nine minutes.
+> The two abandoned attempts were a concurrent session using all sixteen cores, plus —
+> twice — my own `timeout` being shorter than the report and a pipe into `grep -c` that
+> discarded the partial output when the process was killed. The tool is *slow* relative
+> to the ~53s of measured work `8514f38` profiled, and that gap is still unexplained and
+> still worth closing. But "slow" and "cannot be run" are different findings and this
+> review made the wrong one. **A tool that looks broken under contention should be
+> re-measured on a quiet machine before it is written up.**
 
-That is worth its own line, because D75 wrote the rule and `8514f38` was the fix for
-it: *"A measurement nobody can afford to run is one that stops being run."* The
-profiling commit put the full 400-trial report at roughly 53 seconds of measured work.
-If it now takes materially longer than that on a normal machine, the regression should
-be found before the next tuning pass, or the same trap closes again. **Re-time it.**
+The table below was a real measurement — 400 trials, taken after the D103 re-tune — but
+**it is now superseded and should not be quoted.** A concurrent session rewrote the card
+level curve about an hour later (`card_data.gd`, and `DMG_POWER_K` 0.15 -> 0.065 in
+`balance.gd`), so these absolute rates describe a game that no longer exists. What still
+holds is D103's *comparison*: baseline and result were measured under the same constants,
+and the de-fingerprinting moved no cell more than 12 points. Re-measure once that curve
+settles — see the D103 correction in DESIGN.md.
 
-The numbers below are therefore the most recently *recorded* pass from the decision
-log (D75, 120 trials, ±5 points), not a fresh measurement:
+```
+Starter   Crypt 100  Ossuary  67  Warrens 100
+Early     Crypt 100  Warrens 100  Foundry  24
+Mid       Warrens 100 Foundry  96  Ember   100
+Status    Warrens 100 Foundry  66  Ember    62
+Barricade Warrens  99 Foundry  18  Vault    30
+Poison    Fungal   69 Rot      67
+AoE       Rot      64 Market   36
+Thorns    Slag     99 Stair    15  Maw      29
+Maxed     Foundry 100 Vault    71
+Relic     Warrens 100 Foundry 100  Vault    84
+Late      Market   82 Stair    20  Maw      12
+Endgame   Stair    62 Maw      67
+Deep      Foundry 100 Vault    64
+```
+
+<details><summary>The superseded D75 figures this section originally quoted (120 trials)</summary>
 
 ```
 Starter   Crypt  99   Ossuary 75
@@ -562,18 +586,24 @@ Late      Stair  32   Maw     27
 Endgame   Stair  70   Maw     67
 ```
 
-Read as design rather than as tuning, two things stand out and neither is a bug:
+</details>
 
-- **The opening is very soft.** Starter/Crypt at 99% and Early/Crypt at 100% means the
-  first dungeon cannot be lost. That is a defensible teaching choice, but it also means
-  the escrow — the mechanic the whole meta layer hangs on — never *bites* during the
-  window in which the player is learning what the game is about. A player who cannot
-  lose the Crypt has no reason to notice that "AT RISK" means anything.
-- **The deep end is decided by equipment, not by play.** At the Maw the spread runs
-  27% (Late) to 67% (Endgame) to 57% (Thorns); at the Abyssal Stair, 32% to 70%. A
-  40-point swing between builds at the same depth is a build-selection problem
-  presenting as a difficulty curve. The AoE build at the Drowned Market (28%) and the
-  Barricade build at the Foundry (50%) are the outliers worth looking at first.
+Read as design rather than as tuning, two things stand out in the current numbers and
+neither is a bug:
+
+- **The opening cannot be lost.** Starter and Early both clear the Crypt at 100%. That
+  is a defensible teaching choice, but it means the escrow — the mechanic the whole meta
+  layer hangs on — never *bites* in the window where the player is learning what the game
+  is about. Someone who cannot lose the Crypt has no reason to notice that "AT RISK"
+  means anything. Note this survived D103 untouched: `strike` and `defend` were measured
+  at three values and 6/5 was the only one that did not either gut the opening or
+  over-scale the late game, so the softness is not a stray constant — it is the ratio
+  floor at d1 doing exactly what D36 designed it to do.
+- **The deep end is decided by equipment, not by play.** At the Maw: Late 12%, Thorns
+  29%, Endgame 67%. At the Abyssal Stair: Thorns 15%, Late 20%, Endgame 62%. A 45–55
+  point swing between builds at one depth is a build-selection problem presenting as a
+  difficulty curve. Barricade at the Foundry (18%) and Early at the Foundry (24%) are the
+  tightest cells; the Foundry remains the one early wall, as it has been since D75.
 
 Neither is urgent relative to §2 and §3. The numbers are healthy; the game they
 describe is not the part that needs work.

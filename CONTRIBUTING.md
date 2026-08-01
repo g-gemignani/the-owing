@@ -63,7 +63,7 @@ enemy scaling.
 ## Before you commit
 
 ```bash
-tests/run.sh                                    # 29 suites
+tests/run.sh                                    # 37 suites
 godot --headless --script tools/sim_balance.gd  # if you touched anything tuned
 ```
 
