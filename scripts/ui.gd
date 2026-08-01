@@ -661,14 +661,30 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 
 	var rest_y := pad + badge_h
 	var rest_h := size.y - pad - rest_y - value_h
-	_place(title, pad, rest_y, title_w, rest_h)
-	fit_label(title, Vector2(title_w, rest_h), UITheme.title_font(), 7)
-	var rest_px: int = title.get_theme_font_size("font_size")
+	# The RESTING title takes a width that can shrink; the open one always gets the
+	# whole face. In a hand the neighbour to the right is drawn on top of this card
+	# and hides its right-hand edge — and the name is the only thing a resting card
+	# shows, so the name was precisely what was being covered: a captured five-card
+	# hand read "Smith's Fu / Prepare / Bludgeo / Bite / Shiv" (D96). The fan is the
+	# only thing that knows how much of a card survives, so it tells the card, through
+	# `fit_name` below. Everywhere else — rewards, the shop, the deck lists — nothing
+	# overlaps and the default stays the full face.
+	#
+	# The two mutable pieces live in metas rather than in locals because a GDScript
+	# lambda captures a local BY VALUE, and both closures below have to see the same
+	# current width.
+	holder.set_meta("rest_w", title_w)
+	holder.set_meta("open", false)
+	var lay_rest := func() -> void:
+		var w: float = holder.get_meta("rest_w")
+		_place(title, pad, rest_y, w, rest_h)
+		fit_label(title, Vector2(w, rest_h), UITheme.title_font(), 7)
 	_place(title, pad, pad + badge_h, title_w, title_h)
 	fit_label(title, Vector2(title_w, title_h), body, 7)
 	var open_px: int = title.get_theme_font_size("font_size")
 
 	var show_all := func(open: bool) -> void:
+		holder.set_meta("open", open)
 		desc.visible = open
 		# The number strip exists because a resting card shows only a name. Once the
 		# card is open its rules text carries the same number, and leaving the strip
@@ -680,10 +696,21 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 			_place(title, pad, pad + badge_h, title_w, title_h)
 			title.add_theme_font_size_override("font_size", open_px)
 		else:
-			_place(title, pad, rest_y, title_w, rest_h)
-			title.add_theme_font_size_override("font_size", rest_px)
+			# re-fit rather than restore a remembered size: the resting width can have
+			# changed since, because the fan re-measures every time the hand changes
+			lay_rest.call()
 	show_all.call(false)
 	holder.set_meta("show_all", show_all)   # so tests can drive both states
+	# How the fan tells a card how much of itself is not under the next one. A hovered
+	# card is lifted clear of its neighbours, so the open layout is left alone.
+	holder.set_meta("fit_name", func(visible_w: float) -> void:
+		var w := clampf(visible_w - pad * 2.0, pad, title_w)
+		if is_equal_approx(w, float(holder.get_meta("rest_w"))):
+			return
+		holder.set_meta("rest_w", w)
+		if not bool(holder.get_meta("open")):
+			lay_rest.call())
+	holder.set_meta("name_label", title)   # so tests can measure what a resting hand shows
 
 	# Re-read the live numbers without rebuilding the widget. The combat screen
 	# diffs its hand instead of destroying it every action (that is what allows a

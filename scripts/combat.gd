@@ -643,6 +643,13 @@ func _place_hand() -> void:
 			continue
 		holder.custom_minimum_size = base
 		holder.size = base
+		# Tell the card how much of its own face survives the fan. Cards are drawn in
+		# hand order, so card i is covered by card i+1 and only `step` of it is left;
+		# the last one is on top of everything and keeps the lot. Without this the name
+		# — the only thing a resting card shows — is laid out across a width the player
+		# cannot see (D96).
+		if holder.has_meta("fit_name"):
+			(holder.get_meta("fit_name") as Callable).call(base.x if i == n - 1 else step)
 		# rotation and growth both happen about the bottom-centre, so a card pivots
 		# in the hand rather than sliding sideways as it turns
 		holder.pivot_offset = Vector2(base.x * 0.5, base.y)

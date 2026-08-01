@@ -194,6 +194,35 @@ func _check_live_hand() -> void:
 				named[0], wr.position.x, wr.position.y, wr.end.x, wr.end.y,
 				vp.size.x, vp.size.y])
 
+	# --- the name a RESTING card shows must not be under the next card ------------
+	#
+	# A resting card shows its name, its cost and its headline number and nothing else,
+	# and the fan lays the next card on top of this one's right-hand edge — so the name
+	# was the one thing being hidden. A captured five-card hand read "Smith's Fu",
+	# "Prepare", "Bludgeo", "Bite", "Shiv": three of five unidentifiable without
+	# hovering (D96). None of the checks above can see it — every card was on screen,
+	# fanned, arced and clear of both corners while being unreadable.
+	#
+	# The last card is drawn on top of the rest, so it is the one card allowed the
+	# whole face; everything before it is measured against its right-hand neighbour.
+	for k in maxi(0, cards.size() - 1):
+		var holder3: Control = cards[k]
+		if not holder3.has_meta("name_label"):
+			_fails += 1
+			print("FAIL card %s exposes no name label to measure" % holder3.get_meta("card_id"))
+			continue
+		var nm: Control = holder3.get_meta("name_label")
+		if nm == null or not nm.visible:
+			continue
+		# Tolerance is a whole character of the smallest font the fitter will use: the
+		# holders are rotated, and get_global_rect() is axis-aligned, so both edges
+		# carry a little slop. The defect this guards against is ~35% of a card wide.
+		var covered := (cards[k + 1] as Control).get_global_rect().position.x
+		if nm.get_global_rect().end.x > covered + 7.0:
+			_fails += 1
+			print("FAIL the name on %s runs to x %.0f, under the next card at x %.0f" % [
+				holder3.get_meta("card_id"), nm.get_global_rect().end.x, covered])
+
 	# ...and the hand must not run under the things parked in both bottom corners
 	for zone in [["the vitals", inst.status_label], ["End Turn", inst.end_btn],
 			["the power orb", inst.power_btn]]:
