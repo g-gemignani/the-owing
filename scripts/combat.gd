@@ -413,7 +413,15 @@ func _refresh_enemies() -> void:
 		var intent: Label = slot.get_meta("intent")
 		intent.text = eng.intent_text(i)
 		var mark: Panel = slot.get_meta("mark")
-		mark.modulate = Color(1.0, 0.82, 0.40, 0.85) if targeted else Color(0, 0, 0, 0.72)
+		# A RING when targeted, never a filled disc. The mark is centred on the
+		# standing line, so its upper half lies across the feet — which is what a
+		# contact SHADOW should do, but the targeted version was 85%-opaque gold. It
+		# painted the enemy's ankles out and left it sitting on a bright solid
+		# lozenge. The report was "the monsters are floating"; the backdrops were
+		# mostly innocent (D109).
+		mark.add_theme_stylebox_override("panel",
+			slot.get_meta("mark_ring" if targeted else "mark_shadow"))
+		mark.modulate = Color(1.0, 0.82, 0.40, 0.9) if targeted else Color(0, 0, 0, 0.72)
 		var hit: Button = slot.get_meta("hit")
 		hit.tooltip_text = "%s\nIntent: %s\nClick to target." % [e.name, eng.intent_text(i)]
 
@@ -429,13 +437,23 @@ func _build_slot(i: int) -> Control:
 	slot.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	enemy_box.add_child(slot)
 
-	var mark := Panel.new()          # ground contact / target ring
+	# TWO marks in one node, and which one is showing says whether this enemy is the
+	# target. Filled it is a contact shadow; as an outline it is a ring drawn ON the
+	# floor the enemy stands on. They cannot be the same box: a filled mark that is
+	# also bright reads as a platform rather than as ground (D109).
+	var mark := Panel.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(1, 1, 1)
 	sb.corner_radius_top_left = 999
 	sb.corner_radius_top_right = 999
 	sb.corner_radius_bottom_left = 999
 	sb.corner_radius_bottom_right = 999
+	var ring := sb.duplicate() as StyleBoxFlat
+	ring.bg_color = Color(1, 1, 1, 0.14)   # a breath of fill, so the ellipse still reads as flat on the floor
+	ring.border_color = Color(1, 1, 1)
+	ring.set_border_width_all(2)
+	slot.set_meta("mark_shadow", sb)
+	slot.set_meta("mark_ring", ring)
 	mark.add_theme_stylebox_override("panel", sb)
 	mark.modulate = Color(0, 0, 0, 0.72)
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
