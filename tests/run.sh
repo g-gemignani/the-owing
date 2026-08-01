@@ -140,8 +140,17 @@ fi
 
 # Tests are sandboxed (MetaState.path_prefix / SettingsState.path_override) because
 # they once wrote over a real save and a real settings file. Prove it every run.
-strays=$(ls "$USERDATA" 2>/dev/null | grep -c '^t_' || true)
-if [[ "$strays" != "0" ]]; then
-	echo "WARNING: $strays sandbox file(s) left in the player's data directory" >&2
+#
+# NAME them. "2 sandbox file(s) left" sent someone bisecting the whole suite for a
+# writer that turned out to be a tool run by hand in another terminal: anything
+# headless without DECKCRAWL_SANDBOX lands on `t_headless_`, and this directory is
+# shared by every process on the machine, not just this run. The filename says which
+# it was in one line.
+mapfile -t strays < <(ls "$USERDATA" 2>/dev/null | grep '^t_' || true)
+if ((${#strays[@]})); then
+	echo "WARNING: ${#strays[@]} sandbox file(s) left in the player's data directory:" >&2
+	printf '  %s\n' "${strays[@]}" >&2
+	echo "  (t_headless_* means a headless run with no DECKCRAWL_SANDBOX — likely a tool," >&2
+	echo "   not a suite. Anything else is a test writing outside the prefix it was given.)" >&2
 	exit 1
 fi
