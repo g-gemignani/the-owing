@@ -71,6 +71,12 @@ const SETS := {
 	# sprites by their bottom edge, so the standing point would float.
 	"iso_figures": [0, false],
 	"iso_furniture": [0, false],
+	# Thirty-five archetypes is far too many for one sheet, so this set is always
+	# driven with `--only`: name the handful on the sheet in hand and the grid sizes
+	# itself for them. The full ordered list is still here because `--only` refuses a
+	# name it has no target for, and that refusal is the check that a typo does not
+	# quietly install a subset (D117).
+	"enemies": [256, false],
 }
 
 ## Non-square canvases, by set name. `SETS` carries one number because every set had
@@ -94,7 +100,12 @@ const TALL := {
 ## which is why the thirty-five combat plates measure 0.0% empty space below the feet.
 ## The two tools disagreed only because no bottom-anchored set had ever come in on a
 ## sheet before (D122).
-const FOOTED := ["iso_figures", "iso_furniture"]
+## `enemies` is footed for the reason Tier 2's own brief gives: "every enemy is placed
+## on one standing line, so padding at the bottom of the file makes that enemy hover."
+## `install_cutouts.gd` already passes `true` for this family; a sheet has to agree with
+## the per-file installer or the same archetype lands differently depending on which
+## tool took it in.
+const FOOTED := ["iso_figures", "iso_furniture", "enemies"]
 
 var _dry := false
 
@@ -265,6 +276,12 @@ func _ids(set_name: String) -> Array:
 			for i in Balance.ISO_WANDERERS:
 				out.append(["iso/wander_%d_s.png" % i, "wanderer %d, facing you" % i])
 				out.append(["iso/wander_%d_n.png" % i, "wanderer %d, from behind" % i])
+		# Same order the manifest prints Tier 2 in, and for the same reason every set
+		# here shares: the order asked for and the order installed have to be one list.
+		"enemies":
+			for aid in PixelArt.archetype_ids():
+				var a := load("res://resources/enemies/%s.tres" % aid) as EnemyData
+				out.append(["enemies/%s.png" % aid, a.name if a != null else String(aid)])
 		# The three fight tiers come FIRST, so the three that have to read as escalating
 		# sit next to each other on the sheet and are drawn against each other.
 		"iso_furniture":
