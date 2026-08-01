@@ -115,17 +115,19 @@ const KIT_SLICE := 12
 const KIT_PAD_X := 22.0
 const KIT_PAD_Y := 8.0
 
-## How wide a checkbox is allowed to draw, in layout pixels.
+## How big a control's own icon may draw, in layout pixels. ONE number, because a
+## checkbox and a slider handle sit in the same list at the same eye level and any
+## difference between them reads as one of the two being wrong (D113).
 ##
 ## A nine-slice is authored at 2x and costs nothing for it — the slice margins scale
 ## with the frame. A theme ICON is not: Godot blits it at its own pixel size, so the
 ## 64x64 the asset list asks for (2x of 32, for the 1440p and 4K scale-ups) draws as a
 ## 64px block in a 1280x720 row built for a 16px font. It ate the row: the label
 ## started under the tile and the first letter of "Fullscreen" was painted over by an
-## opaque stone corner (D107). Capping here rather than shrinking the file keeps the
-## resolution the scale-up needs, and keeps the fix in the one place that knows how
-## big a row is.
-const CHECKBOX_ICON := 26.0
+## opaque stone corner (D107). Capping rather than shrinking the files keeps the
+## resolution the scale-up needs, and keeps the decision in the one place that knows
+## how big a row is.
+const CONTROL_ICON := 26.0
 
 ## Which ink reads on this frame, measured off the middle of the art itself.
 ##
@@ -179,6 +181,35 @@ func kit_frame(name: String, l: int, r: int, top: int, bot: int,
 	sb.content_margin_top = pad_y
 	sb.content_margin_bottom = pad_y
 	return sb
+
+## A kit icon, scaled down if it is bigger than `max_side` layout pixels.
+##
+## `icon_max_width` would be the right tool and only Button has it. A slider draws its
+## grabber at the texture's own size, full stop, so the only lever on an HSlider is the
+## size of the texture you hand it — which is why this resamples instead of setting a
+## constant. Kept OUT of `kit_frame`'s path: a nine-slice must never be pre-scaled,
+## because its slice margins are in texture pixels and resampling moves the border out
+## from under them.
+##
+## Returns the texture untouched when it already fits, so nothing is resampled for the
+## sake of it, and null when the file is absent — same contract as `PixelArt.ui_kit`,
+## so the caller's `!= null` gate still means "the art is installed".
+func kit_icon(name: String, max_side: float) -> Texture2D:
+	var tex := PixelArt.ui_kit(name)
+	if tex == null:
+		return null
+	var side := maxf(float(tex.get_width()), float(tex.get_height()))
+	if side <= max_side:
+		return tex
+	var img := tex.get_image()
+	if img == null:
+		return tex
+	if img.is_compressed():
+		img.decompress()
+	var k := max_side / side
+	img.resize(maxi(1, int(round(tex.get_width() * k))),
+		maxi(1, int(round(tex.get_height() * k))), Image.INTERPOLATE_LANCZOS)
+	return ImageTexture.create_from_image(img)
 
 ## A button state: its own painted file if one exists, else today's tinted frame.
 ##
@@ -321,14 +352,26 @@ func _rebuild_theme() -> void:
 	if dropdown != null:
 		for state in ["normal", "hover", "pressed", "disabled", "focus"]:
 			theme.set_stylebox(state, "OptionButton", dropdown)
-		theme.set_color("font_color", "OptionButton", INK)
+		# MEASURED off the art, not assumed. This was a hardcoded `INK`, chosen when
+		# the kit was parchment and harmless for as long as `dropdown.png` did not
+		# exist — the whole block is skipped while the file is absent. The moment the
+		# file landed (D115) it became near-black text on a face of luminance 0.067:
+		# 1.27:1, which is not low contrast, it is invisible. It would have taken the
+		# three filter dropdowns and the settings dropdowns out together.
+		#
+		# Compensating in the ART was the wrong lever and was rejected: a paler
+		# dropdown face would then have swallowed `dropdown_arrow.png`, which is a
+		# pale carved-stone chevron. The frame is right; the ink was guessed.
+		theme.set_color("font_color", "OptionButton", ink_for(PixelArt.ui_kit("dropdown")))
 	var arrow := PixelArt.ui_kit("dropdown_arrow")
 	if arrow != null:
 		theme.set_icon("arrow", "OptionButton", arrow)
 	var track := kit_frame("slider_track", 8, 8, 8, 8, 0.0, 0.0)
 	if track != null:
 		theme.set_stylebox("slider", "HSlider", track)
-	var grabber := PixelArt.ui_kit("slider_grabber")
+	# 48x48 as installed, which drew nearly twice the checkbox beside it in the same
+	# settings list. Capped to the same number they now share (D113).
+	var grabber := kit_icon("slider_grabber", CONTROL_ICON * scale)
 	if grabber != null:
 		theme.set_icon("grabber", "HSlider", grabber)
 		theme.set_icon("grabber_highlight", "HSlider", grabber)
@@ -348,7 +391,7 @@ func _rebuild_theme() -> void:
 		# own type before its base type, so this reaches every checkbox state without
 		# capping the icon on the relic, power and card-thumbnail buttons, which are
 		# deliberately bigger than a tick.
-		theme.set_constant("icon_max_width", "CheckBox", int(round(CHECKBOX_ICON * scale)))
+		theme.set_constant("icon_max_width", "CheckBox", int(round(CONTROL_ICON * scale)))
 		theme.set_constant("h_separation", "CheckBox", int(round(10 * scale)))
 		# The states have to come from ONE family, and the missing one was `hover_pressed`.
 		# A checkbox is a TOGGLE: checked, it draws `pressed`, and hovering a checked box
