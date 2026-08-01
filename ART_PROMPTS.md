@@ -8,21 +8,26 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**56 files can be generated.** The rest of the list cannot, and the sections below
+**52 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
 ## The three rules that do the work
 
-1. **One generator, for everything.** The art already in the game came from two
-   different tools and it is visible: `main_menu.jpg` and the dungeons from one,
-   the scene and zone backdrops from another. Two tools is two dialects no
-   prompt reconciles. Pick one and finish the game with it.
+1. **One generator, for everything — but one generator is not enough.** The art
+   already in the game came from two different tools and it is visible: the
+   dungeons and `main_menu.jpg` from one, the scene and zone backdrops from
+   another. Pick one and finish the game with it. Then note what that alone does
+   NOT buy you: `main_menu.jpg` came off the SAME tool as the twelve dungeons and
+   is still a different dialect — flat vector silhouettes with no ink outline at
+   all, at a ninth the outline density of the rooms it shipped beside (D114). One
+   tool asked twice in two wordings is two dialects, which is what rule 2 is for.
 2. **Attach `assets/art/bg_crypt.png` to every single request**, including the ones that look
    nothing like it. It is the style bible (ART.md §2) and image-conditioning is a
-   stronger constraint on palette and line weight than any adjective.
+   stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
+   is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 56 times.
+   improve it between images. Its job is to be identical 52 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -54,17 +59,7 @@ bloom does not, and keeps the stamp in the shipped file (D112).
 
 *18 of these 24 files are NOT for a generator: computed by `tools/gen_ui_kit.gd`* — `frame_button.png`, `frame_button_hover.png`, `frame_button_pressed.png`, `frame_button_disabled.png`, `frame_button_small.png`, `frame_panel.png`, `frame_inset.png`, `frame_tooltip.png`, `frame_card.png`, `frame_card_rarity_0.png`, `frame_card_rarity_1.png`, `frame_card_rarity_2.png`, `frame_card_rarity_3.png`, `frame_card_rarity_4.png`, `divider.png`, `dropdown.png`, `slider_track.png`, `scrollbar_track.png`
 
-DO NOT GENERATE the nine-slices and tileable strips in this tier. A nine-slice survives being stretched to 14x only if its top and bottom strips are constant along X, its left and right constant along Y, and its centre one flat colour; a painting breaks all three and smears (D83). They come out of `tools/gen_ui_kit.gd`. The loose objects listed as paintable below are ordinary cutouts. Each loose object — the chevron, the bar, the slug, the two sockets — stands alone on a FLAT, EVEN field of a single colour, centred, with no wall, no room, no floor, no shadow and no scenery of any kind; that flat field is what gets cut away, and an object painted into a setting cannot be cut out of it. The card tablet is the one exception and fills its frame edge to edge. Three of the first five came back painted into a cave wall because this tier said none of that (D105).
-
-**1 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
-
-| save as | size | what is wrong with the one we have |
-|---|---|---|
-| `ui/dropdown_arrow.png` | 32x32 | a cyan bloom is painted on the FIELD under the chevron, and the matte can only stop where the bloom stops being field-coloured — so it installs as the chevron sitting on a hard-edged opaque disc, which takes a third of a 32px icon (D112) |
-
-| save as | size | subject |
-|---|---|---|
-| `ui/dropdown_arrow.png` | 32x32 | A small chevron of chipped iron pointing down. One solid shape, centred. The field around it stays FLAT and EMPTY — no glow, no light, no bloom spilling onto it; anything painted on the field is cut away with the field and leaves a hard edge where it was cut. |
+Nothing to generate here — all 6 present.
 
 ## Tier 1b — vitals and selection
 
@@ -105,7 +100,21 @@ Cells in the order of the table below, left to right then top to bottom.
 
 ## Tier 1d — status symbols
 
-Nothing to generate here — all 21 present.
+OVERRIDE THE PALETTE LINE IN THE PREAMBLE: these are SINGLE-COLOUR — flat white glyphs on a flat near-black field, no gradient, no interior shading, no ink outline (the shape IS the ink). `Icons` tints them by rarity and fades them for spent states, and that behaviour is load-bearing: a coloured icon cannot be tinted, only muddied. The installer takes alpha from LUMINANCE and throws the colour away, so an anti-aliased edge survives and a hue does not. Read at 48px: one idea per symbol, no scene, no object in a setting.
+
+**Generate these as ONE image, not 2.** A 2x1 grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is a RE-ROLL of 2 of this tier's 21 files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- symbols <sheet.png> --only=sym_dexterity,sym_energy`
+
+**2 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+
+| save as | size | what is wrong with the one we have |
+|---|---|---|
+| `ui/sym_dexterity.png` | 64x64 | the blow goes the wrong way. The brief asks for 'a tilted buckler GLANCING a blow aside' and the arrow points INTO the disc instead of away from it, so the picture says the hit landed — the opposite of what Dexterity does. The disc also reads as a plate or a frisbee rather than a shield, having no rim and no boss, and at 28px it is a blob with a spike on it |
+| `ui/sym_energy.png` | 64x64 | the point of light is off-centre. The brief asks for an orb 'lit from within by one point of light at its CENTRE'; what came back is a solid white disc with a small dot up and to the right, which the eye reads as a specular highlight — so it is a billiard ball or a pearl, not something lit from inside. The silhouette is also a plain circle, which is the one shape a 21-symbol set cannot afford to spend on an abstraction |
+
+| save as | size | subject |
+|---|---|---|
+| `ui/sym_dexterity.png` | 64x64 | A tilted buckler glancing a blow aside. |
+| `ui/sym_energy.png` | 64x64 | A round orb with one point of light at its centre. |
 
 ## Tier 1e — combat VFX
 
@@ -119,24 +128,7 @@ Nothing to generate here — all 35 present.
 
 ## Tier 3 — card illustrations
 
-A filled 4:3 rectangle, not a cutout. It is the picture band across the top of a card and it fills that band edge to edge: one clear shape, centred, read at 320x240 and shown about 3cm wide. The band is 4:3 to within half a percent, so almost nothing is cropped — use the whole rectangle. FOUR things are drawn on top of it, each on a dark rounded plate, and each needs a quiet corner under it: a cost numeral top left and an effect symbol top right, each about a quarter of the width and a fifth of the height; a damage numeral bottom left and a Block numeral bottom right, the same height but nearly half the width. The bottom two fifths also sit under a shadow that deepens to most of the way black at the very bottom edge, so put nothing down there that has to stay bright — weight the subject into the upper middle and let the lower edge fall away into dark. Each of these is shared by every card in its family, so paint the EFFECT, not any one card's fiction.
-
-**12 to generate.** Style block above, then one of these as the last line:
-
-| save as | size | subject |
-|---|---|---|
-| `cards/attack.png` | 320x240 | One heavy blade coming down through the frame, caught at the moment it lands. The stroke is the subject; no wielder needs to be in shot. |
-| `cards/attack_aoe.png` | 320x240 | A single stroke opening one wide arc clean across the frame, catching several shapes at once in the dark to either side. |
-| `cards/attack_multi.png` | 320x240 | The same blade struck three times over, its arcs overlapping, each one fainter than the last. |
-| `cards/block.png` | 320x240 | A slab of shield-iron braced square against the frame, a blow breaking apart on it. |
-| `cards/dexterity.png` | 320x240 | A blow glancing off a tilted buckler and away — the shape of the deflection, not the impact. |
-| `cards/draw.png` | 320x240 | A hand of cards fanning open, the topmost one lifting free of the rest. |
-| `cards/heal.png` | 320x240 | Strips of linen drawn tight over a wound, one warm point of light behind them. |
-| `cards/poison.png` | 320x240 | A green fume settling low across the frame, beading on cold stone. |
-| `cards/strength.png` | 320x240 | A fist closing on a hammer's grip, the knuckles going white. |
-| `cards/thorns.png` | 320x240 | A barbed ring closed around a reaching hand, every point turned outward. |
-| `cards/vulnerable.png` | 320x240 | A shield split top to bottom, the crack open and dark. |
-| `cards/weak.png` | 320x240 | An arm gone slack, the weapon dropping out of an opening hand. |
+Nothing to generate here — all 12 present.
 
 ## Tier 5 — dungeon battle backdrops
 
@@ -168,18 +160,12 @@ Nothing to generate here — all 6 present.
 
 One OBJECT, three-quarter view, centred, on a flat even field for the matte. Lit from upper-left. No hand holding it, no pedestal, no ground, no shadow, no background scenery. It is seen at 48px in a row of thirty, so the whole job is silhouette and one memorable colour — a beautifully rendered trinket that reads as a brown smudge has failed. Paint what the relic IS, not what it does.
 
-**30 to generate.** Style block above, then one of these as the last line:
+**24 to generate, 6 already present.** Style block above, then one of these as the last line:
 
 | save as | size | subject |
 |---|---|---|
-| `relics/ancient_battery.png` | 128x128 | Ancient Battery — +1 Energy each turn. |
 | `relics/balanced_grip.png` | 128x128 | Balanced Grip — Start each combat with 1 Dexterity. |
-| `relics/bone_charm.png` | 128x128 | Bone Charm — Whenever an enemy dies, draw 1. |
-| `relics/bulwark_plate.png` | 128x128 | Bulwark Plate — Start each combat with 18 Block. |
-| `relics/chipped_whetstone.png` | 128x128 | Chipped Whetstone — Every 2nd turn, gain 1 Strength. |
-| `relics/coin_purse.png` | 128x128 | Coin Purse — Gain 40% more gold. |
 | `relics/crown_of_thorns.png` | 128x128 | Crown of Thorns — Whenever an enemy dies, deal 4 to all enemies. |
-| `relics/duelists_glove.png` | 128x128 | Duelist's Glove — Every 3rd card you play in a turn, deal 5 to all. |
 | `relics/eternal_furnace.png` | 128x128 | Eternal Furnace — Every 3rd turn, deal 6 to all enemies. |
 | `relics/field_kit.png` | 128x128 | Field Kit — Play 2 cards in a turn to draw 1. |
 | `relics/giants_marrow.png` | 128x128 | Giant's Marrow — +40 max HP. |
@@ -227,7 +213,7 @@ Cells in the order of the table below, left to right then top to bottom.
 
 ## Tier 7 — identity and shell
 
-*2 of these 6 files are NOT for a generator: a licensed download* — `display.ttf`, `body.ttf`
+*2 of these 7 files are NOT for a generator: a licensed download* — `display.ttf`, `body.ttf`
 
 The fonts are licensed downloads (OFL/SIL), recorded like the Kenney ones. The logo is the one asset in the game that must carry text and the one place a generator is reliably wrong — generate the ornament and set the wordmark yourself.
 
@@ -239,4 +225,14 @@ The fonts are licensed downloads (OFL/SIL), recorded like the Kenney ones. The l
 | `ui/boot_splash.png` | 1280x720 | A shut iron door at the foot of a stair, one lantern burning above it, seen head-on. Nobody in frame. |
 | `ui/cursor.png` | 64x64 | A slim iron spike pointing up and to the left. One solid shape. |
 | `ui/cursor_press.png` | 64x64 | The same iron spike, shorter and driven in, its tip flared. |
+
+**1 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+
+| save as | size | what is wrong with the one we have |
+|---|---|---|
+| `main_menu.jpg` | 1280x720 | off-style: it carries NO ink outline, and the ink outline is the first line of the style block. Measured as the share of pixels that are a local luminance minimum by >0.08 against both neighbours 2px out, it reads 1.2% against 2.8-12.2% across the twelve dungeons — 2.3x below even bg_crypt, the style bible and the most open room in the set. Flat vector silhouettes for the firs and the mountains, no outline anywhere. Its palette and value are NOT the problem and re-rolling for them would be chasing the wrong fault: mean luminance 20.2% sits inside the 20-35% band and saturation matches the dungeons. It is also the one .jpg in the tree, so the re-roll lands as main_menu.png and four references move with it (D114) |
+
+| save as | size | subject |
+|---|---|---|
+| `main_menu.jpg` | 1280x720 | A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. One cold cyan flame in a stone bowl beside them is the only light source. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white. |
 

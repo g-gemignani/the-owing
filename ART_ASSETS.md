@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**183 files wanted · 108 already present · 75 to provide.**
+**184 files wanted · 138 already present · 46 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -19,7 +19,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 0 — frame kit and control chrome
 
-*24 files, 7 still to provide.* Highest leverage in the whole list: one kit and every screen stops looking broken.
+*24 files, 0 still to provide.* Highest leverage in the whole list: one kit and every screen stops looking broken.
 
 | ? | file | size | what it is |
 |---|---|---|---|
@@ -28,9 +28,9 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `ui/frame_button_pressed.png` | 192x96 | Same frame, bevel inverted. Generated. |
 | x | `ui/frame_button_disabled.png` | 192x96 | Same frame, drained of colour. Generated. |
 | x | `ui/frame_button_small.png` | 96x96 | The square frame, for the 40px +/- buttons in the deck builder, which cannot wear the wide frame's corners. Generated. |
-|   | `ui/frame_panel.png` | 256x256 | Nine-slice 64/64/64/64, SYMMETRIC. Stone panel, flat interior. |
-|   | `ui/frame_inset.png` | 128x128 | Nine-slice 32/32/32/32. A dark recessed well for logs, lists and scroll areas. |
-|   | `ui/frame_tooltip.png` | 128x128 | Nine-slice 24/24/24/24. Small, high-contrast, sits over anything. |
+| x | `ui/frame_panel.png` | 256x256 | Nine-slice 64/64/64/64, SYMMETRIC. Stone panel, flat interior. |
+| x | `ui/frame_inset.png` | 128x128 | Nine-slice 32/32/32/32. A dark recessed well for logs, lists and scroll areas. |
+| x | `ui/frame_tooltip.png` | 128x128 | Nine-slice 24/24/24/24. Small, high-contrast, sits over anything. |
 | x | `ui/frame_card.png` | 320x448 | Nine-slice 40/40/48/56. The card face: illustration band on top, rules text below. |
 | x | `ui/frame_card_rarity_0.png` | 320x448 | Common — plain stone/iron edge. |
 | x | `ui/frame_card_rarity_1.png` | 320x448 | Uncommon — green stone inlay. |
@@ -38,26 +38,26 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `ui/frame_card_rarity_3.png` | 320x448 | Epic — violet inlay, glow. |
 | x | `ui/frame_card_rarity_4.png` | 320x448 | Legendary — gold, ornate, unmistakable at a glance. |
 | x | `ui/card_back.png` | 320x448 | The back of a card. NOTHING LOADS THIS TODAY — the deck traversal that required it went in D94, and combat's piles are the text 'Draw 12 - Discard 3'. Painted and installed anyway in D112, so it is waiting for whatever draws a face-down card next rather than blocking it. |
-|   | `ui/divider.png` | 128x16 | Tileable horizontally. A carved rule between sections. |
-|   | `ui/dropdown.png` | 192x96 | Nine-slice 32/32/28/28, matching the button. `UITheme` already wires OptionButton to this name and skips it while the file is absent, so the dropdown falls back to Godot's grey chrome — the wiring is done, the picture is what is missing. |
+| x | `ui/divider.png` | 128x16 | Tileable horizontally. A carved rule between sections. |
+| x | `ui/dropdown.png` | 192x96 | Nine-slice 32/32/28/28, matching the button. `UITheme` already wires OptionButton to this name and skips it while the file is absent, so the dropdown falls back to Godot's grey chrome — the wiring is done, the picture is what is missing. |
 | x | `ui/dropdown_arrow.png` | 32x32 | The open/close chevron. |
-|   | `ui/slider_track.png` | 128x24 | Tileable horizontally. The grabber beside it is installed; HSlider takes this name the moment it exists, and runs on Godot's default groove until then. |
+| x | `ui/slider_track.png` | 128x24 | Tileable horizontally. The grabber beside it is installed; HSlider takes this name the moment it exists, and runs on Godot's default groove until then. |
 | x | `ui/slider_grabber.png` | 48x48 | The slider handle. |
-|   | `ui/scrollbar_track.png` | 24x128 | Tileable vertically. The thumb beside it is installed; VScrollBar takes this name the moment it exists, and runs on Godot's default well until then. |
+| x | `ui/scrollbar_track.png` | 24x128 | Tileable vertically. The thumb beside it is installed; VScrollBar takes this name the moment it exists, and runs on Godot's default well until then. |
 | x | `ui/scrollbar_grabber.png` | 24x48 | The scrollbar thumb. |
 | x | `ui/checkbox_on.png` | 64x64 | Checked. Settings screen. |
 | x | `ui/checkbox_off.png` | 64x64 | Unchecked. |
 
 ## Tier 1b — vitals and selection
 
-*9 files, 4 still to provide.* HP, Block and Energy are all plain text today.
+*9 files, 0 still to provide.* HP, Block and Energy are all plain text today.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-|   | `ui/bar_frame.png` | 256x48 | Nine-slice. The empty HP/Block bar housing. |
-|   | `ui/bar_hp_fill.png` | 32x48 | Tileable horizontally. Current HP. |
-|   | `ui/bar_hp_loss.png` | 32x48 | Tileable. The slice about to be lost — this is how the enemy's telegraphed damage gets shown on the bar. |
-|   | `ui/bar_block_fill.png` | 32x48 | Tileable. Block, stacked over HP. |
+| x | `ui/bar_frame.png` | 256x48 | Nine-slice. The empty HP/Block bar housing. |
+| x | `ui/bar_hp_fill.png` | 32x48 | Tileable horizontally. Current HP. |
+| x | `ui/bar_hp_loss.png` | 32x48 | Tileable. The slice about to be lost — this is how the enemy's telegraphed damage gets shown on the bar. |
+| x | `ui/bar_block_fill.png` | 32x48 | Tileable. Block, stacked over HP. |
 | x | `ui/energy_orb_full.png` | 128x128 | One unspent energy. Replaces the text 'Energy 3/3'. |
 | x | `ui/energy_orb_empty.png` | 128x128 | One spent energy, same silhouette. |
 | x | `ui/orb_glow.png` | 192x192 | Additive bloom for a spend/gain flash. |
@@ -163,22 +163,22 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 3 — card illustrations
 
-*12 files, 12 still to provide.* One per effect family to start, shared by every card in it — NOT 100 unique paintings up front. This is the single highest-value tier in the file: the card face is two parts, and this is the top one — a real picture with its own band, not a wash behind words (D104). The 100 cards break down as below; unique art for the most-played can come later as `cards/<card_id>.png`, which is checked first.
+*12 files, 0 still to provide.* One per effect family to start, shared by every card in it — NOT 100 unique paintings up front. This is the single highest-value tier in the file: the card face is two parts, and this is the top one — a real picture with its own band, not a wash behind words (D104). The 100 cards break down as below; unique art for the most-played can come later as `cards/<card_id>.png`, which is checked first.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-|   | `cards/attack.png` | 320x240 | 28 cards: All You Have, Bite, Cheap Shot, Counterblow, ... |
-|   | `cards/attack_aoe.png` | 320x240 | 5 cards: Black Tide, Clear the Room, Massacre, Reap, ... |
-|   | `cards/attack_multi.png` | 320x240 | 5 cards: Cull, Keep Hitting, Pressure, Sword Dance, ... |
-|   | `cards/block.png` | 320x240 | 18 cards: Anvil Stance, Brace, Bulwark, Cover, ... |
-|   | `cards/dexterity.png` | 320x240 | 3 cards: Clear Mind, Light on It, Stone Skin |
-|   | `cards/draw.png` | 320x240 | 4 cards: Abyssal Gift, Kick, Read Ahead, See It Coming |
-|   | `cards/heal.png` | 320x240 | 5 cards: Bandage, Bloodlust, Deep Breath, Second Heart, ... |
-|   | `cards/poison.png` | 320x240 | 12 cards: Blight Bloom, Creeping Death, Noxious Cloud, Pandemic, ... |
-|   | `cards/strength.png` | 320x240 | 6 cards: Focus, Red Mind, Smith's Fury, Something Worse, ... |
-|   | `cards/thorns.png` | 320x240 | 8 cards: Bramble Armour, Bristle, Iron Will, Molten Core, ... |
-|   | `cards/vulnerable.png` | 320x240 | 3 cards: Hex, Stumble, Wither |
-|   | `cards/weak.png` | 320x240 | 3 cards: Cold Read, Put the Fear, Smoke Bomb |
+| x | `cards/attack.png` | 320x240 | 28 cards: All You Have, Bite, Cheap Shot, Counterblow, ... |
+| x | `cards/attack_aoe.png` | 320x240 | 5 cards: Black Tide, Clear the Room, Massacre, Reap, ... |
+| x | `cards/attack_multi.png` | 320x240 | 5 cards: Cull, Keep Hitting, Pressure, Sword Dance, ... |
+| x | `cards/block.png` | 320x240 | 18 cards: Anvil Stance, Brace, Bulwark, Cover, ... |
+| x | `cards/dexterity.png` | 320x240 | 3 cards: Clear Mind, Light on It, Stone Skin |
+| x | `cards/draw.png` | 320x240 | 4 cards: Abyssal Gift, Kick, Read Ahead, See It Coming |
+| x | `cards/heal.png` | 320x240 | 5 cards: Bandage, Bloodlust, Deep Breath, Second Heart, ... |
+| x | `cards/poison.png` | 320x240 | 12 cards: Blight Bloom, Creeping Death, Noxious Cloud, Pandemic, ... |
+| x | `cards/strength.png` | 320x240 | 6 cards: Focus, Red Mind, Smith's Fury, Something Worse, ... |
+| x | `cards/thorns.png` | 320x240 | 8 cards: Bramble Armour, Bristle, Iron Will, Molten Core, ... |
+| x | `cards/vulnerable.png` | 320x240 | 3 cards: Hex, Stumble, Wither |
+| x | `cards/weak.png` | 320x240 | 3 cards: Cold Read, Put the Fear, Smoke Bomb |
 
 ## Tier 5 — dungeon battle backdrops
 
@@ -226,18 +226,18 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 6a — relic icons
 
-*30 files, 30 still to provide.* Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.
+*30 files, 24 still to provide.* Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-|   | `relics/ancient_battery.png` | 128x128 | Ancient Battery — +1 Energy each turn. |
+| x | `relics/ancient_battery.png` | 128x128 | Ancient Battery — +1 Energy each turn. |
 |   | `relics/balanced_grip.png` | 128x128 | Balanced Grip — Start each combat with 1 Dexterity. |
-|   | `relics/bone_charm.png` | 128x128 | Bone Charm — Whenever an enemy dies, draw 1. |
-|   | `relics/bulwark_plate.png` | 128x128 | Bulwark Plate — Start each combat with 18 Block. |
-|   | `relics/chipped_whetstone.png` | 128x128 | Chipped Whetstone — Every 2nd turn, gain 1 Strength. |
-|   | `relics/coin_purse.png` | 128x128 | Coin Purse — Gain 40% more gold. |
+| x | `relics/bone_charm.png` | 128x128 | Bone Charm — Whenever an enemy dies, draw 1. |
+| x | `relics/bulwark_plate.png` | 128x128 | Bulwark Plate — Start each combat with 18 Block. |
+| x | `relics/chipped_whetstone.png` | 128x128 | Chipped Whetstone — Every 2nd turn, gain 1 Strength. |
+| x | `relics/coin_purse.png` | 128x128 | Coin Purse — Gain 40% more gold. |
 |   | `relics/crown_of_thorns.png` | 128x128 | Crown of Thorns — Whenever an enemy dies, deal 4 to all enemies. |
-|   | `relics/duelists_glove.png` | 128x128 | Duelist's Glove — Every 3rd card you play in a turn, deal 5 to all. |
+| x | `relics/duelists_glove.png` | 128x128 | Duelist's Glove — Every 3rd card you play in a turn, deal 5 to all. |
 |   | `relics/eternal_furnace.png` | 128x128 | Eternal Furnace — Every 3rd turn, deal 6 to all enemies. |
 |   | `relics/field_kit.png` | 128x128 | Field Kit — Play 2 cards in a turn to draw 1. |
 |   | `relics/giants_marrow.png` | 128x128 | Giant's Marrow — +40 max HP. |
@@ -280,12 +280,13 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 7 — identity and shell
 
-*6 files, 6 still to provide.* Two of these are downloads, not drawings.
+*7 files, 6 still to provide.* Two of these are downloads, not drawings.
 
 | ? | file | size | what it is |
 |---|---|---|---|
 |   | `fonts/display.ttf` | - | Display face for titles and card names. Needs an OFL/SIL licence, recorded like the Kenney ones. THE GAME HAS NO CUSTOM FONT — everything is Godot's default. |
 |   | `fonts/body.ttf` | - | Body face for rules text. Must stay legible at 12px, since card text shrinks to fit. |
+| x | `main_menu.jpg` | 1280x720 | The title screen backdrop. `main_menu.gd` passes it to `UI.screen()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. |
 |   | `ui/logo.png` | 1600x480 | The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself. |
 |   | `ui/boot_splash.png` | 1280x720 | Boot splash. None configured. |
 |   | `ui/cursor.png` | 64x64 | Optional pointer. |

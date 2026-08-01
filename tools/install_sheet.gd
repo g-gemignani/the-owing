@@ -40,6 +40,17 @@
 ## and not a table in here: the next misaligned sheet is misaligned differently, and
 ## a stored permutation would be right once and silently wrong afterwards. The
 ## mapping is printed either way — check it (D112).
+##
+## **`--only=` is for re-rolling PART of a set**, which is what happens once a sheet
+## has landed and two of its twenty-one glyphs turn out to be unreadable. It restricts
+## the target list, and the grid is then sized for what is left — so two names means a
+## 2x1 sheet, not a 5x5 with twenty-three cells to leave empty. It refuses a name it
+## has no target for rather than installing the subset it recognised (D117).
+##
+## Re-rolling the whole sheet to fix two cells is the alternative and it is worse: the
+## reason these tiers are sheets at all is that the SET has to be mutually
+## distinguishable, and once nineteen are on disk the survivors are the reference. A
+## fresh sheet of twenty-one throws away nineteen good drawings.
 extends SceneTree
 
 const Cut := preload("res://tools/cutout_lib.gd")
@@ -67,9 +78,13 @@ func _init() -> void:
 	var cols := 0
 	var rows := 0
 	var cells: Array[int] = []
+	var only: Array[String] = []
 	for a in args:
 		var s := String(a)
-		if s.begins_with("--cols="):
+		if s.begins_with("--only="):
+			for n in s.trim_prefix("--only=").split(",", false):
+				only.append(String(n).get_file().get_basename())
+		elif s.begins_with("--cols="):
 			cols = int(s.trim_prefix("--cols="))
 		elif s.begins_with("--rows="):
 			rows = int(s.trim_prefix("--rows="))
@@ -79,13 +94,33 @@ func _init() -> void:
 		elif not s.begins_with("--"):
 			positional.append(s)
 	if positional.size() < 2 or not SETS.has(positional[0]):
-		print("usage: -- <%s> <sheet.png> [--cols=N] [--rows=N] [--cells=i,j,k...] [--dry]" % "|".join(SETS.keys()))
+		print("usage: -- <%s> <sheet.png> [--only=a,b] [--cols=N] [--rows=N] [--cells=i,j,k...] [--dry]" % "|".join(SETS.keys()))
 		quit(2)
 		return
 
 	var set_name: String = positional[0]
 	var sheet_path: String = positional[1]
 	var targets := _ids(set_name)      # ordered [out_path, label]
+	if not only.is_empty():
+		var kept: Array = []
+		var unknown := only.duplicate()
+		for t in targets:
+			var stem := String(t[0]).get_file().get_basename()
+			if only.has(stem):
+				kept.append(t)
+				unknown.erase(stem)
+		# Refused, not ignored: a typo in `--only` would otherwise install a SUBSET of
+		# what was asked for and report success, which is the same silent-partial
+		# failure the whole positional contract is guarded against.
+		if not unknown.is_empty():
+			print("--only names %s, which %s has no target for. Valid: %s" % [
+				", ".join(unknown), set_name,
+				", ".join(targets.map(func(t): return String(t[0]).get_file().get_basename()))])
+			quit(2)
+			return
+		targets = kept
+		print("--only: %d of %s's targets, so the grid below is sized for those" % [
+			targets.size(), set_name])
 	var canvas := Vector2i.ONE * int(SETS[set_name][0])
 	var mono: bool = bool(SETS[set_name][1])
 

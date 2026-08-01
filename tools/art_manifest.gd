@@ -65,16 +65,23 @@ const REDO := {
 	"ui/intent_debuff.png": REDO_TILED,
 	"ui/intent_poison.png": REDO_TILED,
 	"ui/intent_unknown.png": REDO_TILED,
-	"ui/dropdown_arrow.png":
-		"a cyan bloom is painted on the FIELD under the chevron, and the matte can only stop where the bloom stops being field-coloured — so it installs as the chevron sitting on a hard-edged opaque disc, which takes a third of a 32px icon (D112)",
 	"ui/target_ring.png":
 		"the middle is not empty: a warm bloom fills the ring, so the reticle covers the enemy it is supposed to mark, and where the same bloom spills across the four gaps it holds a wedge of background the matte cannot reach (D112)",
+	# Two of the twenty-one status symbols, and the only two that cannot be NAMED by
+	# somebody who is not told what they are. They were installed and unread until
+	# D116, so nothing had ever looked at them at the size they are drawn (D117).
+	"ui/sym_energy.png":
+		"the point of light is off-centre. The brief asks for an orb 'lit from within by one point of light at its CENTRE'; what came back is a solid white disc with a small dot up and to the right, which the eye reads as a specular highlight — so it is a billiard ball or a pearl, not something lit from inside. The silhouette is also a plain circle, which is the one shape a 21-symbol set cannot afford to spend on an abstraction",
+	"ui/sym_dexterity.png":
+		"the blow goes the wrong way. The brief asks for 'a tilted buckler GLANCING a blow aside' and the arrow points INTO the disc instead of away from it, so the picture says the hit landed — the opposite of what Dexterity does. The disc also reads as a plate or a frisbee rather than a shield, having no rim and no boss, and at 28px it is a blob with a spike on it",
 	"bg_abyssal_stair.png":
 		"no floor where the fight is: the paved ground starts ~75% down, below the 72% standing line, so its enemies stand in the tunnel mouth (D109)",
 	"bg_drowned_market.png":
 		"has FIGURES in it — robed shapes at the far end of the room — and the brief for this tier says an empty room, no figures, no creatures",
 	"bg_warrens.png":
 		"has the words THE WARRENS painted into the wall, which a rename or a translation turns into a lie",
+	"main_menu.jpg":
+		"off-style: it carries NO ink outline, and the ink outline is the first line of the style block. Measured as the share of pixels that are a local luminance minimum by >0.08 against both neighbours 2px out, it reads 1.2% against 2.8-12.2% across the twelve dungeons — 2.3x below even bg_crypt, the style bible and the most open room in the set. Flat vector silhouettes for the firs and the mountains, no outline anywhere. Its palette and value are NOT the problem and re-rolling for them would be chasing the wrong fault: mean luminance 20.2% sits inside the 20-35% band and saturation matches the dungeons. It is also the one .jpg in the tree, so the re-roll lands as main_menu.png and four references move with it (D114)",
 }
 
 ## Fixed assets: nothing in `resources/` implies these, so they are listed.
@@ -218,6 +225,13 @@ const VFX := [
 const SHELL := [
 	["fonts/display.ttf", "-", "Display face for titles and card names. Needs an OFL/SIL licence, recorded like the Kenney ones. THE GAME HAS NO CUSTOM FONT — everything is Godot's default.", Kind.LICENCE],
 	["fonts/body.ttf", "-", "Body face for rules text. Must stay legible at 12px, since card text shrinks to fit.", Kind.LICENCE],
+	## The title art was the one painting in the tree that no row named, so the sheet
+	## could not report it either way — the tier that owns the title screen listed the
+	## logo that sits on top of it, the boot splash before it and the cursor over it, and
+	## not the picture itself. That is why it stayed off the re-roll list while being the
+	## most-seen image in the game (D114).
+	["main_menu.jpg", "1280x720", "The title screen backdrop. `main_menu.gd` passes it to `UI.screen()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre.", Kind.SCENE,
+		"A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. One cold cyan flame in a stone bowl beside them is the only light source. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white."],
 	["ui/logo.png", "1600x480", "The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
 		"An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind."],
 	["ui/boot_splash.png", "1280x720", "Boot splash. None configured.", Kind.SCENE,
@@ -241,8 +255,10 @@ const SCENE_BG := [
 ## Pasted at the top of EVERY generation request, unchanged. The single biggest lever
 ## on coherence is not the model, it is that this block and one reference image are
 ## identical across 113 calls — the twelve backdrops agree with each other because
-## they were asked for the same way, and the four visual languages ART.md §1 diagnoses
-## are four different asks, not four different tools.
+## they were asked for the same way, and the five visual languages ART.md §1 diagnoses
+## are five different asks, not five different tools. `main_menu.jpg` is the proof and
+## the reason that count went from four to five: same tool as the twelve backdrops, one
+## different ask, and it does not carry an ink outline at all (D114).
 const PREAMBLE := """Painted dark-fantasy storybook illustration, in the style of the attached reference image.
 Match the reference for line weight, palette and lighting; do not match its subject or composition.
 LINE: every form carries a dark ink outline, weight ~2-3px at 1280x720.
@@ -450,7 +466,7 @@ func _cards() -> void:
 	_section("Tier 3 — card illustrations",
 		"One per effect family to start, shared by every card in it — NOT 100 unique paintings up front. This is the single highest-value tier in the file: the card face is two parts, and this is the top one — a real picture with its own band, not a wash behind words (D104). The 100 cards break down as below; unique art for the most-played can come later as `cards/<card_id>.png`, which is checked first.",
 		Kind.SCENE,
-		"A filled 4:3 rectangle, not a cutout. It is the picture band across the top of a card and it fills that band edge to edge: one clear shape, centred, read at 320x240 and shown about 3cm wide. The band is 4:3 to within half a percent, so almost nothing is cropped — use the whole rectangle. FOUR things are drawn on top of it, each on a dark rounded plate, and each needs a quiet corner under it: a cost numeral top left and an effect symbol top right, each about a quarter of the width and a fifth of the height; a damage numeral bottom left and a Block numeral bottom right, the same height but nearly half the width. The bottom two fifths also sit under a shadow that deepens to most of the way black at the very bottom edge, so put nothing down there that has to stay bright — weight the subject into the upper middle and let the lower edge fall away into dark. Each of these is shared by every card in its family, so paint the EFFECT, not any one card's fiction.")
+		"A filled 4:3 rectangle, not a cutout. It is the picture band across the top of a card and it fills that band edge to edge: one clear shape, centred, read at 320x240 and shown about 3cm wide. The band is 4:3 to within half a percent, so almost nothing is cropped — use the whole rectangle. LEAVE THE FOUR CORNERS QUIET AND EMPTY: top-left and top-right, each about a quarter of the width and a fifth of the height, and bottom-left and bottom-right, the same height but nearly half the width. Quiet means plain background — no object, no plate, no badge, and above ALL no numeral and no symbol. The FORBIDDEN line above applies hardest here: this one picture is shared by every card in its family, so a number painted into a corner is a WRONG number on twenty different cards, and it will sit under the real one the game draws there. The bottom two fifths also sit under a shadow that deepens to most of the way black at the very bottom edge, so put nothing down there that has to stay bright — weight the subject into the upper middle and let the lower edge fall away into dark. Paint the EFFECT the family shares, not any one card's fiction.")
 	# Discovered families, not a written-down list — so a new effect family shows up
 	# here by itself, and shows up as a failure until somebody says what it looks like.
 	var undescribed: Array[String] = []
@@ -569,9 +585,14 @@ func _accent(zone_id: String) -> String:
 ## problem ART.md §1 is about. A sheet of 113 self-contained paragraphs would each
 ## drift a little, and 113 little drifts is four visual languages again.
 func _emit_prompts() -> void:
+	# Absent files AND re-rolls, because both are a request somebody has to paste, and
+	# counting only the absent ones made this number smaller than the sheet below it:
+	# it read 56 while the tiers asked for 67, and rule 3's "identical N times" is the
+	# same number (D114). A re-roll is not cheaper than a first draft — it is the same
+	# prompt, sent again.
 	var todo := 0
 	for r in _rows:
-		if not bool(r[3]) and _generable(r[4]):
+		if _generable(r[4]) and (not bool(r[3]) or REDO.has(String(r[0]))):
 			todo += 1
 	print("<!-- GENERATED by tools/art_manifest.gd — do not edit by hand.")
 	print("     Regenerate: godot --headless --script tools/art_manifest.gd -- --prompts > ART_PROMPTS.md -->")
@@ -589,13 +610,18 @@ func _emit_prompts() -> void:
 	print("")
 	print("## The three rules that do the work")
 	print("")
-	print("1. **One generator, for everything.** The art already in the game came from two")
-	print("   different tools and it is visible: `main_menu.jpg` and the dungeons from one,")
-	print("   the scene and zone backdrops from another. Two tools is two dialects no")
-	print("   prompt reconciles. Pick one and finish the game with it.")
+	print("1. **One generator, for everything — but one generator is not enough.** The art")
+	print("   already in the game came from two different tools and it is visible: the")
+	print("   dungeons and `main_menu.jpg` from one, the scene and zone backdrops from")
+	print("   another. Pick one and finish the game with it. Then note what that alone does")
+	print("   NOT buy you: `main_menu.jpg` came off the SAME tool as the twelve dungeons and")
+	print("   is still a different dialect — flat vector silhouettes with no ink outline at")
+	print("   all, at a ninth the outline density of the rooms it shipped beside (D114). One")
+	print("   tool asked twice in two wordings is two dialects, which is what rule 2 is for.")
 	print("2. **Attach `%s` to every single request**, including the ones that look" % REFERENCE)
 	print("   nothing like it. It is the style bible (ART.md §2) and image-conditioning is a")
-	print("   stronger constraint on palette and line weight than any adjective.")
+	print("   stronger constraint on palette and line weight than any adjective. `main_menu.jpg`")
+	print("   is what a request without it looks like.")
 	print("3. **Paste the style block below unchanged, then one subject line.** Do not")
 	print("   improve it between images. Its job is to be identical %d times." % todo)
 	print("")
@@ -657,7 +683,20 @@ func _emit_prompt_section(s: Array) -> void:
 	if String(s[4]) != "":
 		print("%s" % String(s[4]))
 		print("")
-	if String(s[5]) != "":
+	# A sheet tier asked for as a sheet — but ONLY while the whole set is being asked
+	# for. A partial re-roll of a sheet tier must not be a sheet, and getting this
+	# wrong produced a page that contradicted itself: two bad glyphs out of
+	# twenty-one printed "Generate this tier as ONE image, not 2" directly above a
+	# paragraph describing a 5x5 grid of twenty-one cells (D117).
+	#
+	# It is not a formatting problem, it is the requirement inverting. These tiers are
+	# sheets because the set has to be mutually distinguishable AS SILHOUETTES and a
+	# request for one glyph is blind to the other six (D91). When nineteen of the
+	# twenty-one are already on disk, that blindness is gone — the survivors ARE the
+	# reference, and the job is to match them, not to redraw them. Asking for the
+	# sheet again would throw away nineteen good drawings to fix two.
+	var whole_tier: bool = rows.size() + redone.size() == count - blocked.size()
+	if String(s[5]) != "" and whole_tier:
 		# The table below IS the reading order, and `install_sheet.gd` derives the same
 		# order from the same tables — so the order asked for and the order installed
 		# cannot drift apart the way a restated list would.
@@ -667,6 +706,28 @@ func _emit_prompt_section(s: Array) -> void:
 		print("**Generate this tier as ONE image, not %d.** %s" % [
 			rows.size() + redone.size(), String(s[5])])
 		print("Cells in the order of the table below, left to right then top to bottom.")
+		print("")
+	elif String(s[5]) != "":
+		# Still ONE image, but a SMALL one, and the geometry is the partial count's
+		# rather than the tier's. Two things had to be true at once and the first
+		# attempt at this got the second wrong: the set must not be redrawn whole (the
+		# nineteen on disk are the reference, and a fresh sheet of twenty-one throws
+		# them away), AND the delivery has to stay a grid, because `install_sheet.gd`
+		# takes a grid and `cut_mono` is what these need. Emitting N individual pastes
+		# instead produced a page that asked for two images and then told the operator
+		# to install one sheet (D117).
+		#
+		# The grid mirrors `install_sheet.gd`'s own `ceil(sqrt(n))` so the doc and the
+		# tool cannot disagree about the shape; `--only` is what makes the tool size
+		# itself the same way.
+		var partial: Array = []
+		for r in rows + redone:
+			partial.append(String(r[0]).get_file().get_basename())
+		var pc: int = int(ceil(sqrt(float(partial.size()))))
+		var pr: int = int(ceil(float(partial.size()) / float(pc)))
+		print("**Generate these as ONE image, not %d.** A %dx%d grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is a RE-ROLL of %d of this tier's %d files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- %s <sheet.png> --only=%s`" % [
+			partial.size(), pc, pr, partial.size(), count - blocked.size(),
+			_sheet_set(String(s[5])), ",".join(partial)])
 		print("")
 	if not rows.is_empty():
 		print("**%d to generate%s.** Style block above, then one of these as the last line:" % [
@@ -705,6 +766,15 @@ func _emit_prompt_section(s: Array) -> void:
 					String(REDO[String(r[0])]).replace("|", "\\|")])
 		print("")
 		_prompt_table(redone)
+
+## The set label out of a sheet tier's own Install: command ("symbols", "intents",
+## "powers"). Lifted rather than restated: the label is `install_sheet.gd`'s first
+## positional argument and the tier note already carries it, so a second copy here is
+## the D34 habit at one line long.
+func _sheet_set(note: String) -> String:
+	var m := RegEx.create_from_string(r"install_sheet\.gd -- (\w+)")
+	var r := m.search(note)
+	return r.get_string(1) if r != null else "SET"
 
 ## The subject table. Carries the target SIZE per row, because the shape of the
 ## request is per FILE and not per tier: Tier 0 is five square-ish cutouts and one
