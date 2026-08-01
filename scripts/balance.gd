@@ -404,31 +404,70 @@ const RELIC_DIR := "res://resources/relics/"
 ## relic collection would outscale enemies exactly the way fusion once did.
 const RELIC_POWER_PER_RATIO := 50.0
 
+## What one card drawn is worth, in `CardData.power_value` units.
+##
+## NOT a new number. It is the figure `CardData.power_value` already charges for a
+## card's `draw`, and the figure `RelicData.triggered_power` already charges for
+## `Effect.DRAW`. This is the third place it appears, and the other two are literals
+## in files D124 was not scoped to touch — so it is named here, where tuning belongs,
+## and the duplication is recorded rather than left to be discovered. Two things
+## deriving a number from separate copies agree with each other and with nothing else
+## (D99), and this constant has already caused exactly that: see below.
+const DRAW_VALUE := 1.5
+
 static func relic_power(relics: Array) -> float:
 	var p := 0.0
 	for r in relics:
 		if r is RelicData:
 			p += r.flat_power()
+			# `extra_draw` is priced HERE, additively, and not as throughput (D124).
+			# `flat_power()` deliberately leaves it out because it used to be charged
+			# multiplicatively below; that is the half of the pair this decision moved.
+			#
+			# The rate is the one the game already uses everywhere else draw is
+			# charged: a card drawn is worth DRAW_VALUE, and a relic that draws every
+			# turn delivers one per turn of a fight. That makes Keen Lens ("draw 1
+			# every turn") price at 1 x 1.5 x 4 = 6.0, against Scholar's Lens ("draw 2
+			# every third turn") at 2 x 1.5 x 4/3 = 4.0 through `triggered_power` —
+			# the stronger relic priced higher, by the same arithmetic, which is what
+			# the two formulas failed to do while one was a multiplier.
+			p += float(r.extra_draw) * DRAW_VALUE * TARGET_NORMAL_TURNS
 	return p
 
-## Relics that grant energy or draw scale everything the deck does, so they act on
-## the ratio multiplicatively. Treating them as flat power undervalued them badly:
-## a +1 energy relic is a third more actions every turn of every fight.
+## Relics that grant ENERGY scale everything the deck does, so they act on the ratio
+## multiplicatively. Treating them as flat power undervalued them badly: a +1 energy
+## relic is a third more actions every turn of every fight.
+##
+## Draw used to be here too, at `1.0 + 0.08 * draw`, and D124 took it out — the same
+## effect was being charged by two formulas that disagreed by a factor of four.
+##
+## **Draw is not throughput in this game, and the two constants that decide it say so.**
+## `HAND_SIZE` is 5 against `MAX_ENERGY` 3, so an average hand already holds more
+## cards than the turn can pay for; the binding constraint is energy, and a sixth card
+## does not loosen it. What the extra card buys is SELECTION — a better pick out of a
+## bigger hand — which is a flat gain per turn, not a percentage of everything. The
+## multiplier said otherwise and the difference was not small: Keen Lens plus
+## Scholar's Lens took a Mid deck from ratio 6.60 to 7.22, **+9.4% enemy scaling**,
+## of which +0.53 was the multiplier and +0.08 the flat term.
+##
+## Measured, identical decks, only the two relics differing, 400 trials, 4 dungeons
+## on each of two carriers: at +9.4% the lenses cost their owner a mean of **12
+## points of run completion**, 8 cells of 8 down, worst at the Drowned Market
+## (73 -> 47). Priced power exceeded delivered power, which is the pillar violation in
+## the opposite direction to the usual one, and it had been open since D120 measured
+## it — deliberately, because the driver of the day played draw cards greedily and
+## could not have priced them. See D124 for the policy fix that came first.
 static func throughput_multiplier(relics: Array, equipped_power = null) -> float:
 	var energy := 0
-	var draw := 0
 	for r in relics:
 		if r is RelicData:
 			energy += r.bonus_energy
-			draw += r.extra_draw
 	# A power that hands back energy every turn scales everything the deck does, so
 	# it belongs here rather than in the additive term. Priced additively it read as
 	# +0.91 ratio — nearly triple what the identical effect costs on a relic.
 	if equipped_power != null:
 		energy += equipped_power.energy_gain
-	var m := float(MAX_ENERGY + energy) / float(MAX_ENERGY)
-	m *= 1.0 + 0.08 * float(draw)
-	return m
+	return float(MAX_ENERGY + energy) / float(MAX_ENERGY)
 
 ## Beyond the cap, scaling continues at a diminishing rate instead of stopping.
 ##
@@ -726,6 +765,18 @@ static func roster_pool(dungeon_data, tier: int) -> Array:
 ## cannot be allowed to change between one look and the next.
 const ISO_FAMILIES := ["swarm", "brute", "caster"]
 const ISO_FAMILY_DEFAULT := "brute"
+
+## How many distinct wanderer designs the floor draws. It lived in `iso_run.gd`, which
+## is the screen that USES it, and that was the right home while the screen was the
+## only thing that cared. It moved here when `tools/art_manifest.gd` had to list one
+## painted file per design: the manifest cannot preload a view script, because a view
+## reaches for the autoloads and `--script` runs have none, so the choice was a second
+## copy of the number or one that both can read. A second copy is the D34 bug, and its
+## shape here would be a painted `wander_4_s.png` that nothing ever loads.
+##
+## It sits beside `ISO_FAMILIES` because it is the same kind of fact: how many of a
+## thing the isometric floor knows about. `iso_run.gd` indexes with `design % this`.
+const ISO_WANDERERS := 4
 const ISO_BRUTE_HP := 1.0
 const ISO_BRUTE_FREQ := 0.9
 
