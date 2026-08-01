@@ -162,6 +162,8 @@ const REDO_CLEARED := [
 	"enemies/grave_sexton.png", "enemies/marrow_abbot.png", "enemies/ossuary_wretch.png",
 	"enemies/abyss_horror.png", "enemies/bellows_brute.png", "enemies/bellows_master.png",
 	"enemies/bog_lurker.png", "enemies/brood_mother.png", "enemies/brute.png",
+	"enemies/cinder_knight.png", "enemies/deep_warden.png", "enemies/drowned_thrall.png",
+	"enemies/ember_hound.png", "enemies/false_step.png", "enemies/forge_hound.png",
 ]
 
 ## The defect recorded against a file, or "" if there is none. Every reader goes
