@@ -6783,3 +6783,131 @@ The first attempt at the document half got the delivery format wrong — it emit
 individual pastes, producing a page that asked for two images and then told the operator to
 install one sheet. Caught by rendering the browser route and reading it, which is the only
 way it could have been caught.
+
+### D120 — The hand is capped at ten, and the simulator cannot see the build it affects
+
+Slay the Spire's rule, copied exactly: `Balance.MAX_HAND_SIZE = 10`; a draw into a full
+hand does not happen and **the card stays in the draw pile**. The cap is checked *before*
+the discard-reshuffle, deliberately — a refused draw must not be able to turn the discard
+pile over, which would be the same free deck cycle by another route.
+
+`hand` is appended to in exactly one place in all of `scripts/`, `draw_cards()`, and every
+one of the seven routes into hand goes through it: `start_turn`'s base draw, Keen Lens's
+`extra_draw`, Scholar's Lens on turn start, a card's own `eff_draw()`, Field Kit on cards
+played, Bone Charm on kill, and Foresight. Retained cards are not a draw and count against
+the cap next turn by construction.
+
+**"A card created into a full hand goes to the discard" was not implemented, because it has
+no subject** — nothing in this game creates a card into hand. An unreachable branch is a
+claim nothing can check, so `draw_cards()` says in a comment that it was considered and why
+it is absent, rather than leaving the next reader to wonder whether it was forgotten.
+
+The loss is surfaced: `Hand full at 10 — 3 draws stay in the pile.`, appended to the same
+returns `combat.gd` already logs. Slay the Spire shows nothing here, but a player with Keen
+Lens equipped whose draw silently stops happening is paying for a relic that quietly
+stopped working, and this game's register is legible consequence.
+
+## The rebalance was asked for, measured, and turned out not to be needed
+
+The instruction was to cap and then rebalance, on the reasoning that a cap must lower
+delivered power for draw builds while `power_ratio` keeps charging for it. **The
+measurement contradicts that, and the change was not made.**
+
+**A noise floor was established first**, by running `sim_balance.gd` twice on *unmodified*
+code from two trees — the sim does not seed its RNG. Two runs of identical code: mean +0.4
+pts across 34 cells, range −5 to +15, one cell ≥10 (Thorns/The Maw swinging 50→65 on
+fights-avoided alone).
+
+Baseline → capped, same 34 cells: **mean +0.0, range −6 to +3, zero cells ≥10.** The effect
+of the change is smaller than the instrument's own variance between identical runs. No
+dungeon changed which line of play wins.
+
+## The finding that matters more than the cap: the instrument is blind to the subject
+
+Instrumented counters in `draw_cards()` (added, measured, removed):
+
+| | shipped 12 profiles | a real draw build |
+|---|---|---|
+| draws refused by the cap | 716 of 1,029,286 = **0.07%** | 121,622 of 1,440,005 = **8.4%** |
+| turns with ≥1 refusal | **0.20%** | **35.5%** |
+| fights with ≥1 refusal | **0.81%** | **76.9%** |
+
+Ten is reachable and for a draw build it binds one turn in three. `tools/sim_balance.gd`
+cannot see any of it, because **no profile in it holds a draw relic** — not Keen Lens, not
+Scholar's Lens — and of the eleven cards that draw, two appear anywhere in the twelve decks.
+The tool this project trusts for every tuning decision was blind to the mechanic being
+changed, and would have reported "no effect" for a change that fires on three quarters of a
+draw build's fights.
+
+So the missing profiles were built (a temporary subclass overriding only `_profiles()`, run
+against both trees, deleted) with each one the report's own **Mid** deck plus something, so
+every row has a known 98-100% neighbour. **13 of 15 lens-bearing cells moved UP** (sign test
+p ≈ 0.007); six control cells scatter −4..+5. Draw-heavy at The Foundry 71→88, draw+retain at
+The Sunken Vault 45→61.
+
+**The cap did not lower delivered power. It raised it** — and the mechanism is visible in the
+turn counts, which fell (Draw-heavy Foundry 7.8 turns → 6.3). `_play_draw` plays every draw
+card it can afford every turn, so a smaller hand means fewer draw cards to burn energy on,
+which means shorter fights and less escalation damage. The greedy policy was over-drawing and
+the cap incidentally corrected it.
+
+Repricing draw *down* in `power_ratio` would therefore have been a straight buff fitted to a
+hypothesis the instrument contradicts, stacked on an already-neutral-to-positive change. That
+is precisely the D109 shape — an analytic retune with no measured need, which goes green on
+`test_balance.gd` and is wrong. `tests/run.sh` is 37/37, and per D109 that is not offered as
+evidence about balance.
+
+## A pre-existing pillar violation, found and deliberately not acted on
+
+Clean A/B, identical 17-card deck, only the two draw relics differing: Keen Lens + Scholar's
+Lens take `power_ratio` from 6.60 to 7.22 — **+9.4% enemy scaling** — and the build clears
+*less* (Sunken Vault 86% without them, 67% with; 90/75 after the cap). **Priced power exceeds
+delivered power for the draw relics**, a violation in the opposite direction to the usual one,
+pre-existing and unchanged by this decision.
+
+Not acted on, and the reason is the same instrument problem: the policy weakness that makes
+the cap look like a buff is the weakness that makes draw look worthless. Both readings come
+out of a simulator that plays draw cards greedily and gets nothing from card selection.
+**The next lever is `sim_balance.gd` itself** — put a draw profile with both lenses in the
+shipped table, stop `_play_draw` spending energy on draw it cannot use, and re-measure the
+relic price then. Repricing a relic against a policy that cannot play it is how D109 happened.
+
+## The nine-card hand was showing 7px names, and the threshold is the wrong shape
+
+D117 set `CARD_NAME_MIN_W` where the name-length curve crosses one name in ten: 34px. That
+left a **nine**-card hand at a 36px slot — just above the line — so the swap did not fire and
+its names rendered at **7px**, the exact defect the swap exists to prevent. Nine was always
+reachable, and the cap makes it the *modal* large hand: a card's own draw resolves while the
+card is still in hand, so playing a draw card out of nine leaves nine, not ten. Found by
+running the suite red, not by reasoning.
+
+37 closes that case. **It does not close the next one, and this is a patch on a wrong shape:**
+an eight-card hand has a 43px slot, above 37, and still cannot name 82 of the 100 cards at
+the floor. No single width can fix that, because the test is per-NAME — "Jab" needs 22px,
+"Something Worse" needs 119 — so every width is right for some names and wrong for the rest.
+The honest rule is a floor on the *rendered* size: swap when the fitter would have to take
+this card's own name below what can be read. That changes the five-card hand for long-named
+cards, which is a visible design decision rather than a bug fix, so it is recorded and not
+taken.
+
+## Two tests were already broken and the cap exposed one of them
+
+`tests/test_relic.gd`'s Bone Charm ON_KILL check was **vacuous and inverted before this
+change**: it measured the hand *before* appending the killer, so `hand.size() == hand_before`
+after the play arithmetically demanded the relic draw nothing — and it passed because a
+redundant second `start_turn()` drew the ten-card deck dry, leaving the hand at exactly ten,
+which the cap then refused on its own. Two independent reasons to pass and neither was the
+relic working. Both preconditions are asserted now instead of assumed.
+
+`tests/card_text_test.gd`'s eleven-card guard went red as designed. It was re-aimed rather
+than lowered: the supply arithmetic is still added up from content (5 + 1 + 2 + 4 − 1 +
+Foresight 1 = 12) and is now asserted to **exceed** the cap, so a relic retuned to nothing
+goes red instead of quietly measuring a smaller hand, with delivered asserted as
+`min(cap, supply)`. Foresight is equipped *because* of the cap — a card's draw counts against
+its own cap, so the only thing that fills a hand to exactly ten is a draw arriving with
+nothing in flight.
+
+The cap's own test covers the half a careless implementation gets wrong: not just that the
+draw is skipped, but that `draw_pile` is unchanged with the same card still on top, and that
+`discard_pile` did not grow. Proved non-vacuous three ways — discarding the refused card,
+`>` for `>=`, and dropping the notice — each watched red and restored.
