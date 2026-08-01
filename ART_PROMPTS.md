@@ -84,7 +84,7 @@ Nothing to generate here.
 
 ## Tier 2 — enemies
 
-Subject alone on a FLAT, EVEN field of a single colour that appears nowhere in the subject — that field is what `tools/install_cutouts.gd` mattes away, and it refuses any image whose border is not flat rather than cutting a hole in a painted wall. Full body, feet included, nothing cropped by the frame edge. No ground, no floor, no shadow, no pedestal, no background scenery. Facing the viewer, lit from above-front. One monster per image. Generate at 1024x1024 and let the installer scale down: the boss files are rendered at 1.34x the ordinary size and an upscaled boss is a soft boss.
+Subject alone on a FLAT, EVEN field of a single colour that appears nowhere in the subject — that field is what `tools/install_cutouts.gd` mattes away, and it refuses any image whose border is not flat rather than cutting a hole in a painted wall. Full body, feet included, nothing cropped by the frame edge. NOTHING BENEATH THE SUBJECT: no ground, no floor, no flagstones, no paving, no dirt, no platform, no plinth, no base, no shadow, no pool of light, no scenery. Its feet touch nothing and the flat field runs right up to the soles. Facing the viewer, lit from above-front, and the lower body and feet a shade darker than the head and shoulders. One monster per image. Generate at 1024x1024 and let the installer scale down: the boss files are rendered at 1.34x the ordinary size and an upscaled boss is a soft boss.
 
 **23 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
 

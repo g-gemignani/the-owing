@@ -7096,6 +7096,16 @@ drawing seen twice or they are two characters. Two sheets of eight beat one of s
 the failure is per-cell, and `--only` plus `--cells` installs the survivors without
 re-rolling the good ones.
 
+**Never tell the generator WHY a rule exists — it draws the reason.** Twelve enemy
+plates came back clean from a prompt that said "keep the lower body and feet darker".
+The next sheet said "keep the lower body and feet darker, *because these sit on a
+brightly lit stone floor*", and every one of the six came back standing on a lit stone
+floor. Same class as D101 and D119, and the third time this project has paid for it: a
+prompt is not a place to explain yourself, because every noun in it is a thing that can
+be drawn. The rule goes in the prompt; the reason goes in `ART_ASSETS.md`, which is the
+split D101 already established and which this violated by hand rather than through the
+manifest. Tier 2's recipe now carries the no-ground clause as a bare instruction.
+
 **On capture.** Autocropping a screenshot against a black overlay is right for a cutout,
 whose subject sits on a field the generator never paints pure black. It silently eats a
 *scene*: the boot splash falls away into darkness at its own edges and came back 1.616
