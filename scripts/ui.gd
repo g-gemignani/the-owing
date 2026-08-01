@@ -555,29 +555,43 @@ static func card_picker(host: Control, deck: Array, title: String,
 ##
 ##     slot 86px (a 5-card hand)   76 of 100 names at >= 14px
 ##     slot 52px (7 cards)         26
-##     slot 35px (9 cards)         13
+##     slot 43px (8 cards)         ~18
+##     slot 36px (9 cards)         13
 ##     slot 34px                   13
 ##     slot 33px                    9
-##     slot 29px (10 cards)         5
-##     slot 25px (11 cards)         1
+##     slot 30px (10 cards)         5
 ##
-## 34px is where that crosses one name in ten: at 33px only nine names in the game
-## can be shown at the floor, so the strip has stopped being a way to name a card and
-## become a place where names go to be too small to read. Below 34px of slot — a step
-## of 34 + 2*pad = 50px, which a hand of ten or more produces — the card shows its
-## cost and its effect symbol instead. A 25px strip cannot hold a name at a legible
-## size, but it holds a cost numeral and a ~28px glyph comfortably, and since D116
-## that glyph is painted art that states what the card actually does rather than the
-## 16x16 CC0 tile that read as noise. "Attack, costs 1" at a glance beats four
-## legible letters of a name; this is a better read of a crowded hand, not a
-## consolation prize for one.
+## Ten is the ceiling now (`Balance.MAX_HAND_SIZE`, D120), so the 25px slot an
+## eleven-card hand used to produce is unreachable and is no longer listed.
 ##
-## Deliberately a WIDTH and not "did the fitter end up under the floor": that test is
-## per-name, and it would fire on the 24 longest names in the 5-card hand the game
-## deals — a hand that has been reviewed and screenshotted at 10-16px names and is
-## not what this is about. The switch is still per-card, because the fan hands every
-## card its own visible width and only the topmost one gets the whole face.
-const CARD_NAME_MIN_W := 34.0
+## Below this much slot the card shows its cost and its effect symbol instead. A 30px
+## strip cannot hold a name at a legible size, but it holds a cost numeral and a ~28px
+## glyph comfortably, and since D116 that glyph is painted art that states what the
+## card actually does rather than the 16x16 CC0 tile that read as noise. "Attack,
+## costs 1" at a glance beats four legible letters of a name; this is a better read of
+## a crowded hand, not a consolation prize for one.
+##
+## The switch is per-card, because the fan hands every card its own visible width and
+## only the topmost one gets the whole face.
+##
+## **37, not the 34 this started at, and the number is a patch on a wrong shape.**
+## D117 set it where the curve crosses one name in ten. That left a NINE-card hand at
+## a 36px slot — just above the line — so the swap did not fire and its names rendered
+## at **7px**, the exact defect the swap exists to prevent. Nine was always reachable
+## and D120's cap made it the *modal* large hand, because a card's own draw resolves
+## while that card is still in hand, so playing a draw card out of nine leaves nine.
+## 37 closes that case, measured.
+##
+## It does not close the next one, and nobody should mistake this for finished: an
+## EIGHT-card hand has a 43px slot, above 37, and still cannot name 82 of the 100
+## cards at the floor. A single width threshold cannot fix that, because the thing
+## being tested is per-NAME — "Jab" needs 22px and "Something Worse" needs 119 — and
+## every width picked here will be right for some names and wrong for the rest.
+## The honest rule is a floor on the RENDERED size: swap when the fitter would have to
+## take this card's own name below what can be read. That changes the five-card hand
+## for long-named cards, which is a visible design decision and not a bug fix, so it
+## is written down here rather than taken (D120).
+const CARD_NAME_MIN_W := 37.0
 
 ## `live` is the CombatEngine when this card is being shown inside a fight, and
 ## null everywhere else. With it, the face and the hover both quote the damage and
