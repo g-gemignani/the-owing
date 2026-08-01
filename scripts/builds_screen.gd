@@ -7,7 +7,7 @@
 extends Control
 
 func _ready() -> void:
-	var col := UI.screen(self, "Builds")
+	var col := UI.screen(self, "Builds", "", "table")
 	UI.label(col, "Archetypes are spread across dungeons on purpose — no single place can finish one. Cards are only kept if you beat the boss or spend a rope.")
 	var list := UI.scroll(col)
 

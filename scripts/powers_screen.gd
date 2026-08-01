@@ -14,7 +14,10 @@ func _ready() -> void:
 	_refresh()
 
 func _build_ui() -> void:
-	var root := UI.screen(self, "Powers — one equipped per run, fires once every turn")
+	# `reliquary`, shared with the Relics screen: both are the list of what you have
+	# earned and cannot lose, so they are one place (D123).
+	var root := UI.screen(self, "Powers — one equipped per run, fires once every turn",
+		"", "reliquary")
 	info_label = Label.new()
 	root.add_child(info_label)
 	list_box = UI.scroll(root)
@@ -51,7 +54,14 @@ func _refresh() -> void:
 		list_box.add_child(row)
 
 		var art := TextureRect.new()
-		art.texture = Icons.tex(Icons.for_card(p))
+		# The painted sigil when one is installed, the procedural glyph when it is not.
+		# The slot was already here at 32px and already sized, so a painted set changes
+		# nothing about this row's layout — which is the whole reason the sigils were
+		# asked for as a set rather than as ten separate pictures. Falling BACK to
+		# `Icons` rather than replacing it keeps a half-painted set working, the same
+		# one-file-at-a-time contract the relics screen runs on (D121, D122).
+		var painted := PixelArt.power_art(pid)
+		art.texture = painted if painted != null else Icons.tex(Icons.for_card(p))
 		art.custom_minimum_size = Vector2(UITheme.px(32), UITheme.px(32))
 		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED

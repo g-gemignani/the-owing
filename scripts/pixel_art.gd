@@ -519,6 +519,35 @@ static func card_art(card_id: String, family: String = "") -> Texture2D:
 	_cache[key] = at
 	return at
 
+## Relic icons, one file per relic id, cut out by `tools/install_cutouts.gd`.
+##
+## Same contract as `enemy_art`: keyed by ID so a file lands on the relic it was
+## painted for, and null when it has not been painted yet — which is most of them,
+## and which the relics screen has to keep working through (D121).
+const RELIC_ART_DIR := "res://assets/art/relics/"
+
+static func relic_art(relic_id: String) -> Texture2D:
+	var p := RELIC_ART_DIR + relic_id + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
+## Power sigils, one file per power id, cut off the Tier 6b sheet by
+## `tools/install_sheet.gd`.
+##
+## Written at the same time as the ten sigils and for the reason D121 records: an
+## installer that reports "wrote 10, failed 0" says nothing about whether anything
+## LOADS them, and the relic icons sat correct-and-unreachable for exactly that gap.
+## Nothing in `scripts/` referenced `assets/art/powers/` before this (D122).
+const POWER_ART_DIR := "res://assets/art/powers/"
+
+static func power_art(power_id: String) -> Texture2D:
+	var p := POWER_ART_DIR + power_id + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
+
 ## The installed backdrop art for a zone, or null if it is missing.
 static func backdrop_texture(zone_id: String) -> Texture2D:
 	var p := BG_DIR + "bg_" + zone_id + ".png"
@@ -572,7 +601,14 @@ static func battle_art(dungeon_id: String) -> Texture2D:
 ## names are disjoint by construction: those are dungeon ids and these are the
 ## Tier 5c scene names. `tests/test_art.gd` asserts the two sets never collide,
 ## because the day a dungeon is called `shop` the merchant gets a fight arena.
-const SCENE_ART := ["shop", "rest", "event", "treasure", "victory", "defeat"]
+##
+## The last four are Tier 5d, the META screens, and they are in the same list rather
+## than a second one on purpose: this list is what `test_art.gd` walks to check the
+## collision and the 1280x720 install size, so an id kept out of it is an id nothing
+## checks. Four ids for twelve screens — the grouping and the argument for it are in
+## `META_BG` in `tools/art_manifest.gd` (D123).
+const SCENE_ART := ["shop", "rest", "event", "treasure", "victory", "defeat",
+	"table", "reliquary", "ledger", "world"]
 
 static func scene_art(scene: String) -> Texture2D:
 	var p := BATTLE_ART_DIR + "bg_" + scene + ".png"

@@ -12,7 +12,7 @@ func _ready() -> void:
 func _build() -> void:
 	for c in get_children():
 		c.queue_free()
-	var col := UI.screen(self, "Settings")
+	var col := UI.screen(self, "Settings", "", "ledger")
 
 	UI.label(col, "Display")
 	# The UI-scale slider used to live here. Removed with the zoom it drove: the

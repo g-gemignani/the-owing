@@ -24,14 +24,15 @@ var news: Label
 var stats: Label
 
 func _ready() -> void:
-	# No full-bleed painting here, and that is a decision rather than an omission.
-	# The deepest unlocked zone's establishing shot was tried as the backdrop and
-	# photographed against this: whichever zone it picks is a zone that already has a
-	# thumbnail in the list, so the screen showed the same picture twice, and at
-	# ZONE_DIM its bright band ran straight under the sealed rows' prose. The rows
-	# carry the art now — five paintings, more than any other screen has — and the
-	# tiling pattern goes back to being what a background is for (D96).
-	var col := UI.screen(self, "The World")
+	# D96 rejected a full-bleed painting here, and what it actually rejected was a ZONE
+	# SHOT: whichever zone that picks already has a thumbnail in the list below, so the
+	# screen drew the same picture twice, and at ZONE_DIM its bright band ran under the
+	# sealed rows' prose. Both halves of that objection are about reusing art composed
+	# for somewhere else. `bg_world.png` is painted for this screen — a gateway looking
+	# out, with nothing beyond the arch that resolves into a place, precisely so it
+	# cannot compete with the five establishing shots stood in front of it (D123). The
+	# rows still carry the art; this carries the room they are read in.
+	var col := UI.screen(self, "The World", "", "world")
 	# What happened since you were last here, kept apart from what is always true.
 	# These used to be one label, so the first-run explanation arrived welded to the
 	# gold count and wrapped onto a second line (D96).

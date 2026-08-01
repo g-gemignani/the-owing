@@ -8,7 +8,7 @@ var msg: Label
 var pending_new: int = -1
 
 func _ready() -> void:
-	var col := UI.screen(self, "Save Slots")
+	var col := UI.screen(self, "Save Slots", "", "ledger")
 	msg = UI.label(col, "Pick a slot to load, or start a new game in it.")
 	list = UI.scroll(col)
 	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/MainMenu.tscn"))

@@ -19,7 +19,16 @@ func _ready() -> void:
 func _build() -> void:
 	for c in get_children():
 		c.queue_free()
-	var col := UI.screen(self, "Paused")
+	# The one screen in the D123 pass that asked for no new painting. Pause is only
+	# reachable inside a run, so there is always a zone, and all five zone shots are
+	# installed — art already on disk that this screen was not reading, which is the
+	# D115 defect rather than a missing-file one. It is also the right picture: you
+	# stopped where you are, and where you are is that zone. D96's objection to a zone
+	# shot was that the Overworld already draws the same one as a thumbnail in the list
+	# under it; nothing on this screen draws a zone. `UI.screen()` falls back to the
+	# procedural pattern if there is no zone, so quitting to here without a run is safe.
+	var z := Balance.zone_of(GameState.dungeon_id)
+	var col := UI.screen(self, "Paused", "", "", false, z.id if z != null else "")
 	var dd := GameState.dungeon_data()
 	UI.label(col, "%s    HP %d/%d    %d gold banked" % [
 		dd.name if dd != null else "No dungeon", GameState.hp, GameState.max_hp, MetaState.gold])

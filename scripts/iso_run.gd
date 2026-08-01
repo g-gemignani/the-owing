@@ -87,7 +87,9 @@ const SPRITE_H := {
 	# fact that she is drawn last and so never occluded.
 	"hero": 1.95,
 }
-const WANDER_DESIGNS := 4
+## Wanderer design count lives in `Balance.ISO_WANDERERS` — the manifest lists one
+## painted file per design and cannot preload this script to read it (D122).
+const WANDER_DESIGNS := Balance.ISO_WANDERERS
 
 var art := {}          ## role -> Texture2D, or absent
 ## Which way the hero is facing, in the only two facings her art has: toward the camera

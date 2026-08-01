@@ -14,7 +14,8 @@ func _build_ui() -> void:
 	# UI.screen rather than a hand-rolled margin+VBox: it is the thing that installs
 	# the backdrop, so a screen that scaffolds itself is a screen on flat black.
 	var root := UI.screen(self,
-		"Collection — fusing spends copies AND gold; both prices rise with level")
+		"Collection — fusing spends copies AND gold; both prices rise with level",
+		"", "table")
 
 	info_label = Label.new()
 	root.add_child(info_label)

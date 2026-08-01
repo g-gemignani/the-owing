@@ -2,10 +2,8 @@
 ## screen has to think about slots.
 extends Control
 
-const TITLE_ART := "res://assets/art/main_menu.jpg"
-
 func _ready() -> void:
-	var col := UI.screen(self, "DECKCRAWL", TITLE_ART)
+	var col := UI.screen(self, "DECKCRAWL", PixelArt.title_art_path())
 	# Keep the menu inside the scrim. Buttons centre their text by default, which
 	# would drop every label into the middle of the picture where the backdrop is
 	# brightest and no longer covered.

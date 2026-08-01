@@ -10,7 +10,7 @@ var slot := 0
 
 func _ready() -> void:
 	slot = GameState.pending_new_slot
-	var col := UI.screen(self, "Choose a Beginning")
+	var col := UI.screen(self, "Choose a Beginning", "", "table")
 	UI.label(col, "Twelve cards. Each set leans a different way — you are not locked in, but you are pointed somewhere.")
 	var list := UI.scroll(col)
 

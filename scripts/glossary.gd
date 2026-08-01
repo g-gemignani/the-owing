@@ -4,7 +4,7 @@
 extends Control
 
 func _ready() -> void:
-	var col := UI.screen(self, "How This Works")
+	var col := UI.screen(self, "How This Works", "", "ledger")
 	var list := UI.scroll(col)
 
 	_section(list, "Combat")

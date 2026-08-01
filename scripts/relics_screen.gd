@@ -74,11 +74,24 @@ const HEAD_LEADING := 30.0
 ## two states, not an absolute floor.
 const UNFOUND_DIM := 0.32
 
+## How big a relic icon draws in its row, in unscaled px. Sized against the ROW, not
+## against the 128px the file ships at: an HBox is as tall as its tallest child, so the
+## icon sets the grid's pitch the moment it exceeds the name line, and ten rows plus
+## five headers have to clear 720px with no scrollbar — the one virtue the empty state
+## has, and what HEAD_LEADING above is tuned for.
+##
+## Measured, not picked, by rendering the screen and reading the scrollbar column:
+## 34 and 26 both scroll (the Legendary group falls off the bottom), 22 does not. So
+## 22 is the ceiling, and the art is authored at 128 so it stays sharp at the 2x and
+## 3x the canvas scales to on a larger display (D121).
+const ICON := 22.0
+
+
 func _ready() -> void:
 	# UI.screen rather than a hand-rolled margin+VBox: it is the thing that installs
 	# the backdrop, so a screen that scaffolds itself is a screen on flat black
 	# (D95). This one already called it — checked, not assumed.
-	var col := UI.screen(self, "Relics")
+	var col := UI.screen(self, "Relics", "", "reliquary")
 
 	# One pass builds the groups AND the count, so the number in the header is not a
 	# second sum of the same thing (the mistake `collection.gd` documents), and the
@@ -150,10 +163,39 @@ func _ready() -> void:
 ## — so the list reads as filled-in versus empty at a glance, without a "locked"
 ## badge repeated two dozen times.
 func _slot(grid: GridContainer, r: RelicData, owned: bool) -> void:
+	# The icon goes in a row BESIDE the text, which is the shape this screen was
+	# written for — "when the thirty paintings land they go in the cell beside the
+	# name and nothing else here has to move" (D116). A relic with no art yet adds
+	# no icon and no gap, so a half-painted set is a list with pictures appearing in
+	# it rather than a list of holes: the same one-file-at-a-time contract the UI kit
+	# runs on. Without this the icons were installed, correct, and unreachable — no
+	# code in `scripts/` read `assets/art/relics/` at all (D121).
+	var row := HBoxContainer.new()
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.custom_minimum_size.x = UITheme.px(SLOT_WIDTH)
+	row.add_theme_constant_override("separation", UITheme.sep(8))
+	grid.add_child(row)
+
+	var art := PixelArt.relic_art(r.id)
+	if art != null:
+		var pic := TextureRect.new()
+		pic.texture = art
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.custom_minimum_size = Vector2.ONE * UITheme.px(ICON)
+		pic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		# An unheld relic's icon recedes the same way its name does — by ink, so the
+		# two states of a slot stay one decision rather than two. `modulate` is the
+		# right tool HERE and not on the label: this is a picture, not text over a
+		# backdrop, so there is nothing behind it for translucency to read against.
+		if not owned:
+			pic.modulate = Color(1, 1, 1, 1.0 - UNFOUND_DIM)
+		row.add_child(pic)
+
 	var cell := VBoxContainer.new()
 	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	cell.custom_minimum_size.x = UITheme.px(SLOT_WIDTH)
-	grid.add_child(cell)
+	row.add_child(cell)
 
 	var name_label := Label.new()
 	name_label.text = r.name

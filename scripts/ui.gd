@@ -669,7 +669,14 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		win.add_child(pic)
 		if painted:
 			pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
-			pic.set_anchors_preset(Control.PRESET_FULL_RECT)
+			# `set_anchors_AND_OFFSETS_preset`, and the difference is the whole
+			# illustration. `set_anchors_preset` leaves the offsets alone by default,
+			# which means it preserves the control's CURRENT rect — and a control
+			# created two lines ago has a rect of 0x0, so it anchors to the full band
+			# and stays zero-sized forever. The bed and the scrim either side of this
+			# call escape it only because they are preset BEFORE `add_child`, when
+			# there is no parent rect to preserve against (D121).
+			pic.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		else:
 			# An EMBLEM in the band, not a picture filling it. KEEP_ASPECT_CENTERED
 			# scales to FIT the box it is given, so handing the fallback the whole band

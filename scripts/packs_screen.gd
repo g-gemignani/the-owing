@@ -19,7 +19,7 @@ var result_box: VBoxContainer
 var info_label: Label
 
 func _ready() -> void:
-	var col := UI.screen(self, "Packs")
+	var col := UI.screen(self, "Packs", "", "table")
 	info_label = UI.label(col, "")
 	list_box = UI.scroll(col)
 	result_box = VBoxContainer.new()

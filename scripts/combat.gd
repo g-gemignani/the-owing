@@ -73,6 +73,8 @@ var power_btn: Button
 var menu_btn: Button
 var place_label: Label
 var power_ring: Panel
+var power_art: TextureRect
+var power_cost: Label
 ## The two bottom corners the hand has to stay out of. Kept as members so the fan
 ## can measure them instead of guessing: a hardcoded reserve was wrong the moment a
 ## Label's BOX turned out wider than its text, and would be wrong again at any other
@@ -316,6 +318,25 @@ func _build_ui() -> void:
 	ring.set_anchors_preset(Control.PRESET_FULL_RECT)
 	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	orb.add_child(ring)
+	# The sigil goes UNDER the button, not on it. A Button's `icon` is laid out against
+	# its text and would fight the cost for the same box; a TextureRect behind a flat
+	# button lets the picture own the orb and the numeral sit on top of it.
+	#
+	# Inset, because the ring is a 3px border on a 999-radius corner: art taken to the
+	# full rect corners gets clipped by the circle at four points, and a sigil with its
+	# edges bitten off reads as a rendering fault rather than as a round icon.
+	power_art = TextureRect.new()
+	power_art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var inset := UITheme.px(POWER_ART_INSET)
+	power_art.offset_left = inset
+	power_art.offset_top = inset
+	power_art.offset_right = -inset
+	power_art.offset_bottom = -inset
+	power_art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	power_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	power_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	orb.add_child(power_art)
+
 	power_btn = Button.new()
 	power_btn.flat = true
 	power_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -323,6 +344,26 @@ func _build_ui() -> void:
 	power_btn.add_theme_font_size_override("font_size", int(UITheme.font() * 0.85))
 	power_btn.pressed.connect(_on_power_pressed)
 	orb.add_child(power_btn)
+
+	# The cost is its own Label rather than the Button's text, because a Button has no
+	# vertical text alignment — only `alignment` (horizontal) and `vertical_icon_
+	# alignment`, which moves the ICON and left "1E" sitting across the middle of the
+	# shield. Anchored to the bottom of the orb, it sits over the ring's dark rim
+	# instead of over the emblem's face.
+	power_cost = Label.new()
+	power_cost.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	power_cost.offset_top = -UITheme.px(POWER_COST_BAND)
+	power_cost.offset_bottom = -UITheme.px(6)
+	power_cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	power_cost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	power_cost.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Outlined, not boxed: the sigils are ten different colours and a numeral that only
+	# works on the dark ones is a numeral that fails on Scythe and Foresight. An outline
+	# reads on any of them without putting a plate over the art (D96's rule, applied to
+	# ink rather than to a scrim).
+	power_cost.add_theme_color_override("font_outline_color", Color(0.05, 0.04, 0.07, 0.95))
+	power_cost.add_theme_constant_override("outline_size", 6)
+	orb.add_child(power_cost)
 	power_ring = ring
 
 	# End Turn is pressed once a turn and never in a hurry. A corner button.
@@ -903,9 +944,42 @@ func _build_slot(i: int) -> Control:
 	slot.set_meta("hit", hit)
 	return slot
 
+## How much of the frame, at EACH side, the enemies are kept out of.
+##
+## This exists because two decisions were in conflict and only one of them knew it.
+## The Tier 5 brief in `tools/art_manifest.gd` asks every dungeon backdrop for
+## "foreground framing elements at the left and right thirds" — that skeleton is what
+## makes twelve rooms feel like one dungeon, and it is deliberate. The layout below
+## used to spread enemies over the FULL width at `vp.x * (k+1)/(n+1)`, which puts two
+## enemies at exactly x=1/3 and x=2/3: the two columns the brief fills with pillars,
+## stall fronts and arch bases. So a pair of enemies stood on the scenery rather than
+## on the floor, and because `PixelArt.STAND_LINE` is a single number for the whole
+## frame, they stood at the height of the CENTRE floor while the visible ground under
+## them started lower. That reads as hovering, and it was reported as one (D122).
+##
+## Only the flanks were ever wrong, which is why it went unseen: one enemy sits dead
+## centre and is fine, and `tests/test_art.gd` reduces each backdrop to one floor
+## number and says in its own comments that it is confidently wrong about half the
+## time. `tools/screenshots.gd` grew a `CombatGroup` capture for this.
+##
+## 0.20 keeps the whole cast inside the middle 60% — for n=2 that is x=40% and 60%,
+## both over open corridor in all twelve rooms. It is NOT 1/3: the framing elements
+## start at the thirds, so standing on the line is standing on their inside edge.
+const STAGE_INSET := 0.20
+
+## How far the power sigil is held back from the orb's edge, in unscaled px. The ring
+## is a circle drawn as a 999-radius corner on a square Panel, so art taken to the full
+## rect loses its four corners to the curve; this is the margin that keeps the emblem
+## inside the circle instead of clipped by it.
+const POWER_ART_INSET := 14.0
+
+## The band at the bottom of the orb the cost numeral sits in, in unscaled px.
+const POWER_COST_BAND := 30.0
+
 ## Where each living enemy stands. Feet on `PixelArt.STAND_LINE`, spread across the
-## frame, and the flanks pushed slightly back — the backdrops are one-point
-## corridors, so a dead-flat row of equal sizes reads as pasted-on.
+## middle of the frame (see `STAGE_INSET`), and the flanks pushed slightly back — the
+## backdrops are one-point corridors, so a dead-flat row of equal sizes reads as
+## pasted-on.
 func _place_slots(living: Array[int]) -> void:
 	var vp := get_viewport_rect().size
 	# On the floor and near the viewer, not on the horizon: standing them where the
@@ -941,7 +1015,8 @@ func _place_slots(living: Array[int]) -> void:
 			1.0 - absf(float(k) - float(n - 1) * 0.5) / maxf(1.0, float(n - 1) * 0.5))
 		var w := body * s
 		var h := body * s
-		var cx := vp.x * float(k + 1) / float(n + 1)
+		var cx := vp.x * (STAGE_INSET + (1.0 - 2.0 * STAGE_INSET)
+			* float(k + 1) / float(n + 1))
 		slot.position = Vector2(cx - w * 0.5, floor_y - h - text_h)
 		slot.size = Vector2(w, h + text_h)
 
@@ -1140,16 +1215,45 @@ func _place_hand() -> void:
 ## The power button states the whole rule: what it does, what it costs, and — when
 ## it cannot be fired — WHY. "Used this turn" and "not enough energy" are different
 ## problems and a greyed button that says neither teaches nothing.
+##
+## **The NAME is on hover; the sigil and the cost are on the orb.** The name used to be
+## printed across the orb, which was the only thing there to look at while `powers/`
+## was empty. Now that the ten sigils are painted (Tier 6b), the picture is the faster
+## read — and a word set at 0.85x font inside a 112px circle was never a good one.
+##
+## The cost stays visible and does NOT move to the tooltip with the name, which is the
+## one place this departs from "picture only". It is not a label, it is the number the
+## turn is planned against: energy is spent on cards from the same pool, so "can I
+## still afford this" is asked every turn and hovering to find out would be a worse
+## screen, not a cleaner one. The ring already dims when the power cannot be fired, but
+## dimming says "no" without saying "how much".
 func _refresh_power() -> void:
 	var p := eng.power
 	if p == null:
 		power_btn.visible = false
 		power_ring.visible = false
+		power_art.visible = false
 		return
 	power_btn.visible = true
 	power_ring.visible = true
-	power_btn.text = "%s\n%s" % [p.name, "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()]
+	# Falls back to the name when a sigil has not been painted, rather than to an empty
+	# orb: the same one-file-at-a-time contract the rest of the art runs on (D121).
+	var sigil := PixelArt.power_art(p.id)
+	power_art.texture = sigil
+	power_art.visible = sigil != null
+	var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
+	# With a sigil the Button carries no text at all — the picture is the button, the
+	# numeral is the Label below, and the name is on hover.
+	power_btn.text = "" if sigil != null else "%s\n%s" % [p.name, cost]
+	power_cost.text = cost if sigil != null else ""
+	power_cost.visible = sigil != null
 	power_btn.disabled = not eng.can_use_power()
+	# The sigil goes with the ring when the power is spent. Without this the orb stayed
+	# bright and only its thin border dimmed, which at 112px is a state you have to
+	# hunt for.
+	power_art.modulate = Color(1, 1, 1) if not power_btn.disabled \
+		else Color(0.55, 0.55, 0.6, 0.65)
+	power_cost.modulate = power_art.modulate
 	# spent or unaffordable reads on the ring, not only in the tooltip: the orb is
 	# small, so its STATE has to be visible from the shape rather than the words
 	power_ring.modulate = Color(1, 1, 1) if not power_btn.disabled else Color(0.5, 0.5, 0.55, 0.7)

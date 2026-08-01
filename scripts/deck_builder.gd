@@ -38,7 +38,7 @@ func _build_ui() -> void:
 			dd.name if dd != null else "Dungeon", GameState.dungeon]
 	# UI.screen rather than a hand-rolled margin+VBox: it is the thing that installs
 	# the backdrop, so a screen that scaffolds itself is a screen on flat black.
-	var root := UI.screen(self, title)
+	var root := UI.screen(self, title, "", "table")
 
 	info_label = Label.new()
 	root.add_child(info_label)
