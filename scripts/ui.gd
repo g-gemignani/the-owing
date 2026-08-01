@@ -285,11 +285,44 @@ static func label(parent: Node, text: String, wrap: bool = true) -> Label:
 	parent.add_child(l)
 	return l
 
+## How wide a button is when it is in a column and nothing narrows it (D116).
+##
+## Read it the way `UITheme.button_height` is read: a designed size, not a ceiling.
+## A label that needs more room still takes more room, so no text is ever clipped to
+## hold this number — which is why it is a minimum and not the max width Godot does
+## not have.
+##
+## Chosen by photographing the whole set at 1280x720 twice, at 480 and at 320. Both
+## fix the banner; 320 is the better `Back` and the worse menu — the title screen's
+## `Continue` line is about 335px of text, so at 320 it came out wider than the four
+## buttons under it and the one column in the game that was deliberately sized went
+## ragged. At 480 every screen's column is uniform and the title menu is within a
+## couple of dozen pixels of the 512 it has always been (its column is pinned to
+## `MENU_WIDTH` to keep the labels on the scrim). The game's own reference for what a
+## button looks like is the overworld's nav rows and the packs' `Open`, which sit at
+## 100–200 because a row's neighbours size them; a column has no neighbours, so it
+## needs this.
+const BUTTON_WIDTH := 480.0
+
 static func button(parent: Node, text: String, on_press: Callable = Callable(),
 		height: float = 42.0) -> Button:
 	var b := Button.new()
 	b.text = text
 	b.custom_minimum_size = Vector2(0, UITheme.button_height(height))
+	# A button in a COLUMN has nothing beside it to take the slack, and a
+	# VBoxContainer hands its full width to whatever it holds — so `Back` came out
+	# 1244px wide on Relics, Packs, Powers, Glossary, Collection and the shop, which
+	# made the least important control on each screen the largest thing on it. In a
+	# ROW the neighbours already do this job (the overworld's nav bars, the packs'
+	# `Open`, combat's `Menu`), so rows are left exactly as they are.
+	#
+	# Set BEFORE the caller gets the button back, deliberately: a screen that wants
+	# another width writes over this line instead of passing a flag. `packs_screen`
+	# already does it for the 140px `Open`, and a parameter nobody sets is a
+	# parameter that will be set wrongly once.
+	if parent is VBoxContainer:
+		b.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+		b.custom_minimum_size.x = UITheme.px(BUTTON_WIDTH)
 	if on_press.is_valid():
 		b.pressed.connect(on_press)
 	else:
@@ -493,7 +526,11 @@ static func card_picker(host: Control, deck: Array, title: String,
 
 	var cancel := Button.new()
 	cancel.text = "Never mind"
-	cancel.custom_minimum_size = Vector2(0, UITheme.px(40))
+	# Built by hand rather than through `button()` because it carries its own sound,
+	# so it needs the column rule of D116 restated: this is a lone control in a
+	# full-width VBox, and left alone it draws a 1244px bar across the picker.
+	cancel.custom_minimum_size = Vector2(UITheme.px(BUTTON_WIDTH), UITheme.px(40))
+	cancel.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	cancel.pressed.connect(func():
 		Audio.play("ui_back")
 		veil.queue_free())
