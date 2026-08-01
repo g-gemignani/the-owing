@@ -69,21 +69,16 @@ enum Kind {
 ## hole in the floor. All twenty-three were repainted in D122 and it went out with them,
 ## same as REDO_TILED did.
 
-## The same defect, on the thirty-five combat plates. `tools/gen_enemy_art.gd` filled a
-## directory that had been empty since the painted backdrops landed, and it was the
-## right call at the time — it replaced 41 unlabelled 16x16 tiles assigned by sort
-## order, where a boss was whichever tile the index fell on. But what it draws is a
-## SILHOUETTE, and a silhouette is a placeholder that reads as finished: measured at
-## luma 0.17-0.23 with an empty interior, so a Cultist and an Ember Hound are two dark
-## shapes on a painted room, and the fight screen is the one the game is mostly spent on.
-##
-## This is also the case the REDO table was built for and nearly missed. Every one of
-## the thirty-five EXISTS, so Tier 2 printed "all 35 present" and the prompt sheet said
-## nothing about them — "the moment something lands, correct or not, the sheet stops
-## mentioning it and the defect has nowhere to be recorded except a person's memory".
-## `gen_enemy_art.gd` stays as the fallback: `PixelArt.enemy_art()` prefers a painted
-## file, so these can be replaced one at a time (D122).
-const REDO_SILHOUETTE := "a procedural SILHOUETTE from `tools/gen_enemy_art.gd`, not a painting: measured luma 0.17-0.23 with a flat empty interior behind a one-sided rim light, so at the 240px it draws at, in front of a painted room, it is a dark shape with no face, no weapon and no material. It was the right placeholder — it replaced 41 unlabelled 16x16 tiles handed out by sort order — but it reads as finished art and is not (D122)"
+## A `REDO_SILHOUETTE` constant sat here, held by all thirty-five combat plates: they
+## were procedural silhouettes out of `gen_enemy_art.gd`, flat interiors behind a
+## one-sided rim light, and they counted as PRESENT so Tier 2 printed "all 35 present"
+## and the prompt sheet said nothing about them. All thirty-five were painted in D122
+## and it went out with them, the same way REDO_TILED and REDO_ISO did. The measure that
+## caught it is worth keeping: mean luminance does NOT separate a painting from a
+## silhouette here (the brief wants these dark-weighted), and neither does plain interior
+## variance (the rim is a big swing). Erode the mask first, then measure — ember_hound
+## went 0.024 -> 0.093, brute 0.052 -> 0.086.
+
 
 const REDO := {
 	# `ui/target_ring.png` was here — a warm bloom filled the ring, so the reticle
@@ -140,33 +135,16 @@ const REDO := {
 ## out. A key here is only ever as wide as the defect actually is, and the defect
 ## shrinks — which is the same thing `REDO` itself is for, one level up.
 const REDO_DIRS := {
-	"enemies/": REDO_SILHOUETTE,
 }
 
-## Files a `REDO_DIRS` rule no longer applies to, because they have been repainted.
-##
-## A family of thirty-five is not repainted in one sitting, and halfway through, both
-## available answers are wrong: leave the directory rule alone and the sheet asks for
-## twelve files that are already done, or drop it and it stops asking for the
-## twenty-three that are not. Narrowing the key worked for `iso/` because the two halves
-## happened to have different prefixes; these do not, and inventing a prefix that only
-## exists to encode progress would be worse than saying it plainly.
-##
-## So this is the progress record, and it is the SHORTER of the two lists on purpose —
-## it starts empty, grows as re-rolls land, and the moment it reaches the whole family
-## the `REDO_DIRS` line comes out and this goes with it. The same shrink-to-nothing the
-## table above is built around (D122).
-const REDO_CLEARED := [
-	# Tier 2, painted in D122. Order is the sheet they came in on, three per row.
-	"enemies/bone_picker.png", "enemies/crypt_hound.png", "enemies/cultist.png",
-	"enemies/grave_sexton.png", "enemies/marrow_abbot.png", "enemies/ossuary_wretch.png",
-	"enemies/abyss_horror.png", "enemies/bellows_brute.png", "enemies/bellows_master.png",
-	"enemies/bog_lurker.png", "enemies/brood_mother.png", "enemies/brute.png",
-	"enemies/cinder_knight.png", "enemies/deep_warden.png", "enemies/drowned_thrall.png",
-	"enemies/ember_hound.png", "enemies/false_step.png", "enemies/forge_hound.png",
-	"enemies/fungal_host.png", "enemies/grave_moth.png", "enemies/hexer.png",
-	"enemies/last_vendor.png", "enemies/market_ghoul.png", "enemies/marrow_priest.png",
-]
+## A `REDO_CLEARED` list lived here while Tier 2 was half repainted — the thirty-five
+## enemy plates could not be done in one sitting, and midway both available answers were
+## wrong: leave the directory rule alone and the sheet asks for files already finished,
+## drop it and it stops asking for the ones that are not. It started empty, grew as the
+## six sheets landed, and went out with the `REDO_DIRS` line when it reached all
+## thirty-five (D122). Bring it back the same way the next time a family is repainted
+## across more than one session.
+
 
 ## The defect recorded against a file, or "" if there is none. Every reader goes
 ## through this rather than indexing `REDO`, so the directory rule cannot be honoured
@@ -175,8 +153,6 @@ const REDO_CLEARED := [
 func _redo(rel: String) -> String:
 	if REDO.has(rel):
 		return String(REDO[rel])
-	if rel in REDO_CLEARED:
-		return ""
 	for prefix in REDO_DIRS:
 		if rel.begins_with(String(prefix)):
 			return String(REDO_DIRS[prefix])

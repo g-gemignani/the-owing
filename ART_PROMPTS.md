@@ -9,7 +9,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**12 files can be generated.** The rest of the list cannot, and the sections below
+**1 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -28,7 +28,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 12 times.
+   improve it between images. Its job is to be identical 1 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -84,25 +84,7 @@ Nothing to generate here.
 
 ## Tier 2 — enemies
 
-Subject alone on a FLAT, EVEN field of a single colour that appears nowhere in the subject — that field is what `tools/install_cutouts.gd` mattes away, and it refuses any image whose border is not flat rather than cutting a hole in a painted wall. Full body, feet included, nothing cropped by the frame edge. NOTHING BENEATH THE SUBJECT: no ground, no floor, no flagstones, no paving, no dirt, no platform, no plinth, no base, no shadow, no pool of light, no scenery. Its feet touch nothing and the flat field runs right up to the soles. Facing the viewer, lit from above-front, and the lower body and feet a shade darker than the head and shoulders. One monster per image. Generate at 1024x1024 and let the installer scale down: the boss files are rendered at 1.34x the ordinary size and an upscaled boss is a soft boss.
-
-**11 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
-
-*All 11 have the same defect: a procedural SILHOUETTE from `tools/gen_enemy_art.gd`, not a painting: measured luma 0.17-0.23 with a flat empty interior behind a one-sided rim light, so at the 240px it draws at, in front of a painted room, it is a dark shape with no face, no weapon and no material. It was the right placeholder — it replaced 41 unlabelled 16x16 tiles handed out by sort order — but it reads as finished art and is not (D122).*
-
-| save as | size | subject |
-|---|---|---|
-| `enemies/maw_tender.png` | 256x256 | **Maw Tender.** Appears in: The Abyssal Stair, The Maw. Tanky — draw it heavy. In a fight it attacks, empowers itself and defends. |
-| `enemies/mycelial_lord.png` | 512x512 | **The Mycelial Lord.** The BOSS of The Fungal Deep. Tanky — draw it heavy. In a fight it makes you vulnerable, attacks and defends. |
-| `enemies/pale_acolyte.png` | 256x256 | **Pale Acolyte.** Appears in: The Sunken Vault, The Drowned Market. In a fight it attacks, makes you vulnerable and empowers itself. |
-| `enemies/plague_rat.png` | 256x256 | **Plague Rat.** Appears in: The Warrens, The Rot Gardens. Fights in groups of 2-3, so it must read at small size. Fragile — draw it slight. In a fight it attacks. |
-| `enemies/rat_swarm.png` | 256x256 | **Rat.** Appears in: The Warrens. Fights in groups of 2-3, so it must read at small size. Fragile — draw it slight. In a fight it attacks. |
-| `enemies/rot_priest.png` | 256x256 | **Rot Priest.** Appears in: The Fungal Deep, The Rot Gardens. In a fight it makes you vulnerable, attacks and weakens you. |
-| `enemies/slag_wretch.png` | 256x256 | **Slag Wretch.** Appears in: The Foundry, The Ember Road, The Slag Pits. Fights in groups of 1-2, so it must read at small size. Hits hard. In a fight it attacks. |
-| `enemies/spore_thing.png` | 256x256 | **Spore Thing.** Appears in: The Fungal Deep, The Rot Gardens. Fights in groups of 1-2, so it must read at small size. In a fight it attacks. |
-| `enemies/the_gardener.png` | 512x512 | **The Gardener.** The BOSS of The Rot Gardens. Tanky — draw it heavy. In a fight it attacks, makes you vulnerable and defends. |
-| `enemies/tomb_guard.png` | 256x256 | **Tomb Guard.** Appears in: The Sunken Vault. Tanky — draw it heavy. In a fight it attacks and defends. |
-| `enemies/warden.png` | 512x512 | **The Forge-Warden.** The BOSS of The Foundry. In a fight it attacks, defends and empowers itself. |
+Nothing to generate here — all 35 present.
 
 ## Tier 3 — card illustrations
 
