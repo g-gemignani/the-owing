@@ -6,8 +6,12 @@
 ## off mid-word. Nothing in the suite could see it: the scene booted, the buttons
 ## worked, only the words were missing.
 ##
-## The hand is measured TWICE, at two sizes: the five combat deals, and the eleven
-## real play reaches with two relics and one fused draw card (D116). `Balance.HAND_SIZE`
+## The hand is measured TWICE, at two sizes: the five combat deals, and the largest
+## hand real play reaches with two relics, a fused draw card and a power (D116). Until
+## D120 that was eleven, added up out of content; the hand now has a ceiling
+## (`Balance.MAX_HAND_SIZE`), so it is ten — but the arithmetic that used to produce
+## eleven is still done, and still asserted to overshoot the cap, or this check would
+## stop being about a large hand the moment a relic was retuned. `Balance.HAND_SIZE`
 ## is the opening hand, not the hand — and the fan gives every extra card its width out
 ## of the card before it, so the size that had never been measured was the dangerous one.
 ##
@@ -466,16 +470,35 @@ func _check_fan(inst: Node, cards: Array[Control], tag: String) -> void:
 ##    +4   a fused See It Coming — cost 0, Draw 3, and a common's draw budget of 1
 ##         buys it a level_cap of 2, so ONE fusion makes it Draw 4
 ##    -1   the card leaves the hand to be played
-##   = 11, which is also about the ceiling a 13-card starter deck can hold up.
+##    +1   Foresight, the equipped power — cost 0, Draw 1, fired after the card
+##   = 12 of SUPPLY, against a `Balance.MAX_HAND_SIZE` of 10.
+##
+## D120 put the cap on, so the hand delivered is `min(cap, supply)` and the number
+## this check measures at is ten rather than twelve. Both halves are asserted, and
+## they catch opposite things: `supply > cap` says the content still offers more draws
+## than the hand can hold — retune Keen Lens to nothing and that goes red rather than
+## quietly measuring a smaller hand — and `delivered == min(cap, supply)` says the
+## engine hands over exactly the cap and not a card more.
+##
+## The power is here because of the cap, not despite it. A card's own draw resolves
+## while the card is STILL in hand (`card_block_bonus` depends on that and documents
+## it), so the card counts against its own cap and playing See It Coming out of a
+## nine-card hand leaves nine, not ten. The one thing that fills a hand to the cap
+## exactly is a draw arriving when nothing is in flight — a power, a triggered relic,
+## or the top of a turn. Foresight is the cheapest of those that exists.
 ##
 ## Every card of that hand is dealt by the engine down the paths the game uses:
-## relics owned in MetaState, a fresh Combat scene, two real End Turns, one real
-## press on a card in hand. Assembling eleven widgets by hand would have been ten
-## lines shorter and would have proved something about the test instead of the game.
+## relics owned in MetaState, a power equipped in MetaState, a fresh Combat scene, two
+## real End Turns, one real press on a card in hand and one on the power button.
+## Assembling ten widgets by hand would have been ten lines shorter and would have
+## proved something about the test instead of the game.
 func _check_large_hand() -> void:
 	for rid in ["keen_lens", "scholars_lens"]:
 		if not MetaState.add_relic(rid):
 			_fails += 1; print("FAIL cannot grant %s to build a large hand" % rid)
+	# A new save equips Bulwark; the largest hand needs the power that draws instead.
+	MetaState.powers["foresight"] = 1
+	MetaState.equipped_power = "foresight"
 	# In the collection the way FUSION leaves a levelled card: copies spent, one left.
 	# The deck is built from the collection, so this card reaches the fight through
 	# the same path as every other card in it.
@@ -522,22 +545,45 @@ func _check_large_hand() -> void:
 		inst._on_card_pressed(sic)
 		await get_tree().process_frame
 		await get_tree().process_frame
+	# ...and the power LAST, through its own button handler. It is what tops the hand
+	# up to the cap: See It Coming's draw resolved while See It Coming was still in
+	# hand, so it spent one of the ten on itself (see the doc comment above).
+	var pdraw := 0
+	if eng.power == null or eng.power.eff_draw() <= 0:
+		_fails += 1; print("FAIL the large-hand fight has no power that draws")
+	else:
+		pdraw = eng.power.eff_draw()
+		if not eng.can_use_power():
+			_fails += 1; print("FAIL %s cannot be fired on turn 3" % eng.power.name)
+		inst._on_power_pressed()
+		await get_tree().process_frame
+		await get_tree().process_frame
 
 	# What the arithmetic in the doc comment above claims, read back off the content
-	# rather than restated as 11: if a relic is retuned or the card is renumbered this
+	# rather than restated as 12: if a relic is retuned or the card is renumbered this
 	# says so, instead of silently measuring a smaller hand and passing.
-	var want: int = Balance.HAND_SIZE + eng.extra_draw \
-		+ _relic_draw(eng, "scholars_lens") + sic.eff_draw() - 1
-	var cards := _hand_cards(inst)
-	print("  large hand: %d cards (%d expected: %d dealt + %d relic draw + %d from %s)" % [
-		cards.size(), want, Balance.HAND_SIZE, eng.extra_draw + _relic_draw(eng, "scholars_lens"),
-		sic.eff_draw(), sic.name])
-	if cards.size() < want:
+	var supply: int = Balance.HAND_SIZE + eng.extra_draw \
+		+ _relic_draw(eng, "scholars_lens") + sic.eff_draw() - 1 + pdraw
+	# The cap is what makes the difference between these two a MEASUREMENT rather than
+	# a tautology. Without this line a relic retuned to zero would drop supply to the
+	# cap, `want` would not move, and the check would pass on a hand it never built.
+	if supply <= Balance.MAX_HAND_SIZE:
 		_fails += 1
-		print("FAIL only %d cards in the large hand, expected %d — the size the rest of this check measures is not the size it claims" % [
+		print("FAIL the content now supplies only %d draws against a cap of %d — this check has stopped measuring a capped hand" % [
+			supply, Balance.MAX_HAND_SIZE])
+	var want: int = mini(Balance.MAX_HAND_SIZE, supply)
+	var cards := _hand_cards(inst)
+	print("  large hand: %d cards (%d expected: %d of supply — %d dealt + %d relic draw + %d from %s + %d from %s — capped at %d)" % [
+		cards.size(), want, supply, Balance.HAND_SIZE,
+		eng.extra_draw + _relic_draw(eng, "scholars_lens"),
+		sic.eff_draw(), sic.name, pdraw,
+		eng.power.name if eng.power != null else "no power", Balance.MAX_HAND_SIZE])
+	if cards.size() != want:
+		_fails += 1
+		print("FAIL %d cards in the large hand, expected %d — the size the rest of this check measures is not the size it claims" % [
 			cards.size(), want])
 	_check_fan(inst, cards, "a played-up hand of %d" % cards.size())
-	# How the fan survives eleven cards, and now an assertion rather than a report.
+	# How the fan survives a capped hand, and now an assertion rather than a report.
 	#
 	# What this used to say: the step drops to 41.6px, so `fit_name` hands the name a
 	# 24px slot, the fitter buys the fit with type size, and the names come out at

@@ -61,6 +61,60 @@ func _init() -> void:
 	if not still_held:
 		fails += 1; print("FAIL retain card was discarded at end of turn")
 
+	# --- the hand cap refuses a draw, and the refused card stays in the pile (D120) ---
+	#
+	# Next to retain deliberately: a retained card is still in your hand when the next
+	# turn deals, so retain is one of the two ways a hand reaches the cap on its own.
+	#
+	# The half a careless implementation gets wrong is not the hand, it is the PILE.
+	# Discarding the card that was not drawn would cycle the deck for free — a gift to
+	# exactly the free-draw decks `test_degenerate.gd` exists to bound — so the draw
+	# pile and the discard pile are both counted here, not only the hand size.
+	var ecap := _fight(_deck({"hack": 20}))
+	ecap.draw_cards(Balance.MAX_HAND_SIZE - ecap.hand.size() - 1)
+	if ecap.hand.size() != Balance.MAX_HAND_SIZE - 1:
+		fails += 1; print("FAIL wanted a hand of %d to sit one under the cap, dealt %d" % [
+			Balance.MAX_HAND_SIZE - 1, ecap.hand.size()])
+	if ecap.take_draw_notice() != "":
+		fails += 1; print("FAIL a hand one card under the cap already reports a lost draw")
+	# The cap is a maximum, not a limit one short of it: the card that fills the hand
+	# to exactly ten must be drawn. This is the off-by-one an implementation written
+	# with `>` instead of `>=` gets backwards, and it lands as an eleven-card hand.
+	ecap.draw_cards(1)
+	if ecap.hand.size() != Balance.MAX_HAND_SIZE:
+		fails += 1; print("FAIL the cap refused the card that fills a hand to exactly %d" % Balance.MAX_HAND_SIZE)
+	if ecap.take_draw_notice() != "":
+		fails += 1; print("FAIL filling a hand to exactly the cap reported a lost draw")
+
+	var pile_before: int = ecap.draw_pile.size()
+	var discard_before2: int = ecap.discard_pile.size()
+	# `draw_cards` pops the BACK, so this is the card the next draw would have taken.
+	var refused: CardData = ecap.draw_pile[pile_before - 1]
+	ecap.draw_cards(3)
+	if ecap.hand.size() != Balance.MAX_HAND_SIZE:
+		fails += 1; print("FAIL drawing into a full hand added cards (%d held)" % ecap.hand.size())
+	if ecap.draw_pile.size() != pile_before or ecap.draw_pile[pile_before - 1] != refused:
+		fails += 1
+		print("FAIL the refused draw did not stay on the pile: %d -> %d cards" % [
+			pile_before, ecap.draw_pile.size()])
+	if ecap.discard_pile.size() != discard_before2:
+		fails += 1
+		print("FAIL a lost draw went to the discard — that cycles the deck for free")
+	var notice: String = ecap.take_draw_notice()
+	if notice.to_lower().find("hand full") == -1 or notice.find("3 draws") == -1:
+		fails += 1; print("FAIL three lost draws report '%s'" % notice)
+	# ...and it has to reach the log by the path the screen actually reads:
+	# `Combat._on_card_pressed` logs whatever `play_card` returns, and nothing else.
+	# A notice the engine holds and no caller collects is a silent nerf again.
+	var sic := _card("see_it_coming")
+	ecap.hand.remove_at(ecap.hand.size() - 1)
+	ecap.hand.append(sic)            # a full hand, one card of which draws
+	ecap.energy = 3
+	var played: String = ecap.play_card(sic)
+	if played.to_lower().find("hand full") == -1:
+		fails += 1
+		print("FAIL playing %s into a full hand logged '%s'" % [sic.name, played])
+
 	# --- poison ignores block and ticks at end of turn ---
 	var e5 := _fight(deck)
 	var vf := _card("venom_fang")
@@ -148,7 +202,7 @@ func _init() -> void:
 			fin.power_value(), fin.eff_damage()])
 
 	if fails == 0:
-		print("MECHANICS TEST: PASS (multi-hit, AoE, exhaust, retain, poison, thorns, block-scaling, grows, heal, energy)")
+		print("MECHANICS TEST: PASS (multi-hit, AoE, exhaust, retain, hand cap, poison, thorns, block-scaling, grows, heal, energy)")
 	else:
 		print("MECHANICS TEST: FAIL (%d)" % fails)
 	quit()

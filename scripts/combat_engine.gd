@@ -56,6 +56,10 @@ var relic_fired: Dictionary = {}
 ## Last thing a relic trigger did, so the UI can report it on the next refresh.
 var last_relic_text: String = ""
 var extra_draw: int = 0
+## Draws the D120 hand cap has eaten since the last time anything reported them.
+## Not persisted in `save_state()`: it is a message in flight, and a fight resumed
+## on a later session should not open by announcing a draw lost before lunch.
+var draws_lost: int = 0
 
 var dungeon: int = 1
 var tier: int = Balance.Tier.NORMAL
@@ -290,8 +294,26 @@ func start_turn() -> void:
 	var expired_msg := _fire_relics(RelicData.Trigger.ON_BLOCK_EXPIRED, expiring)
 	last_relic_text = " ".join([relic_msg, expired_msg]).strip_edges()
 
+## The ONE way a card gets into a hand — start of turn, a card's `draw`, a triggered
+## relic, a power. Everything routes here, which is why the D120 cap only has to be
+## written once. There is no "create a card into your hand" effect in the game: no
+## card, relic or power makes one, and `hand` is appended to nowhere else, so the
+## companion rule (a card CREATED into a full hand goes to the discard) has no
+## subject to apply to and is deliberately not written — an unreachable branch is a
+## claim nothing can check.
 func draw_cards(n: int) -> void:
 	for i in n:
+		# D120: a hand at the cap does not draw, and the card it did not draw stays
+		# on top of the pile. The draw is LOST, not spent — moving it to the discard
+		# would cycle the deck for nothing, which is a favour to exactly the
+		# free-draw loops test_degenerate.gd exists to bound.
+		#
+		# BEFORE the reshuffle below, deliberately. A refused draw must not be able to
+		# turn the discard pile over: that is the same free deck cycle by another route,
+		# and it would reorder the pile of a player who did nothing but hold ten cards.
+		if hand.size() >= Balance.MAX_HAND_SIZE:
+			draws_lost += n - i
+			break
 		if draw_pile.is_empty():
 			draw_pile = discard_pile.duplicate()
 			discard_pile.clear()
@@ -299,6 +321,25 @@ func draw_cards(n: int) -> void:
 		if draw_pile.is_empty():
 			break
 		hand.append(draw_pile.pop_back())
+
+## What the log owes the player about a draw the cap ate, and a reset of the count.
+##
+## Slay the Spire shows nothing here, and this game cannot afford that: a run with
+## Keen Lens equipped is paying enemy scaling for +1 card a turn (`Balance.power_ratio`
+## folds relics in), so a draw that silently does not happen is a relic that silently
+## stopped working. Same register as the escrow line — say what was left behind.
+##
+## Read-and-clear rather than a field the UI polls, because the three places a draw
+## can be lost (turn start, a card's own draw, a triggered relic) each already return
+## a log line, and a counter nobody empties reports the same loss every turn.
+func take_draw_notice() -> String:
+	if draws_lost <= 0:
+		return ""
+	var n := draws_lost
+	draws_lost = 0
+	if n == 1:
+		return "Hand full at %d — the draw stays in the pile." % Balance.MAX_HAND_SIZE
+	return "Hand full at %d — %d draws stay in the pile." % [Balance.MAX_HAND_SIZE, n]
 
 func can_play(card: CardData) -> bool:
 	# eff_cost / eff_hp_cost, not the authored fields: levels buy both of these
@@ -399,6 +440,8 @@ func use_power() -> String:
 	energy -= power.eff_cost()
 	power_used = true
 	var msg := _resolve(power)
+	# a power that draws can hit the cap too — D120
+	msg = (msg + " " + take_draw_notice()).strip_edges()
 	return msg if msg != "" else "%s used." % power.name
 
 ## Play a card at the current target. Returns a short log line, or "" if unplayable.
@@ -417,6 +460,11 @@ func play_card(card: CardData) -> String:
 		discard_pile.append(card)
 	else:
 		msg += "(exhausted) "
+	# AFTER the relic fire, because both the card's own draw and an ON_CARDS_PLAYED
+	# relic's draw can be eaten by the cap and the player is owed one line either way.
+	var lost := take_draw_notice()
+	if lost != "":
+		msg += " " + lost
 	return msg if msg != "" else "%s played." % card.name
 
 # --- what a card would do RIGHT NOW ------------------------------------------
@@ -588,6 +636,11 @@ func _resolve(card: CardData) -> String:
 		msg += "(grows +%d) " % card.grows
 	if card.eff_draw() > 0:
 		draw_cards(card.eff_draw())
+		# Still the card's own number, not the number that landed. The D120 notice
+		# `play_card` appends says what the cap ate, so the pair reads "Draw 3. Hand
+		# full at 10 — 3 draws stay in the pile." — the promise and its consequence,
+		# which is the same shape as the escrow line. Quietly printing "Draw 0." would
+		# hide WHY, and the card face would still be advertising 3.
 		msg += "Draw %d." % card.eff_draw()
 	return msg
 
@@ -641,6 +694,12 @@ func end_turn() -> String:
 		if not enemies[i].is_dead():
 			_roll_intent(i)
 	start_turn()
+	# The next hand is dealt in here, so this is where a turn-start draw lost to
+	# retained cards surfaces — the one case in D120 the player did not cause on
+	# purpose, and the one most worth saying out loud.
+	var lost := take_draw_notice()
+	if lost != "":
+		parts.append(lost)
 	return " ".join(parts)
 
 func _resolve_enemy(i: int) -> String:

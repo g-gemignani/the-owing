@@ -19,6 +19,26 @@ static func ascension_mult() -> float:
 
 # --- combat rules ---
 const HAND_SIZE := 5
+
+## The most cards a hand may ever hold — D120.
+##
+## `HAND_SIZE` is what a turn DEALS; nothing used to say what a hand could reach.
+## Keen Lens adds one every turn, Scholar's Lens two on every third, four cards in
+## the catalogue retain, and eleven draw on play, so the hand had no ceiling at all
+## and the fan had to keep laying out whatever the engine handed it (D116, D117).
+##
+## Ten because the fan is already at the edge there: at ten cards a resting name
+## slot is 29px against `UI.CARD_NAME_MIN_W` of 34, so the card has stopped being
+## able to say its own name and shows its cost and effect symbol instead. Past ten
+## the substitute runs out of room too. The number is therefore a LAYOUT number, not
+## a difficulty one — see D120 for what the simulator said about that.
+##
+## A draw into a full hand does not happen and the card STAYS in the draw pile: the
+## draw is lost, never spent. Discarding it instead would cycle the deck for free,
+## which is a buff to any build that wants its discard back and the opposite of what
+## a cap is for. `CombatEngine.draw_cards()` is the one place that enforces this.
+const MAX_HAND_SIZE := 10
+
 const MAX_ENERGY := 3
 const BASE_MAX_HP := 60
 const HP_PER_DUNGEON := 10  # max HP gained on clearing a dungeon

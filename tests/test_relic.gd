@@ -201,16 +201,30 @@ func _init() -> void:
 	# ON_KILL: Bone Charm draws when something dies
 	var e1 = Engine_.new()
 	e1.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "", [load(relic_dir + "bone_charm.tres")])
-	e1.start_turn()
-	var hand_before: int = e1.hand.size()
 	for foe in e1.enemies:
 		foe.hp = 1
 	e1.intents[0] = {"action": EnemyData.Action.ATTACK, "value": 1}
 	var killer := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
 	killer.damage = 999
 	e1.hand.append(killer)
+	# Measured with the killer already in hand, so the arithmetic below is the whole
+	# of it: -1 for the card played, +1 from the relic, net nothing.
+	#
+	# This used to take the count BEFORE the append and call the same net-zero result
+	# a pass, which is the assertion written backwards — it demanded the relic draw
+	# NOTHING. It passed for two reasons at once, and neither was the relic firing:
+	# a redundant second `start_turn()` (setup already deals a hand) drew the 10-card
+	# deck dry, so there was nothing left to draw, and it left the hand at ten, which
+	# since D120 is the cap and refuses the draw on its own. Both preconditions are
+	# now asserted rather than assumed, because a draw test whose pile is empty and
+	# whose hand is full is a test of nothing.
+	var hand_before: int = e1.hand.size()
+	if e1.draw_pile.is_empty():
+		fails += 1; print("FAIL nothing left in the draw pile for Bone Charm to draw")
+	if hand_before >= Balance.MAX_HAND_SIZE:
+		fails += 1; print("FAIL the hand is at the D120 cap (%d) before the kill — no draw could land" % hand_before)
 	e1.play_card(killer)
-	if e1.hand.size() != hand_before:   # -1 for the card played, +1 from the relic
+	if e1.hand.size() != hand_before:
 		fails += 1; print("FAIL Bone Charm did not draw on a kill (hand %d -> %d)" % [
 			hand_before, e1.hand.size()])
 
