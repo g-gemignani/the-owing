@@ -6442,3 +6442,155 @@ for it was never pointed here.** `REDO` exists precisely because a list of what 
 quiet. Twenty-nine plates landed, the sheet went quiet, and the shopping list has said
 enemies are done ever since. The counts cannot catch it either — they count presence, and
 these are present. Nothing measured them and nothing was going to.
+
+### D116 — Six cheap fixes, and four of them found something the brief had wrong
+
+Second sweep, six parallel agents on disjoint files. The pattern from D115 held: the
+value was mostly in what the agents refused to accept.
+
+**The vitals became instruments.** `HP 60/60` / `Energy 3/3` were text with the art for
+both sitting unread on disk. HP is now a `bar_frame` nine-slice with three fills stacked
+in the trough — current HP, Block as a band across the top of it, and the telegraphed
+damage as a dark slice at the near end. All three are scaled against one span of max HP,
+which is what makes them comparable: the Block band and the loss slice can be read
+against each other by width alone.
+
+The loss slice is `Combatant.predicted_damage(eng.enemy_intent)`, the engine's own
+answer, not the raw intent — so Block and Vulnerable are already in it and combat keeps
+no private copy of the arithmetic. **That exposed a lie in the old line:** the tooltip
+said `incoming` was net of Block and it never was. 13 was the raw swing, and a player
+holding 9 Block had no number anywhere for the 4 that would actually land. It reads
+`Block 9    incoming 13 → 4` now.
+
+`orb_glow` found a use, and only because the orbs are a row of discrete rects: "which orb
+changed" is an index, so the bloom is one node on the existing `fx_layer` with one tween,
+the same shape as `_float_number`. Photographing it with the peak held open caught two
+bugs invisible any other way — at 0.9 alpha the bloom out-shone the orb so a *spent* orb
+read as a white disc, and untinted white additive over a violet orb read as grey smudge
+rather than light.
+
+The vitals block grew from ~56px to ~160px, so the HUD box became **`ALIGNMENT_END`**,
+which matters more than the offset change: a VBox whose children out-measure its rect
+overflows past the *bottom*, and the bottom was 10px from the frame edge. The old
+top-aligned box was one log line away from pushing the log off screen.
+
+**Nine painted symbols had no consumer, and the ones that did were wrong.** `for_card()`
+sent a Strength card to `"relic"` → `"gold"` — **a stack of coins** — and a heal to a
+heart, because the cascade only ever had 13 shapes to choose from. Distinct symbols across
+the 100 cards went 7 → 11, measured by reverting rather than asserted.
+
+The interesting part is the assertion. Raising the existing "must discriminate" floor from
+4 to 8 was not enough: on a *partial* revert `kinds.size()` was still 10, comfortably over
+the floor, while heal, strength and dexterity had silently gone back to being decoration on
+disk. **An aggregate count cannot see a file going unread.** So each wired meaning now has
+its own check that a real card reaches it, failing with the filename:
+`no card resolves to 'strength' — ui/sym_strength.png has no consumer again`.
+
+Three deliberate omissions, all documented at the call site: no `draw` branch, because the
+painted set has no draw glyph so it could only return `card` and its one effect would be
+to hide `energy` behind it; `retain` and `exhaust` unreachable from `for_card`, because no
+card *is* a retain, it retains while doing something else; `pierce` is enemy-side
+(`Balance.pierce_fraction`) and belongs to the intent telegraph.
+
+**Keys were being carried by a promise that was false.** `GameState.risk_line()` returned
+a pre-joined string and two screens had started reverse-engineering its formatting to get
+the parts back — `iso_run` splitting on runs of two spaces, `pause_menu` doing
+`trim_prefix("AT RISK: ")`. `risk_parts()` fixes that, returning display phrases rather
+than counts on purpose: handing back numbers pushes the pluralisation and the
+which-kinds-to-mention rule into every caller, which is the duplication being removed.
+
+But the refactor's real finding was the content. The pause menu read *"At risk in this
+run: 2 cards, 140 gold, 1 pack **Keys 2** — secured by beating the boss, or by using an
+Escape Rope"*, and keys are secured by neither; the rope prompt repeated it. The function's
+own comment already said keys are not at risk in the same sense, and the crawl was
+*disagreeing with the string* by stripping them off the tail — that disagreement was the
+tell. Keys are out of `risk_line()`; both callers still show them, just not under a
+promise the game does not keep. `at_risk()` was added because the D115 header had become a
+second place deciding what "at risk" means.
+
+`TraversalIso.status()` was left joined, for a better reason than the one given: `status()`
+is a virtual on the `Traversal` seam, so a parts accessor is the base class's to declare,
+and adding one to the override alone is a half-migration.
+
+**A 1244px button is not a button, it is a banner.** And the bug was the container, not the
+button: a `VBoxContainer` hands its full width to any child left on the default
+`SIZE_FILL`, while an `HBoxContainer` sizes to content — so every banner in the game was a
+`UI.button()` whose parent was a VBox, and every row had already solved it. Rows are
+untouched, which is what keeps combat's header, the deck builder's footer and D115's
+IsoRun pair byte-identical.
+
+It is a **minimum, not a maximum**: Godot has no max width and a hard cap clips labels, so
+`max(480, content)` narrows every offender while letting a long label grow. No new
+parameter — the width is applied before the caller receives the button, so a screen
+overrides it by writing `custom_minimum_size.x`, which `packs_screen.gd` already does for
+its 140px `Open`. 480 was chosen by photographing the whole set at 480 and at 320: 320 is
+the better `Back` and the worse title screen, because `Continue` is ~335px of text and the
+one column that had been deliberately sized went ragged.
+
+Width did **not** fix Packs' `Open all`, and that is worth recording rather than assuming.
+It is still the first pressable thing on the screen, still above the three packs it
+short-circuits. What invites the skip is reading order, not size.
+
+**The Relics screen said one thing three times over an empty frame.** "0 of 30 found",
+"None yet", "Still undiscovered: 30", then 95% void. It shows all thirty slots now, in
+five rarity groups of 7/8/7/5/3 — the one interesting shape the set has, and the only axis
+the player can act on, since a deeper fight tilts the roll.
+
+Two calls worth keeping. The **effect is withheld, not the name**: thirty rows of "???" is
+the old defect with more rows, and a relic is a rarity-weighted roll off a boss, never
+something you can go and buy, so the name changes no decision available to the player. And
+the recession value was **measured off the rendered PNGs**, which found a floor that cannot
+be met: the first dim value put an unfound Epic name at **2.35:1**, and 4.5:1 is
+*unreachable* for unfound Rare and Epic because those hues are only 7.1:1 and 6.1:1 *when
+held* — a dim variant clearing 4.5 would be indistinguishable from owning the thing.
+Asking for the usual target there would have been a bug, not a standard.
+
+## The hand survives eleven cards by shrinking its type below its own legibility floor
+
+D115 said the pairwise name guard from D97 was sound but only ever measured the five cards
+combat deals. Measured at eleven — `5` `HAND_SIZE` + `1` Keen Lens + `2` Scholar's Lens +
+`4` a once-fused See It Coming − `1` played, every card dealt by the real engine, and the
+test computes that number back off the live relics rather than restating it so a retuned
+relic fails instead of silently measuring less.
+
+**All three assertions pass.** The tightest pair has 3.0px of slack. And the names come out
+at **7-9px** — "Two Quick" at 7px, wrapped to two lines — against the **14px floor this
+same suite enforces for hovered text**. Legally inside its slot and unreadable at arm's
+length. That is printed rather than asserted, because an assertion there is a design
+change: a cap on hand width, a second row, or less overlap. It is the real defect and it is
+still open.
+
+Non-vacuity was proved by reproducing D97's failure at the new size from inside the test,
+without touching `combat.gd`: **10 of 11 names ran 92-107px under their neighbour.**
+
+**The frame size is now asserted, not assumed.** `card_text_test` set `get_window().size`
+from project settings and trusted it; it now measures `get_viewport().get_visible_rect()`
+and fails if it is not 720. Forcing 1280x800 made **only that check fail and nothing
+else** — so every rect in the file had been trustworthy by luck rather than by
+construction. That is D115's screenshot trap turned into a guard.
+
+## Still open, and one of them is bigger than everything above
+
+- **29 of the 35 enemy plates are flat silhouettes** (D115). Not fixed here; the fix is
+  `REDO` entries, and `art_manifest.gd` was being edited by a concurrent session
+  throughout both sweeps.
+- **`sym_energy` reads as a plain disc with a hole and `sym_dexterity` cannot be named at
+  any size** — weak as paintings, independent of scaling. `REDO` candidates.
+- **The spent energy orb reads LIGHTER than the unspent one.** The brief asked for "cold
+  grey stone" for spent and a lit violet orb for full, and cold grey stone is the brighter
+  of the two, so the state that should recede advances. Visible only by looking at the
+  render.
+- **Thin strokes chew at 28px** under the project's NEAREST filter — `rope`'s coil breaks
+  into a dotted ring. Cosmetic, never semantic. The fix is a `PixelArt.symbol_at(name,
+  side)` sharing `kit_icon`'s LANCZOS; it cannot simply call `UITheme.kit_icon`, because
+  that is a method on an autoload and referencing an autoload at compile time makes a
+  headless `--script` test hang rather than fail (D19).
+- **`combat.gd`'s `_refresh_buffs()` is still run-on prose joined by `·`** — six statuses
+  is a paragraph inside a 330px HUD — and `Combatant.status_text()` still abbreviates to
+  `Blk 5 Psn 3 Vuln 2` *because there was never an icon to use*. All seven now have one.
+- **`BAR_BORDER` is restated** in `combat.gd` and `gen_ui_kit.gd` and the two must agree or
+  the fills slide out from under the frame. `test_art.gd` already asserts `gen_ui_kit`'s
+  palettes against their real owners; this belongs in that net.
+- **`tools/screenshots.gd` can only photograph turn one of combat**, so a partial HP bar, a
+  Block band and spent orbs are all invisible to the shipped harness. The agent that built
+  them had to fork the repo to see its own work.
