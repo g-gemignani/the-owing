@@ -419,7 +419,7 @@ static func card_filter_bar(parent: Node, on_change: Callable) -> void:
 	var rarity := OptionButton.new()
 	rarity.add_item("All", 0)
 	for r in CardData.Rarity.keys().size():
-		rarity.add_item(String(CardData.Rarity.keys()[r]).capitalize(), r + 1)
+		rarity.add_item(CardData.rarity_word(r), r + 1)
 	rarity.select(int(st.get("rarity", -1)) + 1)
 	rarity.item_selected.connect(func(i: int):
 		CardFilter.state["rarity"] = i - 1

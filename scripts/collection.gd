@@ -98,8 +98,8 @@ func _refresh() -> void:
 			stats += "blk %d " % card.eff_block()
 		# no empty "()" on a card whose numbers are not damage or block
 		var stat_txt := stats.strip_edges()
-		lbl.text = "%s  [%s]  Lv%d/%d  x%d%s" % [
-			card.name, CardData.Rarity.keys()[card.rarity], entry["level"], cap0,
+		lbl.text = "%s  %s  Lv%d/%d  x%d%s" % [
+			card.name, CardData.rarity_badge(card.rarity), entry["level"], cap0,
 			entry["count"], "   (%s)" % stat_txt if stat_txt != "" else ""]
 		row.add_child(lbl)
 		# What the next level BUYS. The buttons have always quoted the price; the

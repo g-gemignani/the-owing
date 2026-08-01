@@ -248,8 +248,8 @@ func _refresh() -> void:
 			stats += "blk %d " % card.eff_block()
 		# no empty "()" on a card whose numbers are not damage or block
 		var stat_txt := stats.strip_edges()
-		name_lbl.text = "%s [%s] Lv%d/%d  owned %d%s" % [
-			card.name, CardData.Rarity.keys()[card.rarity], entry["level"],
+		name_lbl.text = "%s %s Lv%d/%d  owned %d%s" % [
+			card.name, CardData.rarity_badge(card.rarity), entry["level"],
 			MetaState.max_level(id), entry["count"],
 			"   (%s)" % stat_txt if stat_txt != "" else ""]
 		row.add_child(name_lbl)

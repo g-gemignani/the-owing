@@ -93,6 +93,30 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 ## +N Block for each OTHER card still in your hand.
 @export var block_per_card_in_hand: int = 0
 
+## The player-facing word for a rarity, for cards, relics and powers alike.
+##
+## The enum key was being printed straight into labels — "Abyssal Gift [RARE] Lv1/15"
+## shouts an identifier at someone who never asked what an enum is — and every call
+## site had indexed `Rarity.keys()` itself and picked its own casing, so the same
+## value read three different ways. This is the one owner (D115). It derives the word
+## from the keys rather than holding a table of its own, because a private copy of a
+## shared classification is the D34 bug in better clothes — the mistake
+## `Icons.card_family` documents — and a sixth rarity would silently miss a table.
+##
+## Title Case, and no louder than that: rarity is carried by colour first
+## (`Icons.RARITY_COLOURS`), so the word only has to name the tier, not announce it.
+## Call sites writing a lowercase status line say `.to_lower()` themselves — that is
+## their own typography, and the vocabulary is still owned here.
+static func rarity_word(rarity: int) -> String:
+	var keys := Rarity.keys()
+	return String(keys[clampi(rarity, 0, keys.size() - 1)]).capitalize()
+
+## Rarity as the bracketed tag that follows a name in a list row. Thin on purpose: the
+## brackets are several screens agreeing on one convention, and that convention is the
+## part that drifted, so it gets an owner too.
+static func rarity_badge(rarity: int) -> String:
+	return "[%s]" % rarity_word(rarity)
+
 ## What this card does RIGHT NOW, generated from its effective numbers.
 ##
 ## The `description` field is authored text baked at level 1, so a fused card lied:

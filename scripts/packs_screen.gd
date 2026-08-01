@@ -81,7 +81,7 @@ func _refresh() -> void:
 func _describe(tier: String, build_id: String, dd: DungeonData) -> String:
 	var b := Balance.build(build_id)
 	var cap: int = int(Balance.PACK_TIER_CAP.get(tier, CardData.Rarity.RARE))
-	var cap_word: String = CardData.Rarity.keys()[cap].to_lower()
+	var cap_word: String = CardData.rarity_word(cap).to_lower()
 	var lines: Array[String] = []
 	if b != null:
 		lines.append("%s — %s" % [b.name, b.description])

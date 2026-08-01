@@ -102,7 +102,7 @@ static func summary(shown: int, total: int, st: Dictionary = state) -> String:
 		sort_label(String(st.get("sort", "name"))).to_lower(),
 		" desc" if bool(st.get("desc", false)) else ""]]
 	if int(st.get("rarity", -1)) >= 0:
-		bits.append(CardData.Rarity.keys()[int(st["rarity"])].to_lower())
+		bits.append(CardData.rarity_word(int(st["rarity"])).to_lower())
 	if int(st.get("type", -1)) >= 0:
 		bits.append(CardData.Type.keys()[int(st["type"])].to_lower())
 	var f := ", ".join(bits)

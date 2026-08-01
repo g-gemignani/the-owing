@@ -8,7 +8,7 @@ func _ready() -> void:
 	UI.label(col, "%d of %d relics found." % [owned.size(), MetaState.RELIC_CATALOG.size()])
 	var list := UI.scroll(col)
 	for r in owned:
-		UI.label(list, "%s  [%s]" % [r.name, CardData.Rarity.keys()[r.rarity]])
+		UI.label(list, "%s  %s" % [r.name, CardData.rarity_badge(r.rarity)])
 		UI.label(list, "    %s" % r.description)
 	if owned.is_empty():
 		UI.label(list, "None yet. Clear a dungeon boss to earn one.")

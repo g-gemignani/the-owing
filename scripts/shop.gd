@@ -101,8 +101,8 @@ func _refresh() -> void:
 		var lbl := Label.new()
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(card.rarity))
 		lbl.custom_minimum_size.x = UITheme.px(500)
-		lbl.text = "%s  [%s]  %s" % [
-			card.name, CardData.Rarity.keys()[card.rarity], card.effect_text()]
+		lbl.text = "%s  %s  %s" % [
+			card.name, CardData.rarity_badge(card.rarity), card.effect_text()]
 		row.add_child(lbl)
 		UI.hoverable(row, Icons.card_tooltip(card))
 
