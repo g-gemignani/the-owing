@@ -2,15 +2,20 @@
 ## Run: godot --headless --script tests/test_relic.gd
 extends SceneTree
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_test_relic_"
+
 const CARD_DIR := "res://resources/cards/"
 
 func _init() -> void:
 	# sandbox: tests must never write over the player's real save or settings
 	var Meta_ = load("res://scripts/meta_state.gd")
-	Meta_.path_prefix = "t_test_relic_"
+	Meta_.path_prefix = SANDBOX
 	_cleanup_sandbox()   # a flush after a previous run can outlive its cleanup
 	Meta_.writes_disabled = false
-	load("res://scripts/settings_state.gd").path_override = "user://t_test_relic_settings.json"
+	load("res://scripts/settings_state.gd").path_override = "user://" + SANDBOX + "settings.json"
 	var fails := 0
 	var Meta = load("res://scripts/meta_state.gd")
 	var m = Meta.new()
@@ -44,7 +49,7 @@ func _init() -> void:
 		fails += 1; print("FAIL energy multiplier %.3f (expect %.3f)" % [mult, want])
 
 	# --- relics raise the enemy scaling ratio ---
-	var deck := _deck({"strike": 4, "defend": 4})
+	var deck := _deck({"hack": 4, "cover": 4})
 	var base_ratio: float = Balance.power_ratio(deck)
 	var with_relic: float = Balance.power_ratio(deck, [battery])
 	if with_relic <= base_ratio:
@@ -77,7 +82,7 @@ func _init() -> void:
 	# --- relics are NOT lost on death (unlike cards/gold) ---
 	m2.add_gold(200)
 	for i in 12:
-		m2.add_card("strike")
+		m2.add_card("hack")
 	var before: int = m2.relics.size()
 	for i in 5:
 		m2.penalize_death(4)
@@ -201,7 +206,7 @@ func _init() -> void:
 	for foe in e1.enemies:
 		foe.hp = 1
 	e1.intents[0] = {"action": EnemyData.Action.ATTACK, "value": 1}
-	var killer := (load(CARD_DIR + "strike.tres") as CardData).duplicate()
+	var killer := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
 	killer.damage = 999
 	e1.hand.append(killer)
 	e1.play_card(killer)
@@ -268,7 +273,7 @@ func _cleanup_sandbox() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()
@@ -280,6 +285,6 @@ func _cleanup_sandbox() -> void:
 func _starter_deck() -> Array[CardData]:
 	var deck: Array[CardData] = []
 	for i in 5:
-		deck.append((load(CARD_DIR + "strike.tres") as CardData).duplicate())
-		deck.append((load(CARD_DIR + "defend.tres") as CardData).duplicate())
+		deck.append((load(CARD_DIR + "hack.tres") as CardData).duplicate())
+		deck.append((load(CARD_DIR + "cover.tres") as CardData).duplicate())
 	return deck

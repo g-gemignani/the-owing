@@ -6,11 +6,16 @@
 ## Run: godot --headless --script tests/test_shaping.gd
 extends SceneTree
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_test_shaping_"
+
 const CARD_DIR := "res://resources/cards/"
 
 func _init() -> void:
 	var Meta_ = load("res://scripts/meta_state.gd")
-	Meta_.path_prefix = "t_test_shaping_"
+	Meta_.path_prefix = SANDBOX
 	Meta_.writes_disabled = false
 	var fails := 0
 	var gs = load("res://scripts/game_state.gd").new()
@@ -46,7 +51,7 @@ func _init() -> void:
 		fails += 1; print("FAIL removed a card at the minimum deck size")
 
 	# --- removing something not in the deck must fail, not corrupt ---
-	var stranger := (load(CARD_DIR + "bash.tres") as CardData).duplicate()
+	var stranger := (load(CARD_DIR + "stave_in.tres") as CardData).duplicate()
 	var size_before: int = gs.run_deck.size()
 	if gs.remove_from_run_deck(stranger):
 		fails += 1; print("FAIL removed a card that was never in the deck")
@@ -69,9 +74,9 @@ func _init() -> void:
 	# enemies scale to match. The player is buying consistency, not strength.
 	var mixed: Array[CardData] = []
 	for i in 8:
-		mixed.append(load(CARD_DIR + "strike.tres") as CardData)
+		mixed.append(load(CARD_DIR + "hack.tres") as CardData)
 	for i in 4:
-		mixed.append(load(CARD_DIR + "defend.tres") as CardData)
+		mixed.append(load(CARD_DIR + "cover.tres") as CardData)
 	var full: float = Balance.power_ratio(mixed)
 	var thinned: Array[CardData] = mixed.duplicate()
 	thinned.remove_at(thinned.size() - 1)   # drop a Defend, the weaker card
@@ -131,7 +136,7 @@ func _init() -> void:
 func _deck(n: int) -> Array[CardData]:
 	var out: Array[CardData] = []
 	for i in n:
-		var id := "strike" if i % 2 == 0 else "defend"
+		var id := "hack" if i % 2 == 0 else "cover"
 		out.append((load(CARD_DIR + id + ".tres") as CardData).duplicate())
 	return out
 
@@ -144,7 +149,7 @@ func _cleanup() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

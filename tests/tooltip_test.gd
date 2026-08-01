@@ -10,6 +10,11 @@
 ## Run: godot --headless res://tests/TooltipTest.tscn
 extends Node
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_tooltip_"
+
 const SCENES := [
 	"res://scenes/Collection.tscn",
 	"res://scenes/DeckBuilder.tscn",
@@ -20,7 +25,7 @@ var _fails := 0
 
 func _ready() -> void:
 	# sandbox: a test must never touch the player's save (one previously did)
-	MetaState.path_prefix = "t_tooltip_"
+	MetaState.path_prefix = SANDBOX
 	MetaState.slot = 0
 	MetaState.new_save()
 	GameState.dungeon_id = Balance.DUNGEONS[0]
@@ -89,7 +94,7 @@ func _purge() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

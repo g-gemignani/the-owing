@@ -8,11 +8,11 @@ const DIR := "res://resources/cards/"
 
 func _init() -> void:
 	var fails := 0
-	var deck := _deck({"strike": 8})
+	var deck := _deck({"hack": 8})
 
 	# --- multi-hit deals damage per hit ---
 	var e := _fight(deck)
-	var tw := _card("twin_strike")
+	var tw := _card("two_quick")
 	var hp0: int = e.enemies[0].hp
 	e.energy = 3
 	e.hand.append(tw)
@@ -28,7 +28,7 @@ func _init() -> void:
 	var before: Array = []
 	for en in e2.enemies:
 		before.append(en.hp)
-	var cl := _card("cleave")
+	var cl := _card("reap")
 	e2.energy = 3
 	e2.hand.append(cl)
 	e2.play_card(cl)
@@ -37,8 +37,11 @@ func _init() -> void:
 			fails += 1; print("FAIL cleave did not hit enemy %d" % i); break
 
 	# --- exhaust removes the card from the combat ---
+	# Bandage rather than a card that merely happens to exhaust today: this asserts
+	# the ENGINE rule, and it was pointed at Keep Hitting, which stopped exhausting
+	# the moment that card was given an identity of its own.
 	var e3 := _fight(deck)
-	var ex := _card("pummel")
+	var ex := _card("bandage")
 	e3.energy = 3
 	e3.hand.append(ex)
 	var discard_before: int = e3.discard_pile.size()
@@ -48,12 +51,12 @@ func _init() -> void:
 
 	# --- retain keeps a card through end of turn ---
 	var e4 := _fight(deck)
-	var keep := _card("dodge_roll")
+	var keep := _card("give_ground")
 	e4.hand.append(keep)
 	e4.end_turn()
 	var still_held := false
 	for c in e4.hand:
-		if c.id == "dodge_roll":
+		if c.id == "give_ground":
 			still_held = true
 	if not still_held:
 		fails += 1; print("FAIL retain card was discarded at end of turn")
@@ -84,7 +87,7 @@ func _init() -> void:
 	# --- body slam scales off current block ---
 	var e7 := _fight(deck)
 	e7.player.block = 17
-	var bs := _card("body_slam")
+	var bs := _card("ram")
 	e7.energy = 3
 	e7.hand.append(bs)
 	var t0: int = e7.enemies[0].hp
@@ -93,7 +96,7 @@ func _init() -> void:
 		fails += 1; print("FAIL body_slam ignored Block (%d dealt)" % (t0 - e7.enemies[0].hp))
 
 	# --- grows accumulates within a combat and resets between combats ---
-	var g := _card("perfected_strike")
+	var g := _card("drilled")
 	var e8 := _fight([g])
 	e8.energy = 9
 	if not (g in e8.hand):
@@ -110,13 +113,13 @@ func _init() -> void:
 	# --- heal and energy gain ---
 	var e10 := _fight(deck)
 	e10.player.hp = 20
-	var sw := _card("second_wind")
+	var sw := _card("stitch")
 	e10.energy = 3
 	e10.hand.append(sw)
 	e10.play_card(sw)
 	if e10.player.hp <= 20:
 		fails += 1; print("FAIL heal did nothing")
-	var ad := _card("adrenaline")
+	var ad := _card("kick")
 	var en_before: int = e10.energy
 	e10.hand.append(ad)
 	e10.play_card(ad)
@@ -134,12 +137,12 @@ func _init() -> void:
 		if c.description.strip_edges() == "" or c.name.strip_edges() == "":
 			fails += 1; print("FAIL %s missing name/description" % id)
 	# mechanics must actually raise the price they are worth
-	if _card("twin_strike").power_value() <= _card("shiv").power_value():
+	if _card("two_quick").power_value() <= _card("nick").power_value():
 		fails += 1; print("FAIL multi-hit not priced above a single small hit")
-	if _card("cleave").power_value() <= _card("execute").power_value() * 0.5:
+	if _card("reap").power_value() <= _card("execute").power_value() * 0.5:
 		fails += 1; print("FAIL AoE priced too low")
 	# exhaust is a real cost, so an exhausting card must price BELOW its raw damage
-	var fin := _card("finisher")
+	var fin := _card("last_word")
 	if fin.power_value() >= float(fin.eff_damage()):
 		fails += 1; print("FAIL exhaust discount not applied: %.1f vs %d dmg" % [
 			fin.power_value(), fin.eff_damage()])
@@ -156,11 +159,11 @@ func _init() -> void:
 	# enemy scaling falls behind the deck built around it. Both are asserted, because
 	# the second failure is invisible: the card works, the build just quietly stops
 	# keeping up with the dungeons it unlocked.
-	var cond := _deck({"strike": 8})
+	var cond := _deck({"hack": 8})
 
 	# poison: the same card is worth more into a poisoned target
 	var ep := _fight(cond)
-	var rup := _card("rupture")
+	var rup := _card("split")
 	var plain: int = ep.card_damage(rup)
 	ep.enemies[0].poison = 6
 	var poisoned: int = ep.card_damage(rup)
@@ -177,7 +180,7 @@ func _init() -> void:
 
 	# debuffs: the follow-up hits harder
 	var ed := _fight(cond)
-	var iw := _card("iron_wave")
+	var iw := _card("shoulder")
 	var clean: int = ed.card_damage(iw)
 	ed.enemies[0].vulnerable = 2
 	if ed.card_damage(iw) <= clean:
@@ -185,7 +188,7 @@ func _init() -> void:
 
 	# tempo: worth more late in the turn than early
 	var ec := _fight(cond)
-	var shiv := _card("shiv")
+	var shiv := _card("nick")
 	var early: int = ec.card_damage(shiv)
 	ec.cards_played_this_turn = 4
 	if ec.card_damage(shiv) <= early:
@@ -221,13 +224,13 @@ func _init() -> void:
 	eh.hand = [gd]
 	var alone: int = eh.card_block(gd)
 	for i in 4:
-		eh.hand.append(_card("strike"))
+		eh.hand.append(_card("hack"))
 	if eh.card_block(gd) <= alone:
 		fails += 1; print("FAIL guard ignores the cards in your hand")
 
 	# ...and every one of them must cost the deck something in priced power
-	for pair in [["rupture", "damage_per_poison"], ["riposte", "damage_per_thorns"],
-			["iron_wave", "bonus_vs_debuffed"], ["shiv", "combo_bonus"],
+	for pair in [["split", "damage_per_poison"], ["riposte", "damage_per_thorns"],
+			["shoulder", "bonus_vs_debuffed"], ["nick", "combo_bonus"],
 			["cull", "energy_on_kill"], ["guard", "block_per_card_in_hand"]]:
 		var real := _card(String(pair[0]))
 		var stripped := _card(String(pair[0]))

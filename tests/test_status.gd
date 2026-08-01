@@ -12,12 +12,12 @@ func _init() -> void:
 	# Block must absorb the incoming hit, then expire on the next turn.
 	# ---------------------------------------------------------------
 	var eng := CombatEngine.new()
-	eng.setup(_deck({"strike": 4, "defend": 4}), 60, 60, 1, Balance.Tier.NORMAL, "cultist")
-	var defend := _find(eng.hand, "defend")
+	eng.setup(_deck({"hack": 4, "cover": 4}), 60, 60, 1, Balance.Tier.NORMAL, "cultist")
+	var defend := _find(eng.hand, "cover")
 	if defend == null:
 		# guarantee a Defend in hand for the test
-		eng.hand.append(_card("defend"))
-		defend = _find(eng.hand, "defend")
+		eng.hand.append(_card("cover"))
+		defend = _find(eng.hand, "cover")
 	eng.play_card(defend)
 	if eng.player.block <= 0:
 		fails += 1; print("FAIL block not gained")
@@ -35,16 +35,16 @@ func _init() -> void:
 	# BARRICADE (legendary) — block persists and accumulates.
 	# ---------------------------------------------------------------
 	var e2 := CombatEngine.new()
-	e2.setup(_deck({"defend": 8}), 200, 200, 1, Balance.Tier.NORMAL, "cultist")
-	e2.hand.append(_card("barricade"))
-	e2.play_card(_find(e2.hand, "barricade"))
+	e2.setup(_deck({"cover": 8}), 200, 200, 1, Balance.Tier.NORMAL, "cultist")
+	e2.hand.append(_card("set_stone"))
+	e2.play_card(_find(e2.hand, "set_stone"))
 	if not e2.player.retain_block:
 		fails += 1; print("FAIL barricade did not set retain_block")
 	# bank block over two turns; it must not reset
 	# (Barricade costs 3, so refresh energy before banking block)
 	e2.energy = 3
-	e2.hand.append(_card("defend"))
-	e2.play_card(_find(e2.hand, "defend"))
+	e2.hand.append(_card("cover"))
+	e2.play_card(_find(e2.hand, "cover"))
 	var banked: int = e2.player.block
 	if banked <= 0:
 		fails += 1; print("FAIL no block banked")
@@ -54,9 +54,9 @@ func _init() -> void:
 		fails += 1; print("FAIL barricade block expired (had %d, intent %d)" % [banked, e2.enemy_intent])
 	# accumulate further
 	e2.energy = 3
-	e2.hand.append(_card("defend"))
+	e2.hand.append(_card("cover"))
 	var before_accum: int = e2.player.block
-	e2.play_card(_find(e2.hand, "defend"))
+	e2.play_card(_find(e2.hand, "cover"))
 	if e2.player.block <= before_accum:
 		fails += 1; print("FAIL barricade block did not accumulate")
 
@@ -97,35 +97,35 @@ func _init() -> void:
 	# Cards actually apply their statuses through the engine
 	# ---------------------------------------------------------------
 	var e3 := CombatEngine.new()
-	e3.setup(_deck({"strike": 8}), 60, 60, 1, Balance.Tier.NORMAL, "cultist")
+	e3.setup(_deck({"hack": 8}), 60, 60, 1, Balance.Tier.NORMAL, "cultist")
 	# keep the target alive so the card's rider effects are observable
 	e3.enemies[0].max_hp = 500
 	e3.enemies[0].hp = 500
-	e3.hand.append(_card("bash"))
+	e3.hand.append(_card("stave_in"))
 	e3.energy = 3
-	e3.play_card(_find(e3.hand, "bash"))
+	e3.play_card(_find(e3.hand, "stave_in"))
 	if e3.enemy.vulnerable <= 0:
 		fails += 1; print("FAIL bash did not apply Vulnerable")
-	e3.hand.append(_card("terrify"))
+	e3.hand.append(_card("put_the_fear"))
 	e3.energy = 3
-	e3.play_card(_find(e3.hand, "terrify"))
+	e3.play_card(_find(e3.hand, "put_the_fear"))
 	if e3.enemy.weak <= 0:
 		fails += 1; print("FAIL terrify did not apply Weak")
-	e3.hand.append(_card("inflame"))
+	e3.hand.append(_card("work_up"))
 	e3.energy = 3
-	e3.play_card(_find(e3.hand, "inflame"))
+	e3.play_card(_find(e3.hand, "work_up"))
 	if e3.player.strength <= 0:
 		fails += 1; print("FAIL inflame did not grant Strength")
-	e3.hand.append(_card("footwork"))
+	e3.hand.append(_card("light_on_it"))
 	e3.energy = 3
-	e3.play_card(_find(e3.hand, "footwork"))
+	e3.play_card(_find(e3.hand, "light_on_it"))
 	if e3.player.dexterity <= 0:
 		fails += 1; print("FAIL footwork did not grant Dexterity")
 
 	# status cards must carry tuning weight, or enemy scaling ignores them
-	if _card("barricade").power_value() <= 0:
+	if _card("set_stone").power_value() <= 0:
 		fails += 1; print("FAIL barricade has no power_value (breaks scaling)")
-	if _card("terrify").power_value() <= 0:
+	if _card("put_the_fear").power_value() <= 0:
 		fails += 1; print("FAIL terrify has no power_value (breaks scaling)")
 
 	if fails == 0:

@@ -8,16 +8,21 @@
 ## Run: godot --headless --script tests/test_build.gd
 extends SceneTree
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_test_build_"
+
 const MIN_DUNGEONS := 3
 const MIN_ZONES := 2
 
 func _init() -> void:
 	# sandbox: tests must never write over the player's real save or settings
 	var Meta_ = load("res://scripts/meta_state.gd")
-	Meta_.path_prefix = "t_test_build_"
+	Meta_.path_prefix = SANDBOX
 	_cleanup_sandbox()   # a flush after a previous run can outlive its cleanup
 	Meta_.writes_disabled = false
-	load("res://scripts/settings_state.gd").path_override = "user://t_test_build_settings.json"
+	load("res://scripts/settings_state.gd").path_override = "user://" + SANDBOX + "settings.json"
 	var fails := 0
 	var m = load("res://scripts/meta_state.gd").new()
 	var builds := Balance.all_builds()
@@ -164,7 +169,7 @@ func _cleanup_sandbox() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

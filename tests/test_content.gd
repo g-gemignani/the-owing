@@ -154,8 +154,8 @@ func _init() -> void:
 	# changes and this is not recomputed, the whole curve drifts with no error.
 	var ref: Array = []
 	for i in 4:
-		ref.append(load("res://resources/cards/strike.tres"))
-		ref.append(load("res://resources/cards/defend.tres"))
+		ref.append(load("res://resources/cards/hack.tres"))
+		ref.append(load("res://resources/cards/cover.tres"))
 	var recomputed: float = Balance.deck_power(ref) / Balance.deck_cost(ref)
 	if absf(recomputed - Balance.BASELINE_CARD_POWER) > 0.01:
 		fails += 1

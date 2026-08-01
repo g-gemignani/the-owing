@@ -135,7 +135,7 @@ func _init() -> void:
 
 	# --- a dungeon's roster actually drives who spawns ---
 	var d_crypt := Balance.dungeon("crypt")
-	var deck := _deck({"strike": 4, "defend": 4})
+	var deck := _deck({"hack": 4, "cover": 4})
 	var allowed := Array(d_crypt.enemy_roster)
 	for t in 40:
 		var eng := CombatEngine.new()
@@ -219,7 +219,7 @@ func _init() -> void:
 	var Engine_ = load("res://scripts/combat_engine.gd")
 	var bdeck: Array[CardData] = []
 	for i in 8:
-		bdeck.append(load("res://resources/cards/strike.tres") as CardData)
+		bdeck.append(load("res://resources/cards/hack.tres") as CardData)
 	for did2 in ["crypt", "the_maw"]:
 		var dd := Balance.dungeon(did2)
 		var eb = Engine_.new()

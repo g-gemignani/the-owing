@@ -6,8 +6,8 @@ extends Control
 
 const CARD_DIR := "res://resources/cards/"
 ## Fallback stock when the dungeon defines no pool.
-const DEFAULT_STOCK := ["strike", "defend", "bash", "iron_wave", "clear_mind",
-	"terrify", "inflame", "footwork", "barricade"]
+const DEFAULT_STOCK := ["hack", "cover", "stave_in", "shoulder", "clear_mind",
+	"put_the_fear", "work_up", "light_on_it", "set_stone"]
 
 var status_label: Label
 var msg_label: Label

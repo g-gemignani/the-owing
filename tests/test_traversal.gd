@@ -405,31 +405,92 @@ func _init() -> void:
 			distinct.size(), shapes.size()])
 	print("  (info: %d distinct shapes across %d dungeons)" % [distinct.size(), shapes.size()])
 
+	# --- the memoized option list must never be stale -------------------------
+	#
+	# `options()` caches its answer because building it floods the floor and a single
+	# step used to do that twice (D99). The cache is dropped by every mutator, and the
+	# whole correctness of that rests on "every mutator" being true — a missed
+	# invalidation does not crash, it hands the player a list of moves for a floor they
+	# have already left, which is the quietest possible bug. So walk real dungeons and
+	# compare the cached answer against a freshly computed one at every single step.
+	for did3 in Balance.DUNGEONS:
+		var mem := TraversalIso.new()
+		mem.generate(Balance.dungeon(did3))
+		var msteps := 0
+		while not mem.is_complete() and msteps < 400:
+			msteps += 1
+			var cached := mem.options()
+			var fresh := mem._compute_options()
+			if cached.size() != fresh.size():
+				fails += 1
+				print("FAIL %s: cached %d options, recomputing gives %d" % [
+					did3, cached.size(), fresh.size()])
+				break
+			var drift := false
+			for oi in cached.size():
+				var a: Dictionary = cached[oi]
+				var b: Dictionary = fresh[oi]
+				# Same default on both sides. Using different ones to "also catch a
+				# missing key" makes every option without an `hp_cost` differ from
+				# itself, which is how this assertion first failed on all twelve.
+				if int(a.get("cell", -1)) != int(b.get("cell", -1)) \
+						or int(a.get("type", -1)) != int(b.get("type", -1)) \
+						or String(a.get("label", "")) != String(b.get("label", "")) \
+						or int(a.get("hp_cost", 0)) != int(b.get("hp_cost", 0)) \
+						or a.has("hp_cost") != b.has("hp_cost"):
+					drift = true
+			if drift:
+				fails += 1
+				print("FAIL %s: the memoized option list is stale at step %d" % [did3, msteps])
+				break
+			if cached.is_empty():
+				break
+			var mpick := 0
+			for oi in cached.size():
+				if not cached[oi].has("hp_cost"):
+					mpick = oi
+					break
+			if not mem.select(mpick).is_empty():
+				mem.clear_pending()
+
 	# --- the dodge has to be a trade, not a discount --------------------------
 	#
 	# It was a flat 8 HP and nothing measured it, because the simulator's driver
 	# only dodged below 35% HP and therefore never dodged at all. Measured properly,
 	# skipping every avoidable fight beat fighting outright — the Drowned Market
 	# went 49% to 87% for the same deck. A dominant strategy is a removed decision
-	# (D20), so the price now rises with depth and with each dodge already taken.
+	# (D20), so the price rises with depth and with each dodge already taken.
 	#
 	# Asserted structurally rather than by simulation: what breaks the mechanic is
 	# the TOTAL being small against the health bar you are spending it from.
-	# Checked for EVERY dungeon. It used to skip anything that was not a deck dungeon,
-	# and once D88 moved them all onto the crawl that filter matched nothing and the
-	# whole block silently stopped running — the same failure the avoid calibration in
-	# `sim_balance.gd` had, from the same cause. There is no model to filter on now.
-	var dodgeable: int = Balance.ENCOUNTER_COMBATS + Balance.ENCOUNTER_ELITES
+	#
+	# **The rung count comes from a GENERATED dungeon, not from a constant.** This
+	# block used to skip anything that was not a deck dungeon, and once D88 moved them
+	# all onto the crawl that filter matched nothing and it silently stopped running.
+	# D94 removed the filter — and the block then passed for a second wrong reason: it
+	# priced a ladder of `ENCOUNTER_COMBATS + ENCOUNTER_ELITES` = 4 rungs, the GLOBAL
+	# default mix, while the crawl offers two or three (per-dungeon mixes since D84,
+	# and wanderers come out of the combat budget and cannot be slipped past). The real
+	# bill was 25-46% of a health bar against an assertion of 50%, and it passed on a
+	# number the game never charges (D99). Asking a real traversal how many dodges it
+	# lays down is the only version of this that cannot drift again.
 	for did in Balance.DUNGEONS:
 		var dd2 := Balance.dungeon(did)
 		if dd2 == null:
+			continue
+		var probe := TraversalIso.new()
+		probe.generate(dd2)
+		var dodgeable: int = probe.dodgeable
+		if dodgeable < 1:
+			fails += 1
+			print("FAIL %s offers no fight to slip past — the crawl's only priced decision is absent" % did)
 			continue
 		var depth: int = dd2.difficulty
 		var bar := float(Balance.BASE_MAX_HP + (depth - 1) * Balance.HP_PER_DUNGEON)
 		var total := 0
 		var prev := 0
 		for i in dodgeable:
-			var c: int = Balance.avoid_cost(depth, i)
+			var c: int = Balance.avoid_cost(depth, i, dodgeable)
 			if c <= prev:
 				fails += 1
 				print("FAIL %s: dodge %d costs %d, no more than the one before it (%d)" % [
@@ -439,18 +500,26 @@ func _init() -> void:
 		# skipping the whole dungeon must cost most of a health bar...
 		if float(total) < bar * 0.5:
 			fails += 1
-			print("FAIL %s: dodging every fight costs %d of %d HP — the dungeon can be skipped on pocket change" % [
-				did, total, int(bar)])
+			print("FAIL %s: dodging all %d fights costs %d of %d HP — the dungeon can be skipped on pocket change" % [
+				did, dodgeable, total, int(bar)])
 		# ...while one dodge stays affordable, or nobody would ever use it
-		var first: int = Balance.avoid_cost(depth, 0)
+		var first: int = Balance.avoid_cost(depth, 0, dodgeable)
 		if float(first) > bar * 0.25:
 			fails += 1
 			print("FAIL %s: the first dodge costs %d of %d HP, too dear to ever be worth it" % [
 				did, first, int(bar)])
+		print("  (info: %-16s %d dodges, %d HP total = %.0f%% of a %d HP bar, first %d)" % [
+			did, dodgeable, total, 100.0 * float(total) / bar, int(bar), first])
 	# and depth must matter, or a flat price gets cheaper the deeper you go
-	if Balance.avoid_cost(8, 0) <= Balance.avoid_cost(1, 0):
+	if Balance.avoid_cost(8, 0, 3) <= Balance.avoid_cost(1, 0, 3):
 		fails += 1
 		print("FAIL the dodge costs no more at depth 8 than at depth 1")
+	# ...and so must the LENGTH of the ladder: a dungeon offering two slips has to
+	# charge more per slip than one offering four, or the total drifts with the mix,
+	# which is the whole of D99.
+	if Balance.avoid_cost(4, 0, 2) <= Balance.avoid_cost(4, 0, 4):
+		fails += 1
+		print("FAIL a two-dodge dungeon charges no more per dodge than a four-dodge one")
 
 	if fails == 0:
 		print("TRAVERSAL TEST: PASS (contract holds for %d model(s): termination, one boss, equal budget, priced dodge)" % MODELS.size())

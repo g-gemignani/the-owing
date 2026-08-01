@@ -21,6 +21,11 @@
 ## Run: godot --headless res://tests/PlayableTest.tscn
 extends Node
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_playable_"
+
 var _fails := 0
 
 func _ready() -> void:
@@ -31,7 +36,7 @@ func _ready() -> void:
 		int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
 	await get_tree().process_frame
 
-	MetaState.path_prefix = "t_playable_"
+	MetaState.path_prefix = SANDBOX
 	MetaState.slot = 0
 	MetaState.new_save()
 
@@ -450,7 +455,7 @@ func _dying_is_reported() -> void:
 		"dungeon": "The Crypt", "difficulty": 1, "killer": "Crypt Hound",
 		"tier": Balance.Tier.NORMAL, "turns": 6,
 		"forfeited_cards": 3, "forfeited_gold": 140,
-		"penalty_gold": 25, "penalty_cards": ["strike"],
+		"penalty_gold": 25, "penalty_cards": ["hack"],
 	}
 	UI.clear_escape(self)
 	var inst = (load("res://scenes/Defeat.tscn") as PackedScene).instantiate()
@@ -652,7 +657,7 @@ func _purge() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

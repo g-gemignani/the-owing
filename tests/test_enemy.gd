@@ -47,7 +47,7 @@ func _init() -> void:
 			fails += 1; print("FAIL spawn_count out of bounds: %d" % got); break
 
 	# --- encounter HP budget is split, not multiplied, across a group ---
-	var deck := _deck({"strike": 4, "defend": 4})
+	var deck := _deck({"hack": 4, "cover": 4})
 	var single := CombatEngine.new()
 	single.setup(deck, 60, 60, 1, Balance.Tier.NORMAL, "cultist")
 	var group := CombatEngine.new()

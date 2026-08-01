@@ -2,13 +2,18 @@
 ## Run: godot --headless --script tests/test_death.gd
 extends SceneTree
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_test_death_"
+
 func _init() -> void:
 	# sandbox: tests must never write over the player's real save or settings
 	var Meta_ = load("res://scripts/meta_state.gd")
-	Meta_.path_prefix = "t_test_death_"
+	Meta_.path_prefix = SANDBOX
 	_cleanup_sandbox()   # a flush after a previous run can outlive its cleanup
 	Meta_.writes_disabled = false
-	load("res://scripts/settings_state.gd").path_override = "user://t_test_death_settings.json"
+	load("res://scripts/settings_state.gd").path_override = "user://" + SANDBOX + "settings.json"
 	var Meta = load("res://scripts/meta_state.gd")
 	var fails := 0
 
@@ -16,8 +21,8 @@ func _init() -> void:
 	var m = Meta.new()
 	m.new_save()                       # strike4, defend4, gold0
 	m.add_gold(100)
-	for i in 3: m.add_card("bash")
-	for i in 3: m.add_card("iron_wave")
+	for i in 3: m.add_card("stave_in")
+	for i in 3: m.add_card("shoulder")
 	for i in 3: m.add_card("clear_mind")
 	# starting contents depend on the chosen kit, so derive rather than assert a number
 	var before: int = m.total_copies()
@@ -42,11 +47,11 @@ func _init() -> void:
 
 	# --- last-attack guard: strike is the only attack, must survive ---
 	var m2 = Meta.new()
-	m2.collection = {"strike": {"count": 1, "level": 1}, "defend": {"count": 10, "level": 1}}
+	m2.collection = {"hack": {"count": 1, "level": 1}, "cover": {"count": 10, "level": 1}}
 	m2.gold = 0
 	for i in 30:
 		m2.penalize_death(4)
-	if not m2.collection.has("strike"): fails += 1; print("FAIL last attack was stripped")
+	if not m2.collection.has("hack"): fails += 1; print("FAIL last attack was stripped")
 	if m2.total_copies() < m2.MIN_KEEP: fails += 1; print("FAIL floor breached (m2) ", m2.total_copies())
 
 	# --- persistence of gold ---
@@ -75,7 +80,7 @@ func _cleanup_sandbox() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

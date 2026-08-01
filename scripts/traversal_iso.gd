@@ -64,17 +64,23 @@ const DIR_ARROW := ["↘", "↖", "↙", "↗"]
 
 var w: int = 0
 var h: int = 0
-var enc: Array = []     ## w*h cells: WALL, EMPTY, a feature, or an Enc value
-var seen: Array = []    ## w*h bools: ground you have been near
+## w*h cells: WALL, EMPTY, a feature, or an Enc value.
+##
+## Packed, not a Variant `Array`, and so are the three grids below. `enc[n] == WALL` is
+## the innermost line of every flood over the floor and those floods are most of a
+## headless run (D99); a packed array reads an int where a Variant array unboxes one.
+## JSON round-trips them as plain number arrays, so the save format is unchanged.
+var enc := PackedInt32Array()
+var seen := PackedByteArray()   ## w*h flags: ground you have been near
 ## w*h bools: ground you have actually STOOD on. Distinct from `seen` because this is
 ## a model about coverage, and on a floor that is mostly open ground "have I been
 ## here?" is the question the player is actually asking — when every tile held an
 ## encounter its contents answered it, and now four exits in a row all read
 ## "Open ground" unless something tells them apart.
-var walked: Array = []
+var walked := PackedByteArray()
 ## w*h ints: which chamber a tile belongs to, or -1 for a corridor. Drives the
 ## reveal, and is what lets the view tell a hall from a passage.
-var room_of: Array = []
+var room_of := PackedInt32Array()
 ## cell -> enemy archetype id, for the tiles that hold a fight. Decided when the floor is
 ## laid out rather than when the fight starts, because the thing STANDING there has to be
 ## the thing you end up fighting: before this the sprite was an arbitrary index and the
@@ -96,6 +102,16 @@ var floor_steps: int = 0  ## turns taken on THIS floor, for the linger rule
 ## because the price rises with each one and a fresh floor is not a fresh start — the same
 ## shape the old deck model's `avoided` had, and for the same reason.
 var avoided: int = 0
+## How many fights this dungeon offers a slip past, across all its floors. Decided once,
+## at generation, because the PRICE of each dodge is solved from the total (see
+## `Balance.avoid_cost`) and a price that changed as you resolved encounters would make
+## the first slip cheaper the longer you put it off.
+##
+## Counted here rather than derived from the mix by anyone who needs it: wanderers come
+## out of the combat budget and cannot be slipped past, and that subtraction happens in
+## `generate` below. Deriving it a second time somewhere else is how the number went
+## stale the first time (D99).
+var dodgeable: int = 0
 var done: bool = false
 
 ## Floors, and what is still to be laid out on the ones not yet reached. `plan[i]` is
@@ -119,6 +135,7 @@ var roam: Array = []
 var mons: Array = []
 
 func generate(p_dungeon) -> void:
+	_invalidate()
 	dungeon = p_dungeon
 	cleared = 0
 	pending = {}
@@ -139,6 +156,13 @@ func generate(p_dungeon) -> void:
 	var roaming := Balance.iso_wanderers_for(combats)
 	for i in roaming:
 		budget.erase(Enc.COMBAT)
+
+	# Everything left in the budget that STANDS on a tile and can be slipped past. The
+	# boss is not in `budget` and can never be dodged; the wanderers were just removed.
+	dodgeable = 0
+	for e in budget:
+		if int(e) == Enc.COMBAT or int(e) == Enc.ELITE:
+			dodgeable += 1
 
 	var diff: int = dungeon.difficulty if dungeon != null else 1
 	floors = Balance.iso_floors_for(diff)
@@ -164,19 +188,21 @@ func generate(p_dungeon) -> void:
 ## floor 0 and by `select` on every descent, which is why every per-floor field is
 ## reset here rather than in `generate`.
 func _build_floor(d: int) -> void:
+	_invalidate()
 	depth = clampi(d, 0, floors - 1)
 	floor_steps = 0
+	_room_cells = []
 	mons = []
 	enemy_of = {}
-	enc = []
-	seen = []
-	walked = []
-	room_of = []
-	for i in w * h:
-		enc.append(WALL)
-		seen.append(false)
-		walked.append(false)
-		room_of.append(-1)
+	var n_cells := w * h
+	enc.resize(n_cells)
+	enc.fill(WALL)
+	seen.resize(n_cells)
+	seen.fill(0)
+	walked.resize(n_cells)
+	walked.fill(0)
+	room_of.resize(n_cells)
+	room_of.fill(-1)
 
 	var style := Balance.iso_style(String(dungeon.id) if dungeon != null else "")
 	var rects := _place_rooms(style, Balance.iso_tiles_per_floor(floors))
@@ -192,6 +218,14 @@ func _build_floor(d: int) -> void:
 	# those, the one the floor stretches furthest from, so the stair cannot end up two
 	# steps away and the whole floor be skippable by walking into it. At least two
 	# exits, because a first move with one option is not a move.
+	#
+	# This floods from EVERY candidate — around forty per floor, and the single most
+	# expensive thing in generation. Deliberately left exact (D99). The cheap answer is
+	# a double sweep (flood anywhere, take the furthest tile, flood from that), which
+	# costs two floods instead of forty and picks a *different* tile: it would move
+	# every entrance in the game, reshape every floor and move every balance number
+	# measured against them. A 10%-of-a-run saving is not worth silently regenerating
+	# the content. What made it affordable instead is that each flood is now cheap.
 	pos = int(carved[0])
 	var best := -1
 	for c in carved:
@@ -484,41 +518,83 @@ func _step(i: int, d: Vector2i) -> int:
 
 
 ## Steps from `start` to every tile, -1 for rock and anything unreachable.
-func _dist_from(start: int) -> Array:
-	var dist: Array = []
-	for i in enc.size():
-		dist.append(-1)
-	if start < 0 or start >= enc.size() or int(enc[start]) == WALL:
+##
+## Three BFS functions live here and all three are written the same deliberate way,
+## because between them they are most of a headless run (D99): a `PackedInt32Array`
+## rather than a `Array` of Variants, a read cursor rather than `pop_front` — which
+## shifts the whole queue on a Godot Array and turned every flood into O(n²) — and the
+## four neighbours stepped inline rather than through `_neighbours`, which allocated a
+## fresh Array for every cell visited. `_neighbours` is still there for the callers
+## that want the list; it just has no business inside a flood.
+func _dist_from(start: int) -> PackedInt32Array:
+	var n_cells := enc.size()
+	var dist := PackedInt32Array()
+	dist.resize(n_cells)
+	dist.fill(-1)
+	if start < 0 or start >= n_cells or int(enc[start]) == WALL:
 		return dist
 	dist[start] = 0
-	var queue: Array = [start]
-	while not queue.is_empty():
-		var cur: int = int(queue.pop_front())
-		for n in _neighbours(cur):
-			if int(enc[n]) != WALL and int(dist[n]) < 0:
-				dist[n] = int(dist[cur]) + 1
-				queue.append(n)
+	var queue := PackedInt32Array()
+	queue.resize(n_cells)
+	queue[0] = start
+	var head := 0
+	var tail := 1
+	while head < tail:
+		var cur := queue[head]
+		head += 1
+		var d1 := dist[cur] + 1
+		var cx := cur % w
+		var cy := cur / w
+		for k in 4:
+			var step: Vector2i = DIRS[k]
+			var nx: int = cx + step.x
+			var ny: int = cy + step.y
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var nb: int = ny * w + nx
+			if int(enc[nb]) == WALL or dist[nb] >= 0:
+				continue
+			dist[nb] = d1
+			queue[tail] = nb
+			tail += 1
 	return dist
 
 ## Steps from every tile to the nearest of `sources`. One flood from all of them at
 ## once, which is the same answer as a BFS per source without multiplying by how many
 ## there are.
-func _dist_to_any(sources: Array) -> Array:
-	var dist: Array = []
-	for i in enc.size():
-		dist.append(-1)
-	var queue: Array = []
+func _dist_to_any(sources: Array) -> PackedInt32Array:
+	var n_cells := enc.size()
+	var dist := PackedInt32Array()
+	dist.resize(n_cells)
+	dist.fill(-1)
+	var queue := PackedInt32Array()
+	queue.resize(n_cells)
+	var head := 0
+	var tail := 0
 	for s in sources:
 		var i := int(s)
-		if i >= 0 and i < enc.size() and int(enc[i]) != WALL and int(dist[i]) < 0:
+		if i >= 0 and i < n_cells and int(enc[i]) != WALL and dist[i] < 0:
 			dist[i] = 0
-			queue.append(i)
-	while not queue.is_empty():
-		var cur: int = int(queue.pop_front())
-		for n in _neighbours(cur):
-			if int(enc[n]) != WALL and int(dist[n]) < 0:
-				dist[n] = int(dist[cur]) + 1
-				queue.append(n)
+			queue[tail] = i
+			tail += 1
+	while head < tail:
+		var cur := queue[head]
+		head += 1
+		var d1 := dist[cur] + 1
+		var cx := cur % w
+		var cy := cur / w
+		for k in 4:
+			var step: Vector2i = DIRS[k]
+			var nx: int = cx + step.x
+			var ny: int = cy + step.y
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var nb: int = ny * w + nx
+			if int(enc[nb]) == WALL or dist[nb] >= 0:
+				continue
+			dist[nb] = d1
+			queue[tail] = nb
+			tail += 1
 	return dist
 
 ## Steps from every tile to the nearest piece of unfinished business: content on the
@@ -541,12 +617,16 @@ func _dist_to_any(sources: Array) -> Array:
 ## That cannot cut the floor in two, because the way on sits at the furthest tile from
 ## the entrance and a furthest tile can never be the only route to anywhere: whatever
 ## was behind it would be further still.
-func _dist_to_unresolved(skip_exit: bool) -> Array:
-	var dist: Array = []
-	var queue: Array = []
-	for i in enc.size():
-		dist.append(-1)
-	for i in enc.size():
+func _dist_to_unresolved(skip_exit: bool) -> PackedInt32Array:
+	var n_cells := enc.size()
+	var dist := PackedInt32Array()
+	dist.resize(n_cells)
+	dist.fill(-1)
+	var queue := PackedInt32Array()
+	queue.resize(n_cells)
+	var head := 0
+	var tail := 0
+	for i in n_cells:
 		var e := int(enc[i])
 		var is_work: bool = e >= 0 and e != Enc.BOSS
 		# ...and once there is nothing else, the way on IS the work. Leaving this out was
@@ -560,22 +640,62 @@ func _dist_to_unresolved(skip_exit: bool) -> Array:
 		if not is_work:
 			continue
 		dist[i] = 0
-		queue.append(i)
+		queue[tail] = i
+		tail += 1
 	for m in mons:
 		var c := int(m["cell"])
-		if int(dist[c]) < 0 and int(enc[c]) != WALL:
+		if dist[c] < 0 and int(enc[c]) != WALL:
 			dist[c] = 0
-			queue.append(c)
-	while not queue.is_empty():
-		var cur: int = int(queue.pop_front())
-		for n in _neighbours(cur):
-			if int(enc[n]) == WALL or int(dist[n]) >= 0:
+			queue[tail] = c
+			tail += 1
+	while head < tail:
+		var cur := queue[head]
+		head += 1
+		var d1 := dist[cur] + 1
+		var cx := cur % w
+		var cy := cur / w
+		for k in 4:
+			var step: Vector2i = DIRS[k]
+			var nx: int = cx + step.x
+			var ny: int = cy + step.y
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
 				continue
-			if skip_exit and _is_exit(n):
+			var nb: int = ny * w + nx
+			if int(enc[nb]) == WALL or dist[nb] >= 0:
 				continue
-			dist[n] = int(dist[cur]) + 1
-			queue.append(n)
+			if skip_exit and _is_exit(nb):
+				continue
+			dist[nb] = d1
+			queue[tail] = nb
+			tail += 1
 	return dist
+
+## Cells of each chamber, built on first use and thrown away with the floor.
+##
+## `_reveal_around` scanned the whole grid for room members on every step to answer
+## "which tiles share my room" — a floor's rooms do not move, so it was re-deriving a
+## constant 80 times a run (D99). Not serialized: it is derived from `room_of`, and a
+## cache in a save file is a second copy of a fact that can disagree with the first.
+var _room_cells: Array = []
+
+## Memo for `options()`. See the note there; `_opts_valid` is cleared by every mutator.
+var _opts_cache: Array = []
+var _opts_valid: bool = false
+
+func room_cells(r: int) -> PackedInt32Array:
+	if _room_cells.is_empty() and rooms > 0:
+		var buckets: Array = []
+		for k in rooms:
+			buckets.append([])
+		for j in room_of.size():
+			var rr := int(room_of[j])
+			if rr >= 0 and rr < rooms:
+				(buckets[rr] as Array).append(j)
+		for k in rooms:
+			_room_cells.append(PackedInt32Array(buckets[k]))
+	if r < 0 or r >= _room_cells.size():
+		return PackedInt32Array()
+	return _room_cells[r]
 
 func _is_exit(i: int) -> bool:
 	var e := int(enc[i])
@@ -585,14 +705,17 @@ func _is_exit(i: int) -> bool:
 ## corridor gives you `Balance.ISO_SIGHT` steps and no more. That contrast is the
 ## point — the old uniform radius made every floor feel like the same field, and this
 ## is what gives a dungeon the moment where a hall opens up in front of you.
-func _reveal_around(i: int) -> void:
+## `field` is `_dist_from(i)` when the caller already has it. Every step of a walk
+## reveals from the tile just entered AND moves the wanderers off the player's own
+## distance field, which is the same flood computed twice — two of the three floods a
+## step used to run (D99).
+func _reveal_around(i: int, field: PackedInt32Array = PackedInt32Array()) -> void:
 	seen[i] = true
 	var r := int(room_of[i])
 	if r >= 0:
-		for j in enc.size():
-			if int(room_of[j]) == r:
-				seen[j] = true
-	var dist := _dist_from(i)
+		for j in room_cells(r):
+			seen[j] = true
+	var dist := field if field.size() == enc.size() else _dist_from(i)
 	for j in enc.size():
 		var d := int(dist[j])
 		if d >= 0 and d <= Balance.ISO_SIGHT:
@@ -619,9 +742,9 @@ func _rouse(cell: int, radius: int) -> void:
 ## adjacent, waiting.
 ##
 ## Returns the index of the wanderer now engaging the player, or -1.
-func _floor_turn() -> int:
+func _floor_turn(field: PackedInt32Array = PackedInt32Array()) -> int:
 	var engaging := -1
-	var dist := _dist_from(pos)
+	var dist := field if field.size() == enc.size() else _dist_from(pos)
 	for k in mons.size():
 		var m: Dictionary = mons[k]
 		var here := int(m["cell"])
@@ -678,7 +801,30 @@ func _floor_turn() -> int:
 ## gets on with the floor: an unresolved encounter if one adjoins, otherwise a step
 ## toward the nearest piece of business, and the way down only once nothing else is
 ## left.
+##
+## **Memoized.** Building the list floods the floor, and a single step used to do it
+## twice: once for the caller to choose from, once inside `select` to resolve the index
+## it was handed. The cache is dropped by every method that touches state — `generate`,
+## `_build_floor`, `select`, `clear_pending`, `load_state` — and nothing outside this
+## class mutates a floor, so "dirty on every mutator" is the whole invariant.
+## `tests/test_traversal.gd` walks a dungeon comparing each cached answer against a
+## freshly computed one, because a stale option list is a wrong move made silently.
+##
+## The returned Array is the cache itself, not a copy: every caller treats it as
+## read-only, and a shallow copy would protect the list while still sharing the
+## dictionaries inside it, which is false comfort at a real cost.
 func options() -> Array:
+	if _opts_valid:
+		return _opts_cache
+	_opts_cache = _compute_options()
+	_opts_valid = true
+	return _opts_cache
+
+## Drop the memo. Call from anything that changes what a step could be.
+func _invalidate() -> void:
+	_opts_valid = false
+
+func _compute_options() -> Array:
 	if done:
 		return []
 	# No floor means no exits. A blob with no `enc` reaches here from a restore — the
@@ -745,9 +891,14 @@ func options() -> Array:
 ##
 ## Reuses the already-tuned price (`Balance.avoid_cost`) rather than
 ## inventing one, including its rising shape: the first slip is the one you want, the
-## fourth should be unaffordable. Deliberately the SAME number, because it is the same
+## last should be unaffordable. Deliberately the SAME number, because it is the same
 ## decision — D88 moved every dungeon onto this model, and the deck's dodge was the thing
 ## that made a deck dungeon cost what it cost.
+##
+## `dodgeable` goes with it because the price is solved from the whole ladder: a dungeon
+## offering two slips charges more for each than one offering four. Passing the count
+## rather than letting Balance guess it is the fix for D99, where the price was sized for
+## four rungs the crawl has never once offered.
 ##
 ## Why it had to exist here at all: measured over the twelve dungeons, graph runs met 4.5-5.1
 ## fights of their budget, dice runs 3.5-4.1, deck runs 4.9 plus 1.1 dodged — and iso met
@@ -758,7 +909,7 @@ func options() -> Array:
 ## decline, or "every model costs the same" stops being true at the only place it matters.
 func _slip_cost() -> int:
 	var diff: int = dungeon.difficulty if dungeon != null else 1
-	return Balance.avoid_cost(diff, avoided)
+	return Balance.avoid_cost(diff, avoided, dodgeable)
 
 ## What a step reads as. Bare ground gets three different names because a row of
 ## identical "Open ground" buttons is a choice with no information in it: is there
@@ -786,6 +937,7 @@ func _describe(n: int) -> String:
 ## beside you and is what you meet on the way out.
 func select(i: int) -> Dictionary:
 	var opts := options()
+	_invalidate()
 	if i < 0 or i >= opts.size():
 		return {}
 	var o: Dictionary = opts[i]
@@ -811,16 +963,20 @@ func select(i: int) -> Dictionary:
 		enc[pos] = EMPTY
 		enemy_of.erase(pos)
 		avoided += 1
-		_reveal_around(pos)
-		_floor_turn()
+		# One flood, used twice. Clearing the tile above cannot change it: only WALL
+		# blocks a step, and this tile was already walkable.
+		var field0 := _dist_from(pos)
+		_reveal_around(pos, field0)
+		_floor_turn(field0)
 		return {}
 
-	_reveal_around(pos)
+	var field := _dist_from(pos)
+	_reveal_around(pos, field)
 	# Greed wakes the floor. Not extra monsters — that would inflate the encounter
 	# budget — just the ones already counted, which is pressure that cannot cheat.
 	if floor_steps == Balance.ISO_LINGER:
 		_rouse(pos, w * h)
-	var caught := _floor_turn()
+	var caught := _floor_turn(field)
 
 	if int(enc[pos]) >= 0:
 		pending = {"type": int(enc[pos]), "cell": pos}
@@ -842,6 +998,7 @@ func select(i: int) -> Dictionary:
 	return {}
 
 func clear_pending() -> void:
+	_invalidate()
 	if pending.is_empty():
 		return
 	var cell: int = int(pending.get("cell", pos))
@@ -891,7 +1048,8 @@ func status() -> String:
 func _save() -> Dictionary:
 	return {"w": w, "h": h, "enc": enc, "seen": seen, "walked": walked,
 		"room_of": room_of, "pos": pos, "tiles": tiles, "content": content,
-		"rooms": rooms, "quota": quota, "steps": steps, "floor_steps": floor_steps, "avoided": avoided,
+		"rooms": rooms, "quota": quota, "steps": steps, "floor_steps": floor_steps,
+		"avoided": avoided, "dodgeable": dodgeable,
 		"done": done, "mons": mons, "enemy_of": enemy_of,
 		"floors": floors, "depth": depth, "plan": plan, "roam": roam}
 
@@ -899,12 +1057,12 @@ func _load(d: Dictionary) -> void:
 	w = int(d.get("w", Balance.ISO_GRID))
 	h = int(d.get("h", Balance.ISO_GRID))
 	# JSON has no ints and no typed arrays: every cell comes back as a float
-	enc = []
+	enc = PackedInt32Array()
 	for e in d.get("enc", []):
 		enc.append(int(e))
 	seen = _bools(d.get("seen", []), enc.size())
 	walked = _bools(d.get("walked", []), enc.size())
-	room_of = []
+	room_of = PackedInt32Array()
 	for r in d.get("room_of", []):
 		room_of.append(int(r))
 	while room_of.size() < enc.size():
@@ -917,6 +1075,9 @@ func _load(d: Dictionary) -> void:
 	steps = int(d.get("steps", 0))
 	floor_steps = int(d.get("floor_steps", 0))
 	avoided = int(d.get("avoided", 0))
+	dodgeable = int(d.get("dodgeable", 0))
+	_room_cells = []
+	_invalidate()
 	done = bool(d.get("done", false))
 	floors = maxi(1, int(d.get("floors", 1)))
 	depth = clampi(int(d.get("depth", 0)), 0, floors - 1)
@@ -954,12 +1115,12 @@ func _load(d: Dictionary) -> void:
 		for k in raw:
 			enemy_of[int(String(k))] = String(raw[k])
 
-func _bools(src, want: int) -> Array:
-	var out: Array = []
+func _bools(src, want: int) -> PackedByteArray:
+	var out := PackedByteArray()
 	for s in src:
-		out.append(bool(s))
+		out.append(1 if bool(s) else 0)
 	while out.size() < want:
-		out.append(false)
+		out.append(0)
 	return out
 
 # --- for the view -------------------------------------------------------------

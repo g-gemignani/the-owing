@@ -11,6 +11,11 @@
 ## Run: godot --headless res://tests/MenuArtTest.tscn
 extends Node
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_menuart_"
+
 var _fails := 0
 
 func _ready() -> void:
@@ -20,7 +25,7 @@ func _ready() -> void:
 		int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
 	await get_tree().process_frame
 
-	MetaState.path_prefix = "t_menuart_"
+	MetaState.path_prefix = SANDBOX
 	MetaState.slot = 0
 	MetaState.new_save()
 	# Screens with no state bail out by NAVIGATING, which in a harness replaces the
@@ -270,7 +275,7 @@ func _purge() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

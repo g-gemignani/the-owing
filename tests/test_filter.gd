@@ -12,13 +12,13 @@ func _init() -> void:
 	var m = load("res://scripts/meta_state.gd").new()
 	m.new_save()
 	# a spread worth sorting: several rarities, costs and levels
-	for id in ["strike", "defend", "bash", "iron_wave", "clear_mind", "barricade",
-			"inflame", "footwork"]:
+	for id in ["hack", "cover", "stave_in", "shoulder", "clear_mind", "set_stone",
+			"work_up", "light_on_it"]:
 		if m.CATALOG.has(id):
 			m.add_card(id)
 			m.add_card(id)
-	m.collection["strike"]["level"] = 12
-	m.collection["bash"]["level"] = 4
+	m.collection["hack"]["level"] = 12
+	m.collection["stave_in"]["level"] = 4
 
 	var all: Array = CardFilter.apply(m.collection, m.CATALOG, CardFilter.default_state())
 	if all.size() != m.collection.size():
@@ -78,13 +78,13 @@ func _init() -> void:
 	var by_power := CardFilter.apply(m.collection, m.CATALOG,
 		{"sort": "power", "desc": true, "rarity": -1, "type": -1})
 	var plain: Dictionary = m.collection.duplicate(true)
-	plain["strike"]["level"] = 1
+	plain["hack"]["level"] = 1
 	var by_power_plain := CardFilter.apply(plain, m.CATALOG,
 		{"sort": "power", "desc": true, "rarity": -1, "type": -1})
-	if by_power.find("strike") >= by_power_plain.find("strike"):
+	if by_power.find("hack") >= by_power_plain.find("hack"):
 		fails += 1
 		print("FAIL power sort ignores the level actually owned (%d vs %d)" % [
-			by_power.find("strike"), by_power_plain.find("strike")])
+			by_power.find("hack"), by_power_plain.find("hack")])
 
 	# --- filters exclude, and only what they should ---
 	for r in CardData.Rarity.keys().size():

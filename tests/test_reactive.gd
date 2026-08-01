@@ -237,6 +237,6 @@ func _all_enemy_ids() -> Array:
 func _deck() -> Array[CardData]:
 	var deck: Array[CardData] = []
 	for i in 5:
-		deck.append(load(CARD_DIR + "strike.tres") as CardData)
-		deck.append(load(CARD_DIR + "defend.tres") as CardData)
+		deck.append(load(CARD_DIR + "hack.tres") as CardData)
+		deck.append(load(CARD_DIR + "cover.tres") as CardData)
 	return deck

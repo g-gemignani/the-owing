@@ -177,7 +177,7 @@ func _refresh() -> void:
 func _pool_line(z: ZoneData) -> Array[String]:
 	var pool: Array[String] = []
 	for cid in z.card_pool:
-		if cid not in ["strike", "defend"] and cid not in pool:
+		if cid not in ["hack", "cover"] and cid not in pool:
 			pool.append(cid)
 	var only: Array[String] = []
 	for did in z.dungeons:

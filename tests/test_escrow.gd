@@ -7,13 +7,18 @@
 ## Run: godot --headless --script tests/test_escrow.gd
 extends SceneTree
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_test_escrow_"
+
 func _init() -> void:
 	# sandbox: tests must never write over the player's real save or settings
 	var Meta_ = load("res://scripts/meta_state.gd")
-	Meta_.path_prefix = "t_test_escrow_"
+	Meta_.path_prefix = SANDBOX
 	_cleanup_sandbox()   # a flush after a previous run can outlive its cleanup
 	Meta_.writes_disabled = false
-	load("res://scripts/settings_state.gd").path_override = "user://t_test_escrow_settings.json"
+	load("res://scripts/settings_state.gd").path_override = "user://" + SANDBOX + "settings.json"
 	var fails := 0
 	var Meta = load("res://scripts/meta_state.gd")
 	var GS = load("res://scripts/game_state.gd")
@@ -29,8 +34,8 @@ func _init() -> void:
 	g.earn_gold(35)
 	if g.escrow_gold != 75:
 		fails += 1; print("FAIL escrow gold not accumulating: %d" % g.escrow_gold)
-	g.escrow_cards.append("strike")
-	g.escrow_cards.append("bash")
+	g.escrow_cards.append("hack")
+	g.escrow_cards.append("stave_in")
 
 	# --- forfeiting must clear the ledger and report what was lost ---
 	var lost: Dictionary = g.forfeit_escrow()
@@ -41,7 +46,7 @@ func _init() -> void:
 
 	# --- committing must report the same shape ---
 	g.earn_gold(20)
-	g.escrow_cards.append("shiv")
+	g.escrow_cards.append("nick")
 	var kept: Dictionary = g.commit_escrow()
 	if int(kept["gold"]) != 20 or int(kept["cards"]) != 1:
 		fails += 1; print("FAIL commit report wrong: %s" % kept)
@@ -66,7 +71,7 @@ func _init() -> void:
 
 	# --- resetting a run must not leave earnings behind ---
 	g.escrow_gold = 99
-	g.escrow_cards.append("strike")
+	g.escrow_cards.append("hack")
 	g.reset_run_progress()
 	if g.escrow_gold != 0 or not g.escrow_cards.is_empty():
 		fails += 1; print("FAIL reset_run_progress left escrow populated")
@@ -127,7 +132,7 @@ func _init() -> void:
 	var f2 := FileAccess.open(Meta.path_for(0), FileAccess.WRITE)
 	f2.store_string(JSON.stringify({
 		"version": 1,
-		"collection": {"strike": {"count": 4, "level": 1}, "defend": {"count": 4, "level": 1}},
+		"collection": {"hack": {"count": 4, "level": 1}, "cover": {"count": 4, "level": 1}},
 		"gold": 10, "relics": [], "decks": {}, "cleared_dungeons": [],
 	}))
 	f2.close()
@@ -146,7 +151,7 @@ func _init() -> void:
 	# whole point of D20 is that a run's winnings are provisional until the boss.
 	var G2 = load("res://scripts/game_state.gd").new()
 	var M2 = load("res://scripts/meta_state.gd").new()
-	M2.path_prefix = "t_escrow_relic_"
+	M2.path_prefix = SANDBOX + "relic_"
 	M2.slot = 0
 	M2.new_save()
 	var owned_before: int = M2.relics.size()
@@ -202,7 +207,7 @@ func _init() -> void:
 	# make it loot; losing it with everything else is what makes it a stake.
 	var G3 = load("res://scripts/game_state.gd").new()
 	var M3 = load("res://scripts/meta_state.gd").new()
-	M3.path_prefix = "t_escrow_pack_"
+	M3.path_prefix = SANDBOX + "pack_"
 	M3.slot = 0
 	M3.new_save()
 	if not M3.packs.is_empty():
@@ -281,7 +286,7 @@ func _cleanup_sandbox() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

@@ -9,7 +9,7 @@ func _ready() -> void:
 	MetaState.slot = 0
 	MetaState.new_save()
 	GameState.select_dungeon("crypt")
-	GameState.run_deck = MetaState.build_deck({"strike": 6, "defend": 6, "bash": 4, "cleave": 4})
+	GameState.run_deck = MetaState.build_deck({"hack": 6, "cover": 6, "stave_in": 4, "reap": 4})
 	GameState.generate_map()
 	GameState.pending = {"type": GameState.NodeType.COMBAT}
 	var sc: Control = (load("res://scenes/Combat.tscn") as PackedScene).instantiate()

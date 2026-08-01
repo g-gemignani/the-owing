@@ -48,7 +48,7 @@ func _init() -> void:
 					print("FAIL %s Lv%d: hover text omits %s %d" % [id, lv, pair[0], n])
 
 	# --- the actual reported bug: levelling must change what the card says ---
-	for id2 in ["strike", "bash", "clear_mind"]:
+	for id2 in ["hack", "stave_in", "clear_mind"]:
 		var lo := (load(CARD_DIR + id2 + ".tres") as CardData).duplicate() as CardData
 		var hi := (load(CARD_DIR + id2 + ".tres") as CardData).duplicate() as CardData
 		lo.level = 1
@@ -90,34 +90,34 @@ func _init() -> void:
 	# before spending energy. `CombatEngine.card_damage()/card_block()` are what
 	# `_resolve()` itself uses; the face and the hover now quote those.
 	var Engine2 = load("res://scripts/combat_engine.gd")
-	var strike := (load(CARD_DIR + "strike.tres") as CardData).duplicate() as CardData
-	var defend := (load(CARD_DIR + "defend.tres") as CardData).duplicate() as CardData
+	var hack := (load(CARD_DIR + "hack.tres") as CardData).duplicate() as CardData
+	var cover := (load(CARD_DIR + "cover.tres") as CardData).duplicate() as CardData
 	var deck: Array[CardData] = []
 	for i in 8:
-		deck.append(strike.duplicate())
-		deck.append(defend.duplicate())
+		deck.append(hack.duplicate())
+		deck.append(cover.duplicate())
 	var eng = Engine2.new()
 	eng.setup(deck, 200, 200, 1, Balance.Tier.NORMAL, "cultist")
 	eng.player.strength = 5
 	eng.player.dexterity = 3
 
-	var live_dmg: int = eng.card_damage(strike)
-	var live_blk: int = eng.card_block(defend)
-	if live_dmg <= strike.eff_damage():
+	var live_dmg: int = eng.card_damage(hack)
+	var live_blk: int = eng.card_block(cover)
+	if live_dmg <= hack.eff_damage():
 		fails += 1
-		print("FAIL 5 Strength did not raise what Strike would deal (%d vs %d)" % [
-			live_dmg, strike.eff_damage()])
-	if live_blk <= defend.eff_block():
+		print("FAIL 5 Strength did not raise what Hack would deal (%d vs %d)" % [
+			live_dmg, hack.eff_damage()])
+	if live_blk <= cover.eff_block():
 		fails += 1
-		print("FAIL 3 Dexterity did not raise what Defend would give (%d vs %d)" % [
-			live_blk, defend.eff_block()])
-	if strike.effect_text(live_dmg, -1).find(str(live_dmg)) == -1:
+		print("FAIL 3 Dexterity did not raise what Cover would give (%d vs %d)" % [
+			live_blk, cover.eff_block()])
+	if hack.effect_text(live_dmg, -1).find(str(live_dmg)) == -1:
 		fails += 1
 		print("FAIL the card face does not show the %d damage it would deal" % live_dmg)
-	if Icons.card_tooltip(strike, live_dmg, live_blk).find(str(live_dmg)) == -1:
+	if Icons.card_tooltip(hack, live_dmg, live_blk).find(str(live_dmg)) == -1:
 		fails += 1
 		print("FAIL the hover text does not show the %d damage it would deal" % live_dmg)
-	if defend.effect_text(-1, live_blk).find(str(live_blk)) == -1:
+	if cover.effect_text(-1, live_blk).find(str(live_blk)) == -1:
 		fails += 1
 		print("FAIL the card face does not show the %d Block it would give" % live_blk)
 
@@ -128,9 +128,9 @@ func _init() -> void:
 	foe.block = 0
 	foe.vulnerable = 0
 	var hp_before: int = foe.hp
-	var promised: int = eng.card_damage(strike)
+	var promised: int = eng.card_damage(hack)
 	eng.energy = 9
-	eng._resolve(strike)
+	eng._resolve(hack)
 	var actually: int = hp_before - foe.hp
 	if actually != promised:
 		fails += 1
@@ -139,10 +139,10 @@ func _init() -> void:
 	# and with no Strength at all it must read exactly as it does at rest
 	var calm = Engine2.new()
 	calm.setup(deck, 200, 200, 1, Balance.Tier.NORMAL, "cultist")
-	if calm.card_text(strike) != strike.effect_text():
+	if calm.card_text(hack) != hack.effect_text():
 		fails += 1
 		print("FAIL an unbuffed card reads differently in combat: '%s' vs '%s'" % [
-			calm.card_text(strike), strike.effect_text()])
+			calm.card_text(hack), hack.effect_text()])
 
 	# --- and nothing displays the stale field any more ---
 	for f in ["res://scripts/ui.gd", "res://scripts/shop.gd",

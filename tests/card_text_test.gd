@@ -11,6 +11,11 @@
 ## Run: godot --headless res://tests/CardTextTest.tscn
 extends Node
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_cardtext_"
+
 var _fails := 0
 
 func _ready() -> void:
@@ -23,7 +28,7 @@ func _ready() -> void:
 		int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
 	await get_tree().process_frame
 
-	MetaState.path_prefix = "t_cardtext_"
+	MetaState.path_prefix = SANDBOX
 	MetaState.slot = 0
 	MetaState.new_save()
 
@@ -68,13 +73,18 @@ func _check_every_card() -> void:
 	for holder in _cards(box):
 		checked += 1
 		var id: String = holder.get_meta("card_id")
-		# resting: name and cost only, which is all the player sees until they hover
+		# The card is TWO PARTS and both are always on it: the rules text lives in a
+		# band of its own under the picture, so unlike the old face it does not wait
+		# for a hover to exist. This assertion used to be its exact opposite ("shows
+		# its rules text while resting" was the failure) — the shape changed, and a
+		# guard that outlives the design it was guarding is worse than none.
 		_hover(holder, false)
 		await get_tree().process_frame
 		_measure(holder, "%s resting @%dpx" % [id, int(narrow)])
-		if _labels(holder).any(func(l): return l.text == card_desc(id) and l.visible):
-			_fails += 1; print("FAIL %s shows its rules text while resting" % id)
-		# hovered: the full rules text, at the size the hover is there to provide
+		if card_desc(id) != "" \
+				and not _labels(holder).any(func(l): return l.text == card_desc(id) and l.visible):
+			_fails += 1; print("FAIL %s does not show its rules text at rest" % id)
+		# hovered: the same text, bigger — the hover is comfort now, not disclosure
 		_hover(holder, true)
 		await get_tree().process_frame
 		_measure(holder, "%s hovered @%dpx" % [id, int(narrow)])
@@ -152,10 +162,24 @@ func _check_live_hand() -> void:
 	for k in cards.size():
 		var holder: Control = cards[k]
 		var r := holder.get_global_rect()
-		if r.position.y < 0.0 or r.end.y > vp.size.y + 1.0:
+		# A card in hand HANGS OFF the bottom edge on purpose (Combat.HAND_PEEK) —
+		# that is what buys a portrait card its height. So the assertion is no longer
+		# "the card is on screen", which would now fail by design; it is **the part
+		# that identifies the card is on screen**: the picture band and the name strip
+		# under it, which is also where the cost and the headline numbers live.
+		# Without this the peek could be tuned to any value at all and nothing would
+		# notice until a player could not tell two cards apart.
+		var ident := roundf(holder.size.y
+				* (UITheme.CARD_ART_BAND + UITheme.CARD_NAME_BAND)) \
+			+ roundf(holder.size.x * UITheme.CARD_PAD)
+		if r.position.y < 0.0:
 			_fails += 1
-			print("FAIL card %s spans y %.0f-%.0f, outside a %.0f-tall frame" % [
-				holder.get_meta("card_id"), r.position.y, r.end.y, vp.size.y])
+			print("FAIL card %s starts at y %.0f, above a %.0f-tall frame" % [
+				holder.get_meta("card_id"), r.position.y, vp.size.y])
+		if r.position.y + ident > vp.size.y + 1.0:
+			_fails += 1
+			print("FAIL card %s hangs too far: picture+name end at y %.0f in a %.0f-tall frame" % [
+				holder.get_meta("card_id"), r.position.y + ident, vp.size.y])
 		if r.position.x < 0.0 or r.end.x > vp.size.x + 1.0:
 			_fails += 1
 			print("FAIL card %s spans x %.0f-%.0f, outside a %.0f-wide frame" % [
@@ -200,7 +224,7 @@ func _check_live_hand() -> void:
 	# and the fan lays the next card on top of this one's right-hand edge — so the name
 	# was the one thing being hidden. A captured five-card hand read "Smith's Fu",
 	# "Prepare", "Bludgeo", "Bite", "Shiv": three of five unidentifiable without
-	# hovering (D96). None of the checks above can see it — every card was on screen,
+	# hovering (D97). None of the checks above can see it — every card was on screen,
 	# fanned, arced and clear of both corners while being unreadable.
 	#
 	# The last card is drawn on top of the rest, so it is the one card allowed the
@@ -222,6 +246,39 @@ func _check_live_hand() -> void:
 			_fails += 1
 			print("FAIL the name on %s runs to x %.0f, under the next card at x %.0f" % [
 				holder3.get_meta("card_id"), nm.get_global_rect().end.x, covered])
+
+	# --- hovering a card must show the WHOLE card --------------------------------
+	#
+	# The other half of the bargain the peek strikes: a card is allowed to hang off
+	# the bottom edge at rest only because hovering it brings all of it back. The
+	# lift is computed per card (the fan's outer cards hang lower than its middle
+	# ones, and hover scales about the bottom edge so every pixel of the growth goes
+	# upward), so measuring one card would prove nothing about the one most at risk.
+	# Checked on EVERY card in hand, at the scale the player sees.
+	for holder4 in cards:
+		var open4: Callable = holder4.get_meta("preview", Callable())
+		var btn4: Button = null
+		for ch in holder4.get_children():
+			if ch is Button:
+				btn4 = ch
+		if btn4 == null:
+			continue
+		btn4.mouse_entered.emit()
+		await get_tree().process_frame
+		# global_rect carries the scaled position but the UNSCALED size, so the
+		# bottom edge has to be worked out rather than read off. Growth is about the
+		# bottom-centre pivot, so the bottom stays put and the top rises.
+		var gr := holder4.get_global_rect()
+		var grown := holder4.size.y * holder4.scale.y
+		var top := gr.end.y - grown
+		if top < -1.0 or gr.end.y > vp.size.y + 1.0:
+			_fails += 1
+			print("FAIL hovered %s spans y %.0f-%.0f, not fully inside a %.0f-tall frame" % [
+				holder4.get_meta("card_id"), top, gr.end.y, vp.size.y])
+		btn4.mouse_exited.emit()
+		await get_tree().process_frame
+		if open4.is_valid():
+			open4.call(false)
 
 	# ...and the hand must not run under the things parked in both bottom corners
 	for zone in [["the vitals", inst.status_label], ["End Turn", inst.end_btn],
@@ -358,7 +415,7 @@ func _purge() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

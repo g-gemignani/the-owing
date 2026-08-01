@@ -5,6 +5,11 @@
 ## Run: godot --headless --script tests/test_save.gd
 extends SceneTree
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_test_save_"
+
 ## Resolved through MetaState so it follows the test sandbox prefix rather than
 ## writing over the player's real save.
 static func path() -> String:
@@ -13,10 +18,10 @@ static func path() -> String:
 func _init() -> void:
 	# sandbox: tests must never write over the player's real save or settings
 	var Meta_ = load("res://scripts/meta_state.gd")
-	Meta_.path_prefix = "t_test_save_"
+	Meta_.path_prefix = SANDBOX
 	_cleanup_sandbox()   # a flush after a previous run can outlive its cleanup
 	Meta_.writes_disabled = false
-	load("res://scripts/settings_state.gd").path_override = "user://t_test_save_settings.json"
+	load("res://scripts/settings_state.gd").path_override = "user://" + SANDBOX + "settings.json"
 	var fails := 0
 	var Meta = load("res://scripts/meta_state.gd")
 
@@ -26,7 +31,7 @@ func _init() -> void:
 	m.add_gold(123)
 	m.add_relic("iron_heart")
 	m.mark_cleared(Balance.DUNGEONS[0])
-	m.save_deck("Test", {"strike": 4, "defend": 4})
+	m.save_deck("Test", {"hack": 4, "cover": 4})
 	m.save_game()
 	var m2 = Meta.new()
 	if not m2.load_game():
@@ -38,13 +43,13 @@ func _init() -> void:
 
 	# --- a v0 save (pre-versioning: no relics/decks/clears/gold) migrates ---
 	_write({
-		"collection": {"strike": {"count": 5, "level": 2}, "defend": {"count": 4, "level": 1}},
+		"collection": {"hack": {"count": 5, "level": 2}, "cover": {"count": 4, "level": 1}},
 		"highest_dungeon": 3,
 	})
 	var m3 = Meta.new()
 	if not m3.load_game():
 		fails += 1; print("FAIL v0 save did not load")
-	if int(m3.collection["strike"]["count"]) != 5 or int(m3.collection["strike"]["level"]) != 2:
+	if int(m3.collection["hack"]["count"]) != 5 or int(m3.collection["hack"]["level"]) != 2:
 		fails += 1; print("FAIL v0 collection not preserved")
 	if m3.gold != 0 or m3.relics.size() != 0 or m3.clear_count() != 0:
 		fails += 1; print("FAIL v0 defaults wrong")
@@ -62,7 +67,7 @@ func _init() -> void:
 		fails += 1; print("FAIL no backup written before migrating")
 
 	# --- a save from a FUTURE version is refused, not truncated ---
-	_write({"version": Meta.SAVE_VERSION + 5, "collection": {"strike": {"count": 4, "level": 1}}})
+	_write({"version": Meta.SAVE_VERSION + 5, "collection": {"hack": {"count": 4, "level": 1}}})
 	var m4 = Meta.new()
 	if m4.load_game():
 		fails += 1; print("FAIL loaded a save from a newer version")
@@ -70,10 +75,10 @@ func _init() -> void:
 	# --- unknown content ids are dropped, not fatal ---
 	_write({
 		"version": Meta.SAVE_VERSION,
-		"collection": {"strike": {"count": 4, "level": 1}, "ghost_card": {"count": 9, "level": 3}},
+		"collection": {"hack": {"count": 4, "level": 1}, "ghost_card": {"count": 9, "level": 3}},
 		"relics": ["iron_heart", "ghost_relic"],
 		"cleared_dungeons": ["crypt", "ghost_dungeon"],
-		"decks": {"D": {"strike": 4, "ghost_card": 2}},
+		"decks": {"D": {"hack": 4, "ghost_card": 2}},
 		"gold": 50,
 	})
 	var m5 = Meta.new()
@@ -115,27 +120,27 @@ func _init() -> void:
 	# Each fixture is the shape that version actually wrote, and each must arrive
 	# with its progress intact and the current version's defaults filled in.
 	for old in [
-			{"v": 0, "d": {"collection": {"strike": {"count": 6, "level": 2}}}},
-			{"v": 1, "d": {"version": 1, "collection": {"strike": {"count": 6, "level": 2}},
+			{"v": 0, "d": {"collection": {"hack": {"count": 6, "level": 2}}}},
+			{"v": 1, "d": {"version": 1, "collection": {"hack": {"count": 6, "level": 2}},
 				"relics": ["iron_heart"], "gold": 120, "cleared_dungeons": ["crypt"],
-				"decks": {"Starter": {"strike": 4}}}},
-			{"v": 2, "d": {"version": 2, "collection": {"strike": {"count": 6, "level": 2}},
+				"decks": {"Starter": {"hack": 4}}}},
+			{"v": 2, "d": {"version": 2, "collection": {"hack": {"count": 6, "level": 2}},
 				"relics": ["iron_heart"], "gold": 120, "cleared_dungeons": ["crypt"],
-				"decks": {"Starter": {"strike": 4}}, "consumables": {"escape_rope": 2}}},
-			{"v": 3, "d": {"version": 3, "collection": {"strike": {"count": 6, "level": 2}},
+				"decks": {"Starter": {"hack": 4}}, "consumables": {"escape_rope": 2}}},
+			{"v": 3, "d": {"version": 3, "collection": {"hack": {"count": 6, "level": 2}},
 				"relics": ["iron_heart"], "gold": 120, "cleared_dungeons": ["crypt"],
-				"decks": {"Starter": {"strike": 4}}, "consumables": {"escape_rope": 2},
+				"decks": {"Starter": {"hack": 4}}, "consumables": {"escape_rope": 2},
 				"starter_kit": "blade", "ascension": 1}},
-			{"v": 4, "d": {"version": 4, "collection": {"strike": {"count": 6, "level": 2}},
+			{"v": 4, "d": {"version": 4, "collection": {"hack": {"count": 6, "level": 2}},
 				"relics": ["iron_heart"], "gold": 120, "cleared_dungeons": ["crypt"],
-				"decks": {"Starter": {"strike": 4}}, "consumables": {"escape_rope": 2},
+				"decks": {"Starter": {"hack": 4}}, "consumables": {"escape_rope": 2},
 				"starter_kit": "blade", "ascension": 1, "highest_dungeon": 3}},
 		]:
 		_write(old["d"])
 		var mv = Meta.new()
 		if not mv.load_game():
 			fails += 1; print("FAIL a v%d save does not load" % old["v"]); continue
-		if mv.owned("strike") != 6 or int(mv.collection["strike"]["level"]) != 2:
+		if mv.owned("hack") != 6 or int(mv.collection["hack"]["level"]) != 2:
 			fails += 1; print("FAIL v%d migration lost the collection" % old["v"])
 		if old["v"] >= 1 and mv.gold != 120:
 			fails += 1; print("FAIL v%d migration lost gold (%d)" % [old["v"], mv.gold])
@@ -153,14 +158,14 @@ func _init() -> void:
 	# --- sealed packs survive a save, and unknown ones are dropped (D80) --------
 	var MP = load("res://scripts/meta_state.gd")
 	var mp = MP.new()
-	mp.path_prefix = "t_save_packs_"
+	mp.path_prefix = SANDBOX + "packs_"
 	mp.slot = 0
 	mp.new_save()
 	mp.add_pack(Balance.PACK_BOSS, Balance.DUNGEONS[0])
 	mp.add_pack(Balance.PACK_TREASURE, Balance.DUNGEONS[1])
 	mp.save_game()
 	var mp2 = MP.new()
-	mp2.path_prefix = "t_save_packs_"
+	mp2.path_prefix = SANDBOX + "packs_"
 	mp2.slot = 0
 	mp2.load_game()
 	if mp2.packs.size() != 2:
@@ -172,7 +177,7 @@ func _init() -> void:
 	mp2.packs.append({"kind": Balance.PACK_BOSS, "dungeon": "a_dungeon_that_was_renamed"})
 	mp2.save_game()
 	var mp3 = MP.new()
-	mp3.path_prefix = "t_save_packs_"
+	mp3.path_prefix = SANDBOX + "packs_"
 	mp3.slot = 0
 	mp3.load_game()
 	if mp3.packs.size() != 2:
@@ -204,7 +209,7 @@ func _cleanup_sandbox() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

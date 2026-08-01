@@ -34,7 +34,7 @@ func _init() -> void:
 		fails += 1; print("FAIL no cards discoverable after export")
 
 	# --- the other art paths ---
-	if PixelArt.card_art("strike") == null:
+	if PixelArt.card_art("hack") == null:
 		fails += 1; print("FAIL card illustrations missing after export")
 	if PixelArt.backdrop_texture(Balance.ZONES[0]) == null:
 		fails += 1; print("FAIL zone backdrops missing after export")

@@ -8,14 +8,19 @@
 ## Run: godot --headless --script tests/test_power.gd
 extends SceneTree
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_test_power_"
+
 const CARD_DIR := "res://resources/cards/"
 
 func _init() -> void:
 	var Meta_ = load("res://scripts/meta_state.gd")
-	Meta_.path_prefix = "t_test_power_"
+	Meta_.path_prefix = SANDBOX
 	_cleanup_sandbox()
 	Meta_.writes_disabled = false
-	load("res://scripts/settings_state.gd").path_override = "user://t_test_power_settings.json"
+	load("res://scripts/settings_state.gd").path_override = "user://" + SANDBOX + "settings.json"
 	var fails := 0
 
 	# --- every catalogued power loads and is coherent ---
@@ -48,23 +53,23 @@ func _init() -> void:
 			fails += 1
 			print("FAIL %s dominates the deck: ratio %.3f vs %.3f" % [id, withp, bare])
 	# levelling a power must also be priced in
-	var lv1 := Balance.power("cleave")
-	var lv5 := Balance.power("cleave").duplicate()
+	var lv1 := Balance.power("scythe")
+	var lv5 := Balance.power("scythe").duplicate()
 	lv5.level = 5
 	if Balance.power_ratio(deck, [], lv5) <= Balance.power_ratio(deck, [], lv1):
 		fails += 1; print("FAIL levelling a power does not raise the ratio")
 
 	# --- ONCE per turn, and it costs energy ---
 	var eng = load("res://scripts/combat_engine.gd").new()
-	var cleave := Balance.power("cleave")
-	eng.setup(deck, 60, 60, 3, Balance.Tier.NORMAL, "", [], [], cleave)
+	var scythe := Balance.power("scythe")
+	eng.setup(deck, 60, 60, 3, Balance.Tier.NORMAL, "", [], [], scythe)
 	eng.start_turn()
 	var energy_before: int = eng.energy
 	if not eng.can_use_power():
 		fails += 1; print("FAIL power unusable on a fresh turn")
 	if eng.use_power() == "":
 		fails += 1; print("FAIL use_power did nothing")
-	if eng.energy != energy_before - cleave.cost:
+	if eng.energy != energy_before - scythe.cost:
 		fails += 1; print("FAIL power did not spend energy: %d -> %d" % [energy_before, eng.energy])
 	if eng.can_use_power():
 		fails += 1; print("FAIL power is firable twice in one turn")
@@ -75,9 +80,9 @@ func _init() -> void:
 	if not eng.can_use_power() and not eng.over():
 		fails += 1; print("FAIL power did not refresh at the start of the next turn")
 
-	# --- it actually does something: Cleave must hit every enemy ---
+	# --- it actually does something: Scythe must hit every enemy ---
 	var eng2 = load("res://scripts/combat_engine.gd").new()
-	eng2.setup(deck, 60, 60, 3, Balance.Tier.NORMAL, "", [], [], Balance.power("cleave"))
+	eng2.setup(deck, 60, 60, 3, Balance.Tier.NORMAL, "", [], [], Balance.power("scythe"))
 	eng2.start_turn()
 	var hp_before: Array = []
 	for e in eng2.enemies:
@@ -85,7 +90,7 @@ func _init() -> void:
 	eng2.use_power()
 	for i in eng2.enemies.size():
 		if eng2.enemies[i].hp >= hp_before[i]:
-			fails += 1; print("FAIL Cleave did not damage enemy %d" % i); break
+			fails += 1; print("FAIL Scythe did not damage enemy %d" % i); break
 
 	# --- energy it cannot pay for ---
 	var eng3 = load("res://scripts/combat_engine.gd").new()
@@ -96,7 +101,7 @@ func _init() -> void:
 		fails += 1; print("FAIL power firable with no energy")
 	# an HP cost must never be lethal, same rule as a card
 	var eng4 = load("res://scripts/combat_engine.gd").new()
-	eng4.setup(deck, 60, 60, 3, Balance.Tier.NORMAL, "", [], [], Balance.power("second_wind"))
+	eng4.setup(deck, 60, 60, 3, Balance.Tier.NORMAL, "", [], [], Balance.power("push_on"))
 	eng4.start_turn()
 	eng4.player.hp = 3
 	if eng4.can_use_power():
@@ -152,7 +157,7 @@ func _init() -> void:
 	var m3 = Meta_.new()
 	m3.new_save()
 	m3.powers = {}
-	m3.equipped_power = "cleave"
+	m3.equipped_power = "scythe"
 	if m3.power_data() != null:
 		fails += 1; print("FAIL an unowned power still equips")
 
@@ -166,8 +171,8 @@ func _init() -> void:
 func _starter() -> Array[CardData]:
 	var deck: Array[CardData] = []
 	for i in 4:
-		deck.append(load(CARD_DIR + "strike.tres") as CardData)
-		deck.append(load(CARD_DIR + "defend.tres") as CardData)
+		deck.append(load(CARD_DIR + "hack.tres") as CardData)
+		deck.append(load(CARD_DIR + "cover.tres") as CardData)
 	return deck
 
 ## Remove this test's sandboxed files so a test run leaves no residue in the
@@ -181,7 +186,7 @@ func _cleanup_sandbox() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()

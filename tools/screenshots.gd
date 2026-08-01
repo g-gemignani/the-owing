@@ -33,6 +33,12 @@ const SHOTS := [
 	# The second capture is the same screen a third of the way through a floor.
 	["IsoRunExplored", "res://scenes/IsoRun.tscn", "iso_walked"],
 	["Combat", "res://scenes/Combat.tscn", "combat"],
+	# The hand is the one part of the game with three states worth photographing
+	# rather than one. At rest the cards hang off the bottom edge on purpose; the
+	# other two are what pays for that, and neither exists in a still of the resting
+	# screen — which is precisely how a layout gets shipped half-checked (D104).
+	["CombatHover", "res://scenes/Combat.tscn", "combat", "hover"],
+	["CombatInspect", "res://scenes/Combat.tscn", "combat", "inspect"],
 	["Shop", "res://scenes/Shop.tscn", "shop"],
 	["Encounter", "res://scenes/Encounter.tscn", "event"],
 	["Chest", "res://scenes/Chest.tscn", "chest"],
@@ -66,7 +72,8 @@ func _ready() -> void:
 	for shot in SHOTS:
 		if only.size() > 0 and not only.has(String(shot[0])):
 			continue
-		await _capture(String(shot[0]), String(shot[1]), String(shot[2]))
+		await _capture(String(shot[0]), String(shot[1]), String(shot[2]),
+			String(shot[3]) if shot.size() > 3 else "")
 
 	print("SHOTS: ", ProjectSettings.globalize_path(OUT))
 	# Same sandbox rule as the test suite: no `t_*` file may survive the run —
@@ -80,6 +87,45 @@ func _ready() -> void:
 	_purge()
 	get_tree().quit()
 
+## Put a built screen into a state the player reaches with the mouse, so it can be
+## photographed. Drives the SHIPPED wiring — the card's own `mouse_entered`, the
+## card's own inspector call — rather than posing the nodes by hand, because a
+## capture of a pose no player can produce is worse than no capture.
+func _pose(inst: Node, what: String) -> void:
+	var cards := _card_holders(inst)
+	if cards.is_empty():
+		print("POSE MISS ", what, " — no card on screen")
+		return
+	# the middle of the fan: the card least likely to be clipped by either corner
+	var holder: Control = cards[cards.size() / 2]
+	match what:
+		"hover":
+			for c in holder.get_children():
+				if c is Button:
+					(c as Button).mouse_entered.emit()
+					return
+		"inspect":
+			var id: String = holder.get_meta("card_id")
+			var card := load(MetaState.CATALOG.get(id, "")) as CardData
+			if card != null:
+				UI.inspect_card(holder, card, inst.eng if "eng" in inst else null)
+
+func _card_holders(n: Node) -> Array[Control]:
+	var out: Array[Control] = []
+	if n is Control and (n as Control).has_meta("card_id"):
+		out.append(n as Control)
+	for c in n.get_children():
+		out.append_array(_card_holders(c))
+	return out
+
+## Delete only what THIS harness wrote. It used to take every `t_*` file in
+## `user://`, which is the sandbox prefix the whole test suite shares — so running
+## the harness beside a suite deleted the save a live test was in the middle of
+## using, and the docstring's "do not run this while tests/run.sh is running" was
+## the workaround for it rather than a law of nature. Owning one prefix is cheaper
+## than remembering a rule.
+const SANDBOX := "t_shots_"
+
 func _purge() -> void:
 	var d := DirAccess.open("user://")
 	if d == null:
@@ -88,7 +134,7 @@ func _purge() -> void:
 	var doomed: Array[String] = []
 	var f := d.get_next()
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()
@@ -166,13 +212,13 @@ func _setup(need: String) -> void:
 				"dungeon": "The Crypt", "difficulty": 1, "killer": "Crypt Hound",
 				"tier": Balance.Tier.NORMAL, "turns": 6,
 				"forfeited_cards": 3, "forfeited_gold": 140,
-				"penalty_gold": 25, "penalty_cards": ["strike"],
+				"penalty_gold": 25, "penalty_cards": ["hack"],
 				"forfeited_packs": 2,
 			}
 		_:
 			GameState.pending = {"type": GameState.NodeType.COMBAT, "row": 1, "col": 0, "cleared": false}
 
-func _capture(name: String, path: String, need: String) -> void:
+func _capture(name: String, path: String, need: String, after: String = "") -> void:
 	_setup(need)
 	var packed := load(path) as PackedScene
 	if packed == null:
@@ -183,6 +229,10 @@ func _capture(name: String, path: String, need: String) -> void:
 	# three frames: one to build, one to lay out, one to draw the laid-out tree
 	for i in 4:
 		await get_tree().process_frame
+	if after != "":
+		_pose(inst, after)
+		for i in 3:
+			await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
 	img.save_png(OUT + name + ".png")

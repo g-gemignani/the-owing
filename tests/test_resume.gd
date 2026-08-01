@@ -6,15 +6,20 @@
 ## Run: godot --headless --script tests/test_resume.gd
 extends SceneTree
 
+## Every user:// file this suite may create begins with this. The teardown below
+## deletes by it rather than by "t_", which would delete the live save of every
+## other suite running at the same time.
+const SANDBOX := "t_test_resume_"
+
 const DIR := "res://resources/cards/"
 
 func _init() -> void:
 	# sandbox: tests must never write over the player's real save or settings
 	var Meta_ = load("res://scripts/meta_state.gd")
-	Meta_.path_prefix = "t_test_resume_"
+	Meta_.path_prefix = SANDBOX
 	_cleanup_sandbox()   # a flush after a previous run can outlive its cleanup
 	Meta_.writes_disabled = false
-	load("res://scripts/settings_state.gd").path_override = "user://t_test_resume_settings.json"
+	load("res://scripts/settings_state.gd").path_override = "user://" + SANDBOX + "settings.json"
 	var fails := 0
 	var m = load("res://scripts/meta_state.gd").new()
 
@@ -60,7 +65,7 @@ func _init() -> void:
 
 	# --- a combat round-trips exactly ---
 	var deck: Array[CardData] = []
-	for id in ["strike", "strike", "defend", "bash", "twin_strike", "venom_fang", "shiv", "guard"]:
+	for id in ["hack", "hack", "cover", "stave_in", "two_quick", "venom_fang", "nick", "guard"]:
 		deck.append((load(DIR + id + ".tres") as CardData).duplicate())
 	var e := CombatEngine.new()
 	e.setup(deck, 47, 60, 3, Balance.Tier.ELITE, "hexer")
@@ -161,7 +166,7 @@ func _init() -> void:
 	Meta.delete_slot(0)
 	var w = Meta.new(); w.slot = 0; w.new_save()
 	w.saved_run = {"dungeon_id": Balance.DUNGEONS[0], "dungeon": 1, "hp": 30, "max_hp": 60,
-		"deck": [{"id": "strike", "level": 1, "growth": 0}],
+		"deck": [{"id": "hack", "level": 1, "growth": 0}],
 		"traversal": {"kind": 0, "map": [], "current": null},
 		"escrow_cards": [], "escrow_gold": 0, "combat": {}}
 	w.writes_meta = 0
@@ -219,7 +224,7 @@ func _cleanup_sandbox() -> void:
 	var f := d.get_next()
 	var doomed: Array[String] = []
 	while f != "":
-		if f.begins_with("t_"):
+		if f.begins_with(SANDBOX):
 			doomed.append(f)
 		f = d.get_next()
 	d.list_dir_end()
