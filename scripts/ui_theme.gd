@@ -28,15 +28,31 @@ const FULLSCREEN := true
 # Base (unscaled) sizes; actual sizes are these times the current scale.
 const BASE_FONT := 16
 const BASE_TITLE_FONT := 22
-# Cards are tall because they hold authored rules text. At the old 90px the font
-# had to shrink so far to fit a long description that it stopped being readable.
-const BASE_CARD := Vector2(150, 132)
+# A PORTRAIT card, in two parts: the illustration on top, the name and rules text
+# below it — the shape Slay the Spire and Hearthstone both use, and the shape a
+# card has to be for the picture to be a picture rather than a wash behind words.
+#
+# The width is unchanged from the old 150x132. The fan's arithmetic is all in
+# widths (step, overlap, the reserves either side), so keeping it means the hand
+# still lays out the same and only the vertical budget moved. What pays for the
+# extra height is that the card no longer has to fit on screen whole: see
+# Combat.HAND_PEEK.
+const BASE_CARD := Vector2(150, 214)
 
-## How much a card grows on hover. A resting card shows only its name and cost, so
-## this is what makes the rules text readable — it must be big enough to be worth
-## the motion, small enough that a hovered card stays on screen.
+## The bands, top to bottom, as fractions of the card's HEIGHT. They have to sum
+## to less than 1: what is left over is the rules text, which is the one region
+## that must absorb whatever the others do not use.
+const CARD_ART_BAND := 0.47     ## the illustration, from the top edge down
+const CARD_NAME_BAND := 0.13    ## the name strip directly beneath it
+## Border inset, as a fraction of the card's WIDTH — never its height, or a tall
+## card would get a fat top and bottom margin and a thin one at the sides.
+const CARD_PAD := 0.055
+
+## How much a card grows on hover. The rules text is on the card at all times now,
+## so this is no longer what makes it exist — it is what makes it comfortable, and
+## what lifts a card in hand clear of the screen edge it is hanging over.
 const CARD_HOVER_SCALE := 1.45
-const BASE_REWARD_CARD := Vector2(170, 148)
+const BASE_REWARD_CARD := Vector2(172, 246)
 const BASE_MAP_NODE := Vector2(150, 52)
 const BASE_SEPARATION := 8
 
@@ -98,6 +114,18 @@ const KIT_SLICE := 12
 ## clipped on the deck builder's short buttons.
 const KIT_PAD_X := 22.0
 const KIT_PAD_Y := 8.0
+
+## How wide a checkbox is allowed to draw, in layout pixels.
+##
+## A nine-slice is authored at 2x and costs nothing for it — the slice margins scale
+## with the frame. A theme ICON is not: Godot blits it at its own pixel size, so the
+## 64x64 the asset list asks for (2x of 32, for the 1440p and 4K scale-ups) draws as a
+## 64px block in a 1280x720 row built for a 16px font. It ate the row: the label
+## started under the tile and the first letter of "Fullscreen" was painted over by an
+## opaque stone corner (D107). Capping here rather than shrinking the file keeps the
+## resolution the scale-up needs, and keeps the fix in the one place that knows how
+## big a row is.
+const CHECKBOX_ICON := 26.0
 
 ## Which ink reads on this frame, measured off the middle of the art itself.
 ##
@@ -316,6 +344,32 @@ func _rebuild_theme() -> void:
 	if checked != null and unchecked != null:
 		theme.set_icon("checked", "CheckBox", checked)
 		theme.set_icon("unchecked", "CheckBox", unchecked)
+		# On "CheckBox" and NOT on "Button": a control reads a theme constant off its
+		# own type before its base type, so this reaches every checkbox state without
+		# capping the icon on the relic, power and card-thumbnail buttons, which are
+		# deliberately bigger than a tick.
+		theme.set_constant("icon_max_width", "CheckBox", int(round(CHECKBOX_ICON * scale)))
+		theme.set_constant("h_separation", "CheckBox", int(round(10 * scale)))
+		# The states have to come from ONE family, and the missing one was `hover_pressed`.
+		# A checkbox is a TOGGLE: checked, it draws `pressed`, and hovering a checked box
+		# asks for `hover_pressed` — which nothing set, on either type. So it fell through
+		# to the engine's default, an empty box with no content margin, and hovering a
+		# ticked row did not light it, it DELETED the frame. The 22px of padding that
+		# frame was carrying went with it, sliding the label left, under an icon that had
+		# not moved. That is the "text hidden by the checkbox" (D107).
+		var states := {
+			"normal": "normal", "hover": "hover", "pressed": "pressed",
+			"hover_pressed": "hover", "disabled": "disabled", "focus": "focus",
+		}
+		for st in states:
+			var from: String = states[st]
+			if not theme.has_stylebox(from, "Button"):
+				continue
+			var sb := theme.get_stylebox(from, "Button")
+			theme.set_stylebox(st, "CheckBox", sb)
+			# Every toggle in the game has the same hole, not just the checkboxes.
+			if not theme.has_stylebox(st, "Button"):
+				theme.set_stylebox(st, "Button", sb)
 	var tip := kit_frame("frame_tooltip", 24, 24, 24, 24, 10.0, 8.0)
 	if tip != null:
 		theme.set_stylebox("panel", "TooltipPanel", tip)

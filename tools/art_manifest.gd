@@ -58,16 +58,22 @@ const FRAME_KIT := [
 	["ui/frame_card_rarity_2.png", "320x448", "Rare — blue inlay, brighter metal."],
 	["ui/frame_card_rarity_3.png", "320x448", "Epic — violet inlay, glow."],
 	["ui/frame_card_rarity_4.png", "320x448", "Legendary — gold, ornate, unmistakable at a glance."],
-	["ui/card_back.png", "320x448", "The back of a card. REQUIRED by the deck traversal, which reveals cards face-down.", Kind.SCENE],
+	["ui/card_back.png", "320x448", "The back of a card. REQUIRED by the deck traversal, which reveals cards face-down.", Kind.SCENE,
+		"A carved stone tablet seen face-on, filling the frame, one worn sigil cut into its centre — a closed eye pressed into rock. Symmetrical, quiet, nothing that reads as a face."],
 	["ui/divider.png", "128x16", "Tileable horizontally. A carved rule between sections."],
 	["ui/dropdown.png", "192x96", "Nine-slice 32/32/28/28, matching the button. OptionButton is unstyled today."],
-	["ui/dropdown_arrow.png", "32x32", "The open/close chevron.", Kind.PAINT],
+	["ui/dropdown_arrow.png", "32x32", "The open/close chevron.", Kind.PAINT,
+		"A small chevron of chipped iron pointing down. One solid shape, centred."],
 	["ui/slider_track.png", "128x24", "Tileable horizontally. HSlider is unstyled today."],
-	["ui/slider_grabber.png", "48x48", "The slider handle.", Kind.PAINT],
+	["ui/slider_grabber.png", "48x48", "The slider handle.", Kind.PAINT,
+		"A short bar of worn iron with a groove across its middle, seen face-on."],
 	["ui/scrollbar_track.png", "24x128", "Tileable vertically. VScrollBar is unstyled today."],
-	["ui/scrollbar_grabber.png", "24x48", "The scrollbar thumb.", Kind.PAINT],
-	["ui/checkbox_on.png", "64x64", "Checked. Settings screen.", Kind.PAINT],
-	["ui/checkbox_off.png", "64x64", "Unchecked.", Kind.PAINT],
+	["ui/scrollbar_grabber.png", "24x48", "The scrollbar thumb.", Kind.PAINT,
+		"A narrow vertical slug of worn iron, rounded at both ends."],
+	["ui/checkbox_on.png", "64x64", "Checked. Settings screen.", Kind.PAINT,
+		"A square socket of dark stone with an iron peg driven into it, seated hard."],
+	["ui/checkbox_off.png", "64x64", "Unchecked.", Kind.PAINT,
+		"The same square socket of dark stone, empty. The peg is gone."],
 ]
 
 ## Deliberately empty. The fight is framed HEAD-ON into the corridor the backdrop
@@ -87,37 +93,69 @@ const VITALS := [
 	["ui/bar_hp_fill.png", "32x48", "Tileable horizontally. Current HP."],
 	["ui/bar_hp_loss.png", "32x48", "Tileable. The slice about to be lost — this is how the enemy's telegraphed damage gets shown on the bar."],
 	["ui/bar_block_fill.png", "32x48", "Tileable. Block, stacked over HP."],
-	["ui/energy_orb_full.png", "128x128", "One unspent energy. Replaces the text 'Energy 3/3'.", Kind.PAINT],
-	["ui/energy_orb_empty.png", "128x128", "One spent energy, same silhouette.", Kind.PAINT],
-	["ui/orb_glow.png", "192x192", "Additive bloom for a spend/gain flash.", Kind.PAINT],
-	["ui/target_ring.png", "256x256", "Ring/reticle marking the targeted enemy. Replaces the '> ' text prefix.", Kind.PAINT],
-	["ui/card_glow.png", "320x448", "Additive edge glow: this card is affordable right now. Nothing marks it today.", Kind.PAINT],
+	["ui/energy_orb_full.png", "128x128", "One unspent energy. Replaces the text 'Energy 3/3'.", Kind.PAINT,
+		"A round orb of cut stone lit from within by one warm point at its heart. Whole, and about to be spent."],
+	["ui/energy_orb_empty.png", "128x128", "One spent energy, same silhouette.", Kind.PAINT,
+		"The same orb with the light gone out of it: cold grey stone, the silhouette unchanged."],
+	["ui/orb_glow.png", "192x192", "Additive bloom for a spend/gain flash.", Kind.PAINT,
+		"A soft round bloom of warm light on black, brightest at the centre, fading to nothing at the edge. No object, only the glow."],
+	["ui/target_ring.png", "256x256", "Ring/reticle marking the targeted enemy. Replaces the '> ' text prefix.", Kind.PAINT,
+		"A ring of worn iron broken into four arcs with gaps between them, the inner edge notched like a sight. Face-on, empty in the middle."],
+	["ui/card_glow.png", "320x448", "Additive edge glow: this card is affordable right now. Nothing marks it today.", Kind.PAINT,
+		"A tall rounded halo of warm light on black, brightest along its edge and fading inward. No card, only the light that would spill around one."],
 ]
 
 ## Enemy intent. `eng.intent_text()` renders as the string 'hit 5' today, and the
 ## telegraph is the core read of the whole combat system.
+## The subjects are written to be distinguishable AS SILHOUETTES, which is what the
+## recipe asks for and what a meaning cannot deliver: "it will defend" is a rule, and
+## a generator handed a rule invents a picture of a fight.
 const INTENTS := [
-	["ui/intent_attack.png", "96x96", "Incoming single attack."],
-	["ui/intent_attack_multi.png", "96x96", "Incoming multi-hit."],
-	["ui/intent_block.png", "96x96", "It will defend."],
-	["ui/intent_buff.png", "96x96", "It will strengthen itself."],
-	["ui/intent_debuff.png", "96x96", "It will weaken you."],
-	["ui/intent_poison.png", "96x96", "It will poison you."],
-	["ui/intent_unknown.png", "96x96", "Intent hidden."],
+	["ui/intent_attack.png", "96x96", "Incoming single attack.", null,
+		"One heavy blade driving down, point toward the viewer."],
+	["ui/intent_attack_multi.png", "96x96", "Incoming multi-hit.", null,
+		"Three narrow blades fanned side by side, driving down together."],
+	["ui/intent_block.png", "96x96", "It will defend.", null,
+		"A slab shield face-on, broad and flat, its rim raised."],
+	["ui/intent_buff.png", "96x96", "It will strengthen itself.", null,
+		"A blunt arrow rising out of a clenched fist."],
+	["ui/intent_debuff.png", "96x96", "It will weaken you.", null,
+		"A blunt arrow driving down into an open, sagging hand."],
+	["ui/intent_poison.png", "96x96", "It will poison you.", null,
+		"One fat droplet falling, a bubble rising through it."],
+	["ui/intent_unknown.png", "96x96", "Intent hidden.", null,
+		"A closed eye, the lid drawn down. Nothing to read."],
 ]
 
 ## Status/effect symbols. Painted replacements for PixelArt.GLYPHS, which is 13
 ## monochrome bitmaps covering 21 needed meanings — so several currently share one.
 ## MUST stay monochrome-tintable: callers tint by rarity and fade for spent states.
+## [id, meaning, glyph]. The meaning is for the shopping list; the glyph is what a
+## generator can actually draw. "Block." and "+block per block card." name a rule,
+## and a rule prompts a diagram — these are single shapes instead, chosen to stay
+## apart from each other at 48px (D101).
 const SYMBOLS := [
-	["attack", "Damage."], ["block", "Block."], ["pierce", "Damage that ignores Block."],
-	["poison", "Poison stacks."], ["thorns", "Damage returned to attackers."],
-	["vulnerable", "Takes +50% damage."], ["weak", "Deals -25% damage."],
-	["strength", "+damage per attack."], ["dexterity", "+block per block card."],
-	["retain", "Stays in hand at end of turn."], ["exhaust", "Playable once per fight."],
-	["hp", "Health."], ["heal", "Healing."], ["energy", "Energy."], ["gold", "Gold."],
-	["card", "A card."], ["dice", "A die / the dice board."], ["skull", "Elite or boss."],
-	["campfire", "Rest."], ["rope", "Escape Rope."], ["chest", "Treasure."],
+	["attack", "Damage.", "A notched blade, point up."],
+	["block", "Block.", "A slab shield, face-on."],
+	["pierce", "Damage that ignores Block.", "A narrow spike passing clean through a broken shield."],
+	["poison", "Poison stacks.", "A fat droplet with a bubble caught in it."],
+	["thorns", "Damage returned to attackers.", "A closed ring of barbs, every point turned outward."],
+	["vulnerable", "Takes +50% damage.", "A shield split top to bottom, the crack open."],
+	["weak", "Deals -25% damage.", "A drooping arm, the fist come unclenched."],
+	["strength", "+damage per attack.", "A clenched fist, knuckles forward."],
+	["dexterity", "+block per block card.", "A tilted buckler glancing a blow aside."],
+	["retain", "Stays in hand at end of turn.", "A closed hand holding a single card edge-on."],
+	["exhaust", "Playable once per fight.", "A card curling into ash from one corner."],
+	["hp", "Health.", "A blunt anatomical heart, not a valentine."],
+	["heal", "Healing.", "Two strips of linen crossed over a heart."],
+	["energy", "Energy.", "A round orb with one point of light at its centre."],
+	["gold", "Gold.", "Three coins stacked, seen edge-on."],
+	["card", "A card.", "One card, corners rounded, its face blank."],
+	["dice", "A die / the dice board.", "A cube seen at an angle, its faces marked with round pips."],
+	["skull", "Elite or boss.", "A skull, jaw closed, face-on."],
+	["campfire", "Rest.", "Three logs stacked, one flame above them."],
+	["rope", "Escape Rope.", "A coiled rope with one end hanging free."],
+	["chest", "Treasure.", "A small chest, lid shut, one iron band across it."],
 ]
 
 const VFX := [
@@ -131,14 +169,18 @@ const VFX := [
 
 ## Encounter kinds, in Traversal.Enc order. Used by the graph map (which draws NO
 ## icons today), the dice board and the deck traversal.
+## [id, meaning, object]. Same split as SYMBOLS: "A choice with consequences" is what
+## the node MEANS and cannot be drawn, so each kind also names one object. The node
+## and tile sets share these, which is the point — the recipe asks for the node set
+## re-framed for the tiles rather than fourteen separate ideas.
 const ENCOUNTERS := [
-	["combat", "An ordinary fight."],
-	["elite", "A harder fight, worth more."],
-	["rest", "A campfire: heal, or work on the deck."],
-	["boss", "The named finale of the dungeon."],
-	["shop", "A merchant."],
-	["event", "A choice with consequences."],
-	["treasure", "Gold, sometimes a card."],
+	["combat", "An ordinary fight.", "Two crossed blades."],
+	["elite", "A harder fight, worth more.", "Two crossed blades with a skull set behind them."],
+	["rest", "A campfire: heal, or work on the deck.", "Three logs stacked, one flame above them."],
+	["boss", "The named finale of the dungeon.", "A crown of iron thorns resting on a skull."],
+	["shop", "A merchant.", "A hanging balance, its two pans uneven."],
+	["event", "A choice with consequences.", "A stone waymarker at a fork, two arms pointing different ways."],
+	["treasure", "Gold, sometimes a card.", "A chest with its lid open, light coming out of it."],
 ]
 
 const MAP_KIT := [
@@ -153,10 +195,14 @@ const MAP_KIT := [
 const SHELL := [
 	["fonts/display.ttf", "-", "Display face for titles and card names. Needs an OFL/SIL licence, recorded like the Kenney ones. THE GAME HAS NO CUSTOM FONT — everything is Godot's default.", Kind.LICENCE],
 	["fonts/body.ttf", "-", "Body face for rules text. Must stay legible at 12px, since card text shrinks to fit.", Kind.LICENCE],
-	["ui/logo.png", "1600x480", "The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT],
-	["ui/boot_splash.png", "1280x720", "Boot splash. None configured.", Kind.SCENE],
-	["ui/cursor.png", "64x64", "Optional pointer.", Kind.PAINT],
-	["ui/cursor_press.png", "64x64", "Optional pressed pointer.", Kind.PAINT],
+	["ui/logo.png", "1600x480", "The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
+		"An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind."],
+	["ui/boot_splash.png", "1280x720", "Boot splash. None configured.", Kind.SCENE,
+		"A shut iron door at the foot of a stair, one lantern burning above it, seen head-on. Nobody in frame."],
+	["ui/cursor.png", "64x64", "Optional pointer.", Kind.PAINT,
+		"A slim iron spike pointing up and to the left. One solid shape."],
+	["ui/cursor_press.png", "64x64", "Optional pressed pointer.", Kind.PAINT,
+		"The same iron spike, shorter and driven in, its tip flared."],
 ]
 
 ## Scene backdrops that are not one dungeon or one zone.
@@ -194,6 +240,36 @@ const REFERENCE := "assets/art/bg_crypt.png"
 const ACTION_WORD := ["attacks", "makes you vulnerable", "weakens you", "defends",
 	"empowers itself", "sunders armour", "enrages", "drains life"]
 
+## One painting per effect family, and the ONLY authored art direction in this file
+## that the catalogues cannot supply. `Icons.card_family` is a mechanical fact — it
+## knows a card applies poison, not what poison looks like — so the families were
+## emitted as their own membership lists ("28 cards: Bash, Bite, Blood Price, ...")
+## and that is a table of contents, not a subject. The recipe says paint the EFFECT
+## and not any one card's fiction, so each line below paints the effect once (D101).
+##
+## Keyed by family id. `_cards()` REFUSES to emit a family with no line here rather
+## than falling back to the membership list, because the fallback is exactly the
+## defect and a silent one: a 13th family would ship 99 good prompts and one bad
+## (D34's habit, in a new place).
+const CARD_ART := {
+	"attack": "One heavy blade coming down through the frame, caught at the moment it lands. The stroke is the subject; no wielder needs to be in shot.",
+	"attack_aoe": "A single stroke opening one wide arc clean across the frame, catching several shapes at once in the dark to either side.",
+	"attack_multi": "The same blade struck three times over, its arcs overlapping, each one fainter than the last.",
+	"block": "A slab of shield-iron braced square against the frame, a blow breaking apart on it.",
+	"dexterity": "A blow glancing off a tilted buckler and away — the shape of the deflection, not the impact.",
+	"draw": "A hand of cards fanning open, the topmost one lifting free of the rest.",
+	"heal": "Strips of linen drawn tight over a wound, one warm point of light behind them.",
+	"poison": "A green fume settling low across the frame, beading on cold stone.",
+	"strength": "A fist closing on a hammer's grip, the knuckles going white.",
+	"thorns": "A barbed ring closed around a reaching hand, every point turned outward.",
+	"vulnerable": "A shield split top to bottom, the crack open and dark.",
+	"weak": "An arm gone slack, the weapon dropping out of an opening hand.",
+	# No card lands in these two today. They are written anyway: the guard below
+	# fails on a family with no line, and the cheap half of that trade is here.
+	"energy": "An orb of cut stone brightening as a second point of light kindles beside the first.",
+	"utility": "A ring of iron keys, one held apart from the rest.",
+}
+
 ## Zone accent, per ART.md §2. Injected into the backdrop prompts so twelve rooms in
 ## five zones read as five places, and stated ONCE here rather than per prompt.
 const ZONE_ACCENT := {
@@ -207,27 +283,31 @@ const ZONE_ACCENT := {
 var _rows: Array = []       # [path, size, brief, exists, kind]
 var _sections: Array = []   # [title, note, first_row_index, count, recipe]
 var _kind: Kind = Kind.PAINT   # default for rows added to the current section
+## Set when a table and the catalogues disagree. Checked before anything is printed:
+## a manifest that emits 99 correct rows and one wrong one is worse than no manifest,
+## because the wrong row is the one nobody re-reads.
+var _fatal: String = ""
 
 func _init() -> void:
 	_section("Tier 0 — frame kit and control chrome",
 		"Highest leverage in the whole list: one kit and every screen stops looking broken.",
 		Kind.KIT,
-		"DO NOT GENERATE the nine-slices and tileable strips in this tier. A nine-slice survives being stretched to 14x only if its top and bottom strips are constant along X, its left and right constant along Y, and its centre one flat colour; a painting breaks all three and smears (D83). They come out of `tools/gen_ui_kit.gd`. The loose objects listed as paintable below are ordinary cutouts.")
+		"DO NOT GENERATE the nine-slices and tileable strips in this tier. A nine-slice survives being stretched to 14x only if its top and bottom strips are constant along X, its left and right constant along Y, and its centre one flat colour; a painting breaks all three and smears (D83). They come out of `tools/gen_ui_kit.gd`. The loose objects listed as paintable below are ordinary cutouts. Each loose object — the chevron, the bar, the slug, the two sockets — stands alone on a FLAT, EVEN field of a single colour, centred, with no wall, no room, no floor, no shadow and no scenery of any kind; that flat field is what gets cut away, and an object painted into a setting cannot be cut out of it. The card tablet is the one exception and fills its frame edge to edge. Three of the first five came back painted into a cave wall because this tier said none of that (D105).")
 	for e in FRAME_KIT:
-		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e))
+		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
 
 	_section("Tier 1b — vitals and selection", "HP, Block and Energy are all plain text today.",
 		Kind.KIT,
 		"Bar housings and fills are computed for the same reason as Tier 0 — a fill is a strip tiled along its length. The orbs and rings are cutouts: one object, centred, transparent, no ground shadow.")
 	for e in VITALS:
-		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e))
+		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
 
 	_section("Tier 1c — intent telegraphs", "Currently the string 'hit 5'.",
 		Kind.PAINT,
 		"One symbol per cell, centred, filling ~70% of its cell, on a flat even field. These are read in under a second on a crowded screen, so silhouette beats detail: a shape that survives being described in three words. Keeping the seven mutually distinguishable AS SILHOUETTES is the actual requirement, and it is the one that is lost when they are asked for one at a time — each request is blind to the other six.",
 		"A 3x3 grid at 768x768 or larger, flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- intents <sheet.png>`")
 	for e in INTENTS:
-		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e))
+		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
 
 	_section("Tier 1d — status symbols",
 		"Monochrome and tintable, please: callers tint by rarity and fade spent states.",
@@ -235,13 +315,13 @@ func _init() -> void:
 		"OVERRIDE THE PALETTE LINE IN THE PREAMBLE: these are SINGLE-COLOUR — flat white glyphs on a flat near-black field, no gradient, no interior shading, no ink outline (the shape IS the ink). `Icons` tints them by rarity and fades them for spent states, and that behaviour is load-bearing: a coloured icon cannot be tinted, only muddied. The installer takes alpha from LUMINANCE and throws the colour away, so an anti-aliased edge survives and a hue does not. Read at 48px: one idea per symbol, no scene, no object in a setting.",
 		"A 5x5 grid at 1280x1280 or larger (21 glyphs, 4 cells spare — leave them empty), flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- symbols <sheet.png>`")
 	for e in SYMBOLS:
-		_add("ui/sym_%s.png" % String(e[0]), "64x64", String(e[1]))
+		_add("ui/sym_%s.png" % String(e[0]), "64x64", String(e[1]), null, String(e[2]))
 
 	_section("Tier 1e — combat VFX", "The game has no combat feedback animation at all.",
 		Kind.SHEET,
 		"NOT A GENERATION JOB. Eight frames that have to be the same effect evolving is exactly the thing image models do not hold — eight plausible frames of eight different explosions read as a strobe, not an impact. Shader, particle system, or hand-drawn.")
 	for e in VFX:
-		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e))
+		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
 
 	# --- data-driven from here down ------------------------------------------
 	_enemies()
@@ -255,7 +335,13 @@ func _init() -> void:
 		Kind.PAINT,
 		"The fonts are licensed downloads (OFL/SIL), recorded like the Kenney ones. The logo is the one asset in the game that must carry text and the one place a generator is reliably wrong — generate the ornament and set the wordmark yourself.")
 	for e in SHELL:
-		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e))
+		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
+
+	if _fatal != "":
+		push_error("art_manifest: %s" % _fatal)
+		printerr("art_manifest: %s" % _fatal)
+		quit(1)
+		return
 
 	if OS.get_cmdline_user_args().has("--prompts"):
 		_emit_prompts()
@@ -264,8 +350,17 @@ func _init() -> void:
 	quit()
 
 ## A row's kind: its own if it declared one, otherwise the section's default.
+## An explicit `null` in the kind column means "section default" — needed by the
+## tables that skip the kind to reach the subject column after it.
 func _kind_of(e: Array) -> Kind:
-	return (e[3] as Kind) if e.size() > 3 else _kind
+	if e.size() > 3 and e[3] != null:
+		return e[3] as Kind
+	return _kind
+
+## A const table row's prompt subject, if it wrote one. Optional 5th column, so
+## the tables that need no override stay three or four wide.
+func _subject_of(e: Array) -> String:
+	return String(e[4]) if e.size() > 4 else ""
 
 ## Every archetype, with the dungeons that can field it and the shape it fights in.
 func _enemies() -> void:
@@ -331,15 +426,28 @@ func _cards() -> void:
 	keys.sort()
 
 	_section("Tier 3 — card illustrations",
-		"One per effect family to start, shared by every card in it — NOT 100 unique paintings up front. Illustration band only (top of the card face), so it never competes with the rules text. The 100 cards break down as below; unique art for the most-played can come later as `cards/<card_id>.png`, which is checked first.",
+		"One per effect family to start, shared by every card in it — NOT 100 unique paintings up front. This is the single highest-value tier in the file: the card face is two parts, and this is the top one — a real picture with its own band, not a wash behind words (D104). The 100 cards break down as below; unique art for the most-played can come later as `cards/<card_id>.png`, which is checked first.",
 		Kind.SCENE,
-		"A filled 4:3 rectangle, not a cutout — it fills the card's top band and is cropped to it. Composed for a 320x240 letterbox seen at ~3cm: one clear shape, centred, no fine detail at the edges. It sits directly above rules text, so keep the BOTTOM third of the image quiet and dark. Each of these is shared by every card in its family, so paint the EFFECT, not any one card's fiction.")
+		"A filled 4:3 rectangle, not a cutout. It is the picture band across the top of a card and it fills that band edge to edge: one clear shape, centred, read at 320x240 and shown about 3cm wide. The band is 4:3 to within half a percent, so almost nothing is cropped — use the whole rectangle. FOUR things are drawn on top of it, each on a dark rounded plate, and each needs a quiet corner under it: a cost numeral top left and an effect symbol top right, each about a quarter of the width and a fifth of the height; a damage numeral bottom left and a Block numeral bottom right, the same height but nearly half the width. The bottom two fifths also sit under a shadow that deepens to most of the way black at the very bottom edge, so put nothing down there that has to stay bright — weight the subject into the upper middle and let the lower edge fall away into dark. Each of these is shared by every card in its family, so paint the EFFECT, not any one card's fiction.")
+	# Discovered families, not a written-down list — so a new effect family shows up
+	# here by itself, and shows up as a failure until somebody says what it looks like.
+	var undescribed: Array[String] = []
+	for f in keys:
+		if not CARD_ART.has(f):
+			undescribed.append(String(f))
+	if not undescribed.is_empty():
+		_fatal = ("no CARD_ART line for card famil%s %s — add one to tools/art_manifest.gd. "
+			+ "The membership list is NOT an acceptable fallback subject (D101).") % [
+			"y" if undescribed.size() == 1 else "ies", ", ".join(undescribed)]
+		return
+
 	for f in keys:
 		var names: Array = fams[f]
 		var sample: Array = names.slice(0, mini(4, names.size()))
 		_add("cards/%s.png" % f, "320x240",
 			"%d cards: %s%s" % [names.size(), ", ".join(sample),
-				", ..." if names.size() > sample.size() else ""])
+				", ..." if names.size() > sample.size() else ""],
+			null, String(CARD_ART[f]))
 
 func _map_and_traversal() -> void:
 	_section("Tier 4 — map and traversal",
@@ -347,15 +455,22 @@ func _map_and_traversal() -> void:
 		Kind.PAINT,
 		"Cutouts: one object per cell, centred, no ground shadow, on a flat even field. **This tier is THREE sheets, not one** — the seven `node_*` icons, the seven `tile_*` icons, and the six dice faces — and the tool takes them separately: `install_sheet.gd -- nodes|tiles|dice <sheet.png>`, each with its cells in the order of the table below. The seven encounter kinds appear twice because the graph map and the dice track show the same seven meanings, so draw the node set and re-frame it for the tiles rather than inventing fourteen ideas. The node frames and the path segment are computed, not painted, for the Tier 0 reason.")
 	for e in ENCOUNTERS:
-		_add("ui/node_%s.png" % String(e[0]), "128x128", String(e[1]))
+		_add("ui/node_%s.png" % String(e[0]), "128x128", String(e[1]), null, String(e[2]))
 	for e in ENCOUNTERS:
 		_add("ui/tile_%s.png" % String(e[0]), "128x128",
-			"Dice-track version of the same: %s" % String(e[1]))
+			"Dice-track version of the same: %s" % String(e[1]), null,
+			"%s Re-framed for the dice track: the same object, set into a shallow square tile." % String(e[2]))
+	# The brief quotes the placeholder string it replaces, which is useful in the
+	# shopping list and forbidden in a prompt — the style block bans numerals, and
+	# a die's pips are the one place that has to be said carefully.
 	for i in 6:
 		_add("ui/die_%d.png" % (i + 1), "128x128",
-			"A die showing %d. The two dice are currently the text 'dice: [3, 2]'." % (i + 1))
+			"A die showing %d. The two dice are currently the text 'dice: [3, 2]'." % (i + 1),
+			null,
+			"A stone die resting square to the viewer, its upward face carrying %s round pip%s, deeply cut. No digits anywhere." % [
+				["one", "two", "three", "four", "five", "six"][i], "" if i == 0 else "s"])
 	for e in MAP_KIT:
-		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e))
+		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
 
 ## How many dungeons are still on the 16x16 fallback tile. COUNTED, not written down:
 ## this line read "nine of twelve" while nine of them were being installed, which is
@@ -544,7 +659,10 @@ func _emit_prompt_section(s: Array) -> void:
 	print("| save as | subject |")
 	print("|---|---|")
 	for r in rows:
-		print("| `%s` | %s |" % [String(r[0]), String(r[2]).replace("|", "\\|")])
+		# The prompt sheet asks for a drawing, so it prefers the subject; the
+		# brief is the fallback for rows whose brief is already visual.
+		var subject := String(r[5]) if String(r[5]) != "" else String(r[2])
+		print("| `%s` | %s |" % [String(r[0]), subject.replace("|", "\\|")])
 	print("")
 
 func _generable(k: Kind) -> bool:
@@ -577,10 +695,17 @@ func _section(title: String, note: String, kind: Kind = Kind.PAINT, recipe: Stri
 	_kind = kind
 	_sections.append([title, note, _rows.size(), 0, recipe, sheet])
 
-func _add(rel: String, size: String, brief: String, kind: Variant = null) -> void:
+## `brief` answers "why is this file wanted" and goes to ART_ASSETS.md. `subject`
+## answers "what do I draw" and goes to ART_PROMPTS.md; when it is empty the brief
+## is reused. They started as one string and that was a defect, not a saving: a
+## brief earns its keep by naming the wiring ("Replaces the text 'Energy 3/3'"),
+## and a prompt carrying that sentence asks a generator for UI it cannot see and
+## quotes text at a style block whose FORBIDDEN line bans text (D101).
+func _add(rel: String, size: String, brief: String, kind: Variant = null,
+		subject: String = "") -> void:
 	var path := ART + rel
 	var exists := ResourceLoader.exists(path) or FileAccess.file_exists(path)
-	_rows.append([rel, size, brief, exists, _kind if kind == null else kind])
+	_rows.append([rel, size, brief, exists, _kind if kind == null else kind, subject])
 	if not _sections.is_empty():
 		_sections[-1][3] = _rows.size() - int(_sections[-1][2])
 

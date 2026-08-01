@@ -6,7 +6,15 @@ extends Node
 
 const PATH := "user://settings.json"
 ## Overridable so tests never write over the player's real settings.
-static var path_override := ""
+##
+## Sandboxed by default under `--headless` for the same reason MetaState is: the
+## game is never played headless, so a headless writer is a test or a diagnostic,
+## and this file was corrupted once by one that forgot to opt out. DECKCRAWL_SANDBOX
+## separates concurrently-running suites from each other; see meta_state.gd.
+static var _sandbox := OS.get_environment("DECKCRAWL_SANDBOX")
+static var path_override := (
+	("user://t_%s_settings.json" % _sandbox if _sandbox != "" else "user://t_headless_settings.json")
+	if DisplayServer.get_name() == "headless" else "")
 
 static func settings_path() -> String:
 	return path_override if path_override != "" else PATH
