@@ -50,9 +50,8 @@ func _init() -> void:
 			var relic_hp1 := 0
 			for r1 in relics:
 				relic_hp1 += r1.bonus_max_hp
-			var line := "   %-16s d%d %-5s %3dhp RUN %3.0f%% (%.1f fights, %.1f avoided) |" % [
+			var line := "   %-16s d%d %3dhp RUN %3.0f%% (%.1f fights, %.1f avoided) |" % [
 				dd.name if dd != null else dungeon_id, dungeon,
-				_kind_name(dd.traversal if dd != null else 0),
 				Balance.max_hp_for(clears, relic_hp1),
 				run["complete"] * 100.0, run["avg_fights"], run["avg_avoided"]]
 			for tier in [Balance.Tier.NORMAL, Balance.Tier.ELITE, Balance.Tier.BOSS]:
@@ -83,7 +82,7 @@ func _print_budget() -> void:
 
 ## Is paying HP to skip a fight priced, or is it a cheat?
 ##
-## The deck model's whole decision is face-or-dodge, and it went unmeasured for its
+## The old deck model's whole decision was face-or-dodge, and it went unmeasured for its
 ## entire existence because the driver only dodged below 35% HP — which a greedy
 ## player almost never sits at. So the three lines of play are now measured against
 ## each other. The property that matters is D20's: **a dominant strategy is a
@@ -93,27 +92,28 @@ const CALIBRATION_TRIALS := 150
 
 func _avoid_calibration() -> void:
 	print("\n=== Avoid calibration (%d trials per cell) ===" % CALIBRATION_TRIALS)
-	print("Any dungeon whose model prices a skip — asked of the model, not assumed.")
+	print("Any dungeon that prices a skip — asked of the dungeon, not assumed.")
 	print("A price is right when SMART >= both fixed lines of play.\n")
 	var t_cal := Time.get_ticks_usec()
 	for profile in _profiles():
 		var deck: Array[CardData] = profile["deck"]
 		for dungeon_id in profile["dungeons"]:
 			var dd := Balance.dungeon(dungeon_id)
-			# Ask the MODEL whether it prices a skip, rather than naming the one that used
-			# to. This filtered on `Kind.DECK`, and when D88 moved every dungeon onto the
-			# isometric crawl it silently matched nothing — the calibration printed its
+			# Ask the DUNGEON whether it prices a skip, rather than naming the model that
+			# used to. This filtered on `Kind.DECK`, and when D88 moved every dungeon onto
+			# the isometric crawl it silently matched nothing — the calibration printed its
 			# header and no rows, so the check that a dodge is not a dominant strategy
 			# (D20) went dark at exactly the moment a new model inherited the mechanic.
 			# A harness that selects by name goes quiet when the name changes; one that
-			# selects by behaviour follows the behaviour.
+			# selects by behaviour follows the behaviour. The names are gone now (D94) and
+			# this reads the same, which is the point.
 			if dd == null:
 				continue
-			# Walked, not peeked: the deck model reveals a dodgeable card immediately, but a
-			# spatial model only offers one once you are standing next to a fight, so
+			# Walked, not peeked: the old deck model revealed a dodgeable card immediately,
+			# but a spatial model only offers one once you are standing next to a fight, so
 			# checking the opening options alone would answer "no" for the model that now
 			# owns the mechanic.
-			var probe := Traversal.make(dd.traversal)
+			var probe := TraversalIso.new()
 			probe.generate(dd)
 			var prices_a_skip := false
 			for _s in 40:
@@ -150,9 +150,10 @@ func _avoid_calibration() -> void:
 
 ## Simulate a full dungeon: walk a random path through the real generated map,
 ## fighting with persistent HP, resting where offered. Returns completion rate.
-## Simulate complete runs of a dungeon, driving the real Traversal model directly.
-## Because Traversal is pure logic, ONE walker measures every model — a per-model
-## walker would be the first thing to rot when a new model is added.
+## Simulate complete runs of a dungeon, driving the real Traversal directly.
+## Because Traversal is pure logic, ONE walker measures every dungeon through the
+## same interface — a per-model walker would be the first thing to rot when a second
+## model is added, which is why this one stayed generic after D94 left only the crawl.
 func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		roster: Array = [], mode: int = Policy.SMART, trials: int = TRIALS,
 		clears: int = 0, power: PowerData = null) -> Dictionary:
@@ -167,7 +168,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 	var cost_est := {}
 	var cost_n := {}
 	for t in trials:
-		var tv := Traversal.make(dd.traversal if dd != null else Traversal.Kind.GRAPH)
+		var tv := TraversalIso.new()
 		tv.generate(dd)
 		var relic_hp := 0
 		for r in relics:
@@ -350,9 +351,9 @@ func _sim_event(hp: int, max_hp: int, gold: int) -> Dictionary:
 ## Route policy.
 ##
 ## The old version reached for Avoid only below 35% HP, and measured **0.0 avoids
-## per run in every profile** — so the deck model's entire decision (face this
+## per run in every profile** — so the old deck model's entire decision (face this
 ## encounter, or pay HP to skip it and forfeit the loot) was never exercised, and
-## `DECK_AVOID_HP_COST` had never been calibrated against anything. That is the
+## the avoid price had never been calibrated against anything. That is the
 ## same class of blind spot as the pure-debuff cards the sim never played and the
 ## poison-only cards it could not value: a mechanic the driver ignores reads as a
 ## mechanic that does not matter.
@@ -422,9 +423,9 @@ func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
 	# failure that looked exactly like difficulty.
 	#
 	# So: choose randomly among the options that resolve something, and when none do,
-	# take the model's own first suggestion rather than a coin flip. The other three
-	# models only ever offer encounters, so `resolving` is `faceable` for them and
-	# nothing about their numbers moves.
+	# take the model's own first suggestion rather than a coin flip. A model that only
+	# ever offers encounters — as the three deleted in D94 did — makes `resolving` and
+	# `faceable` the same list, so this stays right for anything added later.
 	var faceable: Array = []
 	var resolving: Array = []
 	for i in opts.size():
@@ -438,13 +439,6 @@ func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
 	if resolving.is_empty():
 		return int(faceable[0])
 	return int(resolving[randi() % resolving.size()])
-
-func _kind_name(kind: int) -> String:
-	match kind:
-		Traversal.Kind.DECK: return "deck"
-		Traversal.Kind.DICE: return "dice"
-		Traversal.Kind.ISO: return "iso"
-		_: return "graph"
 
 func _tier_of_enc(enc: int) -> int:
 	if enc == Traversal.Enc.ELITE:

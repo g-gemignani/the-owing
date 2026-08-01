@@ -18,11 +18,11 @@ func _init() -> void:
 	var fails := 0
 	var m = load("res://scripts/meta_state.gd").new()
 
-	# --- every traversal model round-trips through JSON ---
-	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE, Traversal.Kind.ISO]:
-		for did in Balance.DUNGEONS:
+	# --- the traversal round-trips through JSON, for every dungeon ---
+	for did in Balance.DUNGEONS:
+		if true:
 			var dd := Balance.dungeon(did)
-			var a := Traversal.make(kind)
+			var a := TraversalIso.new()
 			a.generate(dd)
 			# advance a few encounters so the state is not just "freshly generated"
 			var steps := 0
@@ -44,21 +44,19 @@ func _init() -> void:
 			# where int/float drift shows up
 			var blob = JSON.parse_string(JSON.stringify(a.save_state()))
 			var b := Traversal.from_state(blob, dd)
-			if b.kind() != a.kind():
-				fails += 1; print("FAIL kind lost in round-trip (%d)" % kind); break
 			if b.is_complete() != a.is_complete():
-				fails += 1; print("FAIL completion differs after restore (kind %d)" % kind)
+				fails += 1; print("FAIL completion differs after restore (%s)" % did)
 			if b.cleared != a.cleared:
-				fails += 1; print("FAIL cleared count differs (kind %d): %d vs %d" % [
-					kind, b.cleared, a.cleared])
+				fails += 1; print("FAIL cleared count differs (%s): %d vs %d" % [
+					did, b.cleared, a.cleared])
 			var oa := a.options()
 			var ob := b.options()
 			if oa.size() != ob.size():
-				fails += 1; print("FAIL option count differs after restore (kind %d): %d vs %d" % [
-					kind, oa.size(), ob.size()]); break
+				fails += 1; print("FAIL option count differs after restore (%s): %d vs %d" % [
+					did, oa.size(), ob.size()]); break
 			for i in oa.size():
 				if int(oa[i]["type"]) != int(ob[i]["type"]):
-					fails += 1; print("FAIL option %d type differs (kind %d)" % [i, kind]); break
+					fails += 1; print("FAIL option %d type differs (%s)" % [i, did]); break
 
 	# --- a combat round-trips exactly ---
 	var deck: Array[CardData] = []
@@ -117,12 +115,36 @@ func _init() -> void:
 		fails += 1; print("FAIL card levels not preserved")
 
 	# --- unknown content in a saved run must be dropped, not crash ---
-	var bad := {"kind": Traversal.Kind.GRAPH, "map": [], "current": null}
+	var bad := {"map": [], "current": null}
 	var t := Traversal.from_state(bad, Balance.dungeon(Balance.DUNGEONS[0]))
 	if t == null:
 		fails += 1; print("FAIL empty traversal blob produced null")
 	if not t.options().is_empty():
 		fails += 1; print("FAIL empty map produced options")
+
+	# --- a run saved on a traversal model that no longer exists is DROPPED --------
+	#
+	# D94 deleted three models. Their saved runs describe boards the crawl cannot read,
+	# and every field it would look for is missing — restoring one would silently hand
+	# the player a half-formed dungeon rather than an error. Saves written before the
+	# deletion stamp the model number; anything but the crawl's own 3 goes.
+	var GS_ = load("res://scripts/game_state.gd")
+	var live := TraversalIso.new()
+	live.generate(Balance.dungeon(Balance.DUNGEONS[0]))
+	var live_blob: Dictionary = JSON.parse_string(JSON.stringify(live.save_state()))
+	if not GS_.traversal_is_current(live_blob):
+		fails += 1; print("FAIL a run saved by THIS build is rejected on resume")
+	# a save written before the deletion, on the model that survived it
+	var stamped: Dictionary = live_blob.duplicate(true)
+	stamped["kind"] = 3
+	if not GS_.traversal_is_current(stamped):
+		fails += 1; print("FAIL a pre-D94 crawl run is rejected on resume")
+	for stale in [0, 1, 2]:
+		var blob2: Dictionary = live_blob.duplicate(true)
+		blob2["kind"] = stale
+		if GS_.traversal_is_current(blob2):
+			fails += 1
+			print("FAIL a run saved on deleted model %d would be restored onto the crawl" % stale)
 
 	# --- save format carries the run and reports it in the slot summary ---
 	var Meta = load("res://scripts/meta_state.gd")

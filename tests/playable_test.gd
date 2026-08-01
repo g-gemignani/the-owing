@@ -1,6 +1,6 @@
 ## Integration test: the game is actually PLAYABLE, not merely loadable.
 ##
-## Written after a black screen reached a player. `map.gd` stopped compiling and
+## Written after a black screen reached a player. A run view stopped compiling and
 ## stayed broken for five commits, each of which reported a fully green suite,
 ## because every existing test either read the file as text or checked
 ## `load(path) != null` — and `load()` happily returns a Resource for a script
@@ -63,11 +63,11 @@ func _every_screen_is_usable() -> void:
 	GameState.pending = {"type": GameState.NodeType.COMBAT}
 
 	for name in _scene_names():
-		# The three traversal views run on state only their own kind of dungeon
-		# produces. Handing a dice board a graph run is a state the game never
-		# creates, and one of them spins forever on it. Stage 2 covers all three
-		# properly, once per dungeon, with the state they actually receive.
-		if name in ["Map", "DeckRun", "DiceRun", "IsoRun"]:
+		# The run view runs on state only a real run produces, and there used to be
+		# four of them: handing a dice board a graph run was a state the game never
+		# created, and one of them spun forever on it. Stage 2 covers the view
+		# properly, once per dungeon, with the state it actually receives.
+		if name in ["IsoRun"]:
 			continue
 		var path := "res://scenes/%s.tscn" % name
 		var packed := load(path) as PackedScene
@@ -96,8 +96,8 @@ func _every_screen_is_usable() -> void:
 
 ## --- 2. every dungeon can actually be entered -------------------------------
 ##
-## The reported bug exactly: enter the Crypt, get a black screen. Covers all three
-## traversal models because the dungeons use all three.
+## The reported bug exactly: enter the Crypt, get a black screen. Covers every dungeon,
+## because a black screen is per-place now that they all crawl the same way.
 func _every_dungeon_is_enterable() -> void:
 	for did in Balance.DUNGEONS:
 		_start_a_run(did)
@@ -211,7 +211,9 @@ func _every_encounter_can_be_left() -> void:
 		GameState.NodeType.EVENT: "res://scenes/Encounter.tscn",
 		GameState.NodeType.TREASURE: "res://scenes/Encounter.tscn",
 	}
-	for did in ["crypt", "ossuary", "ember_road"]:   # graph, deck, dice
+	# Three dungeons of different shape and surface, which is where they differ now
+	# that they no longer differ by traversal model (D94).
+	for did in ["crypt", "ossuary", "ember_road"]:
 		for t in types:
 			_start_a_run(did)
 			var tv = GameState.traversal
@@ -284,11 +286,9 @@ func _every_screen_has_a_way_out() -> void:
 		var packed := load(path) as PackedScene
 		if packed == null:
 			continue
-		if name in ["Map", "DeckRun", "DiceRun", "IsoRun"]:
-			# same reason as stage 1: these need their own kind of run state
-			_start_a_run(_a_dungeon_using(name))
-			if GameState.run_scene() != path:
-				continue
+		if name == "IsoRun":
+			# same reason as stage 1: the run view needs real run state under it
+			_start_a_run("crypt")
 		var inst = packed.instantiate()
 		UI.clear_escape(self)   # so a leftover registration cannot answer for this screen
 		add_child(inst)
@@ -335,7 +335,9 @@ func _the_score_plays() -> void:
 ## No ScrollContainer may be squeezed to nothing on an axis its content needs.
 ##
 ## Written after the dice board turned out to be **0px tall in the shipped window**.
-## `dice_run.gd` left both scroll modes at AUTO, and a ScrollContainer reports a
+## That board and its script went with their model in D94; the trap did not, which is
+## why this still runs over every screen. It left both scroll modes at AUTO, and a
+## ScrollContainer reports a
 ## minimum size of 0 on any axis it can scroll — so the `SIZE_EXPAND_FILL` spacers
 ## around it took every pixel. Sixteen track cells were built on every refresh and
 ## none of them had anywhere to be drawn.
@@ -587,13 +589,6 @@ func _all_text(n: Node) -> String:
 	for c in n.get_children():
 		out += _all_text(c)
 	return out
-
-func _a_dungeon_using(scene_name: String) -> String:
-	for did in Balance.DUNGEONS:
-		GameState.select_dungeon(did)
-		if GameState.run_scene().ends_with("%s.tscn" % scene_name):
-			return did
-	return "crypt"
 
 # --- helpers -----------------------------------------------------------------
 

@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = "ossuary"
 name = "The Ossuary"
 description = "Stacked neatly, floor to ceiling. Someone was tidy."
-traversal = 3
 difficulty = 2
 unlock_after_clears = 0
 enemy_roster = PackedStringArray("ossuary_wretch", "marrow_priest", "bone_picker")

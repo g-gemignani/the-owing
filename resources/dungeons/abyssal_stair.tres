@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = "abyssal_stair"
 name = "The Abyssal Stair"
 description = "Down, and then further down. The steps are not all stone."
-traversal = 3
 difficulty = 7
 unlock_after_clears = 6
 enemy_roster = PackedStringArray("drowned_thrall", "bog_lurker", "maw_tender")

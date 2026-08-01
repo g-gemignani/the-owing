@@ -1,5 +1,5 @@
-## Global run state. Autoload singleton — survives scene changes (Map <-> Combat).
-## Holds the roguelike RUN state: deck, HP, map, position, progress.
+## Global run state. Autoload singleton — survives scene changes (IsoRun <-> Combat).
+## Holds the roguelike RUN state: deck, HP, floor, position, progress.
 ## (Persistent META state — card collection, relics, city quests — layers on later.)
 extends Node
 
@@ -27,8 +27,11 @@ var current_zone: String = ""  # zone being explored on the overworld
 var manage_only: bool = false
 
 # --- traversal state ---
-## The active traversal model for this run (graph, deck, ...). Null outside a run.
+## The active traversal for this run (the iso crawl). Null outside a run.
 var traversal: Traversal = null
+## What the crawl's model number was in saves written before D94 deleted the other
+## three models. Read once, on resume, to tell a restorable run from a stale one.
+const LEGACY_ISO_KIND := 3
 var pending: Dictionary = {}     # node the player selected, handed to Combat/Shop
 # --- run escrow (D20) ---
 ## Cards and gold earned during a run are held here, not committed to MetaState,
@@ -190,10 +193,11 @@ func earn_pack(kind: String, dungeon_of: String = "", tier_of: String = "") -> v
 		"build": Balance.roll_pack_build(did),
 	})
 
-## What the run stands to lose, as the four traversal screens state it.
+## What the run stands to lose, as the run screens state it.
 ##
-## One function because there were four copies of this string and packs (D80) had
-## to be added to all of them: a thing that can be forfeited but is never shown
+## One function because there were four copies of this string — one per traversal
+## screen, back when there were four (D94) — and packs (D80) had to be added to all
+## of them: a thing that can be forfeited but is never shown
 ## while it is at risk is not really in escrow, it is just a surprise on the
 ## Defeat screen. Relics are named here too, for the same reason.
 func risk_line() -> String:
@@ -242,6 +246,19 @@ func run_to_dict() -> Dictionary:
 		"shop_stock": shop_stock,
 		"combat": combat_state,
 	}
+
+## Can this build rebuild that saved traversal?
+##
+## A run saved on one of the three models deleted in D94 describes a board that no
+## longer exists — restoring it onto the crawl would rebuild half a dungeon out of
+## keys the crawl never reads, and hand the player a broken run rather than an error.
+## Those saves stamp the model number; the crawl was 3 and now writes none at all, so
+## anything else is a deleted model and the run goes.
+##
+## Static, and separate from `run_from_dict`, so a headless test can ask it: the
+## function it guards needs autoloads under /root and a `--script` test has none.
+static func traversal_is_current(tstate: Dictionary) -> bool:
+	return int(tstate.get("kind", LEGACY_ISO_KIND)) == LEGACY_ISO_KIND
 
 func run_from_dict(d: Dictionary) -> bool:
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
@@ -294,7 +311,11 @@ func run_from_dict(d: Dictionary) -> bool:
 	keys = maxi(0, int(d.get("keys", 0)))
 	shop_stock = d.get("shop_stock", [])
 	combat_state = d.get("combat", {})
-	traversal = Traversal.from_state(d.get("traversal", {}), dungeon_data())
+	var tstate: Dictionary = d.get("traversal", {})
+	if not traversal_is_current(tstate):
+		clear_run()
+		return false
+	traversal = Traversal.from_state(tstate, dungeon_data())
 	# a restored run with no deck is unplayable; treat it as absent
 	if run_deck.is_empty():
 		clear_run()
@@ -379,10 +400,11 @@ func refresh_max_hp() -> void:
 	max_hp = Balance.max_hp_for(clears, relic_hp)
 	hp = max_hp
 
-## Build the traversal for the selected dungeon. Model comes from its data.
+## Build the traversal for the selected dungeon. Every dungeon is an iso crawl; what
+## differs between them is the floor it generates, which comes from the dungeon's data.
 func generate_map() -> void:
 	var d := dungeon_data()
-	traversal = Traversal.make(d.traversal if d != null else Traversal.Kind.GRAPH)
+	traversal = TraversalIso.new()
 	traversal.generate(d)
 
 ## Choices available right now (empty outside a run).
@@ -392,15 +414,10 @@ func options() -> Array:
 func in_run() -> bool:
 	return traversal != null and not traversal.is_complete()
 
-## Scene that renders the active traversal model.
+## Scene that renders the run. Still a function rather than a constant at the call
+## sites: it is the one place that decides, and the callers below already ask it.
 func run_scene() -> String:
-	var d := dungeon_data()
-	var kind: int = d.traversal if d != null else Traversal.Kind.GRAPH
-	match kind:
-		Traversal.Kind.DECK: return "res://scenes/DeckRun.tscn"
-		Traversal.Kind.DICE: return "res://scenes/DiceRun.tscn"
-		Traversal.Kind.ISO: return "res://scenes/IsoRun.tscn"
-		_: return "res://scenes/Map.tscn"
+	return "res://scenes/IsoRun.tscn"
 
 ## Where picking the run back up goes: into the fight if one is in progress
 ## (D22 serializes it), otherwise the traversal view. Continue, loading a slot and

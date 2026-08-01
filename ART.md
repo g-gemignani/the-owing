@@ -55,11 +55,11 @@ slice — four different values, i.e. a painting rather than a frame. A nine-sli
 centre must be **low-frequency and tileable**, and its slice must be small relative
 to the smallest control it dresses; these are neither.
 
-**b) Half the screens have no backdrop at all.** Seven of them build straight onto
-the clear colour: `collection.gd`, `deck_builder.gd`, `deck_run.gd`, `dice_run.gd`,
-`encounter.gd`, `map.gd`, `shop.gd`. The map, the shop and the event screen are
-flat near-black rectangles with text on them. Those are three of the four screens
-the player sees most.
+**b) Half the screens have no backdrop at all.** Four of them build straight onto
+the clear colour: `collection.gd`, `deck_builder.gd`, `encounter.gd`, `shop.gd`.
+(Three more did — `deck_run` `dice_run` `map` — and went with their traversal models
+in D94.) The shop and the event screen are flat near-black rectangles with text on
+them, and they are two of the screens the player sees most.
 
 **c) The things the game is *about* have no art.** No player character exists on
 screen anywhere. Enemies are 16×16 tiles handed to `Button.icon` and are not
@@ -384,36 +384,13 @@ per `UI.card_button()`'s existing hand-placed band layout.
 
 ---
 
-### Tier 4 — Map and traversal  ·  26 files
+### Tier 4 — Map and traversal  ·  0 files
 
-Three traversal models, all of them text. `Map.png` is the single worst capture in
-the set: black background, no path lines, no icons, `Balance.NODE_LABEL` strings in
-buttons.
-
-**Graph map (11 files)**
-
-| file | size | hook |
-|---|---|---|
-| `ui/node_<combat\|elite\|rest\|boss\|shop\|event\|treasure>.png` | 128×128 | `Icons.for_encounter()`, currently unused by `map.gd` |
-| `ui/node_frame_available.png` | 192×192, 9-slice | replaces `Icons.style_card_button(b, 1)` |
-| `ui/node_frame_cleared.png` | 192×192 | replaces `modulate.a = 0.35` |
-| `ui/node_frame_locked.png` | 192×192 | replaces `modulate.a = 0.6` |
-| `ui/map_path.png` | 32×16, tile X | **there are no edges drawn between nodes at all** |
-
-**Dice board (14 files)** — the player's position is the string `"^you"` under a
-16×16 glyph, and the two dice are the text `dice: [3, 2]` in the status line.
-
-`ui/tile_<7 encounter kinds>.png` 128×128 · `ui/die_<1..6>.png` 128×128 ·
-`ui/token_player.png` 128×128
-
-> The board was invisible when this brief was written — a `ScrollContainer` with both
-> scroll modes at AUTO reports a minimum size of 0, so the surrounding
-> `SIZE_EXPAND_FILL` spacers crushed it flat. **Fixed in D57**; the track now renders
-> its 16 cells, using the 16×16 encounter glyphs. Those glyphs are what this tier
-> replaces.
-
-**Deck traversal** — needs the card back from Tier 3 plus `ui/reveal_frame.png`
-(320×448, 9-slice) for `deck_run.gd:reveal_icon`.
+**Nothing left to draw here.** This tier asked for 26 files across three traversal
+models — 11 for the graph map, 14 for the dice board, one reveal frame for the deck
+draw. All three models were deleted in D94 after D88 moved every dungeon onto the
+isometric crawl, and the crawl's art is Tier 6, not this one. The tier is kept as a
+heading rather than removed so the numbering below still matches the captures.
 
 ---
 
@@ -421,7 +398,7 @@ buttons.
 
 **All twelve dungeon backdrops are installed** (D73). What still shows the 16×16
 tinted tile — near-black with a faint dot grid — is every screen that is not a
-fight: `Overworld.png`, `Map.png`, `Shop.png`, `Encounter.png`.
+fight: `Overworld.png`, `Shop.png`, `Encounter.png`.
 
 | set | count | missing |
 |---|---|---|
@@ -430,7 +407,7 @@ fight: `Overworld.png`, `Map.png`, `Shop.png`, `Encounter.png`.
 | Scene backdrops | 6 | 6 — shop interior, rest camp, event shrine, treasure vault, victory, defeat |
 
 → hooks: `PixelArt.battle_art()` for dungeons, `PixelArt.backdrop_texture()` for
-zones, and **new** `UI.screen(..., art)` calls on the seven screens listed in §1(b).
+zones, and **new** `UI.screen(..., art)` calls on the four screens listed in §1(b).
 
 Author to the D39/`BATTLE_SCRIM` contract: 20–35% luminance, light source away from
 the top and bottom 34% bands, and the existing contrast tests must stay green.
@@ -474,9 +451,10 @@ and every screen in the game changes character.
 
 Assets that land on top of these problems will not look better. None of it is large.
 
-1. **Backdrops on the seven bare screens** — `collection` `deck_builder` `deck_run`
-   `dice_run` `encounter` `map` `shop`. They build a `MarginContainer` directly and
-   never call `UI.screen()` or `PixelArt.backdrop()`.
+1. **Backdrops on the four bare screens** — `collection` `deck_builder` `encounter`
+   `shop`. They build a `MarginContainer` directly and never call `UI.screen()` or
+   `PixelArt.backdrop()`. (It was seven; three of them were the traversal views
+   deleted in D94.)
 2. **Give text somewhere to sit.** `UITheme._frame()` sets `content_margin` to `10`
    vertically against a `19/21` texture slice, and `min_button_height()` is only
    `t + b + 10`. The result is a 50px button with 40px of border and a 10px parchment
@@ -486,18 +464,15 @@ Assets that land on top of these problems will not look better. None of it is la
    `text`. The 16×16 sprite is not visibly rendered in `Combat.png` at all. Sprite,
    name, HP bar and intent icon each want their own placed region — the same
    hand-placed approach `UI.card_button()` already uses, and for the same reason.
-4. **Style every button, and every other control.** `map.gd`, `dice_run.gd` and
-   `deck_run.gd` build their "Collection" buttons without `UITheme.style_button()`,
-   so they render flat grey next to a framed "Menu". The theme itself only covers
-   `Button` and `PanelContainer` — `OptionButton`, `HSlider`, `VScrollBar` and
-   `CheckBox` are untouched.
+4. **Style every control, not just buttons.** The theme covers `Button` and
+   `PanelContainer` only — `OptionButton`, `HSlider`, `VScrollBar` and `CheckBox` are
+   untouched. (The three run views that built unstyled "Collection" buttons were
+   deleted in D94; the general rule outlived them, so audit new screens for it.)
 5. ~~**The dice board collapses to zero height.**~~ **Done (D57).** One line —
    `vertical_scroll_mode = SCROLL_MODE_DISABLED`, since the track scrolls sideways and
    a `ScrollContainer` only contributes its content's minimum size on axes it cannot
    scroll. `PlayableTest` now asserts the general case: no scroll area may be squeezed
    to zero on an axis whose content needs pixels.
-6. **Draw map edges.** Nothing connects the nodes. A `Line2D` layer under
-   `rows_box`, fed from `TraversalGraph`'s existing edge data.
 7. **Flip the texture filter default.** `project.godot` sets NEAREST globally and
    painted art overrides per-node. Once painted art is the majority that is backwards
    — flip the default to LINEAR and mark the surviving pixel assets NEAREST.

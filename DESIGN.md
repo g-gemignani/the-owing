@@ -81,12 +81,12 @@ Overworld.tscn  (zones: travel + what each zone's card pool holds)
   ├─▶ Settings.tscn
   └─▶ Save and quit ──▶ MainMenu
 
-  DeckBuilder ── assemble/select a deck for this dungeon ──▶ Map.tscn
-  Map.tscn
-    ├─ combat/elite node ──▶ Combat.tscn ──▶ reward ──▶ back to Map
-    ├─ boss node ──▶ Combat.tscn ──▶ reward ──▶ advance dungeon ──▶ DeckBuilder (pick deck for next dungeon)
-    ├─ rest node ──▶ heal inline, stay on Map
-    ├─ shop node ──▶ Shop.tscn (buy cards / healing for gold) ──▶ back to Map
+  DeckBuilder ── assemble/select a deck for this dungeon ──▶ IsoRun.tscn
+  IsoRun.tscn
+    ├─ combat/elite tile ──▶ Combat.tscn ──▶ reward ──▶ back to the floor
+    ├─ boss tile ──▶ Combat.tscn ──▶ reward ──▶ advance dungeon ──▶ DeckBuilder (pick deck for next dungeon)
+    ├─ rest tile ──▶ heal inline, stay on the floor
+    ├─ shop tile ──▶ Shop.tscn (buy cards / healing for gold) ──▶ back to the floor
     └─ "Collection" button ──▶ Collection.tscn (fuse) ──▶ back
     └─ boss cleared ──▶ dungeon marked cleared + relic ──▶ DungeonSelect
   Combat defeat ──▶ death penalty ──▶ run reset ──▶ Overworld
@@ -106,9 +106,7 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 |---|---|
 | `scripts/card_data.gd` | Card = data Resource (`id`, `rarity`, `level`, cost, effects). `eff_damage()/eff_block()` apply level scaling. |
 | `scripts/traversal.gd` | Traversal contract: options/select/complete + shared encounter budget. |
-| `scripts/traversal_graph.gd` | Layered node-graph model (Slay-the-Spire style). |
-| `scripts/traversal_dice.gd` | Dice-board model: roll two, spend one, overshoot skips spaces. |
-| `scripts/traversal_deck.gd` | Dungeon-as-a-deck model: reveal, then face or pay HP to avoid. |
+| `scripts/traversal_iso.gd` | The one model: an isometric building of rooms and corridors over several floors (D79, D88). Three others — graph, deck, dice — were deleted in D94. |
 | `scripts/run_flow.gd` | Shared encounter routing used by every traversal view. |
 | `scripts/build_data.gd` | Build Resource: a named archetype and its defining cards. |
 | `scripts/builds_screen.gd` | Build tracker: progress and where the missing cards are. |
@@ -122,11 +120,9 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `scripts/balance.gd` | **All** tuning constants + scaling formulas (enemy stats, gold, rarity weights, deck bounds, power ratio). |
 | `scripts/combat_engine.gd` | Pure combat rules, no UI/autoloads — shared by the Combat scene and the simulator. |
 | `scripts/meta_state.gd` | Persistent collection, `CATALOG`, fusion, `build_run_deck`, JSON save/load. |
-| `scripts/game_state.gd` | Run state, map generation, reachability. |
+| `scripts/game_state.gd` | Run state, floor generation, run save/restore. |
 | `scripts/combat.gd` | Combat *screen*: thin UI over `CombatEngine`; reward flow and routing. |
-| `scripts/map.gd` | View for the graph traversal. |
-| `scripts/deck_run.gd` | View for the deck traversal. |
-| `scripts/dice_run.gd` | View for the dice-board traversal. |
+| `scripts/iso_run.gd` | View for the crawl: a camera onto the floor, drawn at an angle. |
 | `scripts/event_data.gd` | Event Resource: choices + declarative effects. |
 | `scripts/encounter.gd` | Event/treasure screen; applies all effects centrally. |
 | `scripts/collection.gd` | Collection/fusion UI. |
@@ -619,7 +615,7 @@ Still placeholder: no animation, no sound, no backgrounds, no enemy portraits.
 - [x] Rest heals inline; boss clear → next dungeon, heal, fresh map
 - [x] Enemy HP + intent scale by node type and dungeon tier
 - [x] HP persists across fights within a run
-- [x] Connectivity regression test (`tests/test_map.gd`, 50 trials)
+- [x] Connectivity regression test (`tests/test_map.gd`, 50 trials — folded into `test_traversal.gd`, and the graph model it covered was deleted in D94)
 
 ### Phase 4 — Meta layer `[x]`
 - [x] `MetaState` autoload, persistent, `user://save.json`
@@ -712,7 +708,7 @@ Headless regression tests, run with the Godot binary directly:
 
 ```
 godot --headless --import
-godot --headless --script tests/test_map.gd    # map connectivity, 50 trials
+godot --headless --script tests/test_traversal.gd # the traversal contract, per model
 godot --headless --script tests/test_meta.gd   # persistence + fusion + deck build
 godot --headless --script tests/test_death.gd  # death penalty: gold+card loss, floors, guards
 godot --headless --script tests/test_deck.gd    # deck loadouts: validation, clamp, build, persistence
@@ -4785,3 +4781,70 @@ staging directory rather than fed to a cutout installer that would have refused 
 non-flat border. `install_sheet.gd` shares the `cut()` path and so inherits the fix, but
 reports neither counter — it reported neither before either, so that was left alone
 rather than half-changed.
+
+---
+
+### D94 — Three ways to walk a dungeon that nobody could walk, and one label that said the same thing twelve times
+
+Every dungeon in the game has been an isometric crawl since D88. The three models it
+replaced — a layered node graph, a dungeon-as-a-deck, a dice board — stayed in the tree
+as a fallback nothing fell back to. This deletes them.
+
+**What "fallback" was costing.** Four models is four things that must keep compiling,
+four serialization formats the save has to be able to rebuild, four views the screenshot
+harness photographs, and four entries in every loop in `tests/test_traversal.gd`,
+`test_layout.gd` and `test_resume.gd`. All of that ran on every commit for content that
+could not be reached from the menu. Worse, dead code is not inert:
+
+* The avoid calibration in `tools/sim_balance.gd` filtered on `Kind.DECK`, matched
+  nothing after D88, and printed a header with no rows — recorded at the time (D88) as
+  a lesson about harnesses that select by name.
+* **The same filter was in `tests/test_traversal.gd` and nobody noticed.** The block
+  asserting that dodging is a trade and not a discount — the D20 property, the one the
+  price was retuned for in D57 — skipped every dungeon in the game for the same reason
+  and printed nothing at all. It was found by deleting the field it filtered on, which
+  is the only way a vacuous test ever gets found. It now runs over all twelve, and
+  passes.
+* `tools/screenshots.gd` hung for twenty-two minutes on shot five handing the graph view
+  a `TraversalIso`, and had to grow a "force the model" branch to keep photographing
+  screens no player would see.
+
+**What went.** `traversal_graph.gd`, `traversal_deck.gd`, `traversal_dice.gd` and their
+views `map.gd`, `deck_run.gd`, `dice_run.gd` with `Map.tscn`, `DeckRun.tscn`,
+`DiceRun.tscn` — about 800 lines. With them: `Traversal.Kind`, `Traversal.make()`,
+`Traversal.kind()`, and `DungeonData.traversal`, which was a per-dungeon choice with one
+option in all twelve `.tres` files. `GameState.run_scene()` is now a constant with a
+function's signature, kept as a function because it is the one place that decides.
+
+**What stayed, and why.** The `Traversal` base class. One implementation behind an
+interface looks like ceremony, but it is what keeps the crawl pure logic — no UI, no
+autoloads — which is what lets one headless walker in `sim_balance.gd` measure it, and
+`test_traversal.gd` still loops over an array of models rather than over the crawl
+directly, so a second model rejoins the suite by being named rather than by someone
+writing a second walker. `Balance.deck_avoid_cost` was renamed `avoid_cost`: the crawl
+inherited that mechanic in D88 and now owns it, and a constant named for a deleted model
+is a comment that lies.
+
+**Saves.** A run saved on a deleted model describes a board the crawl cannot read, and
+every field it would look for is missing — restoring one would hand the player a
+half-formed dungeon rather than an error. Saves written before this stamp the model
+number in the traversal blob; the crawl's was 3 and it now writes none. So
+`GameState.traversal_is_current()` drops any run stamped with anything else. It is static
+and separate from `run_from_dict` for a reason worth writing down: `run_from_dict` reads
+autoloads through absolute paths, a `--script` test has no active scene tree, and the
+first version of that test passed because the function bailed on line one. **A guard is
+only tested if the test can reach it.**
+
+**The label.** `ZoneView` printed each dungeon's traversal name on its button. With one
+model it read "isometric floor" on all twelve — the widest line on the screen, spent
+saying nothing, and worse than nothing because a value that never varies still reads as
+a distinguishing fact. Gone. What tells the twelve apart is already on that screen and
+already true: difficulty, boss, description, exclusive cards, and the shape and surface
+of the floor itself (D82).
+
+**Also found while deleting.** `TraversalIso.options()` walked off the end of an empty
+grid when handed a blob with no cells — reachable only from a degenerate restore, which
+the new guard now rejects before it gets there, but a model should not error on its own
+empty state. It returns no options instead.
+
+34/34 suites green.

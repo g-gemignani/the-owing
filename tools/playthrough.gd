@@ -52,8 +52,8 @@ func _init() -> void:
 				wins += 1
 				last = t
 		var rate := float(wins) / float(attempts) * 100.0
-		print("%-18s d%-2d %-6s  cleared %3.0f%% of %d attempts" % [
-			d.name, d.difficulty, _kind(d.traversal), rate, attempts])
+		print("%-18s d%-2d  cleared %3.0f%% of %d attempts" % [
+			d.name, d.difficulty, rate, attempts])
 		if rate < 25.0:
 			notes.append("%s (d%d) clears only %.0f%% of attempts with the best available deck — a wall at this point in progression" % [d.name, d.difficulty, rate])
 		var r := last if wins > 0 else _run(m, d)
@@ -109,15 +109,12 @@ func _choose(opts: Array, hp: int, max_hp: int) -> int:
 			return i
 	return 0
 
-func _kind(k: int) -> String:
-	return ["map","deck","dice","iso"][k] if k < 4 else "?"
-
 func _run(m, d: DungeonData) -> Dictionary:
 	var deck: Array[CardData] = m.build_deck(_best_loadout(m))
 	if deck.size() < Balance.MIN_DECK_SIZE:
 		notes.append("cannot field a legal deck for %s" % d.name)
 		return {"result": "NO DECK", "deck": deck.size(), "fights": 0, "hp": 0, "gained": [], "gold": 0}
-	var tv := Traversal.make(d.traversal)
+	var tv := TraversalIso.new()
 	tv.generate(d)
 	var max_hp: int = Balance.BASE_MAX_HP + int(m.clear_count()) * Balance.HP_PER_DUNGEON \
 		+ int(m.relic_bonus("bonus_max_hp"))
@@ -131,13 +128,13 @@ func _run(m, d: DungeonData) -> Dictionary:
 		guard += 1
 		var opts := tv.options()
 		if opts.is_empty():
-			notes.append("%s: ran out of options mid-run (traversal %s)" % [d.name, _kind(d.traversal)])
+			notes.append("%s: ran out of options mid-run" % d.name)
 			break
 		# route choice matters as much as card play: blindly taking the first option
 		# meant never steering toward a Rest, which killed runs the simulator clears
 		var pick := _choose(opts, hp, max_hp)
 		# whatever the option costs is paid by the caller, because a traversal never
-		# reads run resources: the deck model's dodge and the iso model's step in the
+		# reads run resources: the crawl's dodge and its step in the
 		# dark both arrive this way
 		hp = maxi(1, hp - int(opts[pick].get("hp_cost", 0)))
 		var node := tv.select(pick)

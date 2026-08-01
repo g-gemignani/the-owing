@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = "sunken_vault"
 name = "The Sunken Vault"
 description = "Sealed for a reason. The deepest known door."
-traversal = 3
 difficulty = 5
 unlock_after_clears = 3
 enemy_roster = PackedStringArray("drowned_thrall", "tomb_guard", "pale_acolyte", "bog_lurker")

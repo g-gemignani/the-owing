@@ -386,12 +386,14 @@ const ENCOUNTER_SHOPS := 1
 const ENCOUNTER_EVENTS := 1
 const ENCOUNTER_TREASURES := 1
 
-## Deck model: HP paid to skip a revealed encounter (and forfeit its reward).
+## HP paid to slip past an encounter (and forfeit its reward).
+##
+## Named for the deck model that introduced it until D94; the crawl inherited the
+## mechanic in D88 and now owns it outright, so the name no longer says "deck".
 ##
 ## This was a flat 8 HP, and it was a cheat. Nothing had ever measured it, because
 ## the simulator's driver only dodged below 35% HP and so recorded **0.0 avoids per
-## run in every profile** — the deck model's entire decision went unexercised for
-## its whole existence. Measured properly (`tools/sim_balance.gd`, avoid
+## run in every profile** — the decision went unexercised for its whole existence. Measured properly (`tools/sim_balance.gd`, avoid
 ## calibration), skipping every avoidable fight was strictly better than fighting:
 ## the Drowned Market went from 49% completion to 87% for the same deck, because 8
 ## HP is a rounding error against a fight that costs 17-31% of a health bar, and a
@@ -403,21 +405,21 @@ const ENCOUNTER_TREASURES := 1
 ## shape as `removal_price`. The first dodge is the one you want; the fourth should
 ## be unaffordable. Tuned so dodging every fight in a dungeon costs ~70% of the
 ## health bar and arrives at the boss with no gold and no rewards.
-const DECK_AVOID_BASE_HP := 6
-const DECK_AVOID_PER_DEPTH := 1
-const DECK_AVOID_STEP := 0.5
+const AVOID_BASE_HP := 6
+const AVOID_PER_DEPTH := 1
+const AVOID_STEP := 0.5
 
-static func deck_avoid_cost(difficulty: int, already_avoided: int) -> int:
-	var base := float(DECK_AVOID_BASE_HP + DECK_AVOID_PER_DEPTH * (maxi(1, difficulty) - 1))
-	return int(round(base * (1.0 + DECK_AVOID_STEP * float(maxi(0, already_avoided)))))
+static func avoid_cost(difficulty: int, already_avoided: int) -> int:
+	var base := float(AVOID_BASE_HP + AVOID_PER_DEPTH * (maxi(1, difficulty) - 1))
+	return int(round(base * (1.0 + AVOID_STEP * float(maxi(0, already_avoided)))))
 
 ## Iso model: the floor is a place, most of it is empty, and something else is
 ## walking it.
 ##
-## The other three models price *choosing*. This is the only one where the ground
-## is spatial and can be re-walked, so the thing that needs a cost is WALKING —
-## without one an isometric floor is the graph plus a pathfinding chore, because
-## there would never be a reason not to strip every tile.
+## The three models deleted in D94 priced *choosing*. This one's ground is spatial and
+## can be re-walked, so the thing that needs a cost is WALKING — without one an
+## isometric floor is a node graph plus a pathfinding chore, because there would never
+## be a reason not to strip every tile.
 ##
 ## That cost used to be a torch: a step allowance with an HP overdraft fee (D77
 ## removed it). It never affected what the player could see, which made "light"
@@ -1263,12 +1265,11 @@ static func pierce_fraction(dungeon: int, ratio: float = 1.0) -> float:
 const ESCALATION_PER_TURN := 0.06
 const ESCALATION_MAX := 1.6
 
-## Map node type chances (percent), rolled per non-boss, non-first row.
-# Retired in D84. The graph model rolled node types from these five percentages
-# while taking its SIZE from the encounter mix, so the two disagreed and only the
-# size responded when a dungeon's shape changed. `TraversalGraph._weigh()` now
-# derives the weights from the mix itself, which is the single source of truth the
-# other three models were already using.
+# Map node type chances (percent) lived here, rolled per non-boss, non-first row.
+# Retired in D84: the graph model rolled node types from five fixed percentages while
+# taking its SIZE from the encounter mix, so the two disagreed and only the size
+# responded when a dungeon's shape changed. Every model derived its weights from the
+# mix after that — the single source of truth — and the graph itself went in D94.
 
 # --- shops (gold sink) ---
 ## Card prices are DERIVED from drop weight, like upgrade caps: a rarity that

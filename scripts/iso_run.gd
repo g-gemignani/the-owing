@@ -23,7 +23,7 @@
 ## is the reason the tiles were kept at all — `ISO_MOVES_PER_ENCOUNTER_MAX` is a
 ## ratio of discrete moves to encounters, and it is what stops a spatial model from
 ## burying the card game (D14, D79). A continuous world would have nothing to count,
-## and "every traversal model costs the same" would stop being measurable.
+## and "every dungeon costs the same" would stop being measurable.
 ##
 ## The camera is load-bearing, not a nicety (D77). A 12x12 plate is 1392x754
 ## unscaled and the window is 1280x720 with a header and a button row in the same
@@ -883,7 +883,7 @@ func _on_pick(i: int) -> void:
 	face_south = (step.x + step.y) > 0
 	# Slipping past a fight is priced on the OPTION, so it is read before the move and paid
 	# here — the model reports a price and never touches run HP (D13), the same contract the
-	# deck model's dodge has always had. Clamped so it can never itself be lethal.
+	# old deck model's dodge always had. Clamped so it can never itself be lethal.
 	var slip := int(opts[i].get("hp_cost", 0)) if String(opts[i].get("action", "")) == "avoid" else 0
 	var chosen := tv.select(i)
 	if slip > 0:
@@ -916,7 +916,7 @@ func _on_pick(i: int) -> void:
 		return
 	walk_more = false
 	if bool(chosen.get("ambush", false)):
-		# Paid here rather than in the traversal, for the same reason the deck model's
+		# Paid here rather than in the traversal, for the same reason the old deck model's
 		# dodge is: the model is pure logic and never reads or writes run HP. Clamped
 		# so it can never itself be lethal — a wanderer can corner you on a floor with
 		# one way out, and a price with no counterplay that kills is a trap.

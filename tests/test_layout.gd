@@ -62,10 +62,7 @@ func _init() -> void:
 		float(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
 		float(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
 
-	# --- the graph map must not need scrolling luck to be playable ---
-	var tv := TraversalGraph.new()
-	tv.generate(Balance.dungeon(Balance.DUNGEONS[0]))
-	var rows: int = tv.map.size()
+	# --- the UI scale must have exactly one home -------------------------------
 	# Read the shipped default rather than restating it. This line said 1.6 while
 	# the constant was changed to 1.0, which is exactly how a duplicated number
 	# turns a passing test into a lie.
@@ -73,52 +70,21 @@ func _init() -> void:
 	# ...and there must be no second copy anywhere. settings_state.gd used to carry
 	# its own default and apply it over the theme's, so a new player never got the
 	# shipped scale; the whole zoom is gone now (D65) and this keeps it gone.
-	for src in ["res://scripts/settings_state.gd", "res://scripts/settings_menu.gd",
+	for src0 in ["res://scripts/settings_state.gd", "res://scripts/settings_menu.gd",
 			"res://scripts/ui_theme.gd"]:
-		var fh := FileAccess.open(src, FileAccess.READ)
-		if fh == null:
+		var fh0 := FileAccess.open(src0, FileAccess.READ)
+		if fh0 == null:
 			continue
-		var text := fh.get_as_text()
-		fh.close()
+		var text0 := fh0.get_as_text()
+		fh0.close()
 		for banned in ["set_scale_silent", "func set_scale("]:
-			if text.find(banned) != -1:
+			if text0.find(banned) != -1:
 				fails += 1
-				print("FAIL %s still exposes %s — the UI scale is fixed" % [src, banned])
-	var node_h: float = 52.0 * scale
-	var sep: float = 6.0 * scale
-	var map_h: float = float(rows) * node_h + float(rows - 1) * sep
-
-	# the actionable row is row 0, drawn last (bottom)
-	var opts := tv.options()
-	if opts.is_empty():
-		fails += 1; print("FAIL a fresh map offers no options at all")
-	else:
-		var focus_row := int(opts[0]["row"])
-		if focus_row != 0:
-			fails += 1; print("FAIL a fresh map starts somewhere other than row 0")
-		# if the map is taller than the window, the view MUST scroll to the player
-		if map_h > window.y and not _defines("res://scripts/map.gd", "func _scroll_to_focus"):
-			fails += 1
-			print("FAIL map is %.0fpx tall in a %.0fpx window with no scroll-to-focus" % [
-				map_h, window.y])
-		print("  (info: %d rows = %.0fpx of map, window %.0fpx, needs scrolling: %s)" % [
-			rows, map_h, window.y, str(map_h > window.y)])
-
-	# --- the dice board is the same problem sideways ---
-	var dice := TraversalDice.new()
-	dice.generate(Balance.dungeon("the_maw"))
-	var cell_w: float = 56.0 * scale
-	var board_w: float = float(dice.track.size()) * cell_w
-	if board_w > window.x and not _defines("res://scripts/dice_run.gd", "func _scroll_to_token"):
-		fails += 1
-		print("FAIL dice board is %.0fpx wide in a %.0fpx window with no scroll-to-token" % [
-			board_w, window.x])
-	print("  (info: dice board %d spaces = %.0fpx, window %.0fpx)" % [
-		dice.track.size(), board_w, window.x])
+				print("FAIL %s still exposes %s — the UI scale is fixed" % [src0, banned])
 
 	# --- the isometric floor is a WINDOW onto a bigger plate ---
 	#
-	# The graph scrolls and the dice board scrolls; the floor used to do neither, so
+	# The graph and dice views (deleted in D94) scrolled; the floor did neither, so
 	# the grid size and the tile size were only safe *together* and ISO_GRID could
 	# not grow at all — at 6x6 and 116x58 the plate already drew 406px into 460px of
 	# room, and 7x7 would not have fitted. It now has a camera (D77), which moves the
@@ -190,27 +156,26 @@ func _init() -> void:
 
 	# --- every traversal must offer something pressable at every step ---
 	# (a state with no options and no completion is a soft dead end)
-	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE, Traversal.Kind.ISO]:
-		for did in Balance.DUNGEONS:
-			var t := Traversal.make(kind)
-			t.generate(Balance.dungeon(did))
-			var steps := 0
-			# clear of a real iso tour, which is tens of steps on a ~33-tile floor
-			while not t.is_complete() and steps < 400:
-				steps += 1
-				var o := t.options()
-				if o.is_empty():
-					fails += 1
-					print("FAIL kind %d in %s reached a state with nothing to press" % [kind, did])
+	for did in Balance.DUNGEONS:
+		var t := TraversalIso.new()
+		t.generate(Balance.dungeon(did))
+		var steps := 0
+		# clear of a real iso tour, which is tens of steps on a ~33-tile floor
+		while not t.is_complete() and steps < 400:
+			steps += 1
+			var o := t.options()
+			if o.is_empty():
+				fails += 1
+				print("FAIL %s reached a state with nothing to press" % did)
+				break
+			var pick := 0
+			for i in o.size():
+				if not o[i].has("hp_cost"):
+					pick = i
 					break
-				var pick := 0
-				for i in o.size():
-					if not o[i].has("hp_cost"):
-						pick = i
-						break
-				if t.select(pick).is_empty():
-					continue
-				t.clear_pending()
+			if t.select(pick).is_empty():
+				continue
+			t.clear_pending()
 
 	# --- the classes a headless test loads must not touch an autoload -----------
 	#
@@ -246,8 +211,10 @@ func _init() -> void:
 	# Event node threw mid-render and every row below it — including the only
 	# actionable one — was never created. The shared table was fully covered by
 	# tests; the *duplicate* was not. Duplicated lookups escape their tests.
-	var label_users := ["res://scripts/map.gd", "res://scripts/deck_run.gd",
-		"res://scripts/dice_run.gd", "res://scripts/run_flow.gd"]
+	# The screen that carried the bug (`map.gd`) was deleted with its model in D94, so
+	# this now watches the screens that inherited its job. The rule outlives the file.
+	var label_users := ["res://scripts/iso_run.gd", "res://scripts/run_flow.gd",
+		"res://scripts/encounter.gd"]
 	for path in label_users:
 		if _defines(path, "TYPE_LABEL"):
 			fails += 1
@@ -257,39 +224,19 @@ func _init() -> void:
 	for enc in range(0, Traversal.Enc.size() if false else 7):
 		if not Balance.NODE_LABEL.has(enc):
 			fails += 1; print("FAIL no NODE_LABEL for encounter type %d" % enc)
-	# and every type a real map can contain must be labelled
-	for kind in [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE, Traversal.Kind.ISO]:
-		for did in Balance.DUNGEONS:
-			var t := Traversal.make(kind)
-			t.generate(Balance.dungeon(did))
-			var types := {}
-			if t is TraversalGraph:
-				for row in (t as TraversalGraph).map:
-					for n in row:
-						types[int(n["type"])] = true
-			elif t is TraversalDeck:
-				for e in (t as TraversalDeck).draw_pile:
-					types[int(e)] = true
-			elif t is TraversalDice:
-				for e in (t as TraversalDice).track:
-					types[int(e)] = true
-			elif t is TraversalIso:
-				# rock and cleared rooms are not encounters and have no label
-				for e in (t as TraversalIso).enc:
-					if int(e) >= 0:
-						types[int(e)] = true
-			for ty in types:
-				if not Balance.NODE_LABEL.has(ty):
-					fails += 1
-					print("FAIL %s can contain encounter %d with no label" % [did, ty])
-
-	# --- the map's node labels must not leak debug data ---
-	var src := FileAccess.open("res://scripts/map.gd", FileAccess.READ)
-	if src != null:
-		var text := src.get_as_text()
-		src.close()
-		if text.find('str(node["edges"])') != -1:
-			fails += 1; print("FAIL map buttons still print raw edge indices at the player")
+	# and every type a real floor can contain must be labelled
+	for did in Balance.DUNGEONS:
+		var t2 := TraversalIso.new()
+		t2.generate(Balance.dungeon(did))
+		var types := {}
+		# rock and cleared rooms are not encounters and have no label
+		for e in t2.enc:
+			if int(e) >= 0:
+				types[int(e)] = true
+		for ty in types:
+			if not Balance.NODE_LABEL.has(ty):
+				fails += 1
+				print("FAIL %s can contain encounter %d with no label" % [did, ty])
 
 	if fails == 0:
 		print("LAYOUT TEST: PASS (actionable content is reachable, no dead ends, no debug text)")

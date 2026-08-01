@@ -1,12 +1,14 @@
 ## Isometric dungeon crawl: several floors of rooms and corridors, descended one way,
 ## with things walking them that you can hear before you see.
 ##
-## Decision texture: this is the only model where the ground is SPATIAL and can be
-## re-walked. The graph makes you commit to a route before you can see what is on it;
-## the deck reveals one encounter and prices the dodge; the dice make you manage
-## overshoot. Here the dungeon is a *building*, the way down is not marked, and the
-## question at every step is how much of a floor you strip before you take the stairs
-## you have just found.
+## The only traversal in the game: every dungeon is one of these (D88), and the three
+## models it beat — a node graph you committed a route to, a card draw that revealed one
+## encounter and priced the dodge, a dice board you managed overshoot on — were deleted
+## in D94 once nothing could reach them.
+##
+## Decision texture, and why it won: the ground here is SPATIAL and can be re-walked.
+## The dungeon is a *building*, the way down is not marked, and the question at every
+## step is how much of a floor you strip before you take the stairs you have just found.
 ##
 ## Four rules carry that, and each one replaced something that measured fine and did
 ## not feel like anything (D79):
@@ -42,7 +44,8 @@
 ## `tests/test_traversal.gd` also bounds MOVES per encounter, because a spatial model
 ## can bury the card game with walking while every encounter count stays perfect.
 ##
-## Pure logic, like every model: it never reads or writes run resources.
+## Pure logic, as the contract in `traversal.gd` requires: it never reads or writes run
+## resources. That is what lets one headless walker in `tools/sim_balance.gd` drive it.
 class_name TraversalIso
 extends Traversal
 
@@ -91,7 +94,7 @@ var steps: int = 0        ## turns taken in the dungeon, for the status line
 var floor_steps: int = 0  ## turns taken on THIS floor, for the linger rule
 ## Fights slipped past rather than had. Counts for the whole dungeon, not the floor,
 ## because the price rises with each one and a fresh floor is not a fresh start — the same
-## shape the deck model's `avoided` has, and for the same reason.
+## shape the old deck model's `avoided` had, and for the same reason.
 var avoided: int = 0
 var done: bool = false
 
@@ -678,6 +681,11 @@ func _floor_turn() -> int:
 func options() -> Array:
 	if done:
 		return []
+	# No floor means no exits. A blob with no `enc` reaches here from a restore — the
+	# grid dimensions default while the cells do not, so `_step` hands back an index
+	# into an empty array and every caller sees an engine error instead of "no run".
+	if enc.size() < w * h:
+		return []
 	var others := 0
 	for i in enc.size():
 		var e := int(enc[i])
@@ -735,7 +743,7 @@ func options() -> Array:
 
 ## What squeezing past a fight costs, instead of having it.
 ##
-## Reuses the deck model's already-tuned price (`Balance.deck_avoid_cost`) rather than
+## Reuses the already-tuned price (`Balance.avoid_cost`) rather than
 ## inventing one, including its rising shape: the first slip is the one you want, the
 ## fourth should be unaffordable. Deliberately the SAME number, because it is the same
 ## decision — D88 moved every dungeon onto this model, and the deck's dodge was the thing
@@ -750,7 +758,7 @@ func options() -> Array:
 ## decline, or "every model costs the same" stops being true at the only place it matters.
 func _slip_cost() -> int:
 	var diff: int = dungeon.difficulty if dungeon != null else 1
-	return Balance.deck_avoid_cost(diff, avoided)
+	return Balance.avoid_cost(diff, avoided)
 
 ## What a step reads as. Bare ground gets three different names because a row of
 ## identical "Open ground" buttons is a choice with no information in it: is there
@@ -825,7 +833,7 @@ func select(i: int) -> Dictionary:
 	if caught >= 0:
 		var m: Dictionary = mons[caught]
 		# `ambush` is a PRICE, reported and not applied: a traversal never touches run
-		# resources (D13), exactly as the deck model reports its dodge and lets the
+		# resources (D13), exactly as the old deck model reported its dodge and let the
 		# caller pay. Whoever owns the HP charges Balance.iso_ambush_cost.
 		pending = {"type": int(m["type"]), "cell": pos, "mon": caught, "ambush": true}
 		if String(m.get("enemy", "")) != "":
@@ -861,7 +869,7 @@ func progress() -> float:
 	if quota <= 0:
 		return 0.0
 	# A fight slipped past is business settled, not business outstanding — the same
-	# reading the deck model takes of a dodge.
+	# reading the old deck model took of a dodge.
 	return clampf(float(cleared + avoided) / float(quota), 0.0, 1.0)
 
 func is_complete() -> bool:
@@ -879,9 +887,6 @@ func status() -> String:
 	if mons.size() > 0:
 		out += "   %d prowling" % mons.size()
 	return out
-
-func kind() -> int:
-	return Kind.ISO
 
 func _save() -> Dictionary:
 	return {"w": w, "h": h, "enc": enc, "seen": seen, "walked": walked,

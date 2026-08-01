@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D91 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D94 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -27,8 +27,8 @@ The loop:
 3. **Run** — crawl the dungeon: a painted isometric building of rooms and corridors over
    several floors, explored a tile at a time, with things walking it that take a step
    whenever you do. Fight, shop, rest, hit events and crack chests, down to a named boss.
-   (Three older traversal models — a node graph, a card draw, a dice board — are still in
-   the tree as a fallback, but no dungeon uses them since D88.)
+   (Three older traversal models — a node graph, a card draw, a dice board — lost to it in
+   D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
 4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
    of it. Between runs you fuse duplicates into levels, buy and level Powers and
    Relics, and unlock deeper zones.
@@ -42,7 +42,7 @@ Two-tier state makes this work:
 ## Content at a glance
 
 100 cards · 35 enemy archetypes (6 painted, 29 on generated plates) · 12 bosses (one named per dungeon) · 30 relics ·
-10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model in use of 4 built · 34 test
+10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 34 test
 suites. All content is `.tres` data plus one catalogue line; adding more is a data
 task, not a code task.
 
@@ -84,18 +84,18 @@ task, not a code task.
   can thin or sharpen it at shops and rests (D46). Death forfeits the run's takings;
   the meta layer is what survives.
 
-- **Every traversal model must cost the same, and charge for the right thing.** All four
-  spend a comparable attrition budget or a difficulty rating stops meaning one thing
-  (D14) — checked as an average in `tests/test_traversal.gd`, currently 9.2 against 9.2
-  for every model. Each also needs its own priced decision, and the price must fall on
-  what the model is *about*: the deck charges to see less of a dungeon, the iso dungeon
-  charges for being caught in it. The iso model's first attempt charged for *walking*,
-  which is the thing that model exists to sell, and the mechanic was deleted (D77).
-  **Equal encounter counts are not equal cost.** All four models passed the count
-  assertion at 13.2 while the graph was running 7.2 fights against a mix asking for 4
-  — it took its size from the mix and its contents from five fixed percentages with
-  COMBAT as the fallback (D84). When a model's shape changes, check fights actually
-  *met*, per model, not just the budget.
+- **Every traversal model must cost the same, and charge for the right thing.** A model
+  spends the attrition budget it is given or a difficulty rating stops meaning one thing
+  (D14) — checked as an average in `tests/test_traversal.gd`. Each also needs its own
+  priced decision, and the price must fall on what the model is *about*: the deleted deck
+  model charged to see less of a dungeon, the crawl charges for being caught in it. The
+  crawl's first attempt charged for *walking*, which is the thing it exists to sell, and
+  the mechanic was deleted (D77). **Equal encounter counts are not equal cost.** All four
+  models passed the count assertion at 13.2 while the graph was running 7.2 fights against
+  a mix asking for 4 — it took its size from the mix and its contents from five fixed
+  percentages with COMBAT as the fallback (D84). When a model's shape changes, check fights
+  actually *met*, not just the budget. Only the crawl is left (D94), and the test still runs
+  over an array of models rather than over one, because that is the wiring a second one needs.
 
 - **Walking is bought, not granted.** `ISO_MOVES_PER_ENCOUNTER_MAX` is a ratio, so the
   way to make a dungeon bigger is to give it more to walk toward — chests took the iso
@@ -157,7 +157,9 @@ task, not a code task.
   filtered on `Kind.DECK` and matched nothing the moment every dungeon became isometric — so
   the check that a priced dodge is not a dominant strategy (D20) printed a header and no
   rows on the exact turn a new model inherited the mechanic. It asks the model for the
-  behaviour now, by walking a floor and looking (D88).
+  behaviour now, by walking a floor and looking (D88). The same filter sat in
+  `tests/test_traversal.gd`, silently skipping the dodge-pricing block for every dungeon in
+  the game, and was only found when D94 deleted the name it was filtering on.
 
 - **An invariant about the members of a set says nothing until something checks the set is
   not empty.** The iso model's sealed rooms asserted "a vault has exactly one way in" and
@@ -317,7 +319,7 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              fill — D92; NOT a class_name),
              gen_ui_kit.gd (COMPUTES the nine-slice button frames — D83),
              strip_sparkle.gd (removes the generator's corner watermark — D83c)
-DESIGN.md    the full reasoning, decision by decision (D1–D91)
+DESIGN.md    the full reasoning, decision by decision (D1–D94)
 ART.md       the art brief: the diagnosis, the style, the reasoning
 ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
              whether it exists yet. Never edit by hand; regenerate it.

@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = "ember_road"
 name = "The Ember Road"
 description = "A causeway of slag. It is still cooling."
-traversal = 3
 difficulty = 3
 unlock_after_clears = 2
 enemy_roster = PackedStringArray("ember_hound", "slag_wretch", "bellows_brute")

@@ -1,23 +1,26 @@
 ## How a dungeon is traversed. Base class + shared contract.
 ##
-## Dungeons can traverse differently (a flooded vault should not navigate like a
-## crypt), so traversal is a strategy chosen per DungeonData. Everything else —
-## combat, cards, relics, shops, meta — talks only to this interface and never to
-## a specific model.
+## One model implements it: `TraversalIso`, the isometric crawl every dungeon uses.
+## Three others (a node graph, a card draw, a dice board) were built alongside it and
+## deleted in D94 — every dungeon had moved onto the iso floor in D88, so they were
+## content nobody could reach, and a dead branch of the tree that still had to be kept
+## compiling, serialized, screenshotted and asserted on by four test suites.
+##
+## The base class stays because the contract is worth stating in one place, and because
+## everything else — combat, cards, relics, shops, meta — talks to this interface rather
+## than to the crawl. A second model would slot in beside the first; until there is one,
+## there is no `Kind` to choose between and no dungeon field naming a choice.
 ##
 ## Implementations MUST be pure logic (no UI, no autoloads): the balance simulator
 ## drives them directly, which is what keeps one generic walker able to measure
-## every model instead of needing a bespoke walker each.
+## a model instead of needing a bespoke walker each.
 ##
-## Balance contract: every model must spend a comparable attrition budget
-## (see Balance.ENCOUNTER_BUDGET). If one model yields 3 fights and another 8,
+## Balance contract: a model must spend the attrition budget it is given
+## (see Balance.ENCOUNTER_BUDGET). If one dungeon yields 3 fights and another 8,
 ## "difficulty 4" stops meaning the same thing in different dungeons and the whole
 ## scaling model decouples.
 class_name Traversal
 extends RefCounted
-
-## Stored as a raw int in every dungeon .tres, so values may only be APPENDED.
-enum Kind { GRAPH, DECK, DICE, ISO }
 
 ## Encounter kinds a traversal hands back. Values mirror GameState.NodeType.
 ## Named Enc, not Node: "Node" would shadow Godot's native class.
@@ -64,7 +67,7 @@ func status() -> String:
 ## format: the base only handles what every model has. Implementations override
 ## `_save`/`_load` for their own fields.
 func save_state() -> Dictionary:
-	var d := {"kind": kind(), "pending": pending, "cleared": cleared}
+	var d := {"pending": pending, "cleared": cleared}
 	d.merge(_save())
 	return d
 
@@ -73,31 +76,29 @@ func load_state(d: Dictionary) -> void:
 	cleared = int(d.get("cleared", 0))
 	_load(d)
 
-## Which Kind this instance is — needed to rebuild the right model on load.
-func kind() -> int:
-	return Kind.GRAPH
-
 func _save() -> Dictionary:
 	return {}
 
 func _load(_d: Dictionary) -> void:
 	pass
 
-## Rebuild a traversal from a saved blob, choosing the model by its stored kind.
+## Rebuild a traversal from a saved blob. Callers screen the blob first — a run saved
+## on a model that no longer exists is dropped in `GameState.run_from_dict`, not
+## reconstructed here into something half-formed.
 static func from_state(d: Dictionary, dungeon_data) -> Traversal:
-	var t := make(int(d.get("kind", Kind.GRAPH)))
+	var t := TraversalIso.new()
 	t.dungeon = dungeon_data
 	t.load_state(d)
 	return t
 
 # --- shared helpers ---
 
-## The encounter mix for one run of `dungeon`, so every model costs the player a
+## The encounter mix for one run of `dungeon`, so every dungeon costs the player a
 ## comparable amount. Returns an Array of Node values, boss NOT included.
 ##
-## Takes the dungeon because the mix is now per-place (DungeonData.encounter_mix):
-## the same three models still spend the same budget as each other, but a swarm
-## dungeon and a treasure dungeon no longer feel like the same walk.
+## Takes the dungeon because the mix is per-place (DungeonData.encounter_mix): every
+## dungeon spends the same budget, but a swarm dungeon and a treasure dungeon do not
+## feel like the same walk.
 static func standard_encounters(dungeon_data = null) -> Array:
 	var mix := {
 		"combat": Balance.ENCOUNTER_COMBATS, "elite": Balance.ENCOUNTER_ELITES,
@@ -120,14 +121,3 @@ static func standard_encounters(dungeon_data = null) -> Array:
 	for i in int(mix["treasure"]):
 		out.append(Enc.TREASURE)
 	return out
-
-static func make(kind: int) -> Traversal:
-	match kind:
-		Kind.DECK:
-			return TraversalDeck.new()
-		Kind.DICE:
-			return TraversalDice.new()
-		Kind.ISO:
-			return TraversalIso.new()
-		_:
-			return TraversalGraph.new()

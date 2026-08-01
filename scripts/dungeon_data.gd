@@ -14,9 +14,10 @@ extends Resource
 @export var description: String = "Damp stone and old bones."
 ## Feeds every Balance formula that used to take a raw depth number.
 @export var difficulty: int = 1
-## How this dungeon is explored (Traversal.Kind). Different places navigate
-## differently on purpose; the unlock order doubles as the teaching order.
-@export var traversal: int = 0
+# There is no `traversal` field. Dungeons once named one of four models here; every
+# one of them picked the iso crawl in D88 and the other three were deleted in D94, so
+# the field was a choice with one option. What makes a place navigate differently is
+# now its floor — size, shape, roster, encounter mix — not a model number.
 ## Unlocks once this many dungeons have been cleared (0 = available immediately).
 @export var unlock_after_clears: int = 0
 

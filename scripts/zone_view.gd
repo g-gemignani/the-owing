@@ -31,8 +31,10 @@ func _fill(z: ZoneData) -> void:
 		var tag := "  [cleared]" if MetaState.has_cleared(d.id) else ""
 		if not unlocked:
 			tag = "  [locked — clear %d dungeons]" % Balance.effective_gate(d.id)
-		UI.button(box, "%s   difficulty %d   %s%s" % [
-			d.name, d.difficulty, _kind(d.traversal), tag],
+		# No traversal name on the button any more. It read "isometric floor" on all
+		# twelve — a label that never varies is not information, it is furniture, and
+		# it was spending the widest line on the screen saying nothing.
+		UI.button(box, "%s   difficulty %d%s" % [d.name, d.difficulty, tag],
 			(func(): _enter(d.id)) if unlocked else Callable(), 40.0)
 		UI.label(box, "    %s" % d.description)
 		# Name the boss at the point of choosing. Knowing what waits is what turns
@@ -48,13 +50,6 @@ func _fill(z: ZoneData) -> void:
 		var gap := Control.new()
 		gap.custom_minimum_size = Vector2(0, UITheme.px(10))
 		box.add_child(gap)
-
-func _kind(k: int) -> String:
-	match k:
-		Traversal.Kind.DECK: return "encounter deck"
-		Traversal.Kind.DICE: return "dice board"
-		Traversal.Kind.ISO: return "isometric floor"
-		_: return "branching map"
 
 func _exclusives(d: DungeonData) -> String:
 	var names: Array[String] = []

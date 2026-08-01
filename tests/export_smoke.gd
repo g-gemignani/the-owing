@@ -65,7 +65,7 @@ func _init() -> void:
 		if packed == null:
 			fails += 1; print("FAIL scene %s does not load from the pack" % scene); continue
 		# `load()` returns a Resource even for a script that failed to PARSE, so the
-		# previous null check here passed while map.gd was broken for five commits.
+		# previous null check here passed while a run view was broken for five commits.
 		# Instantiating is the only honest answer.
 		var inst = packed.instantiate()
 		if inst == null:

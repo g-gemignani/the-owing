@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = "the_maw"
 name = "The Maw"
 description = "It does not have a bottom. It has an appetite."
-traversal = 3
 difficulty = 8
 unlock_after_clears = 8
 enemy_roster = PackedStringArray("maw_tender", "drowned_thrall", "bog_lurker")

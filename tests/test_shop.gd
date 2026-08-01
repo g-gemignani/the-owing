@@ -80,31 +80,52 @@ func _init() -> void:
 	if m2.gold != 60:
 		fails += 1; print("FAIL gold not persisted: %d" % m2.gold)
 
-	# --- shop nodes actually appear on generated maps ---
-	var GS := TraversalGraph.new()
+	# --- shop nodes actually appear on generated floors ---
+	#
+	# This used to generate graph maps and count nodes per row. The graph went with its
+	# model in D94, so it counts what the crawl lays on its tiles instead — the property
+	# is the same one either way: a gold sink the player cannot reach is not a sink.
 	var shops := 0
 	var rests := 0
-	var trials := 200
-	for t in trials:
-		GS.generate(null)
-		for r in GS.map.size():
-			for node in GS.map[r]:
-				if node["type"] == Traversal.Enc.SHOP:
+	var trials := 0
+	for did in Balance.DUNGEONS:
+		for t in 20:
+			var iso := TraversalIso.new()
+			iso.generate(Balance.dungeon(did))
+			trials += 1
+			# Every floor, not just the one being stood on: the dungeon's whole budget is
+			# dealt across the floors up front, and a shop dealt to floor three still has
+			# to exist. `plan` holds what the floors below are still owed.
+			var laid: Array = []
+			for e in iso.enc:
+				laid.append(int(e))
+			for pf in iso.plan:
+				for e in pf:
+					laid.append(int(e))
+			for e in laid:
+				if e == Traversal.Enc.SHOP:
 					shops += 1
-				elif node["type"] == Traversal.Enc.REST:
+				elif e == Traversal.Enc.REST:
 					rests += 1
 	if shops == 0:
-		fails += 1; print("FAIL no shop nodes generated in %d maps" % trials)
-	# boss row and first row must never be shops
-	for t in 50:
-		GS.generate(null)
-		if GS.map[0][0]["type"] == Traversal.Enc.SHOP:
-			fails += 1; print("FAIL shop on first row"); break
-		for node in GS.map[GS.map.size() - 1]:
-			if node["type"] != Traversal.Enc.BOSS:
-				fails += 1; print("FAIL boss row polluted"); break
-	print("  (info: %.1f shops and %.1f rests per map)" % [
-		float(shops) / trials, float(rests) / trials])
+		fails += 1; print("FAIL no shop nodes generated in %d floors" % trials)
+	# The boss is the last thing in a dungeon, so it must never be laid on a floor the
+	# player can reach before the deepest one — a boss on floor one is the whole run.
+	for did in Balance.DUNGEONS:
+		for t in 20:
+			var iso2 := TraversalIso.new()
+			iso2.generate(Balance.dungeon(did))
+			if iso2.floors <= 1:
+				continue
+			var early := false
+			for e in iso2.enc:
+				if int(e) == Traversal.Enc.BOSS:
+					early = true
+			if early:
+				fails += 1
+				print("FAIL %s: the boss is standing on the first floor" % did); break
+	print("  (info: %.1f shops and %.1f rests per dungeon)" % [
+		float(shops) / float(maxi(1, trials)), float(rests) / float(maxi(1, trials))])
 
 	# --- prices are quoted in FIGHTS, so a shop is usable at every depth (D71) ---
 	#

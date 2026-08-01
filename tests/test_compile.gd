@@ -1,8 +1,8 @@
 ## Headless test: every script in the project actually compiles.
 ##
-## This exists because a broken `map.gd` shipped and survived FIVE commits, each
-## reporting a green suite, while every graph dungeon in the game was a black
-## screen. Three separate things let that happen:
+## This exists because a broken run view (`map.gd`, deleted with its model in D94)
+## shipped and survived FIVE commits, each reporting a green suite, while every graph
+## dungeon in the game was a black screen. Three separate things let that happen:
 ##
 ## 1. `godot --headless --import` does NOT compile scripts. It reported zero
 ##    errors the whole time.

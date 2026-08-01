@@ -53,7 +53,7 @@ const SCORES := {
 ## attaches its own click sound. Anything unlisted gets `DEFAULT_SCORE`.
 const SCENE_SCORE := {
 	"MainMenu": "menu", "SaveSlots": "menu", "StarterKit": "menu", "Victory": "menu",
-	"Map": "dungeon", "DeckRun": "dungeon", "DiceRun": "dungeon", "IsoRun": "dungeon",
+	"IsoRun": "dungeon",
 	"Shop": "dungeon", "Encounter": "dungeon", "PauseMenu": "dungeon",
 	"Combat": "combat",
 }

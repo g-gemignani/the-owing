@@ -26,9 +26,6 @@ const SHOTS := [
 	["Overworld", "res://scenes/Overworld.tscn", ""],
 	["ZoneView", "res://scenes/ZoneView.tscn", "zone"],
 	["DeckBuilder", "res://scenes/DeckBuilder.tscn", ""],
-	["Map", "res://scenes/Map.tscn", "graph"],
-	["DeckRun", "res://scenes/DeckRun.tscn", "deck"],
-	["DiceRun", "res://scenes/DiceRun.tscn", "dice"],
 	["IsoRun", "res://scenes/IsoRun.tscn", "iso"],
 	# Captured twice on purpose. The iso floor is a model about DISCOVERY, so its
 	# opening state — six tiles lit, nothing else known — is the least informative
@@ -109,50 +106,23 @@ func _run_state() -> Array[CardData]:
 			deck.append((load(MetaState.CATALOG[cid]) as CardData).duplicate())
 	return deck
 
-func _dungeon_with(model: int) -> String:
-	for did in Balance.DUNGEONS:
-		var dd := Balance.dungeon(did)
-		if dd != null and dd.traversal == model:
-			return did
-	return Balance.DUNGEONS[0]
-
-## Which traversal each capture needs, if it needs a specific one.
-const MODEL_FOR := {
-	"graph": Traversal.Kind.GRAPH, "deck": Traversal.Kind.DECK,
-	"dice": Traversal.Kind.DICE, "iso": Traversal.Kind.ISO,
-	"iso_walked": Traversal.Kind.ISO,
-}
-
 func _setup(need: String) -> void:
 	GameState.reset_run_progress()
 	var did: String = Balance.DUNGEONS[0]
 	match need:
-		"deck": did = _dungeon_with(Traversal.Kind.DECK)
-		"dice": did = _dungeon_with(Traversal.Kind.DICE)
-		"iso", "iso_walked": did = _dungeon_with(Traversal.Kind.ISO)
 		# deepest dungeon, or the capture only ever shows worn chests: a vault
 		# cannot roll at depth 1 and that is exactly the screen worth looking at
 		"chest": did = Balance.DUNGEONS[Balance.DUNGEONS.size() - 1]
 	GameState.select_dungeon(did)
 	GameState.enter_dungeon(_run_state())
 
-	# FORCE the model the capture is for, rather than trusting a dungeon to use it.
-	#
-	# `_dungeon_with` falls back to the first dungeon when nothing matches, and since
-	# every dungeon became iso (D88) that fallback is what every legacy shot got: the
-	# graph view handed a `TraversalIso`, which it cannot cast, and the harness hung on
-	# shot five with no error and no output. Twenty-two minutes of a software-GL render
-	# producing four files.
-	#
-	# The three older views are still in the tree as a fallback and still worth
-	# photographing, so this builds the model directly instead of skipping them. A
-	# screenshot harness has no business caring which model the CONTENT selects.
-	if MODEL_FOR.has(need):
-		var kind: int = int(MODEL_FOR[need])
-		var dd := Balance.dungeon(did)
-		if dd == null or dd.traversal != kind:
-			GameState.traversal = Traversal.make(kind)
-			GameState.traversal.generate(dd)
+	# This used to FORCE a traversal model per capture, because `_dungeon_with` fell
+	# back to the first dungeon when nothing matched and, once every dungeon became iso
+	# (D88), that fallback handed the graph view a `TraversalIso` it could not cast —
+	# the harness hung on shot five with no error and no output, twenty-two minutes of
+	# software-GL render producing four files. D94 deleted the three unreachable views,
+	# so entering the dungeon builds the only traversal there is and no forcing is left
+	# to do. Restore the forcing, not the fallback, if a second model is ever added.
 	var z := Balance.zone_of(did)
 	GameState.current_zone = z.id if z != null else Balance.ZONES[0]
 	match need:

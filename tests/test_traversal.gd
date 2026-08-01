@@ -1,19 +1,24 @@
-## Headless test: the Traversal contract, applied to EVERY model.
+## Headless test: the Traversal contract, applied to every model there is.
 ##
-## The point of this file is that it is model-agnostic: adding a traversal only
-## requires adding its Kind to KINDS below. Anything a model must guarantee for
-## combat/meta/balance to keep working is asserted here.
+## The file stayed model-agnostic on purpose after D94 deleted three of the four
+## models: the loop below runs over MODELS, and a second traversal rejoins this suite
+## by being added to that array rather than by anyone writing a second walker.
+## Anything a model must guarantee for combat/meta/balance to keep working is here.
 ## Run: godot --headless --script tests/test_traversal.gd
 extends SceneTree
 
-const KINDS := [Traversal.Kind.GRAPH, Traversal.Kind.DECK, Traversal.Kind.DICE,
-	Traversal.Kind.ISO]
-const KIND_NAMES := {0: "GRAPH", 1: "DECK", 2: "DICE", 3: "ISO"}
+## Every traversal model in the game. Add a name here and a branch to `_make` and the
+## whole contract below runs against it — that is the only wiring a second model needs.
+const MODELS := ["ISO"]
 
-## Encounters one run of `did` should cost. The mix is per-dungeon now, but every
-## MODEL still has to spend the same one — that is the contract this test exists
-## for, and it is what lets a difficulty rating mean one thing across three very
-## different ways of walking a dungeon.
+func _make(name: String) -> Traversal:
+	match name:
+		_: return TraversalIso.new()
+
+## Encounters one run of `did` should cost. The mix is per-dungeon, and every MODEL
+## has to spend the same one — that is the contract this test exists for, and it is
+## what lets a difficulty rating mean one thing across dungeons and across any way of
+## walking them that gets built.
 func budget(did: String = "") -> int:
 	var dd := Balance.dungeon(did) if did != "" else null
 	if dd == null:
@@ -29,17 +34,17 @@ func budget(did: String = "") -> int:
 func _init() -> void:
 	var fails := 0
 
-	for kind in KINDS:
-		var label: String = KIND_NAMES.get(kind, str(kind))
+	for model in MODELS:
+		var label: String = model
 		var enc_total := 0
 		var enc_runs := 0
 		var budget_total := 0
 		for dungeon_id in Balance.DUNGEONS:
 			var dd := Balance.dungeon(dungeon_id)
 			for trial in 30:
-				var tv := Traversal.make(kind)
+				var tv := _make(label)
 				if tv == null:
-					fails += 1; print("FAIL %s: make() returned null" % label); break
+					fails += 1; print("FAIL %s: no instance built" % label); break
 				tv.generate(dd)
 
 				# a fresh run must not already be finished, and must offer choices
@@ -108,94 +113,24 @@ func _init() -> void:
 
 		# Average encounters per run must match what the dungeons asked for. Compared
 		# against the mean of the PER-DUNGEON budgets now that the mix varies by
-		# place — the contract was never "every run is nine encounters", it is "the
-		# three models cost the same as each other".
+		# place — the contract was never "every run is nine encounters", it is "a
+		# model costs what the dungeon asked for, whichever model it is".
 		if enc_runs > 0:
 			var avg := float(enc_total) / float(enc_runs)
 			var want := float(budget_total) / float(enc_runs)
 			if abs(avg - want) > 2.0:
 				fails += 1
-				print("FAIL %s: averages %.1f encounters, dungeons asked for %.1f (models must cost the same)" % [
+				print("FAIL %s: averages %.1f encounters, dungeons asked for %.1f (a model must cost what was asked)" % [
 					label, avg, want])
 			else:
 				print("  (info: %s averages %.1f encounters, asked for %.1f)" % [label, avg, want])
 
-	# --- graph specifics: every layer reachable, boss reachable ---
-	var g := TraversalGraph.new()
-	for t in 30:
-		g.generate(null)
-		var frontier: Array = []
-		for col in g.map[0].size():
-			frontier.append(col)
-		for r in range(g.map.size() - 1):
-			var nxt: Array = []
-			for col in frontier:
-				for e in g.map[r][col]["edges"]:
-					if not e in nxt:
-						nxt.append(e)
-			if nxt.is_empty():
-				fails += 1; print("FAIL GRAPH: dead end at row %d" % r); break
-			frontier = nxt
-
-	# --- dice specifics ---
-	var di := TraversalDice.new()
-	di.generate(null)
-	if int(di.track[di.track.size() - 1]) != Traversal.Enc.BOSS:
-		fails += 1; print("FAIL DICE: boss is not the final space")
-	if di.options().size() != TraversalDice.DICE_ROLLED:
-		fails += 1; print("FAIL DICE: expected %d dice options" % TraversalDice.DICE_ROLLED)
-	# every option must move forward, and never past the boss
-	for o in di.options():
-		if int(o["dest"]) <= di.pos:
-			fails += 1; print("FAIL DICE: option does not advance")
-		if int(o["dest"]) > di.track.size() - 1:
-			fails += 1; print("FAIL DICE: option moves past the board")
-	# a roll of the maximum from the last-but-one space must still land on the boss
-	di.pos = di.track.size() - 2
-	di.dice = [TraversalDice.DIE_FACES]
-	var only := di.options()
-	if only.is_empty() or int(only[0]["type"]) != Traversal.Enc.BOSS:
-		fails += 1; print("FAIL DICE: overshoot does not clamp onto the boss")
-
-	# --- deck specifics ---
-	var d := TraversalDeck.new()
-	d.generate(null)
-	# boss must be the bottom card
-	if int(d.draw_pile[d.draw_pile.size() - 1]) != Traversal.Enc.BOSS:
-		fails += 1; print("FAIL DECK: boss is not the bottom card")
-	# counts must describe the real pile
-	var sum := 0
-	for k in d.remaining_counts():
-		sum += int(d.remaining_counts()[k])
-	if sum != d.draw_pile.size():
-		fails += 1; print("FAIL DECK: remaining_counts disagrees with pile")
-	# avoiding must consume the card without resolving it
-	var before: int = d.draw_pile.size()
-	var avoid_idx := -1
-	var opts := d.options()
-	for i in opts.size():
-		if opts[i].has("hp_cost"):
-			avoid_idx = i
-	if avoid_idx >= 0:
-		var r2 := d.select(avoid_idx)
-		if not r2.is_empty():
-			fails += 1; print("FAIL DECK: avoid returned an encounter to resolve")
-		if d.draw_pile.size() != before - 1:
-			fails += 1; print("FAIL DECK: avoid did not discard the card")
-	# the boss can never be avoided
-	while d.draw_pile.size() > 1:
-		d.draw_pile.pop_front()
-	d._reveal()
-	for o in d.options():
-		if o.has("hp_cost"):
-			fails += 1; print("FAIL DECK: boss can be avoided")
-
 	# --- iso specifics ---
 	#
-	# The floor is the one model whose budget can leak GEOMETRICALLY — an encounter that
-	# finds no tile to stand on makes a dungeon quietly cheaper than the same dungeon
-	# walked any other way, and nothing above would notice, because every assertion up
-	# there is about the walk and not the building it was cut from. Since D79 there is a
+	# The floor's budget can leak GEOMETRICALLY — an encounter that finds no tile to
+	# stand on makes a dungeon quietly cheaper than its difficulty says, and nothing
+	# above would notice, because every assertion up there is about the walk and not
+	# the building it was cut from. Since D79 there is a
 	# second way to fail that no encounter count can see: a dungeon can be correct and
 	# still bury the card game in walking, which is what ISO_MOVES_PER_ENCOUNTER_MAX is
 	# for.
@@ -480,17 +415,21 @@ func _init() -> void:
 	#
 	# Asserted structurally rather than by simulation: what breaks the mechanic is
 	# the TOTAL being small against the health bar you are spending it from.
+	# Checked for EVERY dungeon. It used to skip anything that was not a deck dungeon,
+	# and once D88 moved them all onto the crawl that filter matched nothing and the
+	# whole block silently stopped running — the same failure the avoid calibration in
+	# `sim_balance.gd` had, from the same cause. There is no model to filter on now.
 	var dodgeable: int = Balance.ENCOUNTER_COMBATS + Balance.ENCOUNTER_ELITES
 	for did in Balance.DUNGEONS:
 		var dd2 := Balance.dungeon(did)
-		if dd2 == null or dd2.traversal != Traversal.Kind.DECK:
+		if dd2 == null:
 			continue
 		var depth: int = dd2.difficulty
 		var bar := float(Balance.BASE_MAX_HP + (depth - 1) * Balance.HP_PER_DUNGEON)
 		var total := 0
 		var prev := 0
 		for i in dodgeable:
-			var c: int = Balance.deck_avoid_cost(depth, i)
+			var c: int = Balance.avoid_cost(depth, i)
 			if c <= prev:
 				fails += 1
 				print("FAIL %s: dodge %d costs %d, no more than the one before it (%d)" % [
@@ -503,18 +442,18 @@ func _init() -> void:
 			print("FAIL %s: dodging every fight costs %d of %d HP — the dungeon can be skipped on pocket change" % [
 				did, total, int(bar)])
 		# ...while one dodge stays affordable, or nobody would ever use it
-		var first: int = Balance.deck_avoid_cost(depth, 0)
+		var first: int = Balance.avoid_cost(depth, 0)
 		if float(first) > bar * 0.25:
 			fails += 1
 			print("FAIL %s: the first dodge costs %d of %d HP, too dear to ever be worth it" % [
 				did, first, int(bar)])
 	# and depth must matter, or a flat price gets cheaper the deeper you go
-	if Balance.deck_avoid_cost(8, 0) <= Balance.deck_avoid_cost(1, 0):
+	if Balance.avoid_cost(8, 0) <= Balance.avoid_cost(1, 0):
 		fails += 1
 		print("FAIL the dodge costs no more at depth 8 than at depth 1")
 
 	if fails == 0:
-		print("TRAVERSAL TEST: PASS (contract holds for %d models: termination, one boss, equal budget, priced dodge)" % KINDS.size())
+		print("TRAVERSAL TEST: PASS (contract holds for %d model(s): termination, one boss, equal budget, priced dodge)" % MODELS.size())
 	else:
 		print("TRAVERSAL TEST: FAIL (%d)" % fails)
 	quit()

@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = "crypt"
 name = "The Crypt"
 description = "Damp stone and old bones. A place to learn."
-traversal = 3
 difficulty = 1
 unlock_after_clears = 0
 enemy_roster = PackedStringArray("cultist", "crypt_hound", "bone_picker")

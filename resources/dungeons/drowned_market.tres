@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = "drowned_market"
 name = "The Drowned Market"
 description = "Stalls, still stocked. Vendors, still present."
-traversal = 3
 difficulty = 6
 unlock_after_clears = 5
 enemy_roster = PackedStringArray("market_ghoul", "drowned_thrall", "pale_acolyte", "bog_lurker")

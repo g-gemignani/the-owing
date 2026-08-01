@@ -45,9 +45,12 @@ a decision.
 
 ## A dungeon
 
-1. `resources/dungeons/<id>.tres` — difficulty, traversal, roster, boss, card pool.
+1. `resources/dungeons/<id>.tres` — difficulty, roster, boss, card pool, encounter mix.
 2. Add the id to `Balance.DUNGEONS`.
 3. Add it to exactly one zone's `dungeons` list, or it is unreachable.
+4. Give it a shape and a surface — `Balance.ISO_STYLE_OF` and `Balance.ISO_TERRAIN_OF`.
+   There is one traversal model (D94), so the floor is the only thing that makes a
+   dungeon walk differently from its neighbour.
 
 ## A power or relic
 

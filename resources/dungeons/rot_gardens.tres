@@ -7,7 +7,6 @@ script = ExtResource("1")
 id = "rot_gardens"
 name = "The Rot Gardens"
 description = "Something cultivated this. Something still tends it."
-traversal = 3
 difficulty = 5
 unlock_after_clears = 4
 enemy_roster = PackedStringArray("spore_thing", "rot_priest", "plague_rat", "bog_lurker")
