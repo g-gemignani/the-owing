@@ -101,12 +101,29 @@ func _init() -> void:
 	# --- engine applies relic effects ---
 	var kite := load(m.RELIC_CATALOG["kite_shield"]) as RelicData
 	var whet := load(m.RELIC_CATALOG["whetstone"]) as RelicData
-	var lens := load(m.RELIC_CATALOG["scholars_lens"]) as RelicData
+	# DISCOVERED, not named. This line loaded "scholars_lens" by id until that relic
+	# was redesigned off `extra_draw` (D95) and the assertion broke — a harness that
+	# selects by name goes quiet, or falls over, the moment the name changes. Ask the
+	# catalogue which relic actually grants the draw instead.
+	var lens: RelicData = null
+	for rid in m.RELIC_CATALOG:
+		var r := load(m.RELIC_CATALOG[rid]) as RelicData
+		if r != null and r.extra_draw > 0:
+			lens = r
+			break
+	# ...and say so if nobody does. An assertion about the members of a set proves
+	# nothing until something checks the set is not empty: with no draw relic in the
+	# catalogue the hand-size check below would pass by having nothing to test.
+	if lens == null:
+		fails += 1; print("FAIL no relic grants extra_draw — the hand-size check is vacuous")
+	var relics: Array = [battery, kite, whet]
+	if lens != null:
+		relics.append(lens)
 	var eng := CombatEngine.new()
-	eng.setup(deck, 60, 60, 1, Balance.Tier.NORMAL, "cultist", [battery, kite, whet, lens])
+	eng.setup(deck, 60, 60, 1, Balance.Tier.NORMAL, "cultist", relics)
 	if eng.energy != Balance.MAX_ENERGY + 1:
 		fails += 1; print("FAIL energy relic not applied: %d" % eng.energy)
-	if eng.hand.size() != Balance.HAND_SIZE + 1:
+	if lens != null and eng.hand.size() != Balance.HAND_SIZE + lens.extra_draw:
 		fails += 1; print("FAIL draw relic not applied: %d cards" % eng.hand.size())
 	if eng.player.strength < whet.start_strength:
 		fails += 1; print("FAIL start_strength not applied")

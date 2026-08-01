@@ -58,7 +58,12 @@ func _refresh() -> void:
 		var dd := Balance.dungeon(did)
 		var row := UI.row(list_box, 10)
 		var lbl := Label.new()
-		lbl.custom_minimum_size.x = UITheme.px(460)
+		# A minimum width alone did not hold the Open buttons in a column: a Label
+		# grows past it to fit its text, so the button's x tracked the length of the
+		# pack's name. Clipped, the width is the width, and the column is straight.
+		# 600 fits the longest title a pack can have; the tooltip carries the rest.
+		lbl.custom_minimum_size.x = UITheme.px(600)
+		lbl.clip_text = true
 		lbl.add_theme_color_override("font_color", _tier_colour(tier))
 		# what is inside is stated up front: a sealed pack is a promise, not a lottery
 		lbl.text = "%s   (%d cards, found in %s)" % [

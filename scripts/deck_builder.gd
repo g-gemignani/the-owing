@@ -31,24 +31,14 @@ func _ready() -> void:
 	_refresh()
 
 func _build_ui() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	UITheme.pad(margin)
-	add_child(margin)
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", UITheme.sep(8))
-	margin.add_child(root)
-
-	var title := Label.new()
-	title.add_theme_font_size_override("font_size", UITheme.title_font())
 	var dd := GameState.dungeon_data()
-	if GameState.manage_only:
-		title.text = "Loadouts"
-	else:
-		title.text = "Build deck — %s (difficulty %d)" % [
+	var title := "Loadouts"
+	if not GameState.manage_only:
+		title = "Build deck — %s (difficulty %d)" % [
 			dd.name if dd != null else "Dungeon", GameState.dungeon]
-	root.add_child(title)
+	# UI.screen rather than a hand-rolled margin+VBox: it is the thing that installs
+	# the backdrop, so a screen that scaffolds itself is a screen on flat black.
+	var root := UI.screen(self, title)
 
 	info_label = Label.new()
 	root.add_child(info_label)
@@ -259,9 +249,12 @@ func _refresh() -> void:
 			stats += "dmg %d " % card.eff_damage()
 		if card.eff_block() > 0:
 			stats += "blk %d " % card.eff_block()
-		name_lbl.text = "%s [%s] Lv%d/%d  owned %d   (%s)" % [
+		# no empty "()" on a card whose numbers are not damage or block
+		var stat_txt := stats.strip_edges()
+		name_lbl.text = "%s [%s] Lv%d/%d  owned %d%s" % [
 			card.name, CardData.Rarity.keys()[card.rarity], entry["level"],
-			MetaState.max_level(id), entry["count"], stats.strip_edges()]
+			MetaState.max_level(id), entry["count"],
+			"   (%s)" % stat_txt if stat_txt != "" else ""]
 		row.add_child(name_lbl)
 		UI.hoverable(row, Icons.card_tooltip(card))
 

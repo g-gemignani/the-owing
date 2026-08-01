@@ -4848,3 +4848,105 @@ the new guard now rejects before it gets there, but a model should not error on 
 empty state. It returns no options instead.
 
 34/34 suites green.
+
+### D95 — A review of the game as a game, and the five defects worth fixing the same afternoon
+
+The systems have been measured since D5. Nothing had ever been pointed at what the
+build *is to play*, and the two are no longer in step: the engineering is well ahead
+of the game. `REVIEW.md` is that pass — 20 screens captured with `tools/Screenshots.tscn`
+and looked at, the art manifest regenerated, all 100 cards / 30 relics / 10 powers /
+20 events read as data, and the whole thing scored on playability, graphics,
+originality, fun and content. It is not a decision log; it is the outside view, and
+its P0 list is the argument for what to build next. This entry records what came out
+of it that was small enough to fix immediately.
+
+**The three findings that are NOT small, stated here so they are not lost in a
+document nobody re-opens:**
+
+1. **The hand is unreadable at rest.** A resting card deliberately shows only its name
+   (`ui.gd`), and the fan overlap (`combat.gd`) covers exactly that. A capture of a
+   five-card hand reads `Smith's Fu… / Prepare / Bludgeo… / Bite / Shiv`. The one thing
+   the resting state exists to show is the one thing the layout hides. The fix is to lay
+   the name into the strip the fan leaves visible, and it wants an assertion in
+   `CardTextTest`: in a full hand, no card's name rect may intersect the next card's rect.
+2. **There is no card art at all.** `assets/art/cards/` does not exist, so
+   `PixelArt.card_art()` falls through to a 16x16 CC0 atlas tile which `ui.gd` then
+   stretches across a ~160x210 face at 22% alpha. **This is D89's lesson recurring on the
+   most-looked-at object in the game** — a 16px tile magnified ten times is noise, and it
+   was diagnosed once already on the enemy plates. Twelve family illustrations would move
+   the look of the whole product further than any other twelve files.
+3. **Roughly 36 of 100 card names are Slay the Spire's verbatim, and 14 copy the effect
+   AND the constant** — Bludgeon 32 damage exhaust, Impervious 30 Block exhaust, Cleave 8
+   to all, Adrenaline, Pummel, Twin Strike, Barricade, Body Slam, Entrench, Footwork 2
+   Dexterity, Inflame 2 Strength, Shrug It Off 8 Block draw 1, Strike 6, Defend 5. The
+   numbers are the tell: a constant arrived at independently does not land on 32. The
+   renames are a data edit; the fourteen need re-tuning, and therefore a sim pass.
+
+**What was fixed here.** Five defects, chosen because none of them needed a
+measurement and none touched a file the concurrent D94 work held.
+
+**A guard that existed in one of two identical lists.** `deck_builder.gd` rendered
+`Abyssal Gift [RARE] Lv1/15 owned 1 ()` for any card with neither damage nor block.
+`collection.gd` builds the same row from the same fields and had guarded the empty
+string all along. The two lists are near-copies of each other and had drifted exactly
+where a copy drifts — this is the duplicated-logic rot the working rules already warn
+about, showing up in layout rather than in a constant.
+
+**Two screens that opted out of the boilerplate and so opted out of the art.**
+`deck_builder.gd` and `collection.gd` were the only screens rendering on flat black.
+Root cause: both hand-rolled the `MarginContainer` + `VBoxContainer` scaffold instead
+of calling `UI.screen()`, and `UI.screen()` is what installs the backdrop. Its own
+docstring says it exists "so one edit changes the look of all of them once there is
+art" — which is true, and worth nothing to a caller that does not call it. Both now do.
+
+**A minimum size that was not a minimum.** The Packs screen's three "Open" buttons sat
+at three different x positions. The label already carried a `custom_minimum_size.x`, so
+the obvious diagnosis was wrong: a Godot `Label` reports its *text* width as its minimum,
+so it grows past the floor and the button's x tracks the pack name's length. `clip_text`
+makes the floor real. The new width was measured against the longest string the tier x
+build x dungeon tables can actually produce (569px) rather than picked.
+
+**A relic that was another relic.** `scholars_lens.tres` and `keen_lens.tres` were
+byte-identical apart from `id` and `name` — both "Draw 1 extra card each turn.", both
+rarity 3, both `extra_draw = 1`. Scholar's Lens becomes ON_TURN_START / 3 -> DRAW 2,
+"Every 3rd turn, draw 2." Differing in KIND and not in magnitude was the whole point:
+the review's complaint about this roster is that **18 of 30 relics are numeric tiers of
+five templates** (five +max HP, five start-with-Block, three gold%, two +1 draw, two
+start-with-Strength), against a pillar that says relics should change how you play. A
+sixth tier would have closed the defect and widened the flaw.
+
+> **NOT MEASURED. This is a balance change and it has not been simulated.**
+> `triggered_power()` does price ON_TURN_START/DRAW into `power_ratio`, so scaling folds
+> it in and `test_balance`'s invariants are green — but green invariants are not a
+> measurement of outcomes. The relic moved from `extra_draw * 14.0`, a flat term
+> deliberately routed around `flat_power()` because draw is multiplicative, to
+> `triggered_power()`'s additive `2 * 1.5 * (TARGET_NORMAL_TURNS / 3)`. Two different
+> pricing paths with different semantics; the delta is unchecked, and the Relic profile
+> leans on it. **Run `tools/sim_balance.gd` before trusting it.**
+
+**And the test that named the thing it was testing.** `test_relic.gd` loaded
+`"scholars_lens"` by id as *the* extra-draw relic, so the redesign broke it — the same
+shape as the avoid calibration that filtered on a `Kind` that stopped existing (D88),
+except this one failed loudly instead of going quiet, which is the good outcome and only
+by luck. It now asks the catalogue which relic grants `extra_draw` and derives the
+expected hand size from that relic's own value. With the non-vacuity check beside it:
+if no relic in the catalogue grants a draw, the hand-size assertion has nothing to test
+and says so, rather than passing. Both halves of that are already written down as rules
+here — a harness that selects by name, and an invariant about the members of a set.
+
+**Documentation.** `README.md` was stale in four places, not three: three traversal
+models listed when there is one (the two counts were both wrong and neither named the
+model actually in use), "decisions D1 through D38" against a log at D94, a status line
+claiming CC0 placeholders and no animation when 23 backdrops and 35 enemy plates are
+generated and combat has tweened feedback, and — found while fixing that — a licence
+section claiming *all* audio is Kenney CC0 when the five music tracks are generated by
+`tools/gen_music.py` under the repo licence, which `assets/audio/music/PROVENANCE.txt`
+has said all along. A licence claim that is wrong in the permissive direction is the
+one kind of stale sentence that is not merely untidy.
+
+**Not fixed, and why.** The crawl's header wraps mid-phrase (`AT RISK: 0` / `cards, 0
+gold`) — `iso_run.gd` was held by the D94 work. `assets/art/README.md` lists
+`cards/<family>.png` as "generated (Leonardo)" for a directory that does not exist; the
+table is describing intent as fact, which is the same defect class as the `iso/` README
+headed "licence status: UNKNOWN" in D89, and it deserves its own pass rather than a
+line here.

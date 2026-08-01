@@ -11,19 +11,10 @@ func _ready() -> void:
 	_refresh()
 
 func _build_ui() -> void:
-	set_anchors_preset(Control.PRESET_FULL_RECT)
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	UITheme.pad(margin)
-	add_child(margin)
-	var root := VBoxContainer.new()
-	root.add_theme_constant_override("separation", UITheme.sep(10))
-	margin.add_child(root)
-
-	var title := Label.new()
-	title.text = "Collection — fusing spends copies AND gold; both prices rise with level"
-	title.add_theme_font_size_override("font_size", UITheme.title_font())
-	root.add_child(title)
+	# UI.screen rather than a hand-rolled margin+VBox: it is the thing that installs
+	# the backdrop, so a screen that scaffolds itself is a screen on flat black.
+	var root := UI.screen(self,
+		"Collection — fusing spends copies AND gold; both prices rise with level")
 
 	info_label = Label.new()
 	root.add_child(info_label)

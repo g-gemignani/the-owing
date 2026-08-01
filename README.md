@@ -4,8 +4,11 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 (GDScript). Slay-the-Spire-shaped combat, but what you carry between runs is a
 *collection* you grow, fuse and spend — not a fresh start every time.
 
-> Status: playable prototype. Art and audio are CC0 placeholders (plus a generated
-> title image) and there is no animation yet. The systems are the point.
+> Status: playable prototype. The scenery is painted — 23 generated backdrops and 35
+> enemy plates — and combat moves: floating damage numbers, hit shake, a screen flash
+> scaled to the hit. What the player *touches* is still placeholder: no card art, no
+> vitals or status icons, and only the button and card frames out of the frame kit.
+> The systems are the point.
 
 ---
 
@@ -20,7 +23,7 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 | Powers         | 10 — one equipped per run, fires once every turn             |
 | Events         | 20                                                           |
 | Dungeons       | 12 across 5 zones, 8 difficulty tiers                        |
-| Traversal      | 3 pluggable models: node graph, card draw, dice board        |
+| Traversal      | one model: an isometric crawl, walked by all 12 dungeons     |
 | Tests          | 34 suites, including a playability integration test          |
 
 ## Running it
@@ -106,7 +109,7 @@ disagree — so a half-added card cannot silently not exist.
 ## Design notes
 
 [DESIGN.md](DESIGN.md) is long and is the actual documentation — decisions D1
-through D38, each with what was tried, what was measured, and what broke. If you
+through D92, each with what was tried, what was measured, and what broke. If you
 only read one section, read the ones on the difficulty ratchet (D36) and on
 enemies that react (D38); both are cases where the obvious design was wrong and
 the simulator said so.
@@ -115,11 +118,13 @@ the simulator said so.
 
 Code is [Apache 2.0](LICENSE).
 
-The title illustration in `assets/art/` is generated and is **not** CC0; see
-`assets/art/README.md`.
+Everything under `assets/art/` — the title illustration, the 23 backdrops, the 35
+enemy plates and the generated frame kit — is generated for this project and is
+**not** CC0; see `assets/art/README.md`. So are the five looping music tracks in
+`assets/audio/music/`; see their `PROVENANCE.txt`.
 
-The rest of the art and all audio are **CC0** by [Kenney](https://kenney.nl) — Tiny Dungeon, 1-Bit
-Pack, UI Pack RPG Expansion, Pattern Pack Pixel, Interface Sounds, RPG Audio and
-Music Jingles. The original licence files ship alongside the assets under
-`assets/`. Kenney's work is public domain and requires no attribution; it is given
-here because it is deserved.
+The pixel art in `assets/pixel/` and the sound effects are **CC0** by
+[Kenney](https://kenney.nl) — Tiny Dungeon, 1-Bit Pack, UI Pack RPG Expansion,
+Pattern Pack Pixel, Interface Sounds, RPG Audio and Music Jingles. The original
+licence files ship alongside the assets under `assets/`. Kenney's work is public
+domain and requires no attribution; it is given here because it is deserved.
