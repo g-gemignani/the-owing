@@ -1,12 +1,16 @@
-## Art lookup. Everything is pixel art now (see PixelArt): symbols are authored
-## 16x16 glyphs, enemies and UI panels are Kenney CC0 pixel packs.
+## Art lookup. Symbols are the painted 64x64 `ui/sym_*.png` set where one exists and
+## the authored 16x16 glyphs where it does not (D115) — both white-on-transparent, so
+## the tinting below reads the same against either.
 ##
 ## Every lookup still goes through here, so call sites ask for *meaning* rather
 ## than filenames and a missing asset degrades to null instead of crashing.
 class_name Icons
 extends RefCounted
 
-## Semantic name -> pixel glyph.
+## Semantic name -> symbol name. Values are GLYPH names, not filenames: `"hp": "heart"`
+## routes through `PixelArt.SYMBOL_ART_ALIAS` to the painted `sym_hp.png` and still has a
+## bitmap to land on if that file is ever absent. Pointing it straight at "hp" would look
+## tidier and would resolve to nothing the moment the art moved.
 const MAP := {
 	"combat": "attack", "elite": "skull", "boss": "skull", "rest": "campfire",
 	"shop": "gold", "event": "book", "treasure": "chest",
@@ -150,7 +154,7 @@ static func card_tooltip(c: CardData, live_damage: int = -1, live_block: int = -
 	var blk: int = live_block if live_block >= 0 else c.eff_block()
 	var live := live_damage >= 0 or live_block >= 0
 	var lines: Array[String] = []
-	lines.append("%s — %s, cost %d" % [c.name, CardData.Rarity.keys()[c.rarity].to_lower(), c.eff_cost()])
+	lines.append("%s — %s, cost %d" % [c.name, CardData.rarity_word(c.rarity).to_lower(), c.eff_cost()])
 	if dmg > 0:
 		var d := "Deals %d damage" % dmg
 		if c.hits > 1:

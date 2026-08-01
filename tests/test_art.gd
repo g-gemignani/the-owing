@@ -96,23 +96,41 @@ func _init() -> void:
 	if filter != 0:
 		fails += 1; print("FAIL default texture filter is %d, not NEAREST — pixel art will blur" % filter)
 
-	# --- every authored symbol builds, and is actually 16x16 pixel art ---
+	# --- every symbol resolves, is square, and has a shape in it ---
+	#
+	# This asserted 16x16 exactly, and scanned a hardcoded 16x16 window, until D115
+	# gave `PixelArt.symbol()` a painted 64x64 file to prefer over the authored
+	# bitmap. Both are legitimate answers, so the assertion cannot name a size — what
+	# it is actually protecting is that a symbol is SQUARE (every consumer centres it
+	# in a square box, so a non-square glyph arrives letterboxed or stretched) and on
+	# the 16px grid the whole pixel-art rule rests on.
+	#
+	# The emptiness floor moved with it, from 12 pixels to the fraction 12 pixels of a
+	# 16x16 frame always meant. An absolute count is not scale-free: 12 lit pixels is
+	# a real glyph at 16x16 and a fleck of dust at 64x64, and the 16x16 window was
+	# worse than that — on a 64px glyph it sampled only the top-left quadrant, so four
+	# painted symbols read as empty while their subject sat untouched in the middle.
+	const SYMBOL_MIN_LIT := 12.0 / 256.0
 	for name in PixelArt.GLYPHS:
 		var t := PixelArt.symbol(name)
 		if t == null:
 			fails += 1; print("FAIL symbol %s did not build" % name); continue
-		if t.get_width() != 16 or t.get_height() != 16:
-			fails += 1; print("FAIL symbol %s is %dx%d, not 16x16" % [name, t.get_width(), t.get_height()])
+		var w := t.get_width()
+		var h := t.get_height()
+		if w != h or w % 16 != 0 or w == 0:
+			fails += 1; print("FAIL symbol %s is %dx%d — not a square multiple of 16" % [name, w, h])
 		# a glyph that is blank or almost blank reads as a missing icon
 		var img := t.get_image()
 		var lit := 0
-		for y in 16:
-			for x in 16:
+		for y in h:
+			for x in w:
 				if img.get_pixel(x, y).a > 0.5:
 					lit += 1
-		if lit < 12:
-			fails += 1; print("FAIL symbol %s is nearly empty (%d pixels)" % [name, lit])
-	print("  (info: %d authored symbols)" % PixelArt.GLYPHS.size())
+		var cover := float(lit) / float(maxi(1, w * h))
+		if cover < SYMBOL_MIN_LIT:
+			fails += 1; print("FAIL symbol %s is nearly empty (%.1f%% of %dx%d lit)" % [
+				name, cover * 100.0, w, h])
+	print("  (info: %d symbol names)" % PixelArt.GLYPHS.size())
 
 	# --- every semantic name used by the UI resolves ---
 	for key in Icons.MAP:
@@ -641,9 +659,8 @@ func _init() -> void:
 	# an autoload that is NOT registered in a headless `--script` run, and the
 	# resulting compile error silently skips the checks while still reporting a
 	# pass. The runtime half is tests/MenuArtTest.tscn.
-	var title_art := "res://assets/art/main_menu.jpg"
-	if not ResourceLoader.exists(title_art):
-		fails += 1; print("FAIL title art missing: %s" % title_art)
+	if PixelArt.title_art_path() == "":
+		fails += 1; print("FAIL title art missing: none of %s" % [PixelArt.TITLE_ART_CANDIDATES])
 	if not _source_has("res://scripts/ui.gd", "TEXTURE_FILTER_LINEAR"):
 		fails += 1; print("FAIL painted backdrop is not LINEAR-filtered — it will look jagged")
 

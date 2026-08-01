@@ -5,11 +5,14 @@
 ## * **Enemy sprites and UI panels** come from Kenney's CC0 pixel packs
 ##   (`assets/pixel/`, licences kept beside them). Any distinct sprite works for an
 ##   enemy, so borrowing real art is the right call.
-## * **Effect symbols are authored here as 16x16 bitmaps.** Those *must* mean
-##   exactly what they show — a shield has to read as a shield — and the packs ship
-##   unlabelled spritesheets (`tile_0093.png`), so picking icons from them would
-##   have been guesswork dressed up as art. Twelve small glyphs is cheaper than
-##   being wrong about every one of them.
+## * **Effect symbols are PAINTED where a painting exists, and authored here as
+##   16x16 bitmaps where it does not** (D115). They *must* mean exactly what they
+##   show — a shield has to read as a shield — and the packs ship unlabelled
+##   spritesheets (`tile_0093.png`), so picking icons from them would have been
+##   guesswork dressed up as art. Twelve small glyphs was cheaper than being wrong
+##   about every one of them, and stayed the answer until a painted set arrived that
+##   covers 21 meanings against these 13. The bitmaps are the fallback now, not the
+##   plan; `symbol()` is where the preference lives.
 ##
 ## Symbols are monochrome so callers can tint them (rarity colour, faded states).
 class_name PixelArt
@@ -376,10 +379,30 @@ const ZONE_BACKDROP := {
 
 static var _cache := {}
 
-## Texture for a symbol, or null if unknown. Cached: these are built pixel by pixel.
+## Where the painted set and the authored glyphs disagree on a name. One entry, and the
+## rename that would remove it is not worth making: the bitmap is named after what it
+## draws and the manifest after what it means, and "hp" is already the semantic key
+## `Icons.MAP` hands out to five screens.
+const SYMBOL_ART_ALIAS := {"heart": "hp"}
+
+## Texture for a symbol, or null if unknown. Painted file first, authored bitmap second.
+##
+## Twenty-one painted symbols sat in `ui/sym_*.png` unread because this function only
+## ever knew about `GLYPHS` (D115). Eleven names match outright, `heart` matches through
+## the alias above, and `book` — the event marker — has no painted equivalent, which is
+## why the bitmap path below is a FALLBACK and not dead code: delete it and the event
+## icon goes off the map. Nine painted symbols (pierce, strength, retain, ...) have no
+## glyph and no caller yet; they resolve the day something asks for one.
+##
+## Cached either way — a bitmap is built pixel by pixel and a painted file is a disk hit
+## — and cached under the name asked for, so the alias is paid once.
 static func symbol(name: String) -> Texture2D:
 	if _cache.has(name):
 		return _cache[name]
+	var painted := ui_kit("sym_" + String(SYMBOL_ART_ALIAS.get(name, name)))
+	if painted != null:
+		_cache[name] = painted
+		return painted
 	if not GLYPHS.has(name):
 		return null
 	var rows: Array = GLYPHS[name]
@@ -569,6 +592,28 @@ static func zone_art(zone_id: String) -> Texture2D:
 	if ResourceLoader.exists(p):
 		return load(p) as Texture2D
 	return null
+
+## The title screen backdrop, as a path — `UI.screen()` and three tests all want it
+## and none of them should be spelling the extension.
+##
+## It is the one painting in `assets/art/` that is a .jpg, because it is the one that
+## predates the installers. Its re-roll (D114) comes back through
+## `install_scene_backdrops.gd` like every other backdrop, and that tool only writes
+## PNG — so for one commit both files exist, and after it only the PNG does. Resolving
+## here rather than at four call sites is what makes that swap a no-op instead of a
+## silent black title screen: the loss would not throw, because `UI.screen()` already
+## treats a missing backdrop as "not drawn yet" and draws the menu on flat colour.
+## PNG first, so the re-roll wins the moment it lands.
+const TITLE_ART_CANDIDATES := [
+	"res://assets/art/main_menu.png",
+	"res://assets/art/main_menu.jpg",
+]
+
+static func title_art_path() -> String:
+	for p in TITLE_ART_CANDIDATES:
+		if ResourceLoader.exists(p) or FileAccess.file_exists(p):
+			return String(p)
+	return ""
 
 ## The painted art for one archetype, or null if nobody has drawn it yet.
 static func enemy_art(archetype_id: String) -> Texture2D:
