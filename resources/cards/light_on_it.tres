@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "light_on_it"
 name = "Light on It"
-description = "Gain 2 Dexterity (permanent)."
+description = "Gain 3 Dexterity (permanent)."
 cost = 1
 type = 2
 rarity = 2

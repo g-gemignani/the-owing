@@ -5168,6 +5168,19 @@ running calibration passes on, so it was deliberately left alone rather than hal
 Renaming without re-tuning is the cosmetic half of this fix; the entry exists partly so
 the other half is not mistaken for finished.
 
+> **Correction (D110).** The paragraph above reads the authored `description`, not the
+> data, and the two had already parted company: All You Have's `damage` was **28** when
+> that was written, Shut Out's `block` **26**, Two Quick **6**, Take It **7**, Light on
+> It and Work Up **3** each. The tuned constants were re-tuned; only the authored line
+> still quoted the other game. So this was never the balance change it was filed as, and
+> it needed no simulator run — seven descriptions were simply stale, which is invisible
+> because `description` is not shown to players (D50 moved every surface onto the
+> generated face) and not read by the engine. They now match, and `test_card_truth.gd`
+> asserts that every number in an authored line is a number the card actually does, so
+> the two halves cannot drift apart again. Hack 6 and Cover 5 are untouched: those are
+> the starter kit and their numbers are the 1.0 baseline `Balance.power_ratio` is
+> defined against.
+
 34/34 suites green, and the combat, zone and shop screens re-rendered and read.
 
 ---

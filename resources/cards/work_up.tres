@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "work_up"
 name = "Work Up"
-description = "Gain 2 Strength (permanent)."
+description = "Gain 3 Strength (permanent)."
 cost = 1
 type = 2
 rarity = 2

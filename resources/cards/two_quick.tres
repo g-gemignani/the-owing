@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "two_quick"
 name = "Two Quick"
-description = "Deal 5 damage twice."
+description = "Deal 6 damage twice."
 cost = 1
 type = 0
 rarity = 0

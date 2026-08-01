@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "all_you_have"
 name = "All You Have"
-description = "Deal 32 damage. Exhaust."
+description = "Deal 28 damage. Exhaust."
 cost = 3
 type = 0
 rarity = 3

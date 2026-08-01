@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "kick"
 name = "Kick"
-description = "Gain 1 Energy. Draw 2. Exhaust."
+description = "Gain 1 Energy. Draw 1. Exhaust."
 cost = 0
 type = 1
 rarity = 2

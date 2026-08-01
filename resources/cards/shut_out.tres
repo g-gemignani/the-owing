@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "shut_out"
 name = "Shut Out"
-description = "Gain 30 Block. Exhaust."
+description = "Gain 26 Block. Exhaust."
 cost = 2
 type = 1
 rarity = 3

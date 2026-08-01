@@ -144,6 +144,32 @@ func _init() -> void:
 		print("FAIL an unbuffed card reads differently in combat: '%s' vs '%s'" % [
 			calm.card_text(hack), hack.effect_text()])
 
+	# --- the authored line must not contradict the engine either -----------------
+	#
+	# `description` is no longer shown to players (that is the check below), which is
+	# exactly why it rotted: seven cards stated a number the engine had stopped using
+	# — All You Have promised 32 damage and dealt 28, Kick promised Draw 2 and drew 1.
+	# Nobody was misled, because nobody could see it, but it is the authored record of
+	# what the card is FOR and every one of those was a tuning change that only got
+	# half made. Numbers only: the phrasing is deliberately freer than the generated
+	# face ("Gain 3 Dexterity (permanent)." vs "+3 Dexterity."), so requiring the
+	# strings to match would only force the authored line to stop being useful.
+	var digits := RegEx.new()
+	digits.compile("\\d+")
+	for cid3 in m.CATALOG:
+		var c3 := load(m.CATALOG[cid3]) as CardData
+		if c3 == null:
+			continue
+		var face3 := c3.effect_text()
+		if face3 == c3.description:
+			continue          # the fallback path: nothing to disagree with
+		for hit in digits.search_all(c3.description):
+			if face3.find(hit.get_string()) == -1:
+				fails += 1
+				print("FAIL %s is authored '%s' but does %s" % [
+					cid3, c3.description, face3])
+				break
+
 	# --- and nothing displays the stale field any more ---
 	for f in ["res://scripts/ui.gd", "res://scripts/shop.gd",
 			"res://scripts/powers_screen.gd", "res://scripts/deck_builder.gd"]:
