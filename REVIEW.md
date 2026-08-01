@@ -31,7 +31,7 @@ Everything below was measured or looked at, not inferred from the docs:
 |---|---|
 | 34/34 test suites | `tests/run.sh` — all green, zero sandbox strays *(37 suites now)* |
 | 20 screens | `tools/Screenshots.tscn` rendered at the shipped 1280×720, every PNG inspected *(19 captures now)* |
-| art coverage | `tools/art_manifest.gd` regenerated: **209 files wanted, 69 present, 140 missing** *(183 / 74 / 109 now — the 26 map icons this review said to drop were dropped)* |
+| art coverage | `tools/art_manifest.gd` regenerated: **209 files wanted, 69 present, 140 missing** *(as of the review, and deliberately left dated. The 26 map icons this review said to drop were dropped (D111) and two batches of `ui/` files have landed since, so all three of those numbers are wrong. **Run the tool.** This parenthetical used to carry a refreshed figure; it went stale twice, which is the point D111 made — a document that restates a number something else owns is a document that lies on a delay.)* |
 | balance | `tools/sim_balance.gd` at 400 trials (see the appendix — the original "could not be run" note was wrong, and the table has since been superseded by an in-flight level-curve rework) |
 | content | all 100 cards, 30 relics, 10 powers, 20 events, 35 enemies, 12 dungeons read as data |
 | code | 13,969 lines in `scripts/`, 8,015 in `tests/`, 4,996 in `tools/`, 6,683 lines of docs |
@@ -54,10 +54,13 @@ Three things, in order:
    to walk out with it — is the best mechanic in the game. It is also invisible for
    the first hour and explained in a status line.
 2. **The card is the object the player looks at for 90% of the runtime, and it has no
-   art, clipped text, and a name they cannot read at rest.** This one screen is worth
-   more than the other nineteen combined.
-3. **Roughly a third of the card names are Slay the Spire's, verbatim.** That is a
-   real problem for a game whose stated pitch is "Slay-the-Spire-shaped, but…".
+   art, clipped text, and ~~a name they cannot read at rest~~.** The name is readable now
+   (D97); **the art is not there at all** and that is the half that still stands. This
+   one screen is worth more than the other nineteen combined.
+3. ~~**Roughly a third of the card names are Slay the Spire's, verbatim.** That is a
+   real problem for a game whose stated pitch is "Slay-the-Spire-shaped, but…".~~
+   **DONE** — renamed in D98, the fourteen copied constants re-tuned in D103. §4 below is
+   the original finding and is kept as the argument for why, not as a live defect.
 
 ---
 
@@ -116,7 +119,7 @@ Every screen renders, nothing softlocks, `PlayableTest` guarantees a button on e
 screen. Past that floor, the interface is a wall of left-aligned text sitting on top
 of good paintings.
 
-### 2.1 The hand is unreadable at rest — **highest-priority defect in the build**
+### 2.1 The hand is unreadable at rest — ~~highest-priority defect in the build~~ **DONE (D97)**
 
 A card at rest deliberately shows only its **name**, its cost, and its headline number
 (`ui.gd:458`, and the reasoning at `ui.gd:571` is sound). The problem is that the fan
@@ -138,6 +141,19 @@ to **lay the name out in the strip that stays visible** — the left ~62% of the
 matching the step the fan actually uses — and let the covered strip carry only the
 art. This is measurable and belongs in `CardTextTest`: *for every card in a full hand,
 the name's rect must not intersect the next card's rect.*
+
+**Both halves of that were done (D97).** The card exposes `fit_name` and `_place_hand()`
+calls it with the width the next card leaves uncovered, so the resting title re-fits into
+the visible strip; the hovered layout is untouched. The assertion is in `CardTextTest`,
+walking consecutive pairs, and it was proved non-vacuous the only way that counts — the
+fix was disabled and the test reported four failures of 28–31px each. A fresh 1280×720
+capture of the combat screen reads all five names in full.
+
+**One gap, and it is the "full hand" in the sentence above.** The assertion only ever
+runs on the hand a combat start deals, which is `Balance.HAND_SIZE` — five. Draw effects
+and the extra-draw relics push past that, and `Combat.FAN_OVERLAP` (0.88) narrows the
+step as the hand grows, so the case the wording was aimed at is the case nothing
+measures. Not a defect on the evidence available; an untested boundary.
 
 ### 2.2 The deck builder and collection are spreadsheets
 
@@ -171,9 +187,11 @@ right now it is a reason to close it.
 
 ### 2.4 Alignment is visibly ragged
 
-- **Packs**: the three "Open" buttons sit at three different x positions, because each
+- ~~**Packs**: the three "Open" buttons sit at three different x positions, because each
   one is laid out after a label of a different length. Two of the three overlap the
-  column the third starts in.
+  column the third starts in.~~ **DONE (D95)** — a Godot `Label` reports its *text* width
+  as its minimum, so the `custom_minimum_size.x` that was already there was never a
+  floor; `clip_text` makes it one. A fresh capture shows a straight column.
 - **Collection**: the fuse buttons sit at two different x positions depending on
   whether that row happens to have a `next:` preview.
 - **Shop**: all the interactive content is crowded into the top-left third; the painted
@@ -241,8 +259,8 @@ The regenerated manifest says **209 wanted, 69 present**. But the split is not r
 | Enemy plates | **35 / 35** | done |
 | Card illustrations | **0 / 12** | *every card in the game* |
 | Vitals (HP/Block/Energy bars) | **0 / 9** | HP is the string `HP 60/60` |
-| Intent icons | **0 / 7** | an intent is the string `hit 5` |
-| Status icons | **0 / 21** | Poison/Weak/Vulnerable are text |
+| ~~Intent icons~~ | ~~**0 / 7**~~ | ~~an intent is the string `hit 5`~~ — **complete (D112)** |
+| ~~Status icons~~ | ~~**0 / 21**~~ | ~~Poison/Weak/Vulnerable are text~~ — **complete (D112)** |
 | Relic icons | **0 / 30** | relics are text rows |
 | Power icons | **0 / 10** | the equipped Power is a text button |
 | Combat impact FX | **0 / 6** | no hit sprite, no death, no card-play flourish |
@@ -253,6 +271,15 @@ The regenerated manifest says **209 wanted, 69 present**. But the split is not r
 touches.** That is the whole finding, and it explains why screens with beautiful
 backdrops still look unfinished: the art and the interface are two different games
 stacked on top of each other.
+
+> The column above is the split *at the time of the review* and is not maintained — the
+> two struck rows landed in D112, along with part of the frame kit and part of the vitals.
+> The rows that still read `0 /` are the ones nobody has started. For the live figures ask
+> the tool that owns them: `godot --headless --script tools/art_manifest.gd`, whose summary
+> line and per-tier "*N files, M still to provide*" counts are the only current answer. The
+> finding survives the update: the tiers still at zero are the card illustrations, the
+> relic icons, the power icons and the combat FX — which is to say the split has begun to
+> move but it has not moved on the object §3 says matters most.
 
 ### The card art specifically
 
@@ -450,7 +477,9 @@ Stated briefly because it is not the point of this review: 34/34 suites green (3
 sandboxed test state with a leak check, a single source of truth for tuning that the
 tests actively defend against private copies, a headless balance simulator, a
 screenshot harness, a `PlayableTest` that walks every screen, and a decision log
-(D1–D92 then; D1–D111 now) that records what was *tried and rejected*, with numbers. This is a better
+(D1–D92 at the review; well past that now — `DESIGN.md` owns the range and this line has
+already been wrong twice, so it will not carry a figure again) that records what was
+*tried and rejected*, with numbers. This is a better
 engineering culture than most commercial projects have.
 
 Two costs worth naming:
@@ -478,11 +507,11 @@ Two costs worth naming:
 
 | # | where | what |
 |---|---|---|
-| 1 | `scripts/combat.gd:595` + `scripts/ui.gd:571` | Card names are occluded by the fan overlap; a hand of 5 shows 3 truncated names. The resting state's only content is the part that gets covered. |
+| 1 | `scripts/combat.gd:595` + `scripts/ui.gd:571` | ~~Card names are occluded by the fan overlap; a hand of 5 shows 3 truncated names. The resting state's only content is the part that gets covered.~~ **FIXED (D97)** — the name re-fits into the strip the fan leaves visible, with the pairwise assertion in `CardTextTest` proved non-vacuous. Only ever exercised at a five-card hand; see §2.1. |
 | 2 | `assets/art/cards/` (absent) → `scripts/pixel_art.gd:474`, `scripts/ui.gd:494` | Zero card illustrations. A 16×16 CC0 tile is magnified ~10× across every card face and reads as noise. |
-| 3 | `scripts/deck_builder.gd:262` | Prints a bare `()` for any card with no damage and no block ("Abyssal Gift [RARE] Lv1/15 owned 1 ()"). `scripts/collection.gd:109` guards the identical string; the deck builder does not — the same duplicated-logic rot `AGENTS.md` warns about. |
-| 4 | `resources/relics/` | **Keen Lens** and **Scholar's Lens** are the same relic: "Draw 1 extra card each turn." Identical text, identical effect, different names. |
-| 5 | `scripts/packs_screen.gd` | The three "Open" buttons land at three different x positions; two overlap the column the third starts in. |
+| 3 | `scripts/deck_builder.gd:262` | ~~Prints a bare `()` for any card with no damage and no block ("Abyssal Gift [RARE] Lv1/15 owned 1 ()"). `scripts/collection.gd:109` guards the identical string; the deck builder does not — the same duplicated-logic rot `AGENTS.md` warns about.~~ **FIXED (D95)** — the row builds a `stat_txt` and omits the parens when it is empty. |
+| 4 | `resources/relics/` | ~~**Keen Lens** and **Scholar's Lens** are the same relic: "Draw 1 extra card each turn." Identical text, identical effect, different names.~~ **FIXED (D95)** — Scholar's Lens is now "Every 3rd turn, draw 2", a trigger rather than a sixth numeric tier. Note D95's own warning that the re-pricing is **unsimulated**. |
+| 5 | `scripts/packs_screen.gd` | ~~The three "Open" buttons land at three different x positions; two overlap the column the third starts in.~~ **FIXED (D95)** — `clip_text` makes the label's minimum width an actual minimum. |
 | 6 | `scripts/zone_view.gd` | Every dungeon row is labelled "isometric floor" — an internal enum name, and true of all 12, so it carries no information. **[fixed in the working tree while this was written]** |
 | 7 | `scripts/iso_run.gd` (status line) | Header wraps mid-phrase: `AT RISK: 0` / `cards, 0 gold`. |
 | 8 | `assets/art/bg_chest.png`, `bg_victory.png`, `bg_defeat.png` | Visibly a flatter, unrendered art tier than the other 20 backdrops. Victory is the end-of-run screen. |
@@ -496,9 +525,15 @@ Two costs worth naming:
 
 ### P0 — do these before anything else
 
-1. **Make the hand readable.** Lay the card name into the strip the fan leaves
+1. ~~**Make the hand readable.** Lay the card name into the strip the fan leaves
    visible, and add the assertion to `CardTextTest`: in a full hand, no card's name
-   rect may intersect the next card's rect. *(hours)*
+   rect may intersect the next card's rect.~~ **DONE (D97)** — both halves: the name
+   re-fits to the fan's step, and the pairwise assertion is in `CardTextTest` and was
+   proved non-vacuous by disabling the fix (four failures, 28–31px). A capture reads all
+   five names. **One thing the wording asked for is still not covered**: the assertion
+   only runs on the five-card hand a combat start deals, so "a full hand" — one pushed
+   past five by draw effects, against `FAN_OVERLAP` 0.88 — is untested. Worth a hand-size
+   sweep, not a re-open.
 2. **Twelve card illustrations, one per effect family.** The manifest already
    specifies them and `PixelArt.painted_card_art()` already prefers them. This
    changes the look of the whole game. *(the single highest-leverage art job in the
@@ -509,9 +544,9 @@ Two costs worth naming:
    at 6/5 on the numbers, and three mechanic-only cards were left alone. Verified to
    move no cell more than 12 points against a pre-change baseline.
 4. **Fix defects 3, 4, 5, 7, 9, 10** — all small, all visible.
-   **9 and 10 are done** (D95, and the D111 doc audit). **3, 4, 5 and 7 are still
-   open**: the deck builder's bare `()`, the duplicate Keen Lens / Scholar's Lens, the
-   ragged Packs column, and the crawl header wrapping mid-phrase.
+   **3, 4, 5, 9 and 10 are done** (3, 4, 5 and 9 in D95; 10 in D95 and again in the D111
+   doc audit). **7 is the only one still open**: the crawl header wrapping mid-phrase
+   (`iso_run.gd` `_refresh()`).
 
 ### P1 — the next tier
 
