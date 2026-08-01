@@ -4950,3 +4950,70 @@ gold`) — `iso_run.gd` was held by the D94 work. `assets/art/README.md` lists
 table is describing intent as fact, which is the same defect class as the `iso/` README
 headed "licence status: UNKNOWN" in D89, and it deserves its own pass rather than a
 line here.
+
+### D96 — The hub was the only screen with no art on it, and the one line meant to sell a zone described no deck
+
+The world screen was the screen the player returns to after every run, and the only
+navigation screen in the game rendering the tiling 16x16 pixel pattern instead of a
+painting. `UI.screen(self, "The World")` passed no `art`/`scene`/`zone`, so it fell
+through to `PixelArt.backdrop()`. One click deeper, `ZoneView` passes `z.id` and gets
+`bg_zone_barrows.png` full-bleed. Five establishing shots already existed on disk. The
+hub showed none of them.
+
+**Rows carry the art, not the background.** The obvious fix — pass the deepest unlocked
+zone to `UI.screen` — was built and photographed, and the capture rejected it. Whichever
+zone that picks is a zone that also has a row in the list, so the screen drew the same
+picture twice; and at `ZONE_DIM` the painting's one bright band ran directly under the
+sealed rows' prose, which is a contrast regression the 0.60 dim was never measured for
+(it was measured against `ZoneView`, whose rows are opaque). So the establishing shots
+go in the ROWS, as 160x82 thumbnails beside the text, and the pattern stays the
+background. Five paintings on one screen, more than any other screen has, and **no
+contrast measurement needed at all — a thumbnail sits beside its text, never under it.**
+
+**A locked row recedes by ink, not by opacity.** The first version dimmed sealed rows
+with `row.modulate = Color(1,1,1,0.62)`. Translucent text does not read against a colour,
+it reads against whatever is behind it, and "Sealed for a reason" landed on the mist. A
+flat darker `font_color` is the same recession with no dependency on the backdrop.
+Related, and the reason four of five rows needed to recede at all: on a fresh save four
+zones are sealed, and at equal weight they buried the one that could be pressed.
+
+**Sized against a number, not a taste.** 168x95 with a 10px gap put the fifth zone half
+off the bottom of the list — five pixels over, and a new player's first sight of the hub
+was a picture sliced by the frame edge. 160x82 with a 6px gap fits all five inside 720p.
+The gap also moved from the text column to the list: inside the column it only separated
+rows whose prose was taller than their thumbnail, so the four sealed rows ran their
+pictures into a continuous strip.
+
+**The pool line described no deck, and could not be made to.** It read
+"Deck cards found here: Adrenaline, Anvil Stance, Bash, Berserker Rage, ..." — alphabetical,
+truncated at ten of seventeen. Naming the deck instead was tried twice and **measured
+out both times.** Per-zone build coverage: the best build in each zone runs 25–40% with
+the next two within a few points of it (Barrows 36/30/30, Beyond the Stair's best is 2 of
+8 cards). Mechanical concentration is no better — it rests on two or three cards out of
+twenty, so "the Barrows is where cards grow" would be a claim built on two files. This is
+not a content gap to fix: `test_build.gd` *enforces* that builds are scattered across
+zones, because a build you can farm in one place is a build with no journey in it. **There
+is no zone theme to name, and a label claiming one would be invented.** What replaced it
+is what the decision actually turns on and is true: how many cards the pool holds, how
+many of them you do not own yet, and what is found only here.
+
+**Four numbers moved onto the buttons that lead to them.** The footer restated
+`Cleared · builds · relics · cards` one line under a nav row whose buttons led to exactly
+those four screens, and `Cleared` was also in the header. The Packs button already carried
+its count with the reason written beside it — "a menu entry that does not say 3 is a menu
+entry nobody opens" — and that argument covers every button here leading to a collection
+with a ceiling. The footer line is gone.
+
+**The header was four things in one label.** Hint, `NEW RELIC:`, the run haul and six
+stats were concatenated with four-space gaps, so the first-run explanation arrived welded
+to the gold count and wrapped to a second line. Transient news is now its own amber label,
+hidden when there is nothing to say; the stat bar is what is always true.
+
+**What did NOT change, and why.** `Save and quit to title` was a full-width bar across the
+bottom — the loudest control on the hub was the one that leaves the game. It is now sized
+to its own text and pushed to the far end of the second button row. It stays unbound to
+Escape: `tests/playable_test.gd` lists this screen in `NO_EXIT` on purpose, because leaving
+the world "must be deliberate", and quiet is not the same as easy to hit by accident.
+
+33/34 suites green; `test_relic` fails identically on the unmodified tree (a draw relic,
+unrelated).

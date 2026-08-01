@@ -156,6 +156,46 @@ static func _painted_backdrop(root: Control, tex: Texture2D, foot: bool,
 		root.move_child(layers[i], i)
 	return true
 
+## One zone's establishing shot, cropped to a fixed-size thumbnail for a list row.
+##
+## The same `bg_zone_<id>.png` the zone screen uses full-bleed. It exists so a list
+## of PLACES reads as places: five zones drawn as five identical full-width bars are
+## a menu, and the world screen was the only navigation screen in the game with no
+## art on it at all (D96).
+##
+## No scrim and no contrast measurement, unlike every other use of this art — a
+## thumbnail sits BESIDE its text, never under it, which is the one arrangement where
+## the question does not arise. `dim` is for a zone the player cannot enter yet: the
+## picture stays, in shadow, because a darkened place reads as a sealed door where a
+## greyed-out bar reads as a broken widget.
+##
+## Falls back to the zone's tiling pixel pattern if nobody has painted it, on the
+## same "use it if it exists" rule as the backdrops above.
+const THUMB_DIM := Color(0.34, 0.36, 0.46)
+
+static func zone_thumb(parent: Node, zone_id: String, size: Vector2,
+		dim: bool = false) -> Control:
+	var tex := PixelArt.zone_art(zone_id)
+	var tr: TextureRect
+	if tex != null:
+		tr = TextureRect.new()
+		tr.texture = tex
+		# COVER: the shots are 16:9 and the row is not, so one axis has to be cropped.
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		# LINEAR for the same reason illustration() uses it — project.godot forces
+		# NEAREST globally, which is right for pixel art and jagged on a painting.
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	else:
+		tr = PixelArt.backdrop(zone_id)
+	tr.custom_minimum_size = Vector2(UITheme.px(size.x), UITheme.px(size.y))
+	tr.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	if dim:
+		tr.modulate = THUMB_DIM
+	parent.add_child(tr)
+	return tr
+
 ## The band rising from the bottom. Same construction as the top one, upside down.
 static func _foot_scrim() -> Control:
 	var grad := Gradient.new()
@@ -265,6 +305,13 @@ static func row(parent: Node, separation: int = 10) -> HBoxContainer:
 static func spacer(parent: Node) -> Control:
 	var c := Control.new()
 	c.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(c)
+	return c
+
+## The same, turned sideways: eats the slack in a row so what follows sits right.
+static func hspacer(parent: Node) -> Control:
+	var c := Control.new()
+	c.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	parent.add_child(c)
 	return c
 
