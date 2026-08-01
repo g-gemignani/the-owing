@@ -599,6 +599,44 @@ func _profiles() -> Array:
 		"relics": _relics(["iron_heart", "kite_shield", "whetstone", "ancient_battery"]),
 	})
 	out.append({
+		# D124. Twelve profiles and not one draw relic between them, and of the eleven
+		# cards that draw exactly two appeared anywhere in the table — so when D120
+		# capped the hand at ten, this report called it a no-op while instrumented
+		# counters put the cap's bite at 35% of turns and 77% of fights for a build
+		# like this one. A tool that cannot play the build cannot price it, and a
+		# temporary subclass that measures once and is deleted leaves the same hole
+		# behind. This row exists so draw can never go unmeasured again.
+		#
+		# Both lenses, because they are the two relics whose price is in question:
+		# Keen Lens is +1 every turn, Scholar's Lens is +2 on every third. Seven of the
+		# seventeen cards draw as well, across every shape draw comes in — In and Out
+		# and Take It draw while they hit or block, Clear Mind draws while it buffs
+		# (which is why `_play_powers` and not `_play_draw` is what plays it), and
+		# Read Ahead is one of only two cards in the game whose sole effect is draw.
+		#
+		# It is a DECK first and a demonstration second. The first attempt was eleven
+		# cards of draw and defence around four attackers, and it cleared 0% of both
+		# dungeons with normal fights running 13 turns — a row that reads zero measures
+		# nothing, and what it measured was the deck being unplayable, not draw being
+		# mispriced. This one keeps Mid's attacking spine (5 Hack, 2 Stave In) and pays
+		# for its draw out of the block slots, which is the trade a player actually
+		# makes. It lands at ratio 6.39 against Mid's 6.60, so the two are comparable.
+		#
+		# Three dungeons, because a row that reads 100% measures nothing either and the
+		# band moved under this decision's own feet: over three 400-trial runs the
+		# Foundry sits at 96-98%, the Sunken Vault at 66-77%, the Drowned Market 52. The
+		# Foundry is kept anyway — saturated as a *level*, it is the cell that carried
+		# the whole policy finding (44 -> 97 on the fix alone), and a row that has moved
+		# 53 points once is worth watching.
+		"name": "Draw build (Lv15 + 2 lenses)",
+		"clears": 4, "power_level": 2,
+		"deck": _deck({"hack": 5, "cover": 3, "stave_in": 2, "in_and_out": 3,
+			"take_it": 1, "clear_mind": 2, "read_ahead": 1}, 15),
+		"dungeons": ["foundry", "sunken_vault", "drowned_market"],
+		"hp_mult": 1.0,
+		"relics": _relics(["keen_lens", "scholars_lens"]),
+	})
+	out.append({
 		"name": "Late (Lv40 + 6 relics)",
 		"clears": 8, "power_level": 3,
 		"deck": _deck({"hack": 4, "cover": 4, "stave_in": 3, "shoulder": 3, "dead_weight": 3,
@@ -796,6 +834,19 @@ func _play_powers(eng: CombatEngine) -> void:
 			if eng.can_play(c) and (c.retain_block or c.eff_strength() > 0 or c.eff_dexterity() > 0):
 				eng.play_card(c); again = true; break
 
+## Draw, played before the rest of the turn so what it finds can be planned with.
+##
+## The rule here was "play every draw card you can afford, always", and that is not a
+## player, it is a compulsion. D120 caught it from the far side: capping the hand at
+## ten measured as a *buff* for draw builds, because a smaller hand meant fewer draw
+## cards to burn energy on, so fights ran shorter (Draw-heavy at the Foundry, 7.8
+## turns to 6.3) and less escalation damage landed. A policy that over-draws makes
+## draw look worthless, and nothing measured against it can price a draw relic —
+## which is why D120 left the lenses' known mispricing open rather than "fixing" it.
+##
+## `_draw_is_worth_it` is the whole of the change. It is deliberately not a solver:
+## the rest of this driver is three greedy passes and a policy smarter than the one
+## it shares a file with would be measuring a player nobody is.
 func _play_draw(eng: CombatEngine) -> void:
 	var again := true
 	# guard: a zero-cost card that draws returns via the discard, so "play
@@ -807,8 +858,64 @@ func _play_draw(eng: CombatEngine) -> void:
 		guard += 1
 		again = false
 		for c in eng.hand.duplicate():
-			if eng.can_play(c) and c.eff_draw() > 0:
+			if eng.can_play(c) and c.eff_draw() > 0 and _draw_is_worth_it(eng, c):
 				eng.play_card(c); again = true; break
+
+## Is this card worth playing FOR ITS DRAW right now? (D124)
+##
+## Two tests, and neither is a solver:
+##
+##   * The cards it fetches must have somewhere to land. `_resolve()` runs before
+##     `hand.erase()`, so a draw card is still in its own hand while it draws: at
+##     `MAX_HAND_SIZE` every one of them is refused, the card is spent and the
+##     energy is simply gone (D120's `draw_cards`).
+##   * Paid draw is worth energy only when the HAND is the bottleneck rather than
+##     the energy. A hand that can already spend every point this turn has nothing
+##     to do with more cards, and `end_turn()` discards the hand, so a card drawn
+##     and not played is thrown away rather than banked for next turn. This
+##     subsumes "is there energy left after paying for it": a hand cannot spend less
+##     than the nothing that would be left.
+##
+## Free draw skips the second test — no energy spent, no trade to weigh.
+##
+## **The first version of this exempted every card with a BODY from the second test**
+## — play In and Out for its 4 damage, Take It for its 7 Block, and let the draw be a
+## rider — on the reasoning that only a card whose sole effect is draw is a purchase.
+## It sounded principled and it left the test with no subject: instrumented over a
+## draw-heavy profile it evaluated **1,498 draw plays and refused none of them**.
+## Every card in the catalogue whose only effect is draw (Read Ahead, See It Coming)
+## costs **zero**, and every paid draw card has a body — Clear Mind is not even a
+## pure draw card, it grants Dexterity, so `_play_powers` takes it before this pass
+## ever sees it. An invariant about the members of a set says nothing until something
+## checks the set is not empty (D86), and that exemption emptied the set.
+##
+## So the test applies to Take It and In and Out too, and that is the honest reading
+## of what it says: a card is not played at the top of the turn *merely because it
+## draws*. Nothing is stranded by holding one back — `_try_lethal`, `_block_incoming`
+## and `_spend_rest` all pick on merit and all re-read the hand after every play, so
+## a rider worth its energy is still played, just later and for the right reason.
+##
+## Measured against the greedy rule on identical code, ten cells over five decks that
+## hold draw cards, 400 trials: mean run completion **68.6 -> 72.8**, with the Draw
+## build at the Foundry 47/46 -> 96/96 and normal fights there falling from 7.4 turns
+## to 4.6. It costs one cell — see the note on `_block_incoming`'s tolerance below.
+func _draw_is_worth_it(eng: CombatEngine, c: CardData) -> bool:
+	if eng.hand.size() >= Balance.MAX_HAND_SIZE:
+		return false
+	if c.eff_cost() <= 0:
+		return true
+	return _energy_the_rest_of_the_hand_can_use(eng, c) < eng.energy - c.eff_cost()
+
+## What the rest of the hand could already spend this turn. Costs are summed rather
+## than fitted to a knapsack because the question is whether the hand REACHES the
+## energy, not which cards fill it — and which cards fill it is decided by the passes
+## below, on merit, which is the whole point of not deciding it here.
+func _energy_the_rest_of_the_hand_can_use(eng: CombatEngine, skip: CardData) -> int:
+	var total := 0
+	for c in eng.hand:
+		if c != skip:
+			total += c.eff_cost()
+	return total
 
 ## True if the enemy can be killed with the energy in hand this turn.
 func _try_lethal(eng: CombatEngine) -> bool:
@@ -837,6 +944,17 @@ func _try_lethal(eng: CombatEngine) -> bool:
 
 ## Spend block cards until the incoming hit is (nearly) neutralized. With a
 ## retain_block power, bank a cushion instead but stop before stalling the fight.
+##
+## FOUND BY D124, NOT FIXED BY IT. `tolerance` is 8% of MAX HP, so at the Sunken
+## Vault this pass deliberately eats up to 9.6 damage a turn rather than spend a
+## card on it — and at 120 HP over five fights that adds up. It never showed,
+## because the old `_play_draw` played every block card that also drew before this
+## pass could decline to. Gating draw (above) hands the decision back to the pass
+## whose job it is, and the Draw build at the Sunken Vault falls 86/86 -> 71/65
+## while its fights shorten from 9.0 turns to 5.6. That is a tolerance calibrated
+## against a driver that was over-blocking for other reasons, and re-pitching it is
+## a policy change of its own with its own recalibration; it is recorded here rather
+## than folded into a decision about draw.
 func _block_incoming(eng: CombatEngine) -> void:
 	# Eat small hits: spending a whole card to prevent a trivial amount of damage
 	# is worse than landing that damage on the enemy.
