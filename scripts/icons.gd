@@ -11,13 +11,44 @@ extends RefCounted
 ## routes through `PixelArt.SYMBOL_ART_ALIAS` to the painted `sym_hp.png` and still has a
 ## bitmap to land on if that file is ever absent. Pointing it straight at "hp" would look
 ## tidier and would resolve to nothing the moment the art moved.
+##
+## The nine rows added in D116 — pierce, strength, dexterity, vulnerable, weak, retain,
+## exhaust, heal, energy — are the other half of that sentence: the painted set covers 21
+## meanings and `GLYPHS` only ever had 13, so these have **no bitmap underneath them** and
+## resolve through the painting or not at all. That is why they are written down here
+## rather than left to `tex()`'s identity fallback, which would have resolved them just as
+## well and been invisible: `tests/test_art.gd` walks `MAP`, so a row here is the thing
+## that fails when `ui/sym_weak.png` goes missing. Nobody would notice otherwise — an
+## unlisted name that stops resolving just draws nothing (D116).
+##
+## They also existed as *files* for three decisions before anything asked for one, which
+## is the D115 lesson stated as a mapping: the manifest could see 21 paintings installed
+## and the code could only say 13 things, so `for_card()` sent Strength cards to a stack
+## of coins and healing to a heart. Every semantic name in here needs a caller; the ones
+## that still have none are noted where their caller belongs.
 const MAP := {
 	"combat": "attack", "elite": "skull", "boss": "skull", "rest": "campfire",
 	"shop": "gold", "event": "book", "treasure": "chest",
 	"attack": "attack", "block": "block", "poison": "poison", "thorns": "thorns",
+	# Enemy-side, not card-side: pierce is a share of an incoming hit that Block never
+	# sees (`Balance.pierce_fraction`), so its reader is the intent telegraph, not a card.
+	"pierce": "pierce",
+	"strength": "strength", "dexterity": "dexterity",
+	"vulnerable": "vulnerable", "weak": "weak",
+	# Card keywords rather than dominant effects — no card in the game IS a retain, it
+	# retains while doing something else — so `for_card()` deliberately cannot reach these
+	# two. They belong on a keyword row on the card face, beside the rules text.
+	"retain": "retain", "exhaust": "exhaust",
 	"card": "card", "deck": "card", "collection": "card",
+	# Three names, one coin, and still the honest answer: nobody painted a relic or a
+	# rarity, so these are the doubling-up ART.md complains about that D116 does NOT fix.
+	# `for_card` stopped routing Strength here, which leaves `relic` and `legendary`
+	# waiting on `relics_screen.gd` and a painting of their own.
 	"gold": "gold", "relic": "gold", "legendary": "gold",
-	"rope": "rope", "dice": "dice", "hp": "heart",
+	# Two meanings, two paintings, and conflating them is what `for_card` used to do: the
+	# heart is how much life you have, `heal` is the act of getting some back.
+	"rope": "rope", "dice": "dice", "hp": "heart", "heal": "heal",
+	"energy": "energy",
 	"locked": "block", "unlocked": "card", "unknown": "dice"
 }
 
@@ -60,6 +91,10 @@ static func rarity_colour(rarity: int) -> Color:
 ## the `cards/x.png` the loader looks for). A generated document exists so it cannot
 ## drift from the code; a generator with a private lookup table is the D34 bug with
 ## better manners. This is the one function, and `tools/art_manifest.gd` calls it.
+##
+## `for_card()` at the bottom of this file asks a *different* question — which small
+## tintable symbol states the effect — and the two are deliberately not merged; the
+## reasons are written out there, because that is the one that changed in D116.
 static func card_family(c: CardData) -> String:
 	if c == null:
 		return "utility"
@@ -233,6 +268,28 @@ static func fit_card_width(count: int, base_w: float, available_w: float, gap: f
 	return maxf(48.0, minf(base_w, each))
 
 ## Icon for the dominant effect of a card, for a quick read of what it does.
+##
+## A **priority cascade, not a lookup**. Most cards do two or three things and this picks
+## the one the card is *about*: `creeping_death` deals 5 and poisons for 4, and it is a
+## poison card, so poison is tested first. Reordering these lines changes what the deck
+## builder, the collection, the shop and every card face say about a hundred cards.
+##
+## Not the same question as `card_family()` above, and they must not be merged:
+##
+## * `card_family()` names a **painting to commission** — one illustration shared by every
+##   card in the family, so it splits attacks three ways (a sweep, a flurry and a thrust
+##   are three pictures) and has a `draw` family because "cards fanning out" is drawable.
+## * this names a **symbol to state the effect** in a ~28px box. The painted set has one
+##   attack glyph, so the three-way split would resolve to one file; and it has no draw
+##   glyph, so a `draw` branch here could only return `card` — which is already the
+##   fallback, meaning the branch would say nothing and would hide `energy` behind it.
+##   `kick` is "+1 Energy, draw 1, exhaust" and the energy is the point of it.
+##
+## Six of the nine unwired paintings land here (D116). Before that the tail of this
+## cascade was two wrong answers: healing went to `hp`, a heart, which is how much life
+## you have rather than the act of restoring it; and Strength *and* Dexterity both went to
+## `relic`, which `MAP` sends to `gold` — so a Strength card showed the player a stack of
+## coins. Neither was a bug in the mapping, they were the closest of thirteen shapes.
 static func for_card(c: CardData) -> String:
 	if c == null:
 		return "card"
@@ -245,7 +302,15 @@ static func for_card(c: CardData) -> String:
 	if c.block > 0 or c.double_block or c.retain_block:
 		return "block"
 	if c.heal > 0:
-		return "hp"
-	if c.gain_strength > 0 or c.gain_dexterity > 0 or c.gain_thorns > 0:
-		return "relic"
+		return "heal"
+	if c.gain_strength > 0:
+		return "strength"
+	if c.gain_dexterity > 0:
+		return "dexterity"
+	if c.energy_gain > 0:
+		return "energy"
+	if c.apply_vulnerable > 0:
+		return "vulnerable"
+	if c.apply_weak > 0:
+		return "weak"
 	return "card"

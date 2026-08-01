@@ -133,6 +133,13 @@ func _init() -> void:
 	print("  (info: %d symbol names)" % PixelArt.GLYPHS.size())
 
 	# --- every semantic name used by the UI resolves ---
+	#
+	# This loop got sharper teeth in D116 without changing a line. Every name in `MAP`
+	# used to bottom out in an authored bitmap, so it could only fail if somebody typed a
+	# glyph name wrong; the nine names added for the painted-only meanings (strength,
+	# weak, pierce, ...) have NO bitmap under them, so this is now the check that
+	# `assets/art/ui/sym_*.png` is still on disk and still imported. A missing painting
+	# there draws nothing at all, silently, on the deck builder and the shop.
 	for key in Icons.MAP:
 		if Icons.tex(key) == null:
 			fails += 1; print("FAIL Icons.tex('%s') resolves to nothing" % key)
@@ -171,12 +178,73 @@ func _init() -> void:
 		if Icons.tex(icon) == null:
 			fails += 1; print("FAIL card %s maps to missing icon '%s'" % [cid, icon])
 	# and the mapping must actually discriminate, not label everything "card"
+	#
+	# The floor was 4 and is 8 since D116, and 8 is DERIVED rather than picked: the old
+	# cascade could return exactly seven names for any card anybody could ever write
+	# (poison, thorns, attack, block, hp, relic, card), so 8 is the smallest floor that no
+	# version of the pre-D116 mapping can satisfy. Raising it to the number today's 100
+	# cards happen to produce would pin content, not behaviour.
 	var kinds := {}
 	for cid in m.CATALOG:
 		kinds[Icons.for_card(load(m.CATALOG[cid]) as CardData)] = true
-	if kinds.size() < 4:
+	if kinds.size() < 8:
 		fails += 1; print("FAIL card icons only use %d distinct symbols" % kinds.size())
 	print("  (info: cards use %d distinct symbols: %s)" % [kinds.size(), kinds.keys()])
+
+	# --- the painted symbols D116 wired up must each be reached by a real card ---
+	#
+	# A count cannot see this. `kinds.size()` was 7 through the entire period in which
+	# healing showed a heart and Strength showed a stack of coins, and it would still be 7
+	# if all six of these regressed to `card`. What the paintings need is a *consumer* —
+	# the exact thing D115 found missing for three decisions, with 21 files installed and
+	# 13 meanings sayable.
+	#
+	# Failing when the last card of a kind is deleted is the point, not brittleness: it is
+	# the only report that a painted symbol has gone back to being decoration on disk.
+	for meaning in ["heal", "strength", "dexterity", "energy", "vulnerable", "weak"]:
+		if not kinds.has(meaning):
+			fails += 1
+			print("FAIL no card resolves to '%s' — ui/sym_%s.png has no consumer again" % [
+				meaning, meaning])
+
+	# --- and the cascade's ORDER is the behaviour, so pin it ---
+	#
+	# Most cards do two or three things, so which line of `for_card` wins is the whole
+	# design of it. Probed on synthetic cards rather than catalogue ids because a content
+	# edit must not be able to quietly delete the case under test — the trap that let a
+	# name-filtered harness go silent in D88.
+	if Icons.for_card(null) != "card":
+		fails += 1; print("FAIL Icons.for_card(null) does not fall back to 'card'")
+	var cascade := [
+		# The pair the deck builder, the collection, the shop and every card face got
+		# wrong for the whole life of the game: a Strength card must show Strength.
+		[{"gain_strength": 3}, "strength"],
+		[{"gain_dexterity": 5}, "dexterity"],
+		[{"heal": 12}, "heal"],
+		[{"apply_vulnerable": 2}, "vulnerable"],
+		[{"apply_weak": 2}, "weak"],
+		# `kick`: the Energy is what the card is for, which is why there is no `draw`
+		# branch above it — see Icons.for_card.
+		[{"energy_gain": 1, "draw": 1}, "energy"],
+		# ...but an attack that also grants Strength is an ATTACK (`forge_strike`). The
+		# headline number is what the player reads, and a buff glyph would bury it.
+		[{"damage": 6, "gain_strength": 1}, "attack"],
+		# Block outranks the healing beside it (`iron_lung`) and poison outranks the
+		# damage carrying it (`creeping_death`) — the two ends of the same cascade.
+		[{"block": 8, "heal": 15}, "block"],
+		[{"damage": 5, "apply_poison": 4}, "poison"],
+		# nothing legible: fall back rather than guess
+		[{}, "card"],
+	]
+	for row in cascade:
+		var fields: Dictionary = row[0]
+		var probe := CardData.new()
+		for k in fields:
+			probe.set(String(k), fields[k])
+		var got := Icons.for_card(probe)
+		if got != String(row[1]):
+			fails += 1
+			print("FAIL Icons.for_card(%s) is '%s', expected '%s'" % [fields, got, row[1]])
 
 	# --- every zone has a real backdrop, and it stays a BACKDROP ---
 	#
