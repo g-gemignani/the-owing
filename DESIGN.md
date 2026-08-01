@@ -6289,7 +6289,7 @@ once, when the new painting lands.
 
 ---
 
-### D115 — The card tier could never have installed, and the generator was blamed for it
+### D118 — The card tier could never have installed, and the generator was blamed for it
 
 Found while harvesting the first card illustration. `tools/install_cutouts.gd -- cards`
 refuses every source it is given:
@@ -6594,3 +6594,192 @@ construction. That is D115's screenshot trap turned into a guard.
 - **`tools/screenshots.gd` can only photograph turn one of combat**, so a partial HP bar, a
   Block band and spent orbs are all invisible to the shipped harness. The agent that built
   them had to fork the repo to see its own work.
+
+---
+
+### D119 — Generating the art through a browser, and the four things that were wrong with asking
+
+The Gemini API refuses image generation on an unbilled key — every image model reports
+a free-tier quota of zero, and one real call returns `429 ... quota exceeded for metric
+generate_content_free_tier_input_token_count`. Billing was ruled out, so the whole
+remaining art list had to come through the consumer web app, driven by Claude in Chrome.
+The mechanics are written up in the `gemini-browser` skill; what belongs here is what
+the run found out about the *asking*, because three of the four defects were in this
+repository's own prompt sheet and would have reappeared through any pipeline.
+
+**Delivered: tier 3 complete (12/12 card families) and 6 of 30 relic icons**, manifest
+108 → 135 present.
+
+#### The brief described the wiring, not the picture — again
+
+`ART_PROMPTS.md` told the generator that "FOUR things are drawn on top of it … a cost
+numeral top left and an effect symbol top right". Those are the plates the *game*
+composites over the art. The generator drew them: a "5" top-left, a sword icon
+top-right, an "8" and a "15" along the bottom — in direct contradiction of the same
+prompt's own `FORBIDDEN: … numerals` line three paragraphs above. A family illustration
+is shared by every card in it, so that is a permanently *wrong* cost on nineteen cards.
+
+This is D101 and D108 for the third time. **Describe a keep-clear region by position and
+emptiness, never by naming what will later occupy it.** The fix is in the tool.
+
+#### A whole tier failing identically is evidence about the route, not the art
+
+Written up separately as D118, because it is a code defect rather than a prompt one:
+`install_cutouts.gd -- cards` mattes anything opaque, card art is opaque by
+construction, and the matte therefore refused all twelve. It had never been exercised —
+the tier was 0/12 since it was written, so the first file to arrive was the first test
+the path ever had. **A route with no traffic is not a working route, it is an untested
+one**, and the prompt sheet printed its install command the entire time.
+
+#### The matte can eat the subject, and only the display size shows it
+
+`balanced_grip` installed cleanly, looked right in a file browser, and read at 48px —
+the size a relic icon is actually drawn — as two floating fragments. Its dark
+leather-wrapped midsection fell outside the matte, which severed the object; the
+despeckle then dropped the pieces as specks. The count it prints is the tell: 41 and 101
+were watermark, **167 was the handle**, and 10–22 is what a clean cutout costs.
+
+So the prompt now requires **one connected solid mass, lighter than the field
+everywhere, no thin dark parts** — and the tier is judged on a 48px contact strip, which
+is the only size at which its own brief ("silhouette and one memorable colour") means
+anything. Same lesson as D89: photograph the result, at the size it ships.
+
+#### A style reference decides more than style
+
+Every relic came back glowing the same cyan, because "ONE saturated light source" plus a
+cyan-lit reference is a cyan light source thirty times over. "One *memorable* colour"
+is a claim about an icon relative to the other twenty-nine, and nothing in the prompt
+made it one. Accent colour is now named per item.
+
+#### And a long chat stops reading the subject line
+
+After ~15 images in one conversation the model began answering its own recent output:
+`balanced_grip` returned a near-duplicate of the previous relic, a rune-covered power
+cube with no grip in it. Every image was individually well-made and on-style, which is
+exactly why it nearly passed — **the only tell is that two results could carry the same
+caption.** Naming the shape to avoid ("do NOT draw a cube, block, box or anything
+covered in runes") beats it; a generic "make it different" does not.
+
+#### What actually limits this
+
+Not the automation. The free tier allows roughly **20–25 images a day**, then silently
+switches the model to Flash-Lite and answers image requests with "I can create more
+images as soon as your limit resets". Verified as account-level, not per-model, by
+switching back to 3.6 Flash and getting the same refusal. The remaining 33 files are a
+two-day job at that rate. The paid API would do the lot for about two dollars, which is
+worth restating whenever this comes up again.
+
+### D117 — A Label reports its text as a minimum width, and it was eating the hand
+
+Three fixes that turned out to be one finding: **the combat HUD's width was data-driven and
+nothing was bounding it.**
+
+**The status readout was collapsing the fan.** `_refresh_buffs()` rendered the player's
+statuses as run-on prose in a single `Label`, and a Label reports its text as its own
+minimum width. With six statuses up that forced `hud_box` to **1373px** — 16..1389 inside a
+1280 frame, running under the hand and off the right edge — and with seven two-digit
+statuses to **1563px**, which drops the fan's step from 107.8px to **7.9px**. With a
+five-card hand. So the unreadable-hand problem was never an eleven-card edge case; its
+common trigger is a fight where statuses stack.
+
+It is a row of icon+number chips now, and `hud_box` holds at 330px whatever is up. Every
+one of the seven meanings had a painted symbol waiting since D112 and unread until D116.
+The old line also applied ONE colour to the whole string, so **Strength went red whenever
+any debuff was up** — worse than no distinction. The two chip colours are the same two
+literals that code was already choosing between, promoted to named constants.
+
+`Combatant.status_text()` — the enemy-side `Blk 5 Psn 3 Vuln 2` abbreviation, abbreviated
+*because there had never been an icon* — was **deleted** rather than kept, after a grep
+found exactly one caller. Keeping it would have left a second hand-kept list of the same
+seven statuses that nothing reads, which is the D111 shape.
+
+**Taking 18px back off the HUD exposed a `maxf` that outranked its own measurement.**
+`_place_hand` did `left = maxf(px(372), hr.end.x + px(14))`, so the constant — a number
+taken off a screenshot, which that block's own comment is an apology for — silently won as
+soon as the live rect got *smaller*. It is a pre-layout default only now.
+
+## The hand keeps one row, and gives up the name rather than shrinking it
+
+The fan is staying a single overlapping row. `step = (room - card_width) / (n - 1)`, so at
+n=11 the step is ~41px and `fit_name` was buying the fit with type size: names at **7-9px**
+against the **14px floor this same suite enforces on card text**. Legally inside the slot
+and unreadable at arm's length.
+
+**Density is the wrong lever and the arithmetic says so.** `card_width` appears once in the
+numerator while the divisor is `n-1`, so narrowing cards 150→110 buys about +4px; reclaiming
+HUD width bought +1.8px measured. Neither touches a 7px problem.
+
+So below a threshold the resting card stops showing its name and shows its **cost and its
+effect symbol** instead. This is only worth doing because of D116: that glyph is a painted
+symbol that states what the card does, where a week ago it was a 16x16 CC0 tile that read as
+noise. "Attack, costs 1" at a glance beats four legible letters of a name.
+
+**The threshold is measured, not chosen.** All 100 card names were fitted into the real
+28px-tall strip at every slot width from 4 to 140, recording where each first holds 14px:
+22px for "Jab", 119px for "Something Worse", median 69px. Read as a curve — how much of the
+deck a slot can still name — 86px names 76 of 100, 52px names 26, 35px names 13, 33px names
+9. `CARD_NAME_MIN_W = 34.0` is where that crosses **one name in ten**: below it the strip has
+stopped being a way to name a card. Deliberately a *width* and not "did the fitter end below
+the floor", because the latter is per-name and would fire on the 24 longest names in a
+five-card hand.
+
+The five-card hand is unchanged, and that was verified as identity rather than resemblance:
+the same seeded pose rendered against `HEAD:scripts/ui.gd` and against the change produced
+**the same md5**.
+
+**The vacuity trap was the real hazard, and it was already in the file.** The pairwise name
+assertion from D97 opened with `if nm == null or not nm.visible: continue` — so hiding the
+name would have made it silently pass at exactly the hand sizes it was added to protect.
+Hiding the subject to satisfy the check is not a fix. It now demands *either* a visible name
+clear of its neighbour *or* a visible cost and a visible symbol with a real texture, never
+neither; asserts the swap happens at eleven and does **not** at five, so the threshold cannot
+drift to "always" or "never" unnoticed; and asserts hovering still gives back the whole face.
+Every one of those was watched go red — threshold at 0 gives "still claims to show its name"
+plus a 7px name, at 999 gives "4 of 5 cards in the DEALT hand gave up their names".
+
+## Two corrections to what D116 recorded about the spent orb
+
+D116 said the spent energy orb reads lighter than the unspent one. The conclusion was right
+and both of its premises were wrong.
+
+Undimmed, the spent orb was already the **darker** one by mean — 0.294 against 0.426. It
+advanced anyway because the unspent orb spends its luminance on a 3px warm core inside a
+soft gradient while the spent one spends its on a hard-edged **ring around the whole disc**,
+and there are two of them. Area times contrast, not peak. The reverse of the usual trap: the
+numbers were reassuring and the render was not.
+
+And the measurement that reported spent as outright brighter had caught them
+**mid-`_flash_orb`** — spent is (158,125,118) in that frame against (76,73,96) at rest,
+while the unspent orb is identical to the byte in both. That was the bloom's additive amber.
+Worth keeping: the bloom fires on the orbs that *changed*, so for ~⅓s after spending, the
+orb you just spent really is the brightest thing in the corner.
+
+Spent now sits at a third of the lit orb, with alpha deliberately 1.0 — at 0.7 it goes
+translucent and reads as a hole, which is the mirror-image defect.
+
+## REDO and sheet tiers did not compose
+
+Two of the twenty-one status symbols cannot be *named* by someone who is not told what they
+are: `sym_energy`'s point of light is off-centre, so a brief asking for an orb "lit from
+within by one point of light at its centre" produced a disc with a specular highlight — a
+billiard ball; and `sym_dexterity`'s arrow points INTO the buckler instead of glancing off,
+so the picture says the hit landed, the opposite of what Dexterity does. Both had been
+installed and unread until D116, so nothing had ever looked at them at the size they are
+drawn.
+
+Listing them in `REDO` printed **"Generate this tier as ONE image, not 2"** directly above a
+paragraph describing a 5x5 grid of twenty-one cells. That is not a formatting bug, it is the
+requirement inverting: these tiers are sheets because the SET has to be mutually
+distinguishable and a single request is blind to the others (D91) — but once nineteen are on
+disk, **the survivors are the reference**, and re-rolling the sheet throws away nineteen good
+drawings to fix two.
+
+So `install_sheet.gd` gained `--only=`, which restricts the target list and sizes the grid to
+what is left: two names is a 2x1 sheet, not a 5x5 with twenty-three cells to leave empty. It
+refuses a name it has no target for, printing the valid list, rather than installing the
+subset it recognised.
+
+The first attempt at the document half got the delivery format wrong — it emitted N
+individual pastes, producing a page that asked for two images and then told the operator to
+install one sheet. Caught by rendering the browser route and reading it, which is the only
+way it could have been caught.
