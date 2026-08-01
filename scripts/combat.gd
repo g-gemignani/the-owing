@@ -11,9 +11,34 @@ const DEFAULT_POOL := ["hack", "cover", "stave_in", "shoulder", "clear_mind",
 var eng: CombatEngine
 var tier: int = Balance.Tier.NORMAL
 
+## The vitals that still have to be *read*: Block, the telegraphed hit, and — on the
+## way out of a fight — the reward or defeat line. HP and Energy moved onto art in
+## D116; this label is what says whatever the art cannot, which includes HP itself
+## when `ui/bar_frame.png` is not on disk. It is also the anchor the player's own
+## floating numbers rise from, so it must stay visible and laid out.
 var status_label: Label
 var buffs_label: Label
 var piles_label: Label
+
+## --- the painted vitals (D116) -----------------------------------------------
+##
+## Every one of these is null when its file is missing, and every null puts the
+## number back in `status_label`. That is the contract `PixelArt.ui_kit` was built
+## for and it is why the kit has been able to land one file at a time: a
+## half-installed vitals block is still a readable vitals block, never a blank one.
+var hp_bar: Control            ## the `bar_frame` housing, or null with no art
+var hp_fill: TextureRect       ## what you have
+var hp_loss: TextureRect       ## the slice the enemy has already promised to take
+var block_fill: TextureRect    ## Block, stacked over the HP it stands in front of
+var hp_number: Label           ## "42/60", ON the bar
+var orb_row: HBoxContainer     ## one orb per point of energy; always built
+var orb_full_tex: Texture2D
+var orb_empty_tex: Texture2D
+var orb_glow_tex: Texture2D
+var energy_number: Label
+## What the orbs last drew. Kept so a change can be *flashed* rather than just
+## redrawn, and initialised to -1 so the first draw of a fight is silent.
+var shown_energy: int = -1
 ## The stage: full-rect, enemies placed on the backdrop's floor line.
 var enemy_box: Control
 ## Rebuild slot positions only when the living count changes, so a hit-shake tween
@@ -178,8 +203,21 @@ func _build_ui() -> void:
 	hud.anchor_bottom = 1.0
 	hud.offset_left = UITheme.px(16)
 	hud.offset_right = UITheme.px(16) + UITheme.px(348)
-	hud.offset_top = -UITheme.px(128)
+	# Tall enough for the painted vitals, and bottom-aligned so it does not matter
+	# whether it is. A VBox whose children out-measure its rect overflows past the
+	# BOTTOM edge, which here is 10px from the bottom of the frame — so the old
+	# top-aligned box was one extra line of log away from pushing the log off screen,
+	# and growing it for the bar would only have moved that cliff. ALIGNMENT_END makes
+	# the block grow UPWARDS into the empty middle of the frame instead, where there is
+	# nothing to hit. The width is untouched on purpose: the hand's left reserve is
+	# measured off this rect's right edge (`_place_hand`), so the fan does not move.
+	hud.alignment = BoxContainer.ALIGNMENT_END
+	hud.offset_top = -UITheme.px(228)
 	hud.offset_bottom = -UITheme.px(10)
+
+	# HP as a bar with the enemy's telegraphed damage marked on it, before the line
+	# that carries the numbers the bar cannot say.
+	_build_hp_bar(hud)
 
 	status_label = Label.new()
 	status_label.add_theme_font_size_override("font_size", UITheme.title_font())
@@ -190,6 +228,9 @@ func _build_ui() -> void:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hud.add_child(status_label)
 	UI.hoverable(status_label, "Block expires at the start of your next turn. 'incoming' is what would actually land after Block.")
+
+	# Energy as orbs, under the line it used to be a fragment of.
+	_build_orbs(hud)
 
 	# Buffs and debuffs spelled out, under the vitals they modify. They used to be a
 	# "[Blk 5 Str 3]" fragment inside a run-on line, which is not where anybody looks
@@ -306,6 +347,250 @@ func _build_ui() -> void:
 	fx_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(fx_layer)
 
+# --- the painted vitals (D116) -------------------------------------------------
+#
+# HP, Block and Energy were three fragments of a four-number text block in the
+# bottom-left corner. They are the numbers every card in hand is spent against, and
+# reading them meant reading a sentence. Now HP and Block are a bar and Energy is a
+# row of orbs — with the numerals kept, because this game's combat read is
+# arithmetic and a bar you cannot subtract from is decoration.
+#
+# Where the numerals ended up, and why:
+#   HP        on the bar, centred, because it is the bar's own quantity.
+#   Block     in `status_label`, because the band is ten pixels tall and no numeral
+#             fits on it — and because Block is the number you compare AGAINST incoming.
+#   incoming  in `status_label`, beside Block, for the same comparison. The bar shows
+#             it as a slice; the line says how big it is.
+#   Energy    beside the orbs. Unary is exact up to about six, but energy is the one
+#             number you actively subtract card costs from all turn, so it is written.
+#
+# `Draw / Discard / Hand` stay text: bookkeeping, not something you do arithmetic on
+# under pressure.
+
+## The bar housing is drawn at its art's own size. `ui/bar_frame.png` is 256x48 with a
+## 10px border, so at 1:1 the nine-slice never stretches and the trough inside it is
+## exactly 236px wide. Height is 44 rather than 48 to buy the block back for the log —
+## the middle row is what gives, and the border keeps its 10px.
+const BAR_SIZE := Vector2(256, 44)
+## The nine-slice margin, in TEXTURE pixels, matching `gen_ui_kit.gd` BAR_BORDER.
+## Deliberately not scaled, for the reason UITheme's button slices are not: slice
+## margins index into the art, and scaling them slices the border in the wrong place.
+const BAR_BORDER := 10.0
+## How much of the trough Block occupies, stacked on top of the HP it stands in front
+## of. A band, not a full-height segment: full height would hide the loss slice it is
+## supposed to be shrinking.
+const BLOCK_BAND := 0.44
+
+## HP as a bar, or nothing at all. `UITheme.kit_frame` returns null when the file is
+## absent, and that null is the whole fallback: `hp_bar` stays null, `_refresh_vitals`
+## returns immediately and `_refresh` puts "HP 42/60" back at the front of the status
+## line, exactly as it read before D116.
+func _build_hp_bar(hud: VBoxContainer) -> void:
+	var frame := UITheme.kit_frame("bar_frame", int(BAR_BORDER), int(BAR_BORDER),
+		int(BAR_BORDER), int(BAR_BORDER), 0.0, 0.0)
+	if frame == null:
+		return
+	hp_bar = Control.new()
+	hp_bar.custom_minimum_size = Vector2(UITheme.px(BAR_SIZE.x), UITheme.px(BAR_SIZE.y))
+	hp_bar.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	hud.add_child(hp_bar)
+	var housing := Panel.new()
+	housing.add_theme_stylebox_override("panel", frame)
+	housing.set_anchors_preset(Control.PRESET_FULL_RECT)
+	housing.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_bar.add_child(housing)
+	# Draw order IS the stack: what you have, then the slice about to go, then the
+	# Block standing in front of both. Each fill is one column of colour per row and
+	# nothing per column, so stretching it along the bar is lossless — which is what
+	# the strips were authored for (D114).
+	hp_fill = _bar_fill("bar_hp_fill")
+	hp_loss = _bar_fill("bar_hp_loss")
+	block_fill = _bar_fill("bar_block_fill")
+	hp_number = Label.new()
+	hp_number.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hp_number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hp_number.set_anchors_preset(Control.PRESET_FULL_RECT)
+	hp_number.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_number.add_theme_font_size_override("font_size", UITheme.font())
+	hp_number.add_theme_color_override("font_color", Color(0.97, 0.95, 0.91))
+	# The trough is dark and the HP fill is a mid red, so the numeral crosses two very
+	# different backgrounds along its own width. An outline is what makes one colour
+	# work on both.
+	hp_number.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
+	hp_number.add_theme_constant_override("outline_size", 5)
+	hp_bar.add_child(hp_number)
+	UI.hoverable(hp_bar, "Your HP. The dark slice at the near end is what the enemies have already promised to take this turn, after Block.")
+	# The fills are placed in the bar's rect, and a rect does not exist until the
+	# container has laid out — the first `_refresh()` of a fight runs before that and
+	# measures a zero-width bar. Without this the bar sat empty until the player's
+	# first action, which is the one moment they are looking hardest at their HP.
+	hp_bar.resized.connect(_on_bar_resized)
+
+## The bar has just been given (or re-given) a rect, so it can be filled. Guarded on
+## `eng` because `_build_ui()` runs before the engine exists.
+func _on_bar_resized() -> void:
+	if eng != null:
+		_refresh_vitals(eng.player)
+
+## One fill strip, sized and placed by `_refresh_vitals`. Null-safe: a missing strip
+## simply never draws, so the bar can show HP with no Block art installed and vice
+## versa.
+func _bar_fill(name: String) -> TextureRect:
+	var tex := PixelArt.ui_kit(name)
+	if tex == null:
+		return null
+	var t := TextureRect.new()
+	t.texture = tex
+	t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	t.stretch_mode = TextureRect.STRETCH_SCALE
+	t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_bar.add_child(t)
+	return t
+
+## Energy as one orb per point, spent orbs dark. The row is always built, because the
+## numeral inside it is text and text needs no art: with the orbs missing it simply
+## reads "Energy 3/3" where the old status line said it.
+func _build_orbs(hud: VBoxContainer) -> void:
+	var side := UITheme.px(30)
+	# resampled properly rather than dropped in raw: the source is 128x128 and the
+	# project forces NEAREST, which turns a 4.3x downscale of a shaded sphere into
+	# gravel
+	orb_full_tex = UITheme.kit_icon("energy_orb_full", side)
+	orb_empty_tex = UITheme.kit_icon("energy_orb_empty", side)
+	orb_glow_tex = PixelArt.ui_kit("orb_glow")
+	orb_row = HBoxContainer.new()
+	orb_row.add_theme_constant_override("separation", UITheme.sep(3))
+	orb_row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	hud.add_child(orb_row)
+	energy_number = Label.new()
+	energy_number.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	energy_number.add_theme_color_override("font_color", Color(0.96, 0.86, 0.58))
+	orb_row.add_child(energy_number)
+	UI.hoverable(orb_row, "Energy. Every card costs some, and it refills at the start of each of your turns.")
+
+## The bar, redrawn from the numbers: three widths over one span of max HP.
+##
+## The loss slice is what will actually come off HP, which is `enemy_intent` put through
+## `Combatant.predicted_damage` — the engine's own answer, so Block AND Vulnerable are
+## both in it and this screen keeps no private copy of the arithmetic. That is the whole
+## reason `bar_hp_loss` exists as a third file rather than a tint of the second: play a
+## card that gains 5 Block and the dark slice retreats by exactly 5, which is the same
+## sum the status line spells out and far faster to see than to read.
+func _refresh_vitals(p: Combatant) -> void:
+	if hp_bar == null:
+		return
+	# The inset is the border's own thickness, UNSCALED, for the reason the slice margin
+	# is unscaled: the housing is a nine-slice, so a bigger bar gets a longer middle and
+	# a border that is still ten pixels of art. Scaling this inset would slide the fills
+	# out from under the frame at any scale but 1.
+	var b := BAR_BORDER
+	var span := hp_bar.size.x - b * 2.0
+	var band := hp_bar.size.y - b * 2.0
+	if span <= 0.0 or band <= 0.0:
+		return                      # first frame: the rect does not exist yet
+	var per := span / maxf(1.0, float(p.max_hp))
+	var hp_w := per * clampf(float(p.hp), 0.0, float(p.max_hp))
+	var loss_w := per * float(mini(p.predicted_damage(eng.enemy_intent), p.hp))
+	var block_w := per * float(clampi(p.block, 0, p.max_hp))
+	if hp_fill != null:
+		hp_fill.visible = hp_w >= 1.0
+		hp_fill.position = Vector2(b, b)
+		hp_fill.size = Vector2(hp_w, band)
+	if hp_loss != null:
+		# at the NEAR end of the HP, because that is the end the damage comes off
+		hp_loss.visible = loss_w >= 1.0
+		hp_loss.position = Vector2(b + hp_w - loss_w, b)
+		hp_loss.size = Vector2(loss_w, band)
+	if block_fill != null:
+		block_fill.visible = block_w >= 1.0
+		block_fill.position = Vector2(b, b)
+		block_fill.size = Vector2(block_w, band * BLOCK_BAND)
+	hp_number.text = "%d/%d" % [p.hp, p.max_hp]
+
+## One orb per point of energy the turn can hold, lit up to what is left.
+##
+## Built to fit rather than to a constant: a relic can add energy (`bonus_energy`), so
+## the number of orbs is a run-time fact. Orbs are added and never removed — a fight
+## can only gain capacity — and the surplus is hidden rather than freed so nothing is
+## allocated inside a refresh.
+func _refresh_orbs() -> void:
+	if orb_row == null:
+		return
+	var cap: int = Balance.MAX_ENERGY + eng.bonus_energy
+	energy_number.text = ("%d/%d" if orb_full_tex != null else "Energy %d/%d") % [
+		eng.energy, cap]
+	if orb_full_tex == null:
+		return
+	var side := UITheme.px(30)
+	while orb_row.get_child_count() - 1 < cap:
+		var t := TextureRect.new()
+		t.custom_minimum_size = Vector2(side, side)
+		t.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		t.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		t.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		orb_row.add_child(t)
+		# the numeral stays last in the row, after however many orbs there are
+		orb_row.move_child(energy_number, orb_row.get_child_count() - 1)
+	for i in orb_row.get_child_count():
+		# the numeral is the one child that is not an orb, and it is last
+		var orb := orb_row.get_child(i) as TextureRect
+		if orb == null:
+			continue
+		orb.visible = i < cap
+		orb.texture = orb_full_tex if i < eng.energy else orb_empty_tex
+	# Only the orbs that CHANGED bloom, and only after the first draw of the fight.
+	if shown_energy >= 0 and eng.energy != shown_energy:
+		for i in range(mini(eng.energy, shown_energy), maxi(eng.energy, shown_energy)):
+			_flash_orb(i)
+	shown_energy = eng.energy
+
+## `ui/orb_glow.png` over one orb, once. This is not an animation system and must not
+## become one: the orbs are already a row of discrete rects, so "which orb changed" is
+## an index and the bloom is one node on the effects layer with one tween on it — the
+## same shape as `_float_number` and `_flash_hurt`, which is why it was worth wiring at
+## all. Additive, per the brief: a bloom adds light to the orb underneath rather than
+## painting over it.
+func _flash_orb(i: int) -> void:
+	if orb_glow_tex == null or fx_layer == null or orb_row == null or not is_inside_tree():
+		return
+	if i < 0 or i >= orb_row.get_child_count() - 1:
+		return
+	var orb := orb_row.get_child(i) as Control
+	if orb == null or not orb.visible:
+		return
+	var r := orb.get_global_rect()
+	if r.size.x <= 1.0:
+		return
+	var side := r.size.x * 2.0
+	var g := TextureRect.new()
+	g.texture = orb_glow_tex
+	g.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	g.stretch_mode = TextureRect.STRETCH_SCALE
+	g.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	g.material = mat
+	fx_layer.add_child(g)
+	g.size = Vector2(side, side)
+	g.position = r.get_center() - Vector2(side, side) * 0.5
+	g.pivot_offset = Vector2(side, side) * 0.5
+	g.scale = Vector2(0.55, 0.55)
+	# Tinted to the orb's own amber core rather than left white. Additive white over a
+	# violet orb came out as grey haze, which reads as a smudge on the screen; warm, it
+	# reads as the light in the orb arriving or leaving. Only the alpha is tweened, so
+	# the tint survives the fade.
+	g.modulate = Color(1.0, 0.84, 0.52, 0.0)
+	var tw := create_tween()
+	tw.set_parallel(true)
+	# Peak well under half: additive at 0.9 the bloom's own core out-shone the orb it is
+	# supposed to be lighting, and a spent orb read as a white disc for a third of a
+	# second. Both were caught by holding the peak open in a capture and looking at it —
+	# a 66ms flash is not something you can judge from the numbers.
+	tw.tween_property(g, "modulate:a", 0.4, FX_FLASH * 0.3)
+	tw.tween_property(g, "scale", Vector2.ONE, FX_FLASH * 1.4)
+	tw.tween_property(g, "modulate:a", 0.0, FX_RISE * 0.55).set_delay(FX_FLASH * 0.6)
+	tw.chain().tween_callback(g.queue_free)
+
 func _on_power_pressed() -> void:
 	var before := _snapshot_hp()
 	var msg := eng.use_power()
@@ -366,10 +651,29 @@ func _on_end_turn() -> void:
 
 func _refresh() -> void:
 	var p := eng.player
-	UI.hoverable(status_label, "Block expires at the start of your next turn. 'incoming' is what would actually land after Block.")
-	status_label.text = "HP %d/%d    Block %d\nEnergy %d/%d    incoming %d" % [
-		p.hp, p.max_hp, p.block,
-		eng.energy, Balance.MAX_ENERGY + eng.bonus_energy, eng.enemy_intent]
+	UI.hoverable(status_label, "Block expires at the start of your next turn. 'incoming' is what the enemies are swinging for; the number after the arrow is what gets through your Block, and it is the dark slice on the bar.")
+	# Block and the telegraphed hit are the pair you compare, so they share a line.
+	# HP joins them only when there is no bar to carry it — that null is the whole
+	# fallback, and it is what lets `ui/bar_frame.png` be absent without leaving a
+	# player unable to see how close to dead they are (D116).
+	var said: Array[String] = []
+	if hp_bar == null:
+		said.append("HP %d/%d" % [p.hp, p.max_hp])
+	said.append("Block %d" % p.block)
+	# Both halves of the sum, because the bar draws the SECOND one and a line that only
+	# said the first would disagree with the picture next to it. The tooltip claimed
+	# "incoming" was already net of Block and it never was — 13 was the raw swing — so
+	# a player with 9 Block up had no number for the 4 that was going to land. An arrow
+	# rather than "(4 through)": at title size the parenthesis form measured past the
+	# label's 330px and wrapped, which cost a line and read as a mistake.
+	var through := p.predicted_damage(eng.enemy_intent)
+	if through != eng.enemy_intent:
+		said.append("incoming %d → %d" % [eng.enemy_intent, through])
+	else:
+		said.append("incoming %d" % eng.enemy_intent)
+	status_label.text = "    ".join(said)
+	_refresh_vitals(p)
+	_refresh_orbs()
 	_refresh_buffs(p)
 
 	_refresh_enemies()
@@ -796,15 +1100,20 @@ func _show_deltas(before: Dictionary) -> void:
 		elif lost < 0:
 			_float_number(plate, "+%d" % (-lost), Color(0.62, 0.95, 0.62))
 
+	# The player's own numbers rise off the thing that just changed. That used to be
+	# the status line because the status line was the only thing there; now HP and
+	# Block are a bar, so they rise off the bar, and off the line only when there is
+	# no bar installed.
+	var pin: Control = hp_bar if hp_bar != null else status_label
 	var p_lost: int = int(before.get("player", eng.player.hp)) - eng.player.hp
 	if p_lost > 0:
-		_float_number(status_label, "-%d" % p_lost, Color(1.0, 0.5, 0.45))
+		_float_number(pin, "-%d" % p_lost, Color(1.0, 0.5, 0.45))
 		_flash_hurt(p_lost)
 	elif p_lost < 0:
-		_float_number(status_label, "+%d" % (-p_lost), Color(0.62, 0.95, 0.62))
+		_float_number(pin, "+%d" % (-p_lost), Color(0.62, 0.95, 0.62))
 	var gained_block: int = eng.player.block - int(before.get("block", eng.player.block))
 	if gained_block > 0:
-		_float_number(status_label, "+%d block" % gained_block, Color(0.62, 0.80, 1.0))
+		_float_number(pin, "+%d block" % gained_block, Color(0.62, 0.80, 1.0))
 
 func _float_number(over: Control, text: String, colour: Color) -> void:
 	if fx_layer == null or not is_inside_tree():
@@ -940,6 +1249,10 @@ func _win() -> void:
 	GameState.earn_gold(g)   # at risk until the boss falls (D20)
 	end_btn.disabled = true
 	_seal_exit()
+	# Nothing is incoming from a dead room. `status_label` is about to become the reward
+	# line, so the bar is the only thing left saying what your HP is — and it would
+	# otherwise keep a dark slice reserved for a hit that can no longer land.
+	_refresh_vitals(eng.player)
 	card_widgets.clear()
 	enemy_plates.clear()
 	for c in hand_box.get_children():
@@ -1109,6 +1422,11 @@ func _lose() -> void:
 	status_label.text = "DEFEAT."
 	buffs_label.visible = false
 	piles_label.visible = false
+	# an empty bar and a row of dark orbs say nothing the word does not
+	if hp_bar != null:
+		hp_bar.visible = false
+	if orb_row != null:
+		orb_row.visible = false
 	GameState.reset_run_progress()
 	GameState.clear_run()
 	GameState.flush_save()   # death is final; do not risk losing the penalty
