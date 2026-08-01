@@ -93,14 +93,44 @@ const CALIBRATION_TRIALS := 150
 
 func _avoid_calibration() -> void:
 	print("\n=== Avoid calibration (%d trials per cell) ===" % CALIBRATION_TRIALS)
-	print("Deck dungeons only — the other models have nothing to dodge.")
+	print("Any dungeon whose model prices a skip — asked of the model, not assumed.")
 	print("A price is right when SMART >= both fixed lines of play.\n")
 	var t_cal := Time.get_ticks_usec()
 	for profile in _profiles():
 		var deck: Array[CardData] = profile["deck"]
 		for dungeon_id in profile["dungeons"]:
 			var dd := Balance.dungeon(dungeon_id)
-			if dd == null or dd.traversal != Traversal.Kind.DECK:
+			# Ask the MODEL whether it prices a skip, rather than naming the one that used
+			# to. This filtered on `Kind.DECK`, and when D88 moved every dungeon onto the
+			# isometric crawl it silently matched nothing — the calibration printed its
+			# header and no rows, so the check that a dodge is not a dominant strategy
+			# (D20) went dark at exactly the moment a new model inherited the mechanic.
+			# A harness that selects by name goes quiet when the name changes; one that
+			# selects by behaviour follows the behaviour.
+			if dd == null:
+				continue
+			# Walked, not peeked: the deck model reveals a dodgeable card immediately, but a
+			# spatial model only offers one once you are standing next to a fight, so
+			# checking the opening options alone would answer "no" for the model that now
+			# owns the mechanic.
+			var probe := Traversal.make(dd.traversal)
+			probe.generate(dd)
+			var prices_a_skip := false
+			for _s in 40:
+				if probe.is_complete():
+					break
+				var pos_opts := probe.options()
+				if pos_opts.is_empty():
+					break
+				for po in pos_opts:
+					if String(po.get("action", "")) == "avoid":
+						prices_a_skip = true
+						break
+				if prices_a_skip:
+					break
+				if not probe.select(0).is_empty():
+					probe.clear_pending()
+			if not prices_a_skip:
 				continue
 			var roster: Array = Array(dd.enemy_roster) if dd.has_roster() else []
 			var relics: Array = profile.get("relics", [])
@@ -165,7 +195,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		var alive := true
 		var fights := 0
 		var guard := 0
-		while alive and not tv.is_complete() and guard < 60:
+		# The iso floor is mostly open ground now (D77), so a run is tens of MOVES for
+		# the same handful of fights. At 60 this truncated every iso run mid-floor and
+		# reported the model as costing a third of its budget.
+		while alive and not tv.is_complete() and guard < 400:
 			guard += 1
 			var opts := tv.options()
 			if opts.is_empty():
@@ -179,13 +212,21 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 			var was_dodge := String(opts[pick].get("action", "")) == "avoid"
 			var node := tv.select(pick)
 			# EVERY priced option is paid for, not only the ones that resolve nothing.
-			# The iso model charges HP for a step taken after the torch has burnt out,
-			# and that step still hands back the encounter in the room it led to —
-			# paying only on an empty result measured walking in the dark as free.
+			# This was found through the iso model, which used to charge HP for a step
+			# taken after its torch burnt out while still handing back the encounter in
+			# the room it led to, so paying only on an empty result measured walking in
+			# the dark as free. The torch is gone (D77) and the deck's dodge is once
+			# again the only priced option, but the rule stays general on purpose.
 			# `avoidable`/`avoided` count dodges specifically, which is what the
-			# calibration below reports; a step across explored ground is not one.
+			# calibration below reports; a step across open ground is not one.
 			if cost > 0:
 				hp = maxi(1, hp - cost)
+			# Being caught in the open is priced too, and it is priced on the ENCOUNTER
+			# rather than on the option — a wanderer decides to reach you after the move
+			# is chosen, so there is nothing on the option to read. Paid before the fight
+			# is simulated, or the ambush would be a number the report never feels.
+			if bool(node.get("ambush", false)):
+				hp = maxi(1, hp - Balance.iso_ambush_cost(max_hp))
 			if node.is_empty():
 				if was_dodge:
 					avoided_total += 1
@@ -197,10 +238,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 				Traversal.Enc.TREASURE:
 					gold += Balance.TREASURE_GOLD_MIN + randi() % maxi(1,
 						Balance.TREASURE_GOLD_MAX - Balance.TREASURE_GOLD_MIN + 1)
-					if randi() % 100 < Balance.TREASURE_CARD_CHANCE:
-						var found := _reward_card(dungeon_id, reward_level)
-						if found != null:
-							run_deck.append(found)
+					# The sealed pack a treasure yields (D80) is deliberately NOT modelled:
+					# it does not join the run deck, so it cannot change the odds of the
+					# run this profile is measuring. It is meta reward, which is exactly
+					# what made it the safe place to put more cards.
 					tv.clear_pending()
 				Traversal.Enc.EVENT:
 					# HP/gold effects only. Card and relic grants are skipped: they
@@ -230,7 +271,14 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					# multipliers (D41). Leaving them out measured a weaker player
 					# against a different finale.
 					var t_su := Time.get_ticks_usec()
-					eng.setup(run_deck, hp, max_hp, difficulty, tier, "", relics, roster,
+					# The traversal's own choice of creature is honoured here for the same
+					# reason the named boss and the equipped power are: whatever the game
+					# passes to CombatEngine, the sim has to pass too. The iso model casts
+					# its fights at generation time (D85), and a sim that kept rolling its
+					# own would be measuring a different enemy distribution than the one
+					# being played — the D72/D74/D77 mistake for a fourth time.
+					eng.setup(run_deck, hp, max_hp, difficulty, tier,
+						String(node.get("enemy", "")), relics, roster,
 						power, dd.boss if dd != null else "")
 					_tick("fight_setup", t_su)
 					var t_fi := Time.get_ticks_usec()
@@ -338,8 +386,8 @@ func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
 		if frac < 0.6 and (t == Traversal.Enc.REST or t == Traversal.Enc.SHOP):
 			return i
 
-	# A dodge, not merely a priced option: the iso model prices MOVEMENT once its
-	# torch is out, and this policy is about declining a fight.
+	# A dodge, not merely a priced option: this policy is about declining a fight,
+	# and the iso model once priced plain MOVEMENT (D77 removed it).
 	var avoid := -1
 	for i in opts.size():
 		if String(opts[i].get("action", "")) == "avoid":
@@ -362,14 +410,34 @@ func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
 					if expected > float(cost) * FACE_BIAS:
 						return avoid          # the dodge is simply cheaper
 
-	# otherwise face it, choosing randomly among the non-avoid options
+	# Otherwise face it. A random pick among the non-avoid options is right when those
+	# options are ENCOUNTERS — it stops the driver quietly favouring whatever each
+	# model happens to list first, which is how a policy becomes a measurement of an
+	# ordering. It is WRONG when the options are merely directions, and the iso floor
+	# is now mostly open ground (D77): a uniform random step is a drunkard's walk, and
+	# a drunkard does not reliably reach the far corner of a 30-tile floor. It
+	# measured the Warrens at a flat 72% for every deck in the report — starter and
+	# fully-relic'd alike, every fight won, HP barely touched — because a quarter of
+	# runs simply never found the stair inside the move guard. A model-agnostic
+	# failure that looked exactly like difficulty.
+	#
+	# So: choose randomly among the options that resolve something, and when none do,
+	# take the model's own first suggestion rather than a coin flip. The other three
+	# models only ever offer encounters, so `resolving` is `faceable` for them and
+	# nothing about their numbers moves.
 	var faceable: Array = []
+	var resolving: Array = []
 	for i in opts.size():
-		if not opts[i].has("hp_cost"):
-			faceable.append(i)
+		if opts[i].has("hp_cost"):
+			continue
+		faceable.append(i)
+		if int(opts[i].get("type", -1)) >= 0:
+			resolving.append(i)
 	if faceable.is_empty():
 		return 0
-	return int(faceable[randi() % faceable.size()])
+	if resolving.is_empty():
+		return int(faceable[0])
+	return int(resolving[randi() % resolving.size()])
 
 func _kind_name(kind: int) -> String:
 	match kind:

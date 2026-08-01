@@ -34,6 +34,7 @@ func _build_ui() -> void:
 	status_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(status_label)
 	var coll_btn := Button.new()
+	UITheme.style_button(coll_btn)
 	coll_btn.text = "Collection"
 	coll_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
 	header.add_child(coll_btn)
@@ -62,9 +63,8 @@ func _refresh() -> void:
 		GameState.hp, GameState.max_hp, GameState.run_deck.size(),
 		MetaState.gold, MetaState.relics.size()]
 	UI.hoverable(status_label, "AT RISK: found this run, but only kept if you beat the boss or use an Escape Rope.")
-	status_label.text += "    AT RISK: %d cards, %d gold    Ropes %d" % [
-		GameState.escrow_cards.size(), GameState.escrow_gold,
-		MetaState.item_count("escape_rope")]
+	status_label.text += "    %s    Ropes %d" % [
+		GameState.risk_line(), MetaState.item_count("escape_rope")]
 
 	for c in rows_box.get_children():
 		c.queue_free()

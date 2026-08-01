@@ -9,7 +9,7 @@ func _ready() -> void:
 	if z == null:
 		call_deferred("_back")
 		return
-	var col := UI.screen(self, z.name)
+	var col := UI.screen(self, z.name, "", "", false, z.id)
 	UI.label(col, z.description)
 	UI.label(col, "Gold %d    Relics %d    Cleared %d/%d" % [
 		MetaState.gold, MetaState.relics.size(),

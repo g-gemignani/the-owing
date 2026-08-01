@@ -25,15 +25,17 @@ func _build() -> void:
 		dd.name if dd != null else "No dungeon", GameState.hp, GameState.max_hp, MetaState.gold])
 	var ropes := MetaState.item_count("escape_rope")
 	if GameState.in_run():
-		UI.label(col, "At risk in this run: %d cards, %d gold — secured by beating the boss, or by using an Escape Rope." % [
-			GameState.escrow_cards.size(), GameState.escrow_gold])
+		UI.label(col, "At risk in this run: %s — secured by beating the boss, or by using an Escape Rope." % [
+			GameState.risk_line().trim_prefix("AT RISK: ")])
 	UI.label(col, "Escape Ropes held: %d" % ropes)
 	UI.spacer(col)
 
 	match confirming:
 		Confirm.ROPE:
-			UI.label(col, "Use an Escape Rope? You keep the %d cards and %d gold found here, but the dungeon stays uncleared — no relic, no unlock." % [
-				GameState.escrow_cards.size(), GameState.escrow_gold])
+			# the rope is the only thing that carries a sealed pack out of a run you
+			# are not going to finish, so it has to be named in the choice
+			UI.label(col, "Use an Escape Rope? You keep everything found here (%s), but the dungeon stays uncleared — no relic, no unlock." % [
+				GameState.risk_line().trim_prefix("AT RISK: ")])
 			var r := UI.row(col, 8)
 			UI.button(r, "Use the rope", func(): _use_rope(), 38.0)
 			UI.exit_button(r, "Keep going", func(): _cancel(), 38.0)

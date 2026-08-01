@@ -150,6 +150,36 @@ func _init() -> void:
 		if not reread.load_game() or reread.power_data() == null:
 			fails += 1; print("FAIL v%d save was not rewritten in the current shape" % old["v"])
 
+	# --- sealed packs survive a save, and unknown ones are dropped (D80) --------
+	var MP = load("res://scripts/meta_state.gd")
+	var mp = MP.new()
+	mp.path_prefix = "t_save_packs_"
+	mp.slot = 0
+	mp.new_save()
+	mp.add_pack(Balance.PACK_BOSS, Balance.DUNGEONS[0])
+	mp.add_pack(Balance.PACK_TREASURE, Balance.DUNGEONS[1])
+	mp.save_game()
+	var mp2 = MP.new()
+	mp2.path_prefix = "t_save_packs_"
+	mp2.slot = 0
+	mp2.load_game()
+	if mp2.packs.size() != 2:
+		fails += 1; print("FAIL packs did not survive a save: %d of 2" % mp2.packs.size())
+	elif String(mp2.packs[0].get("dungeon", "")) != Balance.DUNGEONS[0]:
+		fails += 1; print("FAIL a pack forgot where it was found")
+	# a pack naming a dungeon that no longer exists must be dropped on LOAD, never
+	# in migration, so renaming content cannot corrupt a save (D15)
+	mp2.packs.append({"kind": Balance.PACK_BOSS, "dungeon": "a_dungeon_that_was_renamed"})
+	mp2.save_game()
+	var mp3 = MP.new()
+	mp3.path_prefix = "t_save_packs_"
+	mp3.slot = 0
+	mp3.load_game()
+	if mp3.packs.size() != 2:
+		fails += 1
+		print("FAIL a pack from renamed content was kept: %d packs" % mp3.packs.size())
+	mp.writes_disabled = true
+
 	if fails == 0:
 		print("SAVE TEST: PASS (round-trip, every version migrates, backups, future refused, junk dropped)")
 	else:

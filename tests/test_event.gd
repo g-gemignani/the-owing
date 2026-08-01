@@ -41,8 +41,13 @@ func _init() -> void:
 	# --- treasure numbers are sane ---
 	if Balance.TREASURE_GOLD_MIN <= 0 or Balance.TREASURE_GOLD_MAX < Balance.TREASURE_GOLD_MIN:
 		fails += 1; print("FAIL treasure gold range invalid")
-	if Balance.TREASURE_CARD_CHANCE < 0 or Balance.TREASURE_CARD_CHANCE > 100:
-		fails += 1; print("FAIL treasure card chance out of range")
+	if Balance.TREASURE_ROPE_CHANCE < 0 or Balance.TREASURE_ROPE_CHANCE > 100:
+		fails += 1; print("FAIL treasure rope chance out of range")
+	# every treasure yields a pack, and a pack must promise at least one card
+	if Balance.pack_cards(Balance.PACK_WORN) < 1:
+		fails += 1; print("FAIL a treasure pack contains nothing")
+	if Balance.pack_gold(1, Balance.PACK_WORN) <= 0:
+		fails += 1; print("FAIL a treasure pack is worth no gold")
 
 	# --- card loss from events must respect the softlock floor ---
 	var m = Meta.new()

@@ -21,6 +21,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	UI.scene_backdrop(self, "shop")
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UITheme.pad(margin)

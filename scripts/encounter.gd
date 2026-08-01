@@ -1,5 +1,9 @@
-## Non-combat encounter screen: events (choices with declarative effects) and
-## treasure (gold, sometimes a card).
+## Event screen: choices with declarative effects.
+##
+## Chests used to live here too, back when one was "gold, and sometimes a card".
+## They moved to `Chest.tscn` when they grew tiers and locks (D84) — an event is a
+## decision you make, a chest is a thing you found, and one screen doing both made
+## them read as the same beat.
 ##
 ## All effects are applied HERE rather than inside the data, so run rules are
 ## enforced in one place: HP never drops below 1, gold never goes negative, and
@@ -19,13 +23,13 @@ var resolved := false
 
 func _ready() -> void:
 	_build_ui()
-	if int(GameState.pending.get("type", -1)) == GameState.NodeType.TREASURE:
-		_show_treasure()
-	else:
-		_show_event()
+	_show_event()
 
 func _build_ui() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Treasure has no art of its own yet, so it borrows the event shrine rather
+	# than falling back to a flat black screen.
+	UI.scene_backdrop(self, "event")
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UITheme.pad(margin)
@@ -138,28 +142,6 @@ func _on_choice(i: int) -> void:
 		return
 
 	result_label.text = "\n".join(lines) + "\n\n" + _status()
-	var cont := Button.new()
-	UITheme.style_button(cont)
-	cont.text = "Continue"
-	cont.custom_minimum_size = Vector2(0, UITheme.button_height(40))
-	cont.pressed.connect(_finish)
-	options_box.add_child(cont)
-
-# ---------------- treasure ----------------
-func _show_treasure() -> void:
-	title_label.text = "Treasure"
-	var gold := Balance.TREASURE_GOLD_MIN + randi() % maxi(1, Balance.TREASURE_GOLD_MAX - Balance.TREASURE_GOLD_MIN + 1)
-	gold += int(round(gold * MetaState.relic_bonus("gold_percent") / 100.0))
-	GameState.earn_gold(gold)
-	var lines: Array[String] = ["You find %d gold." % gold]
-	if randi() % 100 < Balance.TREASURE_CARD_CHANCE:
-		var got := _grant_card()
-		if got != "":
-			lines.append("Tucked underneath: %s." % got)
-	if randi() % 100 < Balance.TREASURE_ROPE_CHANCE:
-		MetaState.add_item("escape_rope")
-		lines.append("Also here: an Escape Rope. A way out, if you want one.")
-	body_label.text = "\n".join(lines) + "\n\n" + _status()
 	var cont := Button.new()
 	UITheme.style_button(cont)
 	cont.text = "Continue"

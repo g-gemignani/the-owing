@@ -16,6 +16,76 @@ func _source_has(path: String, needle: String) -> bool:
 	f.close()
 	return text.find(needle) != -1
 
+## Every directory at or under `root` that holds at least one PNG. Discovered rather
+## than listed, which is the whole point of the check that uses it.
+func _dirs_with_pngs(root: String) -> Array:
+	var out: Array = []
+	var stack: Array = [root]
+	while not stack.is_empty():
+		var dir: String = stack.pop_back()
+		var d := DirAccess.open(dir)
+		if d == null:
+			continue
+		var has_png := false
+		d.list_dir_begin()
+		var f := d.get_next()
+		while f != "":
+			if d.current_is_dir():
+				if not f.begins_with("."):
+					stack.append(dir + f + "/")
+			# an exported PCK lists the sidecar rather than the source, the trap
+			# `PixelArt.list_resources` documents — so accept either spelling
+			elif f.ends_with(".png") or f.ends_with(".png.import"):
+				has_png = true
+			f = d.get_next()
+		d.list_dir_end()
+		if has_png:
+			out.append(dir)
+	out.sort()
+	return out
+
+## Does this README name a generator that actually exists? A README claiming the art is
+## generated is worth nothing if the tool it names was deleted — which is exactly what
+## happens when a generated set is abandoned and the files are left behind.
+func _names_generator(readme: String) -> bool:
+	if not FileAccess.file_exists(readme):
+		return false
+	var text := FileAccess.open(readme, FileAccess.READ).get_as_text()
+	var at := text.find("tools/gen_")
+	while at >= 0:
+		var end := at
+		while end < text.length() and not text[end] in [" ", "\n", "\t", "`", ")", ","]:
+			end += 1
+		if FileAccess.file_exists("res://" + text.substr(at, end - at)):
+			return true
+		at = text.find("tools/gen_", at + 1)
+	return false
+
+## The .gitignore lines that keep PNGs out of the repository.
+func _ignored_png_patterns() -> Array:
+	var out: Array = []
+	if not FileAccess.file_exists("res://.gitignore"):
+		return out
+	for line in FileAccess.open("res://.gitignore", FileAccess.READ).get_as_text().split("\n"):
+		var l: String = String(line).strip_edges()
+		if l.is_empty() or l.begins_with("#"):
+			continue
+		if l.ends_with(".png") or l.ends_with("/"):
+			out.append(l)
+	return out
+
+## Minimal glob: `*` matches within one path segment, which is all these patterns use.
+func _matches_any(path: String, patterns: Array) -> bool:
+	for p in patterns:
+		var pat := String(p)
+		if pat.ends_with("/"):
+			if path.begins_with(pat):
+				return true
+			continue
+		if path.matchn(pat):
+			return true
+	return false
+
 func _init() -> void:
 	var fails := 0
 	var m = load("res://scripts/meta_state.gd").new()
@@ -54,22 +124,27 @@ func _init() -> void:
 	var ids := PixelArt.archetype_ids()
 	if ids.is_empty():
 		fails += 1; print("FAIL no enemy archetypes found")
+	# Every archetype has a plate of its own, and no two share one.
+	#
+	# This used to assert the same thing about a POOL of 41 CC0 sprites handed out by
+	# sort order, which needed a 12-entry override table to stop bosses inheriting
+	# trash-mob faces. The plates are keyed by id (D89), so "shared sprite" is now
+	# impossible by construction and what is worth checking is that one exists at all —
+	# a missing plate is silent, and `combat.gd` draws an empty footprint box for it.
+	var missing: Array = []
 	for id in ids:
 		var t := Icons.enemy(id)
 		if t == null:
-			fails += 1; print("FAIL no sprite for enemy %s" % id); continue
+			missing.append(id)
+			continue
 		used[t.resource_path] = int(used.get(t.resource_path, 0)) + 1
-	var shared := 0
-	for k in used:
-		if int(used[k]) > 1:
-			shared += 1
-	if shared > 0:
-		fails += 1; print("FAIL %d sprite(s) shared between enemies — they look identical" % shared)
-	print("  (info: %d enemies, %d distinct sprites, %d available)" % [
-		ids.size(), used.size(), PixelArt.enemy_sprites().size()])
-	if PixelArt.enemy_sprites().size() < ids.size():
-		fails += 1; print("FAIL fewer sprites (%d) than enemies (%d)" % [
-			PixelArt.enemy_sprites().size(), ids.size()])
+	if not missing.is_empty():
+		fails += 1
+		print("FAIL %d archetype(s) have no plate in assets/art/enemies/ — run tools/gen_enemy_art.gd then --import: %s" % [
+			missing.size(), ", ".join(missing)])
+	if used.size() < ids.size() - missing.size():
+		fails += 1; print("FAIL two archetypes resolved to the same plate")
+	print("  (info: %d archetypes, %d distinct plates)" % [ids.size(), used.size()])
 
 	# --- every card resolves to a symbol that suits it ---
 	for cid in m.CATALOG:
@@ -192,26 +267,59 @@ func _init() -> void:
 		if Icons.tex(Icons.for_card(c)) == null:
 			fails += 1; print("FAIL card %s lost its effect symbol" % cid)
 
-	# --- licences must ship beside the borrowed art ---
-	for dir in ["res://assets/pixel/enemies/", "res://assets/pixel/ui/", "res://assets/pixel/bg/", "res://assets/pixel/cards/"]:
+	# --- no PNG in this tree may be both committable and unlicensed (D89) ---
+	#
+	# This check used to name FOUR directories, and that is precisely how the isometric
+	# floor art sat in the tree for a whole milestone with no licence file, no
+	# attribution, and a README of its own saying "licence status: UNKNOWN for the
+	# floor, NON-COMMERCIAL for the hero". Nothing was watching, because the watcher had
+	# a hand-kept list and the new directory was not on it.
+	#
+	# So the directories are DISCOVERED now, and each PNG has to be accounted for in one
+	# of exactly three ways:
+	#
+	#   1. a licence file sits beside it (the CC0 packs),
+	#   2. its directory's README names the generator that made it (ours outright), or
+	#   3. .gitignore keeps it out of the repository (local stand-ins).
+	#
+	# Anything else is art we would be redistributing without knowing whether we may.
+	var ignored := _ignored_png_patterns()
+	var checked := 0
+	for dir in _dirs_with_pngs("res://assets/"):
 		var d := DirAccess.open(dir)
 		if d == null:
-			fails += 1; print("FAIL missing art directory %s" % dir); continue
+			continue
 		var has_licence := false
-		var pngs := 0
+		var pngs: Array = []
 		d.list_dir_begin()
 		var f := d.get_next()
 		while f != "":
 			if f.to_lower().contains("licen"):
 				has_licence = true
 			if f.ends_with(".png"):
-				pngs += 1
+				pngs.append(f)
 			f = d.get_next()
 		d.list_dir_end()
-		if not has_licence:
-			fails += 1; print("FAIL no licence file in %s" % dir)
-		if pngs == 0:
-			fails += 1; print("FAIL no art in %s" % dir)
+		# a subdirectory may be documented by its parent's README — the UI frame kit is
+		# explained in `assets/art/README.md` and has no README of its own, which is
+		# reasonable and would otherwise read as undeclared art
+		var generated := _names_generator(dir + "README.md") \
+			or _names_generator(String(dir).get_base_dir().get_base_dir() + "/README.md")
+		for png in pngs:
+			checked += 1
+			if has_licence or generated:
+				continue
+			if _matches_any(String(dir).replace("res://", "") + String(png), ignored):
+				continue
+			fails += 1
+			print("FAIL %s%s has no licence beside it, no generator named in %sREADME.md, and is not gitignored — committing it redistributes art we have not cleared" % [
+				dir, png, dir])
+	print("  (info: %d PNGs across %d directories, each licensed, generated or gitignored)" % [
+		checked, _dirs_with_pngs("res://assets/").size()])
+
+	for dir2 in ["res://assets/art/enemies/", "res://assets/pixel/bg/", "res://assets/pixel/cards/"]:
+		if DirAccess.open(dir2) == null:
+			fails += 1; print("FAIL missing art directory %s" % dir2)
 
 	# --- rarity colours must be distinguishable, since rarity is read by colour ---
 	for i in Icons.RARITY_COLOURS.size():
@@ -317,6 +425,95 @@ func _init() -> void:
 		fails += 1
 		print("FAIL the stand line (%.2f) is not below the horizon (%.2f) — enemies would stand in the wall" % [
 			PixelArt.STAND_LINE, PixelArt.HORIZON_LINE])
+
+	# --- the generator's signature must not be in the shipped art --------------
+	#
+	# The image tool stamps a sparkle into the bottom-right corner. Twelve files
+	# carried one and nobody noticed for two milestones, because at 45px in a dim
+	# corner it reads as a highlight until you put the corners side by side.
+	#
+	# Detected the same way `tools/strip_sparkle.gd` removes it: anything brighter
+	# than its own surroundings in EVERY one of the twelve, at the same pixel. A
+	# brazier is bright in one room and absent from the next; a stamp is in all of
+	# them. This is a re-derivation rather than a call into the tool, on purpose —
+	# a check that shares its subject's code cannot catch its subject being wrong.
+	var bgs: Array[Image] = []
+	for did3 in Balance.DUNGEONS:
+		var bt := PixelArt.battle_art(did3)
+		if bt == null:
+			continue
+		var bi := bt.get_image()
+		if bi == null:
+			continue
+		if bi.is_compressed():
+			bi.decompress()
+		bgs.append(bi)
+	if bgs.size() >= 4:
+		var common := _common_bright_corner(bgs)
+		print("  (info: corner lit in all %d backdrops: %d px, largest blob %d)" % [
+			bgs.size(), common[0], common[1]])
+		# The LARGEST CONNECTED BLOB, not the total, and the difference is what makes
+		# this assertable. Twelve rooms drawn by one generator share more than a
+		# watermark: they all put a lit pillar edge in this corner, which is 225 px of
+		# scattered agreement and cannot be thresholded away from the stamp's 759.
+		# As one blob they separate cleanly — the stamp measured 461 px in a 38x34
+		# box, the pillar edge 58 px in a 6x20 sliver. Eight times over.
+		if common[1] > 200:
+			fails += 1
+			print("FAIL a %d px blob is lit in every dungeon backdrop's corner — that is the generator's watermark. Run tools/strip_sparkle.gd" % common[1])
+
+	# --- the non-combat backdrops share that directory and that prefix ---------
+	#
+	# `scene_art("shop")` and `battle_art("shop")` are the same path. Today the two
+	# name sets are disjoint, and this is what keeps them that way: the day someone
+	# adds a dungeon called `rest`, the campfire becomes its fight arena and the
+	# rest screen shows the fight arena, with nothing anywhere reporting a problem.
+	for scene in PixelArt.SCENE_ART:
+		if Balance.DUNGEONS.has(scene):
+			fails += 1
+			print("FAIL '%s' is both a dungeon id and a scene backdrop — one file, two meanings" % scene)
+	# The zone shots live in their own namespace for the same reason, and this is
+	# the case that would actually happen: `foundry` is a zone AND a dungeon, and
+	# the generator delivered the zone painting under that exact name.
+	var zones_done := 0
+	for zid2 in Balance.ZONES:
+		if not _source_has("res://scripts/pixel_art.gd", "bg_zone_"):
+			break
+		var za := PixelArt.zone_art(zid2)
+		if za == null:
+			continue
+		zones_done += 1
+		if za.get_width() != 1280 or za.get_height() != 720:
+			fails += 1
+			print("FAIL bg_zone_%s.png is %dx%d, not 1280x720" % [
+				zid2, za.get_width(), za.get_height()])
+		if FileAccess.file_exists("res://assets/art/bg_" + zid2 + ".png") \
+				and not Balance.DUNGEONS.has(zid2):
+			fails += 1
+			print("FAIL zone %s also has an unprefixed bg_%s.png — one of them is misfiled" % [
+				zid2, zid2])
+	print("  (info: %d of %d zone backdrops painted)" % [zones_done, Balance.ZONES.size()])
+	if not _source_has("res://scripts/ui.gd", "PixelArt.zone_art"):
+		fails += 1
+		print("FAIL nothing loads the zone backdrops — the files would do nothing")
+
+	var scenes_done := 0
+	for scene2 in PixelArt.SCENE_ART:
+		var sa := PixelArt.scene_art(scene2)
+		if sa == null:
+			continue
+		scenes_done += 1
+		# Installed at the shipped size by `tools/install_scene_backdrops.gd`. A file
+		# at some other aspect gets COVER-cropped at runtime, which silently eats the
+		# edges of a painting that was composed symmetrically.
+		if sa.get_width() != 1280 or sa.get_height() != 720:
+			fails += 1
+			print("FAIL bg_%s.png is %dx%d, not 1280x720 — run tools/install_scene_backdrops.gd" % [
+				scene2, sa.get_width(), sa.get_height()])
+	print("  (info: %d of %d scene backdrops painted)" % [scenes_done, PixelArt.SCENE_ART.size()])
+	if not _source_has("res://scripts/ui.gd", "PixelArt.scene_art"):
+		fails += 1
+		print("FAIL nothing loads the scene backdrops — the files would do nothing")
 
 	# --- painted enemies are keyed by id, not by position ----------------------
 	#
@@ -438,15 +635,6 @@ func _init() -> void:
 	if not has_audio_licence:
 		fails += 1; print("FAIL no licence file in %s" % A.DIR)
 
-	# --- a pinned sprite must exist, or the pin silently does nothing ---
-	# Four boss overrides named tiles that had never been copied into the project.
-	# enemy_sprite() fell back to positional assignment without a word, and the
-	# bosses quietly wore other enemies' faces.
-	for aid in PixelArt.OVERRIDES:
-		var pinned: String = PixelArt.ENEMY_DIR + String(PixelArt.OVERRIDES[aid]) + ".png"
-		if not ResourceLoader.exists(pinned):
-			fails += 1; print("FAIL %s is pinned to %s, which does not exist" % [aid, pinned])
-
 	# --- painted title art exists and is not filtered like a pixel sprite ---
 	#
 	# Only the source-level half lives here: reading UI.* would pull in UITheme,
@@ -488,3 +676,78 @@ func _floor_fraction(img: Image) -> float:
 			best_d = d
 			best_y = y
 	return float(best_y) / float(h)
+
+## How much of the bottom-right corner is brighter than its own local background in
+## EVERY image. Returns [total px, largest connected blob]. Independent of
+## `tools/strip_sparkle.gd` by design.
+##
+## The margin exclusion matters: the local mean is clipped within a radius of the
+## window edge, so a light-to-dark boundary there shows a false excess in every
+## image at once — which is exactly what this looks for, and would report a
+## watermark on twelve clean files.
+func _common_bright_corner(imgs: Array[Image]) -> Array:
+	const WW := 280
+	const WH := 240
+	const R := 20
+	const LIT := 0.05
+	var lit: Array[bool] = []
+	lit.resize(WW * WH)
+	lit.fill(true)
+	for img in imgs:
+		var x0 := img.get_width() - WW
+		var y0 := img.get_height() - WH
+		if x0 < 0 or y0 < 0:
+			return [0, 0]
+		var lum := PackedFloat32Array()
+		lum.resize(WW * WH)
+		for y in WH:
+			for x in WW:
+				lum[y * WW + x] = img.get_pixel(x0 + x, y0 + y).get_luminance()
+		for y in range(R, WH - R):
+			for x in range(R, WW - R):
+				var i := y * WW + x
+				if not lit[i]:
+					continue
+				var s := 0.0
+				var n := 0
+				for yy in range(y - R, y + R + 1):
+					for xx in range(x - R, x + R + 1, 3):
+						s += lum[yy * WW + xx]
+						n += 1
+				if lum[i] - s / float(n) <= LIT:
+					lit[i] = false
+	for y in WH:
+		for x in WW:
+			if x < R or x >= WW - R or y < R or y >= WH - R:
+				lit[y * WW + x] = false
+	var total := 0
+	for b in lit:
+		if b:
+			total += 1
+	# largest 4-connected component
+	var seen: Array[bool] = []
+	seen.resize(lit.size())
+	seen.fill(false)
+	var biggest := 0
+	for start in lit.size():
+		if not lit[start] or seen[start]:
+			continue
+		var size := 0
+		var stack: Array[int] = [start]
+		seen[start] = true
+		while not stack.is_empty():
+			var i: int = stack.pop_back()
+			size += 1
+			var x: int = i % WW
+			var y: int = i / WW
+			for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+				var nx: int = x + d[0]
+				var ny: int = y + d[1]
+				if nx < 0 or ny < 0 or nx >= WW or ny >= WH:
+					continue
+				var j: int = ny * WW + nx
+				if lit[j] and not seen[j]:
+					seen[j] = true
+					stack.append(j)
+		biggest = maxi(biggest, size)
+	return [total, biggest]

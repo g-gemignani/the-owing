@@ -148,6 +148,7 @@ func _build_ui() -> void:
 	coll_btn.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
 	bottom.add_child(coll_btn)
 	start_btn = Button.new()
+	UITheme.style_button(start_btn)
 	start_btn.text = "Save loadout and leave" if GameState.manage_only else "Start Dungeon"
 	start_btn.pressed.connect(_on_start)
 	bottom.add_child(start_btn)
@@ -265,7 +266,7 @@ func _refresh() -> void:
 		UI.hoverable(row, Icons.card_tooltip(card))
 
 		var minus := Button.new()
-		UITheme.style_button(minus)
+		UITheme.style_button(minus, true)
 		minus.text = "-"
 		minus.custom_minimum_size.x = UITheme.px(40)
 		minus.pressed.connect(_adjust.bind(id, -1))
@@ -277,7 +278,7 @@ func _refresh() -> void:
 		row.add_child(cnt)
 
 		var plus := Button.new()
-		UITheme.style_button(plus)
+		UITheme.style_button(plus, true)
 		plus.text = "+"
 		plus.custom_minimum_size.x = UITheme.px(40)
 		plus.pressed.connect(_adjust.bind(id, 1))

@@ -82,6 +82,51 @@ const PANEL_SLICE := {"l": 38, "r": 19, "t": 49, "b": 57}
 ## The parchment reads at luminance 0.86. White text on it measures 1.2:1 — flatly
 ## invisible — so text on a framed button is near-black, at 18:1.
 const INK := Color(0.13, 0.09, 0.07)
+## And the reverse, for a frame with a DARK inlay. Which of the two a button gets is
+## measured off its own art by `ink_for()`, not decided here: the kit can be light
+## or dark, and hardcoding one of them is exactly how white-on-parchment happened.
+const PALE := Color(0.949, 0.914, 0.831)
+
+## The generated kit's border thickness (`tools/gen_ui_kit.gd` BORDER) and the
+## padding that clears it. These are nine-slice margins in TEXTURE pixels, so they
+## have to match where the art was actually drawn — slicing a 12px border at 28
+## eats 16px of the flat middle and stretches the border instead, which is the
+## squashed-frame failure the old numbers produced on a 50px button.
+const KIT_SLICE := 12
+## Padding is measured from the button edge, so it has to clear the 12px border
+## before it buys any gap: at 16 the text sat 4px off the carved edge and read as
+## clipped on the deck builder's short buttons.
+const KIT_PAD_X := 22.0
+const KIT_PAD_Y := 8.0
+
+## Which ink reads on this frame, measured off the middle of the art itself.
+##
+## Sampled from the flat inlay (the centre 30%), which is the only part text is
+## ever drawn over. Cached: this decodes an image, and `style_button` is called a
+## few hundred times on the deck builder.
+static var _ink_cache: Dictionary = {}
+static func ink_for(tex: Texture2D) -> Color:
+	if tex == null:
+		return INK
+	var key := tex.resource_path
+	if _ink_cache.has(key):
+		return _ink_cache[key]
+	var ink := INK
+	var img := tex.get_image()
+	if img != null:
+		if img.is_compressed():
+			img.decompress()
+		var w := img.get_width()
+		var h := img.get_height()
+		var tot := 0.0
+		var n := 0
+		for y in range(int(h * 0.35), maxi(int(h * 0.65), int(h * 0.35) + 1)):
+			for x in range(int(w * 0.35), maxi(int(w * 0.65), int(w * 0.35) + 1)):
+				tot += img.get_pixel(x, y).get_luminance()
+				n += 1
+		ink = INK if tot / maxf(1.0, float(n)) > 0.5 else PALE
+	_ink_cache[key] = ink
+	return ink
 
 ## The painted frame kit ART.md specifies, wired so dropping a file in turns it on.
 ##
@@ -108,11 +153,25 @@ func kit_frame(name: String, l: int, r: int, top: int, bot: int,
 	return sb
 
 ## A button state: its own painted file if one exists, else today's tinted frame.
-func _button_state(state: String, tint: Color, pad_x: float, pad_y: float) -> StyleBox:
-	var painted := kit_frame("frame_button" + state, 32, 32, 28, 28, pad_x, pad_y)
+##
+## `small` picks the square frame, for the +/- icon buttons the deck builder builds:
+## the wide frame's two corners are 24px of the 36px those buttons are, so it draws
+## as corner-corner with no face between them.
+func _button_state(state: String, tint: Color, pad_x: float, pad_y: float,
+		small: bool = false) -> StyleBox:
+	var base := "frame_button_small" if small else "frame_button" + state
+	var painted := kit_frame(base, KIT_SLICE, KIT_SLICE, KIT_SLICE, KIT_SLICE,
+		KIT_PAD_X if not small else 6.0, KIT_PAD_Y)
 	if painted != null:
 		return painted
 	return _frame(BUTTON_ART, BUTTON_SLICE, tint, pad_x, pad_y)
+
+## The texture a button will actually be dressed in, or null if none is installed.
+func _button_texture(small: bool = false) -> Texture2D:
+	var tex := PixelArt.ui_kit("frame_button_small" if small else "frame_button")
+	if tex != null:
+		return tex
+	return load(BUTTON_ART) as Texture2D
 
 func _frame(path: String, slice: Dictionary, tint: Color,
 		pad_x: float, pad_y: float) -> StyleBox:
@@ -141,22 +200,31 @@ func _frame(path: String, slice: Dictionary, tint: Color,
 ##
 ## Also enforces a height that fits the carved border. The border is drawn 1:1 at
 ## 40px, and four screens had 31px inline buttons that would have squashed it.
-func style_button(b: Button) -> void:
+## `small` asks for the square icon frame — the +/- buttons, which are 40px wide
+## and cannot wear a frame whose two corners are 24px of that.
+##
+## It is a PARAMETER and not something measured off the button, because there is
+## nothing to measure yet: almost every call site in the game styles the button
+## and then sets its text, so a `b.text.length()` test sees "" and calls every
+## button in the game small. That shipped for one screenshot and put the text of
+## seven deck-builder buttons underneath their own border.
+func style_button(b: Button, small: bool = false) -> void:
 	var pad_x := float(BUTTON_SLICE["l"]) + 4.0
-	var art := _button_state("", Color(1, 1, 1), pad_x, 10.0)
+	var art := _button_state("", Color(1, 1, 1), pad_x, 10.0, small)
 	if art == null:
 		return
 	b.add_theme_stylebox_override("normal", art)
 	b.add_theme_stylebox_override("hover",
-		_button_state("_hover", Color(1.18, 1.14, 1.20), pad_x, 10.0))
+		_button_state("_hover", Color(1.18, 1.14, 1.20), pad_x, 10.0, small))
 	b.add_theme_stylebox_override("pressed",
-		_button_state("_pressed", Color(0.82, 0.80, 0.86), pad_x, 10.0))
+		_button_state("_pressed", Color(0.82, 0.80, 0.86), pad_x, 10.0, small))
 	b.add_theme_stylebox_override("disabled",
-		_button_state("_disabled", Color(0.55, 0.55, 0.60, 0.75), pad_x, 10.0))
-	b.add_theme_color_override("font_color", INK)
-	b.add_theme_color_override("font_hover_color", INK)
-	b.add_theme_color_override("font_pressed_color", INK)
-	b.add_theme_color_override("font_disabled_color", Color(0.36, 0.32, 0.32))
+		_button_state("_disabled", Color(0.55, 0.55, 0.60, 0.75), pad_x, 10.0, small))
+	var ink := ink_for(_button_texture(small))
+	b.add_theme_color_override("font_color", ink)
+	b.add_theme_color_override("font_hover_color", ink)
+	b.add_theme_color_override("font_pressed_color", ink)
+	b.add_theme_color_override("font_disabled_color", ink.lerp(Color(0.5, 0.5, 0.5), 0.55))
 	b.custom_minimum_size.y = maxf(b.custom_minimum_size.y, float(min_button_height()))
 
 ## The shortest a framed button may be without crushing its own border. The border
@@ -180,19 +248,21 @@ func _rebuild_theme() -> void:
 	# text has to clear the carved border, which is drawn at a fixed size
 	var pad_x: float = float(BUTTON_SLICE["l"]) + 4.0
 	var pad_y: float = 10.0
-	var art := _frame(BUTTON_ART, BUTTON_SLICE, Color(1, 1, 1), pad_x, pad_y)
+	var art := _button_state("", Color(1, 1, 1), pad_x, pad_y)
 	if art != null:
 		theme.set_stylebox("normal", "Button", art)
 		theme.set_stylebox("hover", "Button",
-			_frame(BUTTON_ART, BUTTON_SLICE, Color(1.18, 1.14, 1.20), pad_x, pad_y))
+			_button_state("_hover", Color(1.18, 1.14, 1.20), pad_x, pad_y))
 		theme.set_stylebox("pressed", "Button",
-			_frame(BUTTON_ART, BUTTON_SLICE, Color(0.82, 0.80, 0.86), pad_x, pad_y))
+			_button_state("_pressed", Color(0.82, 0.80, 0.86), pad_x, pad_y))
 		theme.set_stylebox("disabled", "Button",
-			_frame(BUTTON_ART, BUTTON_SLICE, Color(0.55, 0.55, 0.60, 0.75), pad_x, pad_y))
-		theme.set_color("font_color", "Button", INK)
-		theme.set_color("font_hover_color", "Button", INK)
-		theme.set_color("font_pressed_color", "Button", INK)
-		theme.set_color("font_disabled_color", "Button", Color(0.36, 0.32, 0.32))
+			_button_state("_disabled", Color(0.55, 0.55, 0.60, 0.75), pad_x, pad_y))
+		var tink := ink_for(_button_texture())
+		theme.set_color("font_color", "Button", tink)
+		theme.set_color("font_hover_color", "Button", tink)
+		theme.set_color("font_pressed_color", "Button", tink)
+		theme.set_color("font_disabled_color", "Button",
+			tink.lerp(Color(0.5, 0.5, 0.5), 0.55))
 		# a button must stay taller than its own border, or the frame collapses
 		theme.set_constant("minimum_character_width", "Button", 1)
 	else:

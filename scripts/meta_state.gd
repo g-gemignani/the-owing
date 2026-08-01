@@ -61,7 +61,7 @@ static func delete_slot(s: int) -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 ## Bump when the save shape changes, and add a step to _migrate().
 ## Saves written before versioning existed have no "version" key and read as 0.
-const SAVE_VERSION := 6
+const SAVE_VERSION := 8
 ## The run lives in its own file beside the meta save. They change at wildly
 ## different rates — meta only when the player gains something permanent, the run
 ## on every card played — so writing them together meant rewriting the whole
@@ -321,6 +321,13 @@ var starter_kit: String = "blade"
 var seen_hints: Array = []
 ## New Game+ level: raises difficulty globally once the world has been cleared.
 var ascension: int = 0
+## Sealed packs waiting to be opened, each {"kind", "dungeon", "tier", "build"}.
+## Tier and build are decided where the pack was found, never here. They are
+## banked (past escrow) but deliberately NOT yet resolved: the opening is the moment
+## the overworld did not have, and a pack that resolved itself on arrival would be a
+## line of text again.
+var packs: Array = []
+
 var cleared_dungeons: Array = []
 ## How many times each dungeon has been cleared, for the diminishing repeat payout
 ## (D69). The set above answers "is it unlocked"; this answers "how well trodden".
@@ -354,6 +361,7 @@ func new_save(kit: String = "blade") -> void:
 	equipped_power = "bulwark"
 	cleared_dungeons = []
 	clear_counts = {}
+	packs = []
 	highest_dungeon = 1
 	gold = 0
 	save_game()
@@ -468,6 +476,73 @@ func has_cleared(id: String) -> bool:
 ## How many times this dungeon has been beaten before the run being paid out.
 func times_cleared(id: String) -> int:
 	return int(clear_counts.get(id, 0))
+
+## Bank a pack carried out of a run. Tier and build were decided where it was
+## found; an old save that predates them (v7) gets the humblest possible pack.
+func add_pack(kind: String, dungeon_id: String, tier: String = Balance.PACK_WORN,
+		build_id: String = "") -> void:
+	if not (dungeon_id in Balance.DUNGEONS):
+		return
+	if not (tier in Balance.PACK_TIERS):
+		tier = Balance.PACK_WORN
+	if not (build_id in Balance.BUILDS):
+		build_id = Balance.roll_pack_build(dungeon_id)
+	packs.append({"kind": kind, "dungeon": dungeon_id, "tier": tier, "build": build_id})
+	mark_meta_dirty()
+
+## Open the pack at `index`: its cards join the collection, its coins the purse.
+##
+## Rolls from the BUILD's card list, capped at the tier's best allowed rarity — so
+## a worn pack cannot contain a legendary however deep it was found, and a poison
+## pack contains poison cards wherever it was found (D81). The dungeon is still
+## remembered, and still sets the gold, because depth is what a pack is worth.
+##
+## Returns what came out, for the screen to show.
+func open_pack(index: int) -> Dictionary:
+	if index < 0 or index >= packs.size():
+		return {}
+	var p: Dictionary = packs[index]
+	var kind := String(p.get("kind", Balance.PACK_TREASURE))
+	var did := String(p.get("dungeon", ""))
+	var tier := String(p.get("tier", Balance.PACK_WORN))
+	var build_id := String(p.get("build", ""))
+	var dd := Balance.dungeon(did)
+	var difficulty: int = dd.difficulty if dd != null else 1
+	var pool: Array = Balance.pack_pool(build_id, tier).filter(
+		func(cid): return CATALOG.has(cid))
+	var got: Array[String] = []
+	if not pool.is_empty():
+		var wtbl: Array = Balance.pack_weights(difficulty, tier)
+		var weights: Array = []
+		for cid in pool:
+			var c := Balance.card(cid)
+			weights.append(wtbl[clampi(c.rarity if c != null else 0, 0, wtbl.size() - 1)])
+		for i in Balance.pack_cards(tier):
+			var id: String = pool[Balance.weighted_pick(weights)]
+			add_card(id)
+			got.append(id)
+	var coins := Balance.pack_gold(difficulty, tier)
+	add_gold(coins)
+	packs.remove_at(index)
+	save_game()
+	return {"kind": kind, "dungeon": did, "tier": tier, "build": build_id,
+		"cards": got, "gold": coins}
+
+## Open every pack at once, because "several packs a run" turns one button into a
+## chore. Returns one combined result plus the per-pack ones, so the screen can
+## show the whole haul without eleven separate reveals.
+func open_all_packs() -> Dictionary:
+	var all_cards: Array[String] = []
+	var coins := 0
+	var opened: Array = []
+	while not packs.is_empty():
+		var got := open_pack(0)
+		if got.is_empty():
+			break
+		opened.append(got)
+		all_cards.append_array(got.get("cards", []))
+		coins += int(got.get("gold", 0))
+	return {"cards": all_cards, "gold": coins, "packs": opened}
 
 func mark_cleared(id: String) -> void:
 	clear_counts[id] = int(clear_counts.get(id, 0)) + 1
@@ -810,6 +885,7 @@ func _write_meta() -> void:
 		"consumables": consumables, "powers": powers, "equipped_power": equipped_power,
 		"starter_kit": starter_kit, "seen_hints": seen_hints, "ascension": ascension,
 		"cleared_dungeons": cleared_dungeons, "clear_counts": clear_counts,
+		"packs": packs,
 		"highest_dungeon": highest_dungeon, "gold": gold,
 	}
 	var f := FileAccess.open(save_file(), FileAccess.WRITE)
@@ -873,6 +949,17 @@ func _backup_save(text: String, from_version: int) -> void:
 ## idempotent: missing keys get defaults, unknown ids are dropped on apply.
 func _migrate(data: Dictionary, from_version: int) -> Dictionary:
 	var d := data.duplicate(true)
+	if from_version < 8:
+		# v7 packs have no tier and no build (D81). Nothing to compute here: the
+		# loader normalises a missing tier to worn and rolls a build from where the
+		# pack was found, which is the same answer this migration could give.
+		pass
+	if from_version < 7:
+		# v6 predates sealed packs (D80). Nothing to carry: a save from before they
+		# existed cannot have earned any, and the loader defaults the field to empty.
+		# The bump is here so the log of save shapes stays complete — a version that
+		# only some changes bump is a version nobody can reason from.
+		pass
 	if from_version < 6:
 		# v5 knew only WHETHER a dungeon was cleared. The repeat payout (D69) needs
 		# how often, and an existing player should not be charged for history the
@@ -960,6 +1047,23 @@ func _apply(parsed: Dictionary) -> void:
 			cleared_dungeons.append(id)
 	# unknown ids dropped here rather than in migration, so renaming a dungeon can
 	# never corrupt a save (D15)
+	packs = []
+	for p in parsed.get("packs", []):
+		# a pack from renamed content cannot be opened; dropped on load, never in
+		# migration, so renaming a dungeon can never corrupt a save (D15)
+		if p is Dictionary and String(p.get("dungeon", "")) in Balance.DUNGEONS:
+			# an unknown tier or a retired build is normalised, not dropped: the
+			# pack is still a real thing the player earned, and a save that
+			# silently eats rewards is worse than one that downgrades them
+			var tier := String(p.get("tier", Balance.PACK_WORN))
+			var bid := String(p.get("build", ""))
+			var did := String(p.get("dungeon", ""))
+			packs.append({
+				"kind": String(p.get("kind", Balance.PACK_TREASURE)),
+				"dungeon": did,
+				"tier": tier if tier in Balance.PACK_TIERS else Balance.PACK_WORN,
+				"build": bid if bid in Balance.BUILDS else Balance.roll_pack_build(did),
+			})
 	clear_counts = {}
 	for id in parsed.get("clear_counts", {}):
 		if id in Balance.DUNGEONS:

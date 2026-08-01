@@ -21,6 +21,7 @@ func _ready() -> void:
 		list.add_child(box)
 
 		var b := Button.new()
+		UITheme.style_button(b)
 		b.text = "%s — %s" % [kit["name"], kit["hint"]]
 		b.custom_minimum_size = Vector2(0, UITheme.button_height(44))
 		b.pressed.connect(_pick.bind(kid))

@@ -13,7 +13,7 @@ extends Control
 
 func _ready() -> void:
 	var d: Dictionary = GameState.last_defeat
-	var col := UI.screen(self, "You Died")
+	var col := UI.screen(self, "You Died", "", "defeat")
 
 	if d.is_empty():
 		UI.label(col, "Nothing to report.")
@@ -38,6 +38,9 @@ func _ready() -> void:
 	else:
 		UI.label(col, "   %d card%s and %d gold, earned on this run" % [
 			fc, "" if fc == 1 else "s", fg])
+		var fp := int(d.get("forfeited_packs", 0))
+		if fp > 0:
+			UI.label(col, "   %d sealed pack%s, never opened" % [fp, "" if fp == 1 else "s"])
 		UI.hoverable(UI.label(col, "   (an Escape Rope would have carried these out)"),
 			"Ropes are found in treasures and dropped by bosses. They are never sold.")
 	UI.label(col, "")

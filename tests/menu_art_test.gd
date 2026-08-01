@@ -105,24 +105,38 @@ func _ready() -> void:
 		print("MENU ART TEST: FAIL (%d)" % _fails)
 	get_tree().quit()
 
-## --- painted button frames (D48) -------------------------------------------
+## --- painted button frames (D48, D83) ---------------------------------------
 ##
-## The parchment in the button art measures 0.86 luminance. White text on it is
-## 1.2:1 — flatly invisible — so the ink must be dark. And the carved border is
-## drawn 1:1 at 40px, so a button shorter than that squashes its own frame; four
-## screens had 31px inline buttons when the art first went in.
+## The carved border is drawn 1:1 at 40px, so a button shorter than that squashes
+## its own frame; four screens had 31px inline buttons when the art first went in.
+##
+## And the text has to read on whatever the face of that frame is. This measures
+## the frame the game will ACTUALLY dress a button in — the generated kit if it is
+## installed, the legacy parchment underneath if it is not — against the ink
+## `UITheme.ink_for()` picks for it. It used to measure the legacy file against a
+## hardcoded near-black, which would have gone on passing while the kit shipped a
+## dark face and put near-black text on it.
 func _painted_ui_is_legible() -> void:
 	if not ResourceLoader.exists(UITheme.BUTTON_ART):
 		_fails += 1; print("FAIL button art missing: %s" % UITheme.BUTTON_ART); return
 	if not ResourceLoader.exists(UITheme.PANEL_ART):
 		_fails += 1; print("FAIL panel art missing")
 
-	# ink against the measured parchment
-	var ink: Color = UITheme.INK
+	var probe := Button.new()
+	probe.text = "Probe"
+	UITheme.style_button(probe)
+	var sb := probe.get_theme_stylebox("normal") as StyleBoxTexture
+	probe.free()
+	if sb == null or sb.texture == null:
+		_fails += 1; print("FAIL a styled button has no frame texture at all"); return
+
+	var ink: Color = UITheme.ink_for(sb.texture)
 	var ink_l: float = 0.2126 * ink.r + 0.7152 * ink.g + 0.0722 * ink.b
-	var img := Image.load_from_file(UITheme.BUTTON_ART)
-	var parch := 0.0
+	var img := sb.texture.get_image()
+	var face := 0.0
 	if img != null:
+		if img.is_compressed():
+			img.decompress()
 		var w := img.get_width()
 		var h := img.get_height()
 		var tot := 0.0
@@ -132,12 +146,15 @@ func _painted_ui_is_legible() -> void:
 				var c := img.get_pixel(x, y)
 				tot += (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) * c.a
 				n += 1
-		parch = tot / maxf(1.0, float(n))
-	var contrast: float = (parch + 0.05) / (ink_l + 0.05)
-	print("  button ink on parchment: %.1f:1" % contrast)
+		face = tot / maxf(1.0, float(n))
+	var lighter: float = maxf(face, ink_l)
+	var darker: float = minf(face, ink_l)
+	var contrast: float = (lighter + 0.05) / (darker + 0.05)
+	print("  button ink on frame face (%s): %.1f:1" % [
+		sb.texture.resource_path.get_file(), contrast])
 	if contrast < 4.5:
 		_fails += 1
-		print("FAIL button text is %.1f:1 on the parchment — need 4.5:1" % contrast)
+		print("FAIL button text is %.1f:1 on its own frame — need 4.5:1" % contrast)
 
 	# the nine-slice must not exceed the shortest button any screen builds
 	var need: int = UITheme.min_button_height()

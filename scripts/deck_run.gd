@@ -56,6 +56,7 @@ func _build_ui() -> void:
 	root.add_child(spacer_bot)
 
 	var coll := Button.new()
+	UITheme.style_button(coll)
 	coll.text = "Collection"
 	coll.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
 	root.add_child(coll)
@@ -75,9 +76,8 @@ func _refresh() -> void:
 		GameState.hp, GameState.max_hp, GameState.run_deck.size(),
 		MetaState.gold, MetaState.relics.size()]
 	UI.hoverable(status_label, "AT RISK: found this run, but only kept if you beat the boss or use an Escape Rope.")
-	status_label.text += "    AT RISK: %d cards, %d gold    Ropes %d" % [
-		GameState.escrow_cards.size(), GameState.escrow_gold,
-		MetaState.item_count("escape_rope")]
+	status_label.text += "    %s    Ropes %d" % [
+		GameState.risk_line(), MetaState.item_count("escape_rope")]
 
 	if tv.is_complete():
 		reveal_label.text = "The stack is empty."

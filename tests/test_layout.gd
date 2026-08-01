@@ -37,6 +37,25 @@ func _const_of(path: String, name: String, fallback: float) -> float:
 				return float(l.substr(eq + 1).strip_edges())
 	return fallback
 
+## How many entries a `const NAME := [...]` literal has, read out of source for the
+## same reason `_const_of` is. Returns -1 if it is not there, which reads as a
+## mismatch rather than as a pass.
+func _list_len(path: String, decl: String) -> int:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return -1
+	var text := f.get_as_text()
+	f.close()
+	var at := text.find(decl)
+	if at < 0:
+		return -1
+	var open := text.find("[", at)
+	var close := text.find("]", open)
+	if open < 0 or close < 0:
+		return -1
+	var inner := text.substr(open + 1, close - open - 1).strip_edges()
+	return 0 if inner.is_empty() else inner.split(",").size()
+
 func _init() -> void:
 	var fails := 0
 	var window := Vector2(
@@ -97,33 +116,77 @@ func _init() -> void:
 	print("  (info: dice board %d spaces = %.0fpx, window %.0fpx)" % [
 		dice.track.size(), board_w, window.x])
 
-	# --- the isometric floor has NO scrolling, so it has to fit ---
+	# --- the isometric floor is a WINDOW onto a bigger plate ---
 	#
-	# The graph scrolls and the dice board scrolls; the floor is one drawn diamond
-	# grid with a fixed footprint, which means the grid size and the tile size are
-	# only safe *together*. Growing ISO_GRID by two, or drawing on a bigger tile,
-	# would push rooms off the bottom of a screen with nothing to scroll — and a
-	# drawn Control cannot report that, because it has no children to measure.
-	# Both numbers are read from source, never restated here.
+	# The graph scrolls and the dice board scrolls; the floor used to do neither, so
+	# the grid size and the tile size were only safe *together* and ISO_GRID could
+	# not grow at all — at 6x6 and 116x58 the plate already drew 406px into 460px of
+	# room, and 7x7 would not have fitted. It now has a camera (D77), which moves the
+	# constraint rather than removing it: what must fit is VIEW_W/VIEW_H, and the
+	# plate must be BIGGER than that or the camera is dead code and the floor has
+	# stopped being somewhere you discover. All four numbers are read from source,
+	# never restated here.
 	var tile_w := _const_of("res://scripts/iso_run.gd", "TILE_W", 96.0) * scale
 	var tile_h := _const_of("res://scripts/iso_run.gd", "TILE_H", 48.0) * scale
+	var view_w := _const_of("res://scripts/iso_run.gd", "VIEW_W", 1040.0) * scale
+	var view_h := _const_of("res://scripts/iso_run.gd", "VIEW_H", 420.0) * scale
 	var span := float(Balance.ISO_GRID * 2)
-	var floor_w := span * tile_w * 0.5
-	var floor_h := span * tile_h * 0.5 + tile_h
+	var plate_w := span * tile_w * 0.5
+	var plate_h := span * tile_h * 0.5 + tile_h
 	# the header, the two text lines and the row of move buttons live in the same
 	# column, so the floor cannot have the whole window
 	var chrome := 260.0 * scale
-	if floor_w > window.x:
+	if view_w > window.x:
 		fails += 1
-		print("FAIL the isometric floor is %.0fpx wide in a %.0fpx window and does not scroll" % [
-			floor_w, window.x])
-	if floor_h > window.y - chrome:
+		print("FAIL the isometric view is %.0fpx wide in a %.0fpx window" % [view_w, window.x])
+	if view_h > window.y - chrome:
 		fails += 1
-		print("FAIL the isometric floor is %.0fpx tall with only %.0fpx of room and does not scroll" % [
-			floor_h, window.y - chrome])
-	print("  (info: iso floor %dx%d on %.0fx%.0f tiles = %.0fx%.0fpx, window %.0fx%.0f)" % [
-		Balance.ISO_GRID, Balance.ISO_GRID, tile_w, tile_h, floor_w, floor_h,
-		window.x, window.y])
+		print("FAIL the isometric view is %.0fpx tall with only %.0fpx of room" % [
+			view_h, window.y - chrome])
+	if plate_w <= view_w or plate_h <= view_h:
+		fails += 1
+		print("FAIL the iso plate (%.0fx%.0f) fits inside its own view (%.0fx%.0f) — the camera does nothing and the floor has no hidden ground" % [
+			plate_w, plate_h, view_w, view_h])
+	if not _defines("res://scripts/iso_run.gd", "func _camera_for"):
+		fails += 1
+		print("FAIL the iso plate is larger than the window with no camera to move it")
+	print("  (info: iso plate %dx%d on %.0fx%.0f tiles = %.0fx%.0fpx, viewed through %.0fx%.0f, window %.0fx%.0f)" % [
+		Balance.ISO_GRID, Balance.ISO_GRID, tile_w, tile_h, plate_w, plate_h,
+		view_w, view_h, window.x, window.y])
+
+	# --- every direction the floor offers has a key that walks it (D87) ---
+	#
+	# The failure this catches is silent by construction: a direction with no binding
+	# behaves exactly like a direction with a wall in it, so the only symptom is that
+	# one quarter of the floor is unreachable by keyboard and nothing says why. Add a
+	# fifth entry to `TraversalIso.DIRS` and this is what notices.
+	var bound := {}
+	var iso_src := FileAccess.open("res://scripts/iso_run.gd", FileAccess.READ)
+	if iso_src != null:
+		var body := iso_src.get_as_text()
+		iso_src.close()
+		# read the MOVE_KEYS block out of source, for the same reason every other
+		# constant here is read out of source: loading a UI script pulls in autoloads
+		# that a --script run has not registered, and that hangs rather than fails
+		var block := body.substr(body.find("const MOVE_KEYS"))
+		block = block.substr(0, block.find("}"))
+		for line in block.split("\n"):
+			for part in String(line).split(","):
+				var kv: String = String(part).split("#")[0].strip_edges()
+				if kv.begins_with("KEY_") and kv.contains(":"):
+					bound[int(kv.split(":")[1].strip_edges())] = true
+	for d in TraversalIso.DIRS.size():
+		if not bound.has(d):
+			fails += 1
+			print("FAIL iso direction %s (%s) has no movement key — it can only be clicked" % [
+				d, TraversalIso.DIR_ARROW[d]])
+	var dir_keys := _list_len("res://scripts/iso_run.gd", "const DIR_KEY")
+	if dir_keys != TraversalIso.DIRS.size():
+		fails += 1
+		print("FAIL DIR_KEY names %d directions and there are %d — a move button will show the wrong letter or crash" % [
+			dir_keys, TraversalIso.DIRS.size()])
+	print("  (info: iso binds %d of %d directions to keys, %d letters on the buttons)" % [
+		bound.size(), TraversalIso.DIRS.size(), dir_keys])
 
 	# --- every traversal must offer something pressable at every step ---
 	# (a state with no options and no completion is a soft dead end)
@@ -132,7 +195,8 @@ func _init() -> void:
 			var t := Traversal.make(kind)
 			t.generate(Balance.dungeon(did))
 			var steps := 0
-			while not t.is_complete() and steps < 60:
+			# clear of a real iso tour, which is tens of steps on a ~33-tile floor
+			while not t.is_complete() and steps < 400:
 				steps += 1
 				var o := t.options()
 				if o.is_empty():

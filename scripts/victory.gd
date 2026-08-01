@@ -2,7 +2,7 @@
 extends Control
 
 func _ready() -> void:
-	var col := UI.screen(self, "The Maw Is Quiet")
+	var col := UI.screen(self, "The Maw Is Quiet", "", "victory", true)
 	UI.label(col, "You cleared every door anyone had mapped, and then the one nobody had.")
 	UI.label(col, "")
 

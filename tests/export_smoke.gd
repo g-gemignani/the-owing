@@ -14,18 +14,22 @@ func _init() -> void:
 	var fails := 0
 
 	# --- directory-listed art must resolve inside a pack ---
-	var sprites: int = PixelArt.enemy_sprites().size()
+	#
+	# This is the check that caught the .import/.remap trap: an exported PCK does not
+	# contain the source PNG, so code that listed `.png` found every asset in
+	# development and ZERO in a shipped build. The enemy plates are loaded by PATH
+	# rather than by listing (D89), which is immune to that — but the archetype
+	# catalogue is still enumerated, and a plate that fails to resolve after export is
+	# exactly the failure no dev run can show.
 	var archetypes: int = PixelArt.archetype_ids().size()
-	if sprites == 0:
-		fails += 1; print("FAIL no enemy sprites in the exported pack")
 	if archetypes == 0:
 		fails += 1; print("FAIL no enemy archetypes in the exported pack")
-	var no_sprite := 0
+	var no_plate := 0
 	for a in PixelArt.archetype_ids():
-		if PixelArt.enemy_sprite(a) == null:
-			no_sprite += 1
-	if no_sprite > 0:
-		fails += 1; print("FAIL %d archetypes have no sprite after export" % no_sprite)
+		if PixelArt.enemy_art(a) == null:
+			no_plate += 1
+	if no_plate > 0:
+		fails += 1; print("FAIL %d archetypes have no plate after export" % no_plate)
 	if PixelArt.card_ids().size() == 0:
 		fails += 1; print("FAIL no cards discoverable after export")
 
@@ -72,8 +76,8 @@ func _init() -> void:
 			fails += 1; print("FAIL scene %s has a script that does not compile" % scene)
 		inst.free()
 
-	print("  packed: %d sprites, %d archetypes, %d cards" % [
-		sprites, archetypes, PixelArt.card_ids().size()])
+	print("  packed: %d archetypes (%d plated), %d cards" % [
+		archetypes, archetypes - no_plate, PixelArt.card_ids().size()])
 	if fails == 0:
 		print("EXPORT TEST: PASS (art, content and scenes all resolve inside a pack)")
 	else:

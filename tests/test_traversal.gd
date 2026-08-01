@@ -53,7 +53,11 @@ func _init() -> void:
 				var encounters := 0
 				var bosses := 0
 				var last_was_boss := false
-				while not tv.is_complete() and steps < 100:
+				# An iso dungeon is several floors of rooms now (D79), so a full walk is
+				# tens of steps rather than a dozen — this cap is a runaway guard, not a
+				# budget. What actually bounds the walking is the moves-per-encounter
+				# assertion further down.
+				while not tv.is_complete() and steps < 400:
 					steps += 1
 					var opts := tv.options()
 					if opts.is_empty():
@@ -188,95 +192,233 @@ func _init() -> void:
 
 	# --- iso specifics ---
 	#
-	# The floor is the one model whose budget can leak GEOMETRICALLY: if the grid
-	# cannot hold a room per budgeted encounter, the surplus is dropped on the floor
-	# during generation and the dungeon quietly becomes cheaper than the same
-	# dungeon walked any other way. Nothing above would notice — every other
-	# assertion is about the walk, not the map it was cut from.
+	# The floor is the one model whose budget can leak GEOMETRICALLY — an encounter that
+	# finds no tile to stand on makes a dungeon quietly cheaper than the same dungeon
+	# walked any other way, and nothing above would notice, because every assertion up
+	# there is about the walk and not the building it was cut from. Since D79 there is a
+	# second way to fail that no encounter count can see: a dungeon can be correct and
+	# still bury the card game in walking, which is what ISO_MOVES_PER_ENCOUNTER_MAX is
+	# for.
+	var moves_total := 0.0
+	var encs_total := 0.0
 	for did4 in Balance.DUNGEONS:
 		var dd5 := Balance.dungeon(did4)
-		var iso := TraversalIso.new()
-		iso.generate(dd5)
-		var want: int = Traversal.standard_encounters(dd5).size() + 2
-		if iso.rooms != want:
-			fails += 1
-			print("FAIL ISO %s: carved %d rooms for a budget that needs %d — ISO_GRID is too small" % [
-				did4, iso.rooms, want])
-		var placed := 0
-		var bosses2 := 0
-		for e in iso.enc:
-			if int(e) >= 0:
-				placed += 1
-			if int(e) == Traversal.Enc.BOSS:
-				bosses2 += 1
-		if placed != want - 1:
-			fails += 1
-			print("FAIL ISO %s: %d encounters on a floor that budgeted %d" % [
-				did4, placed, want - 1])
-		if bosses2 != 1:
-			fails += 1; print("FAIL ISO %s: %d stairs down" % [did4, bosses2])
+		# every dungeon, several times: room placement is rejection-sampled, so one
+		# generation per dungeon would miss the shapes that only come up sometimes
+		for trial4 in 8:
+			var iso := TraversalIso.new()
+			iso.generate(dd5)
+			var budget4: int = Traversal.standard_encounters(dd5).size() + 1  # + the boss
+			if iso.quota != budget4:
+				fails += 1
+				print("FAIL ISO %s: quota %d for a dungeon that budgeted %d — floors must SPLIT the budget, not multiply it" % [
+					did4, iso.quota, budget4])
+			if iso.floors != Balance.iso_floors_for(dd5.difficulty if dd5 != null else 1):
+				fails += 1
+				print("FAIL ISO %s: %d floors" % [did4, iso.floors])
+			# --- the floor is a building, not a blob ---
+			if iso.rooms < 2:
+				fails += 1
+				print("FAIL ISO %s: %d chambers — a floor with one room has no corridors and no choice at the door" % [
+					did4, iso.rooms])
+			# Every carved tile must be reachable from the entrance. Corridors are dug
+			# after the rooms are placed, so an off-by-one in the digger strands a whole
+			# chamber — which reads in play as a floor that cannot be finished, and in a
+			# diff as nothing at all.
+			var reach4: Array = iso._dist_from(iso.pos)
+			var stranded := 0
+			for i in iso.enc.size():
+				if int(iso.enc[i]) != TraversalIso.WALL and int(reach4[i]) < 0:
+					stranded += 1
+			if stranded > 0:
+				fails += 1
+				print("FAIL ISO %s: %d tiles walled off from the entrance" % [did4, stranded])
+			# The entrance must be in a chamber, and must offer a choice like the first
+			# row of every other model.
+			if int(iso.room_of[iso.pos]) < 0:
+				fails += 1; print("FAIL ISO %s: the run opens in a corridor" % did4)
+			if int(iso.enc[iso.pos]) != TraversalIso.EMPTY:
+				fails += 1; print("FAIL ISO %s: the entrance tile holds something" % did4)
+			var doors4 := 0
+			for n in iso._neighbours(iso.pos):
+				if int(iso.enc[n]) != TraversalIso.WALL:
+					doors4 += 1
+			if doors4 < 2:
+				fails += 1
+				print("FAIL ISO %s: the entrance has %d exit(s) — no decision at the door" % [
+					did4, doors4])
+			# --- every fight on the floor is cast, and cast from the right pool ---
+			#
+			# The point of casting at generation time is that the creature STANDING there is
+			# the creature you fight. An uncast fight silently falls back to combat rolling
+			# its own, which looks like nothing and undoes the whole feature — so absence is
+			# a failure, not a default.
+			var normal_pool: Array = Balance.roster_pool(dd5, Balance.Tier.NORMAL)
+			var elite_pool: Array = Balance.roster_pool(dd5, Balance.Tier.ELITE)
+			for i in iso.enc.size():
+				var e4 := int(iso.enc[i])
+				if e4 != Traversal.Enc.COMBAT and e4 != Traversal.Enc.ELITE:
+					continue
+				var cast4 := String(iso.enemy_of.get(i, ""))
+				if cast4 == "":
+					fails += 1
+					print("FAIL ISO %s: a fight on the floor has no creature cast" % did4)
+					continue
+				var pool4: Array = normal_pool if e4 == Traversal.Enc.COMBAT else elite_pool
+				if not pool4.has(cast4):
+					fails += 1
+					print("FAIL ISO %s: cast '%s' is not in the tier's roster pool" % [did4, cast4])
+				# A boss must never be cast as ordinary furniture: it is named and fixed,
+				# and leaking one into a corridor leaks its signature into a trash fight.
+				if Balance.ROSTER[Balance.Tier.BOSS].has(cast4):
+					fails += 1
+					print("FAIL ISO %s: cast a BOSS ('%s') as an ordinary fight" % [did4, cast4])
+			for m4 in iso.mons:
+				if String(m4.get("enemy", "")) == "":
+					fails += 1
+					print("FAIL ISO %s: a wanderer has no creature cast" % did4)
+				elif not normal_pool.has(String(m4["enemy"])):
+					fails += 1
+					print("FAIL ISO %s: wanderer cast '%s' is off-roster" % [did4, m4["enemy"]])
+			# a wanderer must be ON bare ground, reachable, and never on the entrance
+			for m in iso.mons:
+				if int(iso.enc[int(m["cell"])]) != TraversalIso.EMPTY:
+					fails += 1; print("FAIL ISO %s: a wanderer shares a tile with something" % did4)
+				if int(m["cell"]) == iso.pos:
+					fails += 1; print("FAIL ISO %s: a wanderer spawned on the entrance" % did4)
+				if int(reach4[int(m["cell"])]) < 0:
+					fails += 1; print("FAIL ISO %s: a wanderer spawned in a sealed pocket" % did4)
 
+			# --- pacing: walk the whole dungeon and count MOVES, not encounters ---
+			#
+			var moves := 0
+			var got := 0
+			while not iso.is_complete() and moves < 400:
+				var o4 := iso.options()
+				if o4.is_empty():
+					fails += 1
+					print("FAIL ISO %s: nothing to press" % did4)
+					break
+				moves += 1
+				if not iso.select(0).is_empty():
+					got += 1
+					iso.clear_pending()
+			if not iso.is_complete():
+				fails += 1
+				print("FAIL ISO %s: did not finish in %d moves" % [did4, moves])
+			moves_total += float(moves)
+			encs_total += float(maxi(1, got))
+
+	var per_enc := moves_total / maxf(1.0, encs_total)
+	if per_enc > Balance.ISO_MOVES_PER_ENCOUNTER_MAX:
+		fails += 1
+		print("FAIL ISO: %.1f moves per encounter, ceiling is %.1f — the walking is burying the card game" % [
+			per_enc, Balance.ISO_MOVES_PER_ENCOUNTER_MAX])
+	else:
+		print("  (info: ISO %.1f moves per encounter, ceiling %.1f)" % [
+			per_enc, Balance.ISO_MOVES_PER_ENCOUNTER_MAX])
+
+	# Encounters must be SPREAD, not clumped. A random subset clumps, and three
+	# encounters in adjoining tiles read as one room with three doors while the open
+	# ground ends up in a corner nobody visits. Farthest-point placement is what turns
+	# the extra tiles into travel, so the property it exists for is asserted.
 	var iso2 := TraversalIso.new()
 	iso2.generate(null)
-	# the stair must be the furthest room from the entrance: a floor that can be
-	# crossed in three rooms is a floor that skips the budget
-	var d_entry: Array = iso2._dist_from(iso2.pos)
-	var stair := -1
-	var furthest := 0
+	var touching := 0
 	for i in iso2.enc.size():
-		if int(iso2.enc[i]) == Traversal.Enc.BOSS:
-			stair = i
-		if int(iso2.enc[i]) != TraversalIso.WALL:
-			furthest = maxi(furthest, int(d_entry[i]))
-	if stair < 0 or int(d_entry[stair]) != furthest:
+		if int(iso2.enc[i]) < 0:
+			continue
+		for n in iso2._neighbours(i):
+			if int(iso2.enc[n]) >= 0:
+				touching += 1
+	if touching > 0:
 		fails += 1
-		print("FAIL ISO: the stair is %d steps in and the floor reaches %d — it is not the far end" % [
-			int(d_entry[stair]) if stair >= 0 else -1, furthest])
-	# the entrance is somewhere you have already been, not a free encounter
-	if int(iso2.enc[iso2.pos]) != TraversalIso.EMPTY:
-		fails += 1; print("FAIL ISO: the entrance room holds an encounter")
-	# ...and it must offer a choice, like the first row of every other model. The
-	# carve seeds a stub with one door, so this is the assertion that keeps the
-	# entrance from being picked for convenience.
-	var entry_doors := 0
-	for n in iso2._neighbours(iso2.pos):
-		if int(iso2.enc[n]) != TraversalIso.WALL:
-			entry_doors += 1
-	if entry_doors < 2:
+		print("FAIL ISO: %d encounters adjoin another — placement clumped instead of spreading" % touching)
+	# Every style in the table has to produce a floor that satisfies everything above,
+	# or a dungeon nobody happened to test ships broken. Checked through the styles
+	# rather than through the dungeons, so adding a style is covered too.
+	for sname in Balance.ISO_STYLES:
+		var seen_rooms := 0
+		for trial5 in 12:
+			var iso3 := TraversalIso.new()
+			iso3.dungeon = null
+			iso3.w = Balance.ISO_GRID
+			iso3.h = Balance.ISO_GRID
+			iso3.enc = []
+			iso3.room_of = []
+			for i in Balance.ISO_GRID * Balance.ISO_GRID:
+				iso3.enc.append(TraversalIso.WALL)
+				iso3.room_of.append(-1)
+			var rects: Array = iso3._place_rooms(Balance.ISO_STYLES[sname], Balance.iso_tiles_per_floor(2))
+			seen_rooms += rects.size()
+			if rects.size() < 2:
+				fails += 1
+				print("FAIL ISO style %s: placed %d chambers" % [sname, rects.size()])
+		print("  (info: iso style %-10s averages %.1f chambers)" % [
+			sname, float(seen_rooms) / 12.0])
+	# Style and terrain are looked up by dungeon id with a silent default, so a typo in
+	# either table does not fail — it just quietly gives that dungeon the fallback and the
+	# variety it was supposed to have goes missing. Both tables are checked against the
+	# real dungeon list and against the sets they index.
+	for did5 in Balance.ISO_STYLE_OF:
+		if not Balance.DUNGEONS.has(did5):
+			fails += 1
+			print("FAIL ISO: style table names '%s', which is not a dungeon" % did5)
+		if not Balance.ISO_STYLES.has(Balance.ISO_STYLE_OF[did5]):
+			fails += 1
+			print("FAIL ISO: %s wants style '%s', which does not exist" % [
+				did5, Balance.ISO_STYLE_OF[did5]])
+	for did6 in Balance.ISO_TERRAIN_OF:
+		if not Balance.DUNGEONS.has(did6):
+			fails += 1
+			print("FAIL ISO: terrain table names '%s', which is not a dungeon" % did6)
+		if not Balance.ISO_TERRAINS.has(Balance.ISO_TERRAIN_OF[did6]):
+			fails += 1
+			print("FAIL ISO: %s wants terrain '%s', which is not in ISO_TERRAINS" % [
+				did6, Balance.ISO_TERRAIN_OF[did6]])
+	# ...and both axes have to actually vary, or the samey test (D81) is being failed
+	# silently: twelve dungeons all defaulting to the same pair would pass every
+	# assertion above.
+	var styles_used := {}
+	var terrains_used := {}
+	for did7 in Balance.DUNGEONS:
+		styles_used[String(Balance.ISO_STYLE_OF.get(did7, Balance.ISO_STYLE_DEFAULT))] = true
+		terrains_used[Balance.iso_terrain(did7)] = true
+	if styles_used.size() < 3 or terrains_used.size() < 3:
 		fails += 1
-		print("FAIL ISO: the entrance has %d door(s) — the run opens on no decision" % entry_doors)
-	# The floor must be deep from where you come in. Taking the most-connected room
-	# as the entrance put it in the middle of the plate, where the furthest room —
-	# and therefore the stair — was TWO steps away and the whole floor could be
-	# skipped by walking into it. Measured over 3000 floors after the fix: 4 to 8
-	# steps, mode 5.
-	if furthest < 3:
+		print("FAIL ISO: %d styles and %d terrains across 12 dungeons — not enough variety to tell them apart" % [
+			styles_used.size(), terrains_used.size()])
+	else:
+		print("  (info: iso uses %d of %d styles and %d of %d terrains)" % [
+			styles_used.size(), Balance.ISO_STYLES.size(),
+			terrains_used.size(), Balance.ISO_TERRAINS.size()])
+	# Every archetype in the game has to land in a family, and the families have to be
+	# populated — a derivation that put all 35 in one bucket would give every creature the
+	# same silhouette while passing every assertion above, which is the whole thing this
+	# feature exists to avoid.
+	var fam_count := {}
+	for fam in Balance.ISO_FAMILIES:
+		fam_count[fam] = 0
+	for tier5 in [Balance.Tier.NORMAL, Balance.Tier.ELITE]:
+		for eid in Balance.ROSTER[tier5]:
+			var fam2 := Balance.iso_family(String(eid))
+			if not Balance.ISO_FAMILIES.has(fam2):
+				fails += 1
+				print("FAIL ISO: '%s' derives family '%s', which is not a family" % [eid, fam2])
+			else:
+				fam_count[fam2] = int(fam_count[fam2]) + 1
+	var empty_fams := 0
+	for fam in fam_count:
+		if int(fam_count[fam]) == 0:
+			empty_fams += 1
+	if empty_fams > 0:
 		fails += 1
-		print("FAIL ISO: the floor only reaches %d steps from the entrance — that is a puddle" % furthest)
-	# every option must be a step to an adjoining room, and the stair must sort LAST
-	# while anything else is unexplored (that ordering is what makes a greedy
-	# walker — the simulator, and a player leaning on the first button — spend a
-	# whole floor instead of beelining for the exit)
-	for o in iso2.options():
-		if not o.has("cell") or not o.has("label"):
-			fails += 1; print("FAIL ISO: option is not a move"); break
-	# the torch must pay for a straight walk to the stair, or the price of the dark
-	# is levied on a player who had no choice but to walk
-	if iso2.torch < furthest:
-		fails += 1
-		print("FAIL ISO: %d torch for a stair %d steps away — reaching it costs HP by force" % [
-			iso2.torch, furthest])
-	# ...and it must NOT pay for stripping the whole floor twice over, or light is
-	# decoration and the model has no cost at all
-	if iso2.torch >= (iso2.rooms - 1) * 2:
-		fails += 1
-		print("FAIL ISO: %d torch on a %d-room floor — wandering is free" % [
-			iso2.torch, iso2.rooms])
-	print("  (info: iso floor %d rooms, stair %d steps in, torch %d)" % [
-		iso2.rooms, furthest, iso2.torch])
-	# the dark is priced by depth, like every other cost in a scaling game
-	if Balance.iso_dark_cost(8) <= Balance.iso_dark_cost(1):
-		fails += 1; print("FAIL a step in the dark costs no more at depth 8 than at depth 1")
+		print("FAIL ISO: %d silhouette famil(y/ies) match no enemy — %s" % [
+			empty_fams, str(fam_count)])
+	else:
+		print("  (info: iso silhouettes %s)" % str(fam_count))
+	print("  (info: iso floor %d tiles, %d chambers, %d on it, %d prowling, %d floors)" % [
+		iso2.tiles, iso2.rooms, iso2.content, iso2.mons.size(), iso2.floors])
 
 	# --- a dungeon may have its own shape, within reason -----------------------
 	#
@@ -297,12 +439,23 @@ func _init() -> void:
 			total += int(mix[k2])
 		shapes[did3] = "%d/%d/%d/%d/%d/%d" % [mix["combat"], mix["elite"], mix["rest"],
 			mix["shop"], mix["event"], mix["treasure"]]
-		if total < 8 or total > 11:
+		# The band moved with chests (D84): 8-11 was written when a dungeon held one
+		# treasure. What it is really protecting is unchanged — a dungeon must not
+		# quietly become twice the run its rating claims — so the band tracks the
+		# shape rather than being deleted.
+		if total < 12 or total > 15:
 			fails += 1
-			print("FAIL %s runs %d encounters; the band is 8-11" % [did3, total])
+			print("FAIL %s runs %d encounters; the band is 12-15" % [did3, total])
 		if fights < 3 or fights > 6:
 			fails += 1
 			print("FAIL %s has %d fights; the band is 3-6" % [did3, fights])
+		# ...and the fights must not be DROWNED by the chests. This is the pacing
+		# question D84 actually risks: 5 chests and 4 fights is an expedition, 5
+		# chests and 2 fights is a shopping trip with monsters in it.
+		if float(fights) / float(maxi(1, total)) < 0.28:
+			fails += 1
+			print("FAIL %s is %.0f%% fights; chests have drowned the card game" % [
+				did3, 100.0 * float(fights) / float(maxi(1, total))])
 		# something other than fighting has to happen, or the dungeon is a treadmill
 		if int(mix["rest"]) + int(mix["shop"]) + int(mix["event"]) + int(mix["treasure"]) < 2:
 			fails += 1

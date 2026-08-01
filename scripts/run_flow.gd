@@ -16,11 +16,21 @@ static func enter_node(view: Node, node: Dictionary, on_resolved: Callable = Cal
 			Audio.play("ui_confirm")
 			_rest_choice(view, node, on_resolved)
 			return false
-		GameState.NodeType.EVENT, GameState.NodeType.TREASURE:
-			Audio.play("treasure" if t == GameState.NodeType.TREASURE else "event")
+		GameState.NodeType.EVENT:
+			Audio.play("event")
 			GameState.pending = node
 			GameState.autosave()
 			view.get_tree().change_scene_to_file("res://scenes/Encounter.tscn")
+			return false
+		GameState.NodeType.TREASURE:
+			# Chests used to share the event screen, and once they grew tiers, locks
+			# and keys (D84) that stopped being a saving and started being a lie: an
+			# event is a DECISION with options, a chest is a THING you found and open
+			# or fail to. Same screen made them read as the same kind of moment.
+			Audio.play("treasure")
+			GameState.pending = node
+			GameState.autosave()
+			view.get_tree().change_scene_to_file("res://scenes/Chest.tscn")
 			return false
 		GameState.NodeType.SHOP:
 			Audio.play("ui_open")
@@ -46,11 +56,18 @@ static func _rest_choice(view: Node, node: Dictionary, on_resolved: Callable) ->
 		return
 
 	var veil := ColorRect.new()
-	veil.color = Color(0, 0, 0, 0.82)
+	# Opaque black under the campfire art, because this overlay sits on top of a
+	# live traversal view — a translucent veil would leave the floor grid showing
+	# through the picture. With no art installed it stays the flat 0.82 veil that
+	# shipped before, which reads as "the map, dimmed" rather than as a room.
+	var lit := PixelArt.scene_art("rest") != null
+	veil.color = Color(0, 0, 0, 1.0 if lit else 0.82)
 	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
 	veil.z_index = 100
 	veil.mouse_filter = Control.MOUSE_FILTER_STOP
 	host.add_child(veil)
+	if lit:
+		UI.scene_backdrop(veil, "rest")
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UITheme.pad(margin)

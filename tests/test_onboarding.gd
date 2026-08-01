@@ -24,24 +24,36 @@ func _init() -> void:
 			open += 1
 	if open < 2:
 		fails += 1; print("FAIL only %d dungeon(s) open on a fresh save — no first decision" % open)
-	# and those openers should differ, or the choice is cosmetic
+	# And those openers must DIFFER, or the first choice in the game is cosmetic.
+	#
+	# What makes them differ moved in D88. Until then the openers used three different
+	# traversal models, and "how many kinds?" was the whole test. Every dungeon is now the
+	# isometric crawl, so the difference has to come from inside that one model — its
+	# architecture and its surface (D82) — and this asserts the thing that actually carries
+	# the variety now instead of the thing that used to. Counting kinds here would pass
+	# forever the moment a second model came back, whatever the openers looked like.
 	var kinds := {}
+	var shapes := {}
 	var gated_builds := {}
 	for did in Balance.DUNGEONS:
 		if Balance.effective_gate(did) != 0:
 			continue
 		var d := Balance.dungeon(did)
 		kinds[d.traversal] = true
+		shapes["%s/%s" % [
+			String(Balance.ISO_STYLE_OF.get(did, Balance.ISO_STYLE_DEFAULT)),
+			Balance.iso_terrain(did)]] = true
 		for c in d.exclusive_cards:
 			for b in Balance.all_builds():
 				if c in b.cards:
 					gated_builds[b.id] = true
-	if kinds.size() < 2:
-		fails += 1; print("FAIL every opening dungeon uses the same traversal")
+	if shapes.size() < 2:
+		fails += 1
+		print("FAIL every opening dungeon is the same place: one %s" % str(shapes.keys()))
 	if gated_builds.size() < 2:
 		fails += 1; print("FAIL opening dungeons gate cards for only %d build(s)" % gated_builds.size())
-	print("  (info: %d dungeons open at start, %d traversal kinds, gating %d builds)" % [
-		open, kinds.size(), gated_builds.size()])
+	print("  (info: %d dungeons open at start, %d traversal kinds, %d shapes %s, gating %d builds)" % [
+		open, kinds.size(), shapes.size(), str(shapes.keys()), gated_builds.size()])
 
 	# --- every starter kit must be playable AND leave deckbuilding slack ---
 	if MetaState_kits(m).size() < 3:

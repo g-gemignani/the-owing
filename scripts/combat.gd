@@ -60,9 +60,15 @@ func _ready() -> void:
 	else:
 		var dd := GameState.dungeon_data()
 		var roster: Array = Array(dd.enemy_roster) if dd != null and dd.has_roster() else []
+		# A traversal may already have decided WHICH creature this is — the iso model does,
+		# at generation time, so that the thing standing on the tile is the thing you
+		# fight (D85). `forced_archetype` is the parameter that has always existed for
+		# this; before now the run path passed "" and let combat roll, which is why the
+		# floor could show a spider and hand over a brute. Models that do not cast their
+		# fights simply omit the key and nothing changes for them.
 		eng.setup(GameState.run_deck, GameState.hp, GameState.max_hp, GameState.dungeon, tier,
-			"", MetaState.relic_data(), roster, GameState.run_power,
-			dd.boss if dd != null else "")
+			String(GameState.pending.get("enemy", "")), MetaState.relic_data(), roster,
+			GameState.run_power, dd.boss if dd != null else "")
 		_snapshot()
 	_refresh()
 	# rects only exist after a frame, and the fan is measured against them
@@ -257,6 +263,7 @@ func _build_ui() -> void:
 
 	# End Turn is pressed once a turn and never in a hurry. A corner button.
 	end_btn = Button.new()
+	UITheme.style_button(end_btn)
 	end_btn.text = "End Turn"
 	end_btn.custom_minimum_size = Vector2(UITheme.px(150), UITheme.button_height(38))
 	end_btn.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -889,6 +896,20 @@ func _win() -> void:
 			var rd := load(MetaState.RELIC_CATALOG[won_relic]) as RelicData
 			relic_line = "  Took %s (at risk)." % (rd.name if rd != null else won_relic)
 			Audio.play("treasure")
+		# ...and a pack, so the elite is the middle rung of the three pack sources
+		# (D81): a chest is usually worn, an elite is usually sealed, a boss is
+		# never worn. Choosing to take the hard fight is what buys the better tier.
+		GameState.earn_pack(Balance.PACK_ELITE)
+		var ep: Dictionary = GameState.escrow_packs.back()
+		relic_line += "  Sealed: %s." % Balance.pack_title(
+			String(ep.get("tier", Balance.PACK_WORN)), String(ep.get("build", "")))
+	# Keys drop from fights as well as chests (D84), so a locked chest is a reason
+	# to take a fight rather than a reason to have walked somewhere else earlier.
+	var chance: int = Balance.KEY_ELITE_CHANCE if tier == Balance.Tier.ELITE else Balance.KEY_FIGHT_CHANCE
+	if randi() % 100 < chance:
+		GameState.keys += 1
+		relic_line += "  Took a key."
+
 	var healed := "  Healed %d." % relic_heal if relic_heal > 0 else ""
 	status_label.text = "Encounter cleared. +%d gold (%d at risk).%s%s Choose a reward:" % [
 		g, GameState.escrow_gold, healed, relic_line]
@@ -968,9 +989,11 @@ func _on_reward_picked(card) -> void:
 	if tier == Balance.Tier.BOSS:
 		# dungeon cleared -> mark it, grant a relic, then back to dungeon select (D6)
 		# the boss is the commit point: banked earnings become permanent here
+		# the boss's own pack, earned a moment before everything commits
+		GameState.earn_pack(Balance.PACK_BOSS)
 		var banked := GameState.commit_escrow()
-		GameState.last_haul = "Secured %d cards, %d gold and %d relic(s)." % [
-			banked["cards"], banked["gold"], banked["relics"]]
+		GameState.last_haul = "Secured %d cards, %d gold, %d relic(s) and %d pack(s)." % [
+			banked["cards"], banked["gold"], banked["relics"], banked["packs"]]
 		MetaState.mark_cleared(GameState.dungeon_id)
 		var got := MetaState.grant_relic(Balance.Tier.BOSS)
 		if got != "":
@@ -1015,6 +1038,7 @@ func _lose() -> void:
 		"turns": eng.turn,
 		"forfeited_cards": int(lost["cards"]),
 		"forfeited_gold": int(lost["gold"]),
+		"forfeited_packs": int(lost.get("packs", 0)),
 		"penalty_gold": int(pen["gold_lost"]),
 		"penalty_cards": pen["cards_lost"],
 	}

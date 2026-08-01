@@ -30,9 +30,13 @@ const RARITY_COLOURS := [
 static func tex(name: String) -> Texture2D:
 	return PixelArt.symbol(String(MAP.get(name, name)))
 
-## Pixel sprite for an enemy archetype.
+## The plate for an enemy archetype, or null if one has not been generated. There is
+## no second source any more: the CC0 sprite pool behind this went away with the
+## positional assignment that handed it out (D89), and `combat.gd` already draws an
+## empty footprint box when a plate is missing, which is honest where a wrong sprite
+## was not.
 static func enemy(archetype_id: String) -> Texture2D:
-	return PixelArt.enemy_sprite(archetype_id)
+	return PixelArt.enemy_art(archetype_id)
 
 ## Icon for an encounter kind (Traversal.Enc / GameState.NodeType values).
 static func for_encounter(enc: int) -> Texture2D:
@@ -83,6 +87,14 @@ static func card_family(c: CardData) -> String:
 
 ## The painted card frame if one exists — per rarity first, then the shared one.
 ## Returns null when nobody has drawn them, and `card_style` below is what ships.
+##
+## The margins are the generator's `CARD_BORDER`, in texture pixels, and NOT the
+## 40/40/48/56 that ART_ASSETS specs. A card is 150x132 on screen: a 48px top margin
+## and a 56px bottom one leave 28px of stretchable middle, so Godot scales the
+## margins down and the carved edge draws squashed instead of crisp — the same
+## failure the buttons had (D83). Change these only alongside `gen_ui_kit.gd`.
+const CARD_SLICE := 14
+
 static func card_frame(rarity: int) -> StyleBox:
 	for name in ["frame_card_rarity_%d" % clampi(rarity, 0, 4), "frame_card"]:
 		var tex := PixelArt.ui_kit(name)
@@ -90,10 +102,10 @@ static func card_frame(rarity: int) -> StyleBox:
 			continue
 		var sb := StyleBoxTexture.new()
 		sb.texture = tex
-		sb.texture_margin_left = 40
-		sb.texture_margin_right = 40
-		sb.texture_margin_top = 48
-		sb.texture_margin_bottom = 56
+		sb.texture_margin_left = CARD_SLICE
+		sb.texture_margin_right = CARD_SLICE
+		sb.texture_margin_top = CARD_SLICE
+		sb.texture_margin_bottom = CARD_SLICE
 		return sb
 	return null
 

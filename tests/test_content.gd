@@ -11,10 +11,6 @@
 ## Run: godot --headless --script tests/test_content.gd
 extends SceneTree
 
-## Below this many spare sprites, the next enemy added silently shares a face
-## with an existing one.
-const SPRITE_HEADROOM_MIN := 3
-
 ## UI scripts reference autoloads, which are not registered in a headless
 ## `--script` run, so some things can only be checked as source text.
 func _source_has(path: String, needle: String) -> bool:
@@ -108,16 +104,24 @@ func _init() -> void:
 		if not placed.has(did4):
 			fails += 1; print("FAIL dungeon %s belongs to no zone — unreachable" % did4)
 
-	# --- art capacity: the next enemy must not silently share a face ---
+	# --- every archetype has a plate, and adding one cannot steal another's ---
+	#
+	# This used to measure "sprite headroom": how many CC0 tiles were left in a shared
+	# pool before the next archetype started sharing a face with an existing one. The
+	# pool is gone (D89) and so is the whole failure mode — plates are keyed by
+	# archetype id and generated from each archetype's own fight data, so a new `.tres`
+	# gets its own and steals nobody's. What is left to check is that somebody ran the
+	# generator.
 	var enemies: int = PixelArt.archetype_ids().size()
-	var sprites: int = PixelArt.enemy_sprites().size()
-	var pinned: int = PixelArt.OVERRIDES.size()
-	var headroom: int = (sprites - pinned) - (enemies - pinned)
-	print("  sprite headroom: %d (%d archetypes, %d sprites, %d pinned)" % [
-		headroom, enemies, sprites, pinned])
-	if headroom < SPRITE_HEADROOM_MIN:
+	var plated := 0
+	for aid in PixelArt.archetype_ids():
+		if PixelArt.enemy_art(String(aid)) != null:
+			plated += 1
+	print("  enemy plates: %d of %d archetypes" % [plated, enemies])
+	if plated < enemies:
 		fails += 1
-		print("FAIL only %d spare enemy sprites — add art before adding archetypes" % headroom)
+		print("FAIL %d archetype(s) have no plate — run tools/gen_enemy_art.gd, then --import" % [
+			enemies - plated])
 	var card_headroom: int = PixelArt.CARD_TILES.size() - m.CATALOG.size()
 	print("  card art headroom: %d" % card_headroom)
 	if card_headroom < 0:

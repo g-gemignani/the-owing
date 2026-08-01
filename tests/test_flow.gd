@@ -102,6 +102,18 @@ func _init() -> void:
 	for i in Meta.SLOT_COUNT:
 		Meta.delete_slot(i)
 
+	# --- a chest is not an event, and the routing must keep saying so (D84) ------
+	# They shared one scene until chests grew tiers and locks. A future edit that
+	# points TREASURE back at Encounter.tscn would not fail any other assertion —
+	# both scenes exist and both compile — so the ROUTE is what gets asserted.
+	var flow_src := FileAccess.get_file_as_string("res://scripts/run_flow.gd")
+	if not flow_src.contains("res://scenes/Chest.tscn"):
+		fails += 1; print("FAIL nothing routes to the chest screen any more")
+	var chest_at := flow_src.find("NodeType.TREASURE")
+	var event_at := flow_src.find("NodeType.EVENT")
+	if chest_at < 0 or event_at < 0 or chest_at == event_at:
+		fails += 1; print("FAIL chests and events share a routing branch again")
+
 	if fails == 0:
 		print("FLOW TEST: PASS (scene refs resolve, settings clamp+persist, slots independent)")
 	else:

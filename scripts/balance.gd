@@ -63,8 +63,17 @@ static func max_level(rarity: int) -> int:
 ## * gold is spent as well, which puts fusion in direct competition with the shop
 ##   instead of being free power on the side.
 const FUSE_BASE_COPIES := 3
-## Levels between each +1 to the copy cost.
-const FUSE_COPIES_STEP := 8
+## Levels between each +1 to the copy cost — the curve's STEEPNESS, and the correct
+## lever when card income changes (D84). Raising `FUSE_BASE_COPIES` instead would tax
+## the fresh save that cannot afford to fuse at all, which is the one place the
+## economy was already tight.
+##
+## Measured, not picked: chests took targeted income from ~1.15 copies of the card
+## you are levelling per run to ~2.65. A step of 2 would have cancelled that exactly
+## — ten pack openings to buy what three used to buy, which is more clicking for the
+## same progression. 4 lets the climb genuinely shorten (Lv15 in ~23 runs against 43,
+## Lv40 in ~109 against 169) while keeping a tail worth having.
+const FUSE_COPIES_STEP := 4
 const FUSE_BASE_GOLD := 20
 ## Exponent on the gold price. A LINEAR gold cost was measured to stop mattering
 ## after about four runs: income scales with dungeon depth, so a price that grows
@@ -402,45 +411,524 @@ static func deck_avoid_cost(difficulty: int, already_avoided: int) -> int:
 	var base := float(DECK_AVOID_BASE_HP + DECK_AVOID_PER_DEPTH * (maxi(1, difficulty) - 1))
 	return int(round(base * (1.0 + DECK_AVOID_STEP * float(maxi(0, already_avoided)))))
 
-## Iso model: the floor is a grid of rooms, and walking it costs light.
+## Iso model: the floor is a place, most of it is empty, and something else is
+## walking it.
 ##
-## The other three models price *choosing*. This is the only one where the player
-## can walk back over ground already taken, so the thing that needs a price is
-## WALKING — without one an isometric floor is the graph plus a pathfinding chore,
-## because there would never be a reason not to strip every room.
+## The other three models price *choosing*. This is the only one where the ground
+## is spatial and can be re-walked, so the thing that needs a cost is WALKING —
+## without one an isometric floor is the graph plus a pathfinding chore, because
+## there would never be a reason not to strip every tile.
 ##
-## Torch pays for a tidy tour of the whole floor (ISO_TORCH_PER_ROOM against the
-## room count, which is the encounter budget plus the entrance and the stair). What
-## it does not pay for is crossing explored ground twice more to come back for the
-## last treasure. Once it is out every further step costs HP, scaled with depth for
-## the same reason DECK_AVOID_PER_DEPTH is: a flat number gets cheaper the deeper
-## you go, which is a bug with a delay on it.
+## That cost used to be a torch: a step allowance with an HP overdraft fee (D77
+## removed it). It never affected what the player could see, which made "light"
+## a costume on a move counter, and it charged the player for the one thing this
+## model exists to sell — looking around. The cost is now **wanderers**: greed
+## means more turns on the floor, and every turn on the floor is a turn the things
+## living on it also take. Danger scales with exploration instead of a tax on it.
 ##
-## ISO_GRID must leave room for the largest encounter mix plus two (see the room
-## count assertion in tests/test_traversal.gd) or encounters would be silently
-## dropped off the floor and the shared budget would rot quietly.
-const ISO_GRID := 6
-const ISO_TORCH_PER_ROOM := 1.4
-const ISO_DARK_BASE_HP := 2
-const ISO_DARK_PER_DEPTH := 1
+## **A dungeon is now several small floors of rooms, not one big field (D79).** The
+## floor used to be one organic blob of ~30 tiles: no rooms, no halls, no corridors,
+## every tile the same width, and two thirds of it holding literally nothing. It
+## measured fine and it did not feel like exploring anything, because nothing was a
+## *place* and there was nothing to find.
+##
+## The size question was settled by arithmetic before any of it was built, and the
+## arithmetic changed the design twice. A card battler's loop is short decision →
+## fight → reward, so the number that matters is **moves per encounter** (~5 on the
+## old floor). Splitting one dungeon's budget across three 30-tile floors gives ~15,
+## which buries the card game. Hence:
+##
+## * more floors that are each SMALLER, not more of the same size; and
+## * one-way descent, because making every floor a round trip costs ~8 on its own.
+##
+## `ISO_MOVES_PER_ENCOUNTER_MAX` is that budget written down, and
+## tests/test_traversal.gd fails if a measured greedy walk exceeds it. It is the
+## replacement for eyeballing floor sizes.
+const ISO_GRID := 12
+const ISO_MOVES_PER_ENCOUNTER_MAX := 7.5
+## Walkable tiles in a whole DUNGEON, divided among however many floors it has — which
+## is why a four-floor dungeon has four small floors and not four of the same size.
+##
+## Measured rather than picked: a greedy tour costs about 0.75 moves per tile, and the
+## budget is ~9.2 encounters, so ~78 tiles lands near 6.5 moves per encounter with
+## headroom under the ceiling. Fixing the ROOM COUNT instead (the first attempt) gave
+## 53-tile floors holding three encounters each and measured 8.6 — a floor can be
+## beautifully built and still be too big for the game it is in.
+const ISO_TILES_PER_DUNGEON := 130
 
-static func iso_torch_for(rooms: int) -> int:
-	return int(round(float(maxi(1, rooms)) * ISO_TORCH_PER_ROOM))
+## Tiles one floor should come to. Rooms are placed until they cover most of it and
+## corridors make up the rest, so this is a target rather than an exact count.
+static func iso_tiles_per_floor(floors: int) -> int:
+	return int(round(float(ISO_TILES_PER_DUNGEON) / float(maxi(1, floors))))
+## Steps of vision down a corridor. A ROOM is revealed whole the moment you set foot
+## in it (TraversalIso._reveal_around) — that contrast is the point: corridors are
+## blind and chambers open up. A uniform radius everywhere was what made a floor feel
+## like a field rather than a building.
+const ISO_SIGHT := 2
 
-static func iso_dark_cost(difficulty: int) -> int:
-	return ISO_DARK_BASE_HP + ISO_DARK_PER_DEPTH * (maxi(1, difficulty) - 1)
+## How many floors a dungeon has, by its difficulty. Deeper dungeons are deeper
+## places; the encounter budget is split across them, so this changes the SHAPE of a
+## dungeon and not its cost.
+const ISO_FLOORS_MIN := 2
+const ISO_FLOORS_MAX := 4
+const ISO_DEPTH_PER_FLOOR := 3
+
+static func iso_floors_for(difficulty: int) -> int:
+	var extra: int = int(floor(float(maxi(1, difficulty) - 1) / float(ISO_DEPTH_PER_FLOOR)))
+	return clampi(ISO_FLOORS_MIN + extra, ISO_FLOORS_MIN, ISO_FLOORS_MAX)
+
+## Architecture, per dungeon. This is what replaces "the traversal model differs" as
+## the reason two dungeons do not feel alike: rooms come in different counts, sizes
+## and connectedness, so a crypt of burial cells does not walk like a gallery or a
+## warren. Unlisted dungeons get ISO_STYLE_DEFAULT.
+##
+##   rooms — bounds on the chamber count. NOT the count itself: rooms are placed until
+##           the floor's tile target is met, so a style of small cells naturally needs
+##           more of them than a style of big halls to fill the same floor
+##   w / h — chamber size range (in tiles); the longer side is flipped at random, so a
+##           gallery dungeon is not combed in one direction
+##   loops — extra corridors beyond the spanning path; 0 is a tree (every dead end
+##           costs a double walk), more is a place you can circle round in
+##   fill  — what fraction of the floor is CHAMBER rather than corridor, and the single
+##           most visible knob here. Gate 2 (six floors rendered side by side) found
+##           `cells` and `warren` indistinguishable while they differed only by a tile of
+##           room width and a loop count; room-versus-corridor is what the eye actually
+##           reads, so 0.9 is a honeycomb of cells and 0.5 is tunnels with the odd chamber
+##   align — snap chamber origins to this lattice. Regularity is a signature no amount of
+##           size variation gives you: burial cells are cut in ranks, a warren is not
+const ISO_STYLES := {
+	# a honeycomb of small cells cut in ranks, barely linked — you go back the way you came
+	"cells": {"rooms": [5, 9], "w": [2, 2], "h": [2, 2], "loops": 0,
+		"fill": 0.90, "align": 3},
+	# long thin galleries: few rooms, but each one is a walk in itself
+	"galleries": {"rooms": [2, 5], "w": [2, 2], "h": [4, 6], "loops": 1,
+		"fill": 0.80, "align": 0},
+	# tunnels that double back, with small chambers hung off them
+	"warren": {"rooms": [3, 6], "w": [2, 3], "h": [2, 3], "loops": 3,
+		"fill": 0.45, "align": 0},
+	# few big open halls, so a wanderer is visible across one long before it arrives
+	"halls": {"rooms": [2, 4], "w": [3, 5], "h": [3, 4], "loops": 1,
+		"fill": 0.85, "align": 0},
+}
+const ISO_STYLE_DEFAULT := "warren"
+const ISO_STYLE_OF := {
+	"crypt": "cells", "ossuary": "galleries", "warrens": "warren",
+	"foundry": "halls", "ember_road": "galleries", "slag_pits": "halls",
+	"fungal_deep": "warren", "rot_gardens": "warren", "sunken_vault": "halls",
+	"drowned_market": "halls", "abyssal_stair": "galleries", "the_maw": "cells",
+}
+
+static func iso_style(dungeon_id: String) -> Dictionary:
+	var name: String = String(ISO_STYLE_OF.get(dungeon_id, ISO_STYLE_DEFAULT))
+	return ISO_STYLES.get(name, ISO_STYLES[ISO_STYLE_DEFAULT])
+
+## Surface, per dungeon — and deliberately a SEPARATE axis from architecture. Style says
+## what shape the place is; terrain says what it is made of. Keeping them apart is what
+## makes the variety multiply: four styles against four terrains is sixteen readings out
+## of eight constants, where folding surface into style would have given four.
+##
+## The names are art roles, resolved to `floor_<t>` / `rock_<t>` by
+## `tools/install_iso_art.gd` and picked up by `iso_run.gd`. A dungeon whose terrain has
+## no art installed falls back to the plain `floor`/`rock` pair, and a floor with no art
+## at all still draws — see the fallbacks in `iso_run.gd`.
+const ISO_TERRAINS := ["stone", "earth", "moss", "sand"]
+const ISO_TERRAIN_DEFAULT := "stone"
+const ISO_TERRAIN_OF := {
+	# worked stone: crypts, foundries, the long stair
+	"crypt": "stone", "ossuary": "stone", "foundry": "stone",
+	"abyssal_stair": "stone",
+	# dug earth: tunnels, ash roads, slag, and the organic cave at the bottom
+	"warrens": "earth", "ember_road": "earth", "slag_pits": "earth",
+	"the_maw": "earth",
+	# overgrown: stone walls the floor has been reclaimed under
+	"fungal_deep": "moss", "rot_gardens": "moss",
+	# silted: drowned places that drained
+	"sunken_vault": "sand", "drowned_market": "sand",
+}
+
+static func iso_terrain(dungeon_id: String) -> String:
+	return String(ISO_TERRAIN_OF.get(dungeon_id, ISO_TERRAIN_DEFAULT))
+
+## Which enemies a dungeon can field at a tier, bosses excluded — the same pool
+## `CombatEngine._spawn_enemies` rolls from, in one place so the two cannot disagree.
+##
+## It matters that they agree. The iso model now decides WHICH enemy stands on a tile at
+## generation time rather than leaving it to the fight (D85), so if this pool differed
+## from the one combat would have used, the model would be quietly changing the enemy
+## distribution — which is the D72/D74/D77 failure over again, a tool measuring something
+## other than the game.
+static func roster_pool(dungeon_data, tier: int) -> Array:
+	var roster: Array = []
+	if dungeon_data != null and dungeon_data.has_method("has_roster") and dungeon_data.has_roster():
+		roster = Array(dungeon_data.enemy_roster)
+	if roster.is_empty():
+		roster = Array(ROSTER.get(tier, ROSTER[Tier.NORMAL]))
+	var pool: Array = roster.filter(func(x): return not (x in ROSTER[Tier.BOSS]))
+	return pool if not pool.is_empty() else roster
+
+## What an enemy LOOKS like on the floor, derived from what it does in a fight rather
+## than from a hand-kept table — so a new archetype gets a silhouette for free and can
+## never be forgotten.
+##
+## The point is that the silhouette is the first tier of information: read at a distance
+## it tells you the *shape* of the fight you are choosing, and only the name (once you
+## have met it) tells you which creature. Three readings, because three is what the art
+## supports and what a glance can actually distinguish:
+##
+##   swarm  — comes in numbers, so the danger is being surrounded
+##   brute  — tough, or relentless: it will simply keep hitting you
+##   caster — frail, and spends its turns setting something up
+##
+## The thresholds were read off the roster rather than guessed, and the first guess was
+## wrong in a way worth recording. `rule_count() > 0` looked like the mark of a caster and
+## is nothing of the kind: reactive behaviour was given to enemies across the board (D38),
+## so it is nearly universal and put **all 35 archetypes in one family**. Attack frequency
+## is barely better — almost every single-spawn enemy alternates attack and utility, so it
+## sits at 0.50-0.67 for nine of ten of them.
+##
+## What actually separates them is **toughness**: brutes measure `hp_mult` 1.00-1.15 and
+## casters 0.85-0.90, with `crypt_hound` the one frail thing that nonetheless just attacks,
+## which the frequency clause catches. Measured split across both rosters: swarm 8,
+## brute 6, caster 4.
+##
+## `count_max` and not `spawn_count()`: the latter rolls, and a creature's silhouette
+## cannot be allowed to change between one look and the next.
+const ISO_FAMILIES := ["swarm", "brute", "caster"]
+const ISO_FAMILY_DEFAULT := "brute"
+const ISO_BRUTE_HP := 1.0
+const ISO_BRUTE_FREQ := 0.9
+
+static func iso_family(enemy_id: String) -> String:
+	var e := enemy(enemy_id)
+	if e == null:
+		return ISO_FAMILY_DEFAULT
+	if e.count_max > 1:
+		return "swarm"
+	if e.hp_mult >= ISO_BRUTE_HP or e.attack_frequency() >= ISO_BRUTE_FREQ:
+		return "brute"
+	return "caster"
+
+## A fight is loud. Wanderers this many steps away wake up and start hunting, which
+## is what couples the battle system to the space: WHERE you choose to fight matters,
+## and clearing a room next to a sleeping thing is a decision rather than free.
+const ISO_NOISE := 6
+## Steps on one floor after which everything on it knows you are there. Pressure that
+## rises with greed, and — unlike spawning extra monsters — it cannot inflate the
+## encounter budget, because it wakes what is already counted.
+const ISO_LINGER := 22
+
+## Wanderers come OUT of the combat budget, they are not added to it: a dungeon
+## must cost what its difficulty says it costs (D14), so the choice here is how
+## much of the budget hunts you rather than how much there is. Half, floored at
+## one, so every floor has something on it and the elites stay put as landmarks.
+const ISO_WANDER_FRACTION := 0.5
+## Steps at which a wanderer notices you and starts pathing. Past it they drift.
+## This is the dial that decides how much of the combat budget a careful player
+## can actually evade, and therefore whether ISO still costs what GRAPH costs —
+## tuned against tools/sim_balance.gd, not chosen.
+const ISO_WANDER_SENSE := 5
+
+## What being caught in the open costs, before the fight even starts.
+##
+## Without this the model has no attrition of its own. The torch used to supply it
+## and D77 deleted the torch, which left wanderers carrying the whole cost of greed
+## while being — mechanically — budget combats that walked. Same count, same tiers,
+## same fights: the Warrens measured 100% completion at every deck in the report,
+## against 81% for the Ossuary sitting at the same difficulty.
+##
+## So a wanderer that reaches you takes the initiative, and that is priced. It is the
+## torch's HP cost paid for the opposite thing: the torch charged you for walking, which
+## is what this model exists to sell, while this charges you for being caught, which is the
+## part a careful player can actually avoid.
+##
+## **A FRACTION of the health bar, not a flat number (D88).** It was `9 + 2×(depth-1)` for
+## as long as one dungeon used this model, and that constant was fitted to make that one
+## dungeon land where a difficulty-2 dungeon should. Applied to all twelve it was a
+## depth-scaling tax stacked on dungeons already scaled for depth, and it did not fail
+## gently: the Foundry at d3 with an Early deck paid ~26 HP of a 80-point bar before any
+## fight started and measured **0%**, while the Abyssal Stair fell to 4%.
+##
+## A flat cost cannot be right at both 60 HP and 220 HP — it is a third of the opening bar
+## and a rounding error by the endgame — and depth-scaling it only moves which end is
+## wrong. A percentage is the same *decision* at every point on the curve, which is what
+## this price is supposed to be: the cost of being careless, not a toll that grows.
+## Floored so it never rounds to nothing.
+const ISO_AMBUSH_PCT := 7.0
+const ISO_AMBUSH_MIN_HP := 3
+
+static func iso_ambush_cost(max_hp: int) -> int:
+	return maxi(ISO_AMBUSH_MIN_HP, int(round(float(maxi(1, max_hp)) * ISO_AMBUSH_PCT / 100.0)))
+
+static func iso_wanderers_for(combats: int) -> int:
+	if combats <= 0:
+		return 0
+	# Rounds up at the half, not down. Flooring gave ONE wanderer for the three-combat
+	# mix that nine of the twelve dungeons use, and one thing moving on a 27-tile floor
+	# is a floor that is still basically empty — the whole point of the open ground is
+	# that something is using it too.
+	return maxi(1, int(round(float(combats) * ISO_WANDER_FRACTION)))
 
 const NODE_LABEL := {0: "Combat", 1: "Elite", 2: "Rest", 3: "BOSS", 4: "Shop",
 	5: "Event", 6: "Treasure"}
 
-## Treasure: gold found, and the chance it also holds a card.
-const TREASURE_GOLD_MIN := 25
-const TREASURE_GOLD_MAX := 60
-const TREASURE_CARD_CHANCE := 55
+## Gold in a chest. It also holds sealed packs, always (D80) — the coin flip that
+## used to decide whether a card appeared is gone, because a pack is carried out
+## rather than added to the deck, so it cannot dilute the run and does not need to
+## be rationed to protect it.
+##
+## PER CHEST, and a dungeon now holds four to six of them (D84), so this fell from
+## 25-60 when it was the only chest in the run. Left alone it would have been a 5x
+## gold inflation, and the simulator buys healing at shops with that gold — the
+## chests would have quietly made every run easier while looking like a card
+## change.
+##
+## Halved a second time after measuring: even at 10-25 the run came out +2.3 points
+## easier on average and pushed four deep cells above the 50-70% target band (the
+## endgame Maw 57% -> 72%), because the simulator spends gold on healing at shops
+## and the deep cells are the ones where a heal decides the run. At 6-14 a run's
+## total chest gold lands near where a single treasure used to leave it, so the
+## chests pay in PACKS and difficulty stays where it was tuned.
+const TREASURE_GOLD_MIN := 6
+const TREASURE_GOLD_MAX := 14
 ## Chance a treasure also holds an Escape Rope. Ropes are FOUND, never sold:
 ## a purchasable exit would let the player buy their way out of every risk, which
 ## is the farming loop escrow was built to close.
 const TREASURE_ROPE_CHANCE := 18
+# --- sealed packs (D80) ------------------------------------------------------
+#
+# A second reward channel, deliberately NOT the combat one. A card taken after a
+# fight joins the run deck, which is the decision D46 built: taking it dilutes what
+# you draw, and measurement says that is a real trade — a poison deck in the Fungal
+# Deep and an AoE deck in the Drowned Market both do BETTER with a deck that never
+# grows. Replacing that with packs would have deleted the decision and cost the back
+# half of the game 10-25 points of completion.
+#
+# Packs sit where the game was flat instead: a treasure was gold and a coin-flip
+# card, a boss was a relic. Both now also yield something SEALED, which is carried
+# out at risk with everything else and opened on the overworld — the screen that had
+# no moment in it at all. Being an object rather than a number is the point: "three
+# unopened packs, lost if you die here" reads where "4 cards and 140 gold" does not.
+const PACK_TREASURE := "treasure"
+const PACK_ELITE := "elite"
+const PACK_BOSS := "boss"
+
+# --- pack tiers (D81) --------------------------------------------------------
+#
+# A pack has a TIER, which is how good it is allowed to be, and a BUILD, which is
+# what is inside it. Both are decided where it is found and both are printed on it
+# before it is opened.
+#
+# The tier exists so that a pack found in the first dungeon cannot hand out a
+# legendary. Without a cap, "where you found it" stopped meaning anything the
+# moment packs stopped rolling on the dungeon pool.
+const PACK_WORN := "worn"
+const PACK_SEALED := "sealed"
+const PACK_GILDED := "gilded"
+const PACK_TIERS := [PACK_WORN, PACK_SEALED, PACK_GILDED]
+## The best rarity each tier may contain. This is the whole promise of a tier.
+const PACK_TIER_CAP := {
+	PACK_WORN: CardData.Rarity.RARE,
+	PACK_SEALED: CardData.Rarity.EPIC,
+	PACK_GILDED: CardData.Rarity.LEGENDARY,
+}
+const PACK_TIER_CARDS := {PACK_WORN: 2, PACK_SEALED: 3, PACK_GILDED: 4}
+const PACK_TIER_GOLD := {PACK_WORN: 10, PACK_SEALED: 18, PACK_GILDED: 30}
+const PACK_TIER_NAME := {PACK_WORN: "Worn", PACK_SEALED: "Sealed", PACK_GILDED: "Gilded"}
+
+## How likely each tier is, by where the pack came from and how deep that was.
+##
+## A treasure at depth 1 is nearly always worn; a boss is never worn, because the
+## thing a boss leaves behind should not be the thing a chest leaves behind. Depth
+## is what moves the odds, so descending is what upgrades your packs — the same
+## axis every other reward in the game is priced on.
+static func pack_tier_odds(kind: String, dungeon: int) -> Array:
+	var d: int = maxi(1, dungeon)
+	match kind:
+		PACK_BOSS:
+			return [0, maxi(1, 60 - 6 * d), 40 + 6 * d]
+		PACK_ELITE:
+			return [maxi(0, 45 - 5 * d), 55, maxi(1, 5 * d)]
+		_:
+			# the gilded coefficient is what decides how often a VAULT is met, since
+			# a chest's tier is also its lock (D84). At 2 it produced 0.6 vaults per
+			# run at the deepest dungeon and none at all above depth 2 — too rare to
+			# be a mechanic the player learns to play around.
+			return [maxi(5, 80 - 6 * d), 20 + 4 * d, maxi(0, 3 * (d - 2))]
+
+static func roll_pack_tier(kind: String, dungeon: int) -> String:
+	return PACK_TIERS[weighted_pick(pack_tier_odds(kind, dungeon))]
+
+## The build a dungeon tends to yield packs for, derived from how many of that
+## build's cards sit in its own card pool.
+##
+## DERIVED, not authored: a `pack_build` field on 12 dungeon resources would be the
+## D34 duplication trap again — the affinity would silently stop matching the pool
+## the first time a card list changed. This way it cannot drift, and adding a
+## poison card to the Rot Gardens makes the Rot Gardens more of a poison dungeon
+## without anyone remembering to say so.
+static var _affinity_cache := {}
+static func pack_build_affinity(dungeon_id: String) -> String:
+	if _affinity_cache.has(dungeon_id):
+		return _affinity_cache[dungeon_id]
+	var pool: Array = card_pool_for(dungeon_id)
+	var best: String = BUILDS[0]
+	var best_n := -1
+	for bid in BUILDS:
+		var b := build(bid)
+		if b == null:
+			continue
+		var n := 0
+		for cid in b.cards:
+			if pool.has(cid):
+				n += 1
+		if n > best_n:
+			best_n = n
+			best = bid
+	_affinity_cache[dungeon_id] = best
+	return best
+
+## Which build's pack this is. The dungeon's own affinity is weighted so it takes
+## about 57% of packs found there: farming a dungeon for an archetype WORKS without
+## the drop being a foregone conclusion, and the overworld choice becomes the way
+## you aim at a deck — the only lever the player has over what a pack contains.
+##
+## MEASURED, not picked (`tools/pack_income.gd`). At the first weight tried, a third
+## of packs, typed packs paid FEWER copies of any single card than the untyped ones
+## they replaced — spread across seven builds they broadened the collection instead
+## of deepening it, which is the opposite of aiming. The weight is what turns "many
+## cards" into "copies of the card you are levelling".
+const PACK_AFFINITY_WEIGHT := 8
+static func roll_pack_build(dungeon_id: String) -> String:
+	var affinity := pack_build_affinity(dungeon_id)
+	var weights: Array = []
+	for bid in BUILDS:
+		weights.append(PACK_AFFINITY_WEIGHT if bid == affinity else 1)
+	return BUILDS[weighted_pick(weights)]
+
+## What can come out: that build's cards, minus anything above the tier's cap.
+##
+## The build list is the pool, NOT the dungeon's — intersecting the two was tried
+## and measured at 1-3 cards per dungeon, which is not a pack, it is a guarantee.
+## So the two reward channels split cleanly: a fight reward is the dungeon's cards,
+## a pack is the archetype's, and the tier cap is what keeps a first-dungeon chest
+## from paying out the back half of the catalogue.
+static func pack_pool(build_id: String, tier: String) -> Array:
+	var b := build(build_id)
+	if b == null:
+		return []
+	var cap: int = int(PACK_TIER_CAP.get(tier, CardData.Rarity.RARE))
+	var out: Array = []
+	for cid in b.cards:
+		var c := card(cid)
+		if c != null and c.rarity <= cap:
+			out.append(cid)
+	return out
+
+## Deeper packs are worth more, on the same curve the rest of the economy uses.
+static func pack_gold(dungeon: int, tier: String) -> int:
+	var base: float = float(PACK_TIER_GOLD.get(tier, 10))
+	return int(round(base + pow(float(maxi(1, dungeon)), GOLD_DEPTH_EXP)))
+
+static func pack_cards(tier: String) -> int:
+	return int(PACK_TIER_CARDS.get(tier, 2))
+
+## Rarity weights for what is inside. A gilded pack rolls on boss odds — the finale
+## should feel like the finale when it is opened, three screens later.
+static func pack_weights(dungeon: int, tier: String) -> Array:
+	return reward_weights(Tier.BOSS if tier == PACK_GILDED else Tier.NORMAL, dungeon)
+
+## What the pack calls itself, e.g. "Gilded pack — The Long Death".
+static func pack_title(tier: String, build_id: String) -> String:
+	var b := build(build_id)
+	return "%s pack — %s" % [PACK_TIER_NAME.get(tier, "Worn"),
+		b.name if b != null else build_id]
+
+## Pick an index from a weight array. Shared by every pack roll so a zero-weight
+## entry is impossible to pick in one place rather than three.
+static func weighted_pick(weights: Array) -> int:
+	var total := 0
+	for w in weights:
+		total += maxi(0, int(w))
+	if total <= 0:
+		return 0
+	var roll := randi() % total
+	for i in weights.size():
+		roll -= maxi(0, int(weights[i]))
+		if roll < 0:
+			return i
+	return weights.size() - 1
+
+# --- chests and their locks (D84) --------------------------------------------
+#
+# A treasure is a CHEST now, and a chest has the same three tiers a pack does. The
+# tier decides three things at once: how many packs are inside, and what it wants
+# before it opens.
+#
+# The point is not more reward, it is that walking somewhere has to BUY something.
+# D79 capped moves per encounter because a spatial model can bury the card game;
+# the answer is not fewer steps but steps that were a decision — a detour for a key
+# is walking that bought something, and the ceiling is really policing the other
+# kind.
+const CHEST_PACKS := {PACK_WORN: 1, PACK_SEALED: 2, PACK_GILDED: 3}
+## What each tier wants before it opens. Worn chests are simply open.
+const CHEST_LOCK_NONE := "none"
+const CHEST_LOCK_KEY := "key"
+const CHEST_LOCK_VAULT := "vault"
+const CHEST_LOCK := {
+	PACK_WORN: CHEST_LOCK_NONE,
+	PACK_SEALED: CHEST_LOCK_KEY,
+	PACK_GILDED: CHEST_LOCK_VAULT,
+}
+static func chest_packs(tier: String) -> int:
+	return int(CHEST_PACKS.get(tier, 1))
+
+static func chest_lock(tier: String) -> String:
+	return String(CHEST_LOCK.get(tier, CHEST_LOCK_NONE))
+
+## Keys are found, never bought — the same rule ropes follow, and for the same
+## reason: a purchasable key turns every locked chest into a gold check, and a gold
+## check is not a decision, it is a delay.
+const KEY_CHEST_CHANCE := 45
+const KEY_FIGHT_CHANCE := 22
+const KEY_ELITE_CHANCE := 60
+
+# --- vault conditions --------------------------------------------------------
+#
+# A gilded chest asks the RUN to prove something instead of asking for an item.
+# Generated from state rather than written down, because a written riddle is solved
+# once and is a lever ever after, and a roguelike is replayed hundreds of times.
+# Every condition here is knowable before the door is reached and actionable when
+# it is — the two properties that separate a puzzle from a coin toss.
+const VAULT_UNHURT := "unhurt"
+const VAULT_RICH := "rich"
+const VAULT_ARMED := "armed"
+const VAULT_THIN := "thin"
+const VAULT_LADEN := "laden"
+const VAULTS := [VAULT_UNHURT, VAULT_RICH, VAULT_ARMED, VAULT_THIN, VAULT_LADEN]
+const VAULT_HP_FRAC := 0.7
+const VAULT_GOLD := 150
+const VAULT_THIN_SLACK := 3
+const VAULT_LADEN_PACKS := 3
+
+static func vault_text(cond: String, build_id: String = "") -> String:
+	match cond:
+		VAULT_RICH:
+			return "opens for the solvent: carry %d gold" % VAULT_GOLD
+		VAULT_ARMED:
+			var b := build(build_id)
+			# "a %s card" reads as "a The Long Death card" — build names carry their
+			# own article, so the sentence has to be built around them
+			return "opens for the committed: a card from %s in your deck" % [
+				b.name if b != null else "some archetype"]
+		VAULT_THIN:
+			return "opens for the disciplined: a deck of %d cards or fewer" % [
+				MIN_DECK_SIZE + VAULT_THIN_SLACK]
+		VAULT_LADEN:
+			return "opens for the greedy: %d sealed packs already carried" % VAULT_LADEN_PACKS
+		_:
+			return "opens for the untouched: above %d%% of your health" % [
+				int(round(VAULT_HP_FRAC * 100.0))]
+
 ## Chance a cleared boss yields a rope on top of its relic.
 const BOSS_ROPE_CHANCE := 35
 
@@ -776,11 +1264,11 @@ const ESCALATION_PER_TURN := 0.06
 const ESCALATION_MAX := 1.6
 
 ## Map node type chances (percent), rolled per non-boss, non-first row.
-const NODE_CHANCE_REST := 14
-const NODE_CHANCE_SHOP := 12
-const NODE_CHANCE_ELITE := 18
-const NODE_CHANCE_EVENT := 12
-const NODE_CHANCE_TREASURE := 8
+# Retired in D84. The graph model rolled node types from these five percentages
+# while taking its SIZE from the encounter mix, so the two disagreed and only the
+# size responded when a dungeon's shape changed. `TraversalGraph._weigh()` now
+# derives the weights from the mix itself, which is the single source of truth the
+# other three models were already using.
 
 # --- shops (gold sink) ---
 ## Card prices are DERIVED from drop weight, like upgrade caps: a rarity that

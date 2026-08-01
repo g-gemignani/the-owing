@@ -21,6 +21,12 @@ func _ready() -> void:
 		GameState.manage_only = true
 		UI.goto(self, "res://scenes/DeckBuilder.tscn"), 38.0)
 	UI.button(nav, "Relics", func(): UI.goto(self, "res://scenes/Relics.tscn"), 38.0)
+	# The count is on the button because an unopened pack is the one thing waiting
+	# for the player here — a menu entry that does not say "3" is a menu entry
+	# nobody opens.
+	var sealed: int = MetaState.packs.size()
+	UI.button(nav, "Packs (%d)" % sealed if sealed > 0 else "Packs",
+		func(): UI.goto(self, "res://scenes/Packs.tscn"), 38.0)
 	UI.button(nav, "Builds", func(): UI.goto(self, "res://scenes/Builds.tscn"), 38.0)
 	UI.button(nav, "Settings", func(): UI.goto(self, "res://scenes/Settings.tscn"), 38.0)
 	UI.button(nav, "How this works", func(): UI.goto(self, "res://scenes/Glossary.tscn"), 38.0)

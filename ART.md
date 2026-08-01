@@ -123,20 +123,23 @@ Taken from what already works, so it needs no leap of faith:
 
 ## 3. The asset list
 
-> **The file-by-file list lives in [ART_ASSETS.md](ART_ASSETS.md)** — 209 wanted, 12
-> present, **197 to provide** — with every filename, size and a brief taken from the
-> content's own name and description. It is *generated*, by
-> `tools/art_manifest.gd`, from the catalogues in `resources/`, so it cannot fall out
-> of step with the game the way a hand-typed list of 35 enemy names would. It also
-> shows which files already exist, so it doubles as the coverage report. Regenerate
-> with:
+> **The file-by-file list lives in [ART_ASSETS.md](ART_ASSETS.md)**, with every
+> filename, size and a brief taken from the content's own name and description, and a
+> running count of what is present against what is wanted. **The wording to ask for
+> it with lives in [ART_PROMPTS.md](ART_PROMPTS.md)**, which adds the shared style
+> block, the per-tier framing rules, and — the part that matters most — which files
+> must NOT be generated at all. Both are *generated*, by `tools/art_manifest.gd`, from
+> the catalogues in `resources/`, so neither can fall out of step with the game the
+> way a hand-typed list of 35 enemy names would:
 >
 > ```bash
 > godot --headless --script tools/art_manifest.gd > ART_ASSETS.md
+> godot --headless --script tools/art_manifest.gd -- --prompts > ART_PROMPTS.md
 > ```
 >
-> **This section is the reasoning; that file is the shopping list.** Where the two
-> disagree on a count, the generated one is right.
+> **This section is the reasoning; those files are the shopping list and the wording.**
+> Where any of them disagree on a count, the generated one is right — no total is
+> restated here, deliberately (D34).
 
 Two thirds are icons. Ordering below is by *visible improvement per hour*, not by
 category:
@@ -246,14 +249,21 @@ measured standing line the enemies share:
 
 | decision | value | where |
 |---|---|---|
-| standing line | **68% of frame** (measured: 71/66/66% in the three painted backdrops) | `PixelArt.FLOOR_LINE` |
-| enemy size | 34% of frame height, ×1.14 elite, ×1.34 boss | `combat.gd:TIER_SIZE` |
+| painted horizon | **68% of frame** — where the back wall meets the floor | `PixelArt.HORIZON_LINE` |
+| standing line | **72% of frame** — where a combatant's feet go | `PixelArt.STAND_LINE` |
+| enemy size | 38% of frame height, ×1.14 elite, ×1.34 boss | `combat.gd:TIER_SIZE` |
 | slot spread | 1-3 across, flanks at 0.88 scale for depth | `combat.gd:_place_slots()` |
 | art lookup | `assets/art/enemies/<archetype_id>.png` | `PixelArt.enemy_art()` |
 
-`tests/test_art.gd` measures every painted backdrop's floor line and fails when one
-lands more than 10 points off, because a backdrop that puts its floor elsewhere does
-not look broken on its own — it makes that dungeon's enemies hover.
+**Those first two are different numbers on purpose**, and collapsing them was the
+original error: a figure standing exactly on the wall/floor junction is at the far end
+of the corridor rather than in the fight. The horizon is a property of the backdrop
+and the standing line is a property of the stage, and the stage stands its enemies
+*in front of* the junction.
+
+`tests/test_art.gd` measures every painted backdrop against `HORIZON_LINE` and fails
+when one lands more than 10 points off, because a backdrop that puts its floor
+elsewhere does not look broken on its own — it makes that dungeon's enemies hover.
 
 **Vitals (7 files)** — HP, Block and Energy are all *text* today
 (`combat.gd:_refresh()` formats one `%s HP %d/%d ... Energy %d/%d` string).
@@ -315,8 +325,20 @@ inheriting trash-mob faces.
 
 Optional +70 files for a 2-frame idle and a hurt frame (`_idle_b`, `_hurt`).
 
-Draw them **facing left**, lit from the left, standing on nothing (no baked ground
-shadow — the backdrop supplies the floor).
+Draw them **facing the viewer**, lit from above-front, standing on nothing — no baked
+ground shadow, the stage draws a contact mark. This is a consequence of the head-on
+framing above and it is the opposite of what this section said while the arena was
+still specced side-on: a left-facing enemy in a symmetrical one-point corridor is a
+monster looking at a wall.
+
+Two placement rules that are invisible in the file and obvious in the game:
+
+- **Feet flush with the bottom edge of the canvas, no bottom padding.** Every enemy is
+  placed with its feet on `STAND_LINE`, so padding under the subject is that enemy
+  hovering by exactly that much, in every fight. `tools/install_cutouts.gd` enforces
+  it by trimming to the alpha bounding box and anchoring to the bottom row.
+- **Weight the silhouette low and dark.** The floor is the brightest band in every
+  painted backdrop, so a pale-footed enemy dissolves into the thing it is standing on.
 
 Naming on `archetype_id` deletes real complexity: `PixelArt.OVERRIDES` and the
 whole positional-assignment-that-skips-pinned-sprites dance in
@@ -490,15 +512,14 @@ Assets that land on top of these problems will not look better. None of it is la
 ## 5. If you only do three things
 
 1. **Tier 0, the frame kit.** Twenty screens stop looking broken. One day of work.
-2. **The nine missing dungeon backdrops** (Tier 5) plus backdrops on the seven bare
-   screens. This is the difference between "a prototype" and "a game", and three
-   existing paintings already set the target.
-3. **A font, and the player character.** The font changes every screen for two
-   files; the enemies stand on the backdrop's own floor line and the HUD carries the
-   player, who is not drawn.
-
-Enemies (Tier 2) are the biggest *credibility* gap and the biggest single job — 35
-paintings. Worth starting in parallel, because it is the item that will not compress.
+2. ~~The nine missing dungeon backdrops.~~ **Done (D73), and all 23 backdrops with
+   them (D83b/D83d).** What is left of this item is code, not art: the seven screens
+   in §1(b) still never call `UI.screen()`, so four of them are flat black *next to*
+   a painted backdrop that exists.
+3. **A font, and the enemies.** The font changes every screen for two files. The
+   enemies are the biggest credibility gap and the biggest single job, and they are
+   the item that will not compress — 35 paintings, each of which has to stand on a
+   line the backdrop already draws.
 
 ---
 

@@ -8,13 +8,23 @@ extends RefCounted
 ##
 ## `art` optionally names a full-bleed painted image to use instead of the tiling
 ## pixel backdrop — for a title screen, where one illustration beats a pattern.
-static func screen(root: Control, title: String, art: String = "") -> VBoxContainer:
+##
+## `scene` names a Tier 5c backdrop (`victory`, `defeat`, ...) instead, which gets
+## the top-band scrim rather than the title screen's left-hand column, and `zone` a
+## Tier 5b establishing shot. All three are "use it if it exists", so a screen keeps
+## its pixel pattern until the art lands.
+static func screen(root: Control, title: String, art: String = "",
+		scene: String = "", foot: bool = false, zone: String = "") -> VBoxContainer:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	# Backdrop first, so it sits behind everything, and mouse-deaf so it never eats
 	# a click meant for a button.
 	if art != "" and ResourceLoader.exists(art):
 		for node in illustration(art):
 			root.add_child(node)
+	elif scene != "" and scene_backdrop(root, scene, foot):
+		pass
+	elif zone != "" and zone_backdrop(root, zone, foot):
+		pass
 	else:
 		# tiling pixel backdrop, themed by wherever the player currently is
 		root.add_child(PixelArt.backdrop(_context_zone()))
@@ -55,9 +65,126 @@ const SCRIM_END := 0.72     ## width fraction at which the scrim is gone
 ## Menu content is kept inside SCRIM_HOLD, so text never strays past the cover.
 const MENU_WIDTH := 0.40
 
-static func illustration(path: String) -> Array[Control]:
+## The same idea for a screen that is not the title screen — the shop, an event, a
+## rest — but turned through ninety degrees.
+##
+## The title screen's scrim is a left-hand COLUMN, because a menu is a column. These
+## screens are not: their prose runs the full width and stops about halfway down,
+## and the buttons below it carry their own opaque frames now. Reusing the column
+## scrim here blacked out the left two thirds of the painting, which is where the
+## merchant and the shrine are, and left nothing covered that needed covering.
+##
+## So the scrim is a top BAND. Below it the art is only dimmed, which is the half
+## these three paintings put their subject in.
+const SCENE_DIM := 0.25     ## flat darkening over the whole image
+const SCENE_HOLD := 0.42    ## height fraction held at full scrim
+const SCENE_END := 0.66     ## height fraction at which the scrim is gone
+
+## And an optional second band rising from the bottom, for a screen that puts PROSE
+## below the fold. Only the victory screen does: everything else down there is a
+## button, and a button carries its own opaque frame.
+##
+## Measured, not chosen. Under dim alone, the bottom of these six backdrops sits at
+## 1.3–1.5:1 against white — which is invisible, and is fine while nothing is written
+## on it. Victory's last line lands at 80% height directly over the doorway light and
+## measured 1.3:1. At this alpha it measures 3.9:1.
+const SCENE_FOOT_ALPHA := 0.72
+const SCENE_FOOT_HOLD := 0.80   ## height fraction below which it is at full alpha
+const SCENE_FOOT_START := 0.62  ## height fraction at which it begins to come in
+
+## A painted card illustration, and the scrim that keeps the rules text on top of it
+## readable. The card face itself is nearly black, so the art is what the text has to
+## survive: clear across the top band (cost, symbol, name) and holding from the
+## midpoint down, where the description and the damage/Block numbers sit.
+const CARD_ART_ALPHA := 0.55
+const CARD_SCRIM_ALPHA := 0.72
+const CARD_SCRIM_START := 0.30   ## height fraction at which the scrim begins
+const CARD_SCRIM_HOLD := 0.52    ## height fraction below which it is at full alpha
+
+static var _card_scrim_tex: GradientTexture2D = null
+
+static func _card_scrim() -> GradientTexture2D:
+	if _card_scrim_tex != null:
+		return _card_scrim_tex
+	var grad := Gradient.new()
+	grad.set_offset(0, 0.0)
+	grad.set_color(0, Color(0, 0, 0, 0.0))
+	grad.set_offset(1, CARD_SCRIM_START)
+	grad.set_color(1, Color(0, 0, 0, 0.0))
+	grad.add_point(CARD_SCRIM_HOLD, Color(0, 0, 0, CARD_SCRIM_ALPHA))
+	grad.add_point(1.0, Color(0, 0, 0, CARD_SCRIM_ALPHA))
+	_card_scrim_tex = GradientTexture2D.new()
+	_card_scrim_tex.gradient = grad
+	_card_scrim_tex.width = 1
+	_card_scrim_tex.height = 128
+	_card_scrim_tex.fill_from = Vector2(0, 0)
+	_card_scrim_tex.fill_to = Vector2(0, 1)
+	return _card_scrim_tex
+
+## Zone establishing shots take a heavier flat dim than the scene backdrops do.
+## Not a taste difference — a layout one. A shop or an event puts its prose in the
+## top half and buttons below it, so a top band covers everything that is written.
+## The zone screen is a SCROLLING LIST: dungeon names, boss warnings and card lines
+## run from the title to the bottom of the frame, so there is no part of the picture
+## that text does not cross, and the only thing that helps everywhere is the dim.
+## At 0.60 the worst pixel under the lower rows measures 3.3:1.
+const ZONE_DIM := 0.60
+
+## Put a painted scene backdrop behind `root`'s contents. Returns false if that
+## scene has no art yet, in which case the caller keeps whatever it had.
+##
+## Inserted at the FRONT of the child list rather than appended: these screens
+## build their own margin container first, and a backdrop added after it draws
+## over the entire screen.
+static func scene_backdrop(root: Control, scene: String, foot: bool = false) -> bool:
+	return _painted_backdrop(root, PixelArt.scene_art(scene), foot)
+
+## The same treatment for a zone establishing shot, which lives in its own namespace
+## (`bg_zone_<id>`) because `foundry` names both a zone and a dungeon.
+static func zone_backdrop(root: Control, zone_id: String, foot: bool = false) -> bool:
+	return _painted_backdrop(root, PixelArt.zone_art(zone_id), foot, ZONE_DIM)
+
+static func _painted_backdrop(root: Control, tex: Texture2D, foot: bool,
+		dim: float = SCENE_DIM) -> bool:
+	if tex == null:
+		return false
+	var layers := illustration("", SCENE_HOLD, SCENE_END, dim, tex, true)
+	if foot:
+		layers.append(_foot_scrim())
+	for i in layers.size():
+		root.add_child(layers[i])
+		root.move_child(layers[i], i)
+	return true
+
+## The band rising from the bottom. Same construction as the top one, upside down.
+static func _foot_scrim() -> Control:
+	var grad := Gradient.new()
+	grad.set_offset(0, 0.0)
+	grad.set_color(0, Color(0, 0, 0, 0.0))
+	grad.set_offset(1, SCENE_FOOT_START)
+	grad.set_color(1, Color(0, 0, 0, 0.0))
+	grad.add_point(SCENE_FOOT_HOLD, Color(0, 0, 0, SCENE_FOOT_ALPHA))
+	grad.add_point(1.0, Color(0, 0, 0, SCENE_FOOT_ALPHA))
+	var gtex := GradientTexture2D.new()
+	gtex.gradient = grad
+	gtex.width = 1
+	gtex.height = 256
+	gtex.fill_from = Vector2(0, 0)
+	gtex.fill_to = Vector2(0, 1)
+	var s := TextureRect.new()
+	s.texture = gtex
+	s.set_anchors_preset(Control.PRESET_FULL_RECT)
+	s.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	s.stretch_mode = TextureRect.STRETCH_SCALE
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	s.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return s
+
+static func illustration(path: String, hold: float = SCRIM_HOLD,
+		end: float = SCRIM_END, dim: float = 0.0,
+		tex: Texture2D = null, vertical: bool = false) -> Array[Control]:
 	var art := TextureRect.new()
-	art.texture = load(path) as Texture2D
+	art.texture = tex if tex != null else load(path) as Texture2D
 	art.set_anchors_preset(Control.PRESET_FULL_RECT)
 	# COVER, not tile: it is one picture, and letterboxing a title screen reads
 	# as a bug rather than a choice.
@@ -69,15 +196,15 @@ static func illustration(path: String) -> Array[Control]:
 	var grad := Gradient.new()
 	grad.set_offset(0, 0.0)
 	grad.set_color(0, Color(0, 0, 0, SCRIM_ALPHA))
-	grad.set_offset(1, SCRIM_HOLD)
+	grad.set_offset(1, hold)
 	grad.set_color(1, Color(0, 0, 0, SCRIM_ALPHA))
-	grad.add_point(SCRIM_END, Color(0, 0, 0, 0.0))
+	grad.add_point(end, Color(0, 0, 0, 0.0))
 	var gtex := GradientTexture2D.new()
 	gtex.gradient = grad
-	gtex.width = 256
-	gtex.height = 1
+	gtex.width = 1 if vertical else 256
+	gtex.height = 256 if vertical else 1
 	gtex.fill_from = Vector2(0, 0)
-	gtex.fill_to = Vector2(1, 0)
+	gtex.fill_to = Vector2(0, 1) if vertical else Vector2(1, 0)
 
 	var scrim := TextureRect.new()
 	scrim.texture = gtex
@@ -87,7 +214,14 @@ static func illustration(path: String) -> Array[Control]:
 	scrim.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
-	var layers: Array[Control] = [art, scrim]
+	var layers: Array[Control] = [art]
+	if dim > 0.0:
+		var shade := ColorRect.new()
+		shade.color = Color(0, 0, 0, dim)
+		shade.set_anchors_preset(Control.PRESET_FULL_RECT)
+		shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layers.append(shade)
+	layers.append(scrim)
 	return layers
 
 ## Which zone's backdrop suits the current screen: the run's zone if there is one,
@@ -348,15 +482,39 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# id first, then the card's effect family — see PixelArt.painted_card_art
 	var art := PixelArt.card_art(card.id, Icons.card_family(card))
 	if art != null:
+		# Two different pictures wearing one call. The CC0 fallback is a 16x16 atlas
+		# slice — an icon, not an illustration — so it is tinted by rarity and left
+		# at 22% as a hint of colour behind the text. A PAINTED family illustration
+		# is a real picture at 320x240 and has to be treated as one: full-bleed,
+		# untinted (a violet wash over a painting is just mud) and strong enough to
+		# be worth having drawn. Sending the painting through the icon treatment was
+		# the whole reason Tier 3 looked pointless in a mock-up.
+		var painted := PixelArt.painted_card_art(card.id, Icons.card_family(card)) != null
 		var pic := TextureRect.new()
 		pic.texture = art
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		pic.modulate = Icons.rarity_colour(card.rarity)
-		pic.modulate.a = 0.22
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED if painted \
+			else TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		if painted:
+			pic.modulate = Color(1, 1, 1, CARD_ART_ALPHA)
+		else:
+			pic.modulate = Icons.rarity_colour(card.rarity)
+			pic.modulate.a = 0.22
 		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		pic.set_anchors_preset(Control.PRESET_FULL_RECT)
 		holder.add_child(pic)
+		# and a scrim under the rules text, for the same reason every backdrop has
+		# one: the brief asks for a dark lower half, but a brief is not a guarantee
+		# and white text over a bright patch is unreadable rather than merely ugly
+		if painted:
+			var s3 := TextureRect.new()
+			s3.texture = _card_scrim()
+			s3.set_anchors_preset(Control.PRESET_FULL_RECT)
+			s3.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			s3.stretch_mode = TextureRect.STRETCH_SCALE
+			s3.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+			s3.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			holder.add_child(s3)
 
 	# The button carries no text. It used to render everything through `Button.text`
 	# with `clip_text`, which silently cut descriptions off mid-word — a Button draws

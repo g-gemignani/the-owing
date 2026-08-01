@@ -195,6 +195,73 @@ func _init() -> void:
 	if Balance.repeat_reward_mult(9) <= 0.0:
 		fails += 1; print("FAIL a re-cleared dungeon pays nothing at all")
 
+	# --- a sealed pack is carried out, or it is not carried out (D80) -----------
+	#
+	# The whole reason packs sit in escrow rather than banking on pickup: an
+	# unopened pack is a stake the player can SEE. Banking it at the treasure would
+	# make it loot; losing it with everything else is what makes it a stake.
+	var G3 = load("res://scripts/game_state.gd").new()
+	var M3 = load("res://scripts/meta_state.gd").new()
+	M3.path_prefix = "t_escrow_pack_"
+	M3.slot = 0
+	M3.new_save()
+	if not M3.packs.is_empty():
+		fails += 1; print("FAIL a new save starts with packs")
+	G3.dungeon_id = Balance.DUNGEONS[0]
+	G3.earn_pack(Balance.PACK_TREASURE)
+	G3.earn_pack(Balance.PACK_BOSS)
+	if G3.escrow_packs.size() != 2:
+		fails += 1; print("FAIL packs did not enter escrow")
+	var lost_run: Dictionary = G3.forfeit_escrow()
+	if int(lost_run.get("packs", 0)) != 2 or not G3.escrow_packs.is_empty():
+		fails += 1; print("FAIL dying did not forfeit the packs")
+
+	# Committing REPORTS what it banked and clears the escrow. It cannot be checked
+	# end-to-end here: a GameState built outside the tree cannot reach the MetaState
+	# autoload (the standing headless limitation), so the two halves are asserted
+	# either side of that seam.
+	G3.earn_pack(Balance.PACK_BOSS)
+	var banked: Dictionary = G3.commit_escrow()
+	if int(banked.get("packs", 0)) != 1 or not G3.escrow_packs.is_empty():
+		fails += 1; print("FAIL committing did not hand over the pack")
+
+	# ...and opening one yields exactly what it promised, from the right dungeon
+	M3.add_pack(Balance.PACK_BOSS, Balance.DUNGEONS[0])
+	if M3.packs.size() != 1:
+		fails += 1; print("FAIL the banked pack is not waiting to be opened")
+	else:
+		var before_gold: int = M3.gold
+		var before_cards: int = M3.total_copies()
+		var opened: Dictionary = M3.open_pack(0)
+		var want: int = Balance.pack_cards(Balance.PACK_WORN)
+		if (opened.get("cards", []) as Array).size() != want:
+			fails += 1
+			print("FAIL a boss pack held %d cards, not %d" % [
+				(opened.get("cards", []) as Array).size(), want])
+		if M3.total_copies() != before_cards + want:
+			fails += 1; print("FAIL the pack's cards did not reach the collection")
+		if M3.gold <= before_gold:
+			fails += 1; print("FAIL the pack held no gold")
+		# A pack rolls its BUILD's cards, not the dungeon's (D81) — the two reward
+		# channels were split deliberately, and intersecting them was measured at
+		# 1-3 cards per dungeon, which is a guarantee rather than a pack. The
+		# dungeon is still remembered, and still sets what the pack is worth.
+		# read from the RESULT, not from `packs` — opening removed it, so the old
+		# lookup would have found nothing and asserted nothing
+		var bid := String(opened.get("build", ""))
+		var bd := Balance.build(bid)
+		var pool: Array = Array(bd.cards) if bd != null else []
+		if pool.is_empty():
+			fails += 1; print("FAIL an opened pack named no build")
+		for cid in opened.get("cards", []):
+			if not (cid in pool):
+				fails += 1
+				print("FAIL %s is not a %s card" % [cid, bid])
+				break
+		if not M3.packs.is_empty():
+			fails += 1; print("FAIL the pack survived being opened")
+	M3.writes_disabled = true
+
 	if fails == 0:
 		print("ESCROW TEST: PASS (earnings held/forfeited/committed; ropes are the only paid exit)")
 	else:

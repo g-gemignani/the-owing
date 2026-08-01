@@ -29,6 +29,7 @@ func generate(p_dungeon) -> void:
 	cleared = 0
 	pending = {}
 	var total := rows(dungeon)
+	_weigh(dungeon)
 	for r in total:
 		var row: Array = []
 		for col in row_width(r, total):
@@ -57,27 +58,38 @@ func generate(p_dungeon) -> void:
 				var src := int(round(float(j) / max(1, last) * (cur.size() - 1)))
 				cur[src]["edges"].append(j)
 
+## Node-type weights taken from the dungeon's own encounter mix.
+##
+## This used to be five fixed percentages with COMBAT as the fallback, while the
+## map's SIZE came from the mix — two sources of truth for one shape (the D34
+## trap). It survived only because the mix sat near 8 for every dungeon. When
+## chests took it to 13 (D84) the graph grew four rows and filled them with the
+## fallback: measured at 7.2 fights per run against a mix that asks for 4, which
+## made the graph model 2 points harder while the dice model got 5 easier — the
+## equal-cost pillar (D14) broken by a generator that was never reading the mix.
+var _weights: Array = []
+var _types: Array = []
+
+func _weigh(dungeon_data) -> void:
+	var mix: Dictionary = {
+		"combat": Balance.ENCOUNTER_COMBATS, "elite": Balance.ENCOUNTER_ELITES,
+		"rest": Balance.ENCOUNTER_RESTS, "shop": Balance.ENCOUNTER_SHOPS,
+		"event": Balance.ENCOUNTER_EVENTS, "treasure": Balance.ENCOUNTER_TREASURES,
+	}
+	if dungeon_data != null and dungeon_data.has_method("encounter_mix"):
+		mix = dungeon_data.encounter_mix()
+	_types = [Enc.COMBAT, Enc.ELITE, Enc.REST, Enc.SHOP, Enc.EVENT, Enc.TREASURE]
+	_weights = [int(mix["combat"]), int(mix["elite"]), int(mix["rest"]),
+		int(mix["shop"]), int(mix["event"]), int(mix["treasure"])]
+
 func _roll_type(r: int, total: int) -> int:
 	if r == total - 1:
 		return Enc.BOSS
 	if r == 0:
 		return Enc.COMBAT
-	var roll := randi() % 100
-	if roll < Balance.NODE_CHANCE_REST:
-		return Enc.REST
-	roll -= Balance.NODE_CHANCE_REST
-	if roll < Balance.NODE_CHANCE_SHOP:
-		return Enc.SHOP
-	roll -= Balance.NODE_CHANCE_SHOP
-	if roll < Balance.NODE_CHANCE_EVENT:
-		return Enc.EVENT
-	roll -= Balance.NODE_CHANCE_EVENT
-	if roll < Balance.NODE_CHANCE_TREASURE:
-		return Enc.TREASURE
-	roll -= Balance.NODE_CHANCE_TREASURE
-	if roll < Balance.NODE_CHANCE_ELITE:
-		return Enc.ELITE
-	return Enc.COMBAT
+	if _weights.is_empty():
+		return Enc.COMBAT
+	return int(_types[Balance.weighted_pick(_weights)])
 
 func kind() -> int:
 	return Kind.GRAPH

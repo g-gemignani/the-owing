@@ -30,11 +30,18 @@ const SHOTS := [
 	["DeckRun", "res://scenes/DeckRun.tscn", "deck"],
 	["DiceRun", "res://scenes/DiceRun.tscn", "dice"],
 	["IsoRun", "res://scenes/IsoRun.tscn", "iso"],
+	# Captured twice on purpose. The iso floor is a model about DISCOVERY, so its
+	# opening state — six tiles lit, nothing else known — is the least informative
+	# picture of it there is, and it is the one that made the rock look broken (D77).
+	# The second capture is the same screen a third of the way through a floor.
+	["IsoRunExplored", "res://scenes/IsoRun.tscn", "iso_walked"],
 	["Combat", "res://scenes/Combat.tscn", "combat"],
 	["Shop", "res://scenes/Shop.tscn", "shop"],
 	["Encounter", "res://scenes/Encounter.tscn", "event"],
+	["Chest", "res://scenes/Chest.tscn", "chest"],
 	["Collection", "res://scenes/Collection.tscn", ""],
 	["Relics", "res://scenes/Relics.tscn", ""],
+	["Packs", "res://scenes/Packs.tscn", "packs"],
 	["Powers", "res://scenes/Powers.tscn", ""],
 	["Glossary", "res://scenes/Glossary.tscn", ""],
 	["Victory", "res://scenes/Victory.tscn", "combat"],
@@ -109,15 +116,43 @@ func _dungeon_with(model: int) -> String:
 			return did
 	return Balance.DUNGEONS[0]
 
+## Which traversal each capture needs, if it needs a specific one.
+const MODEL_FOR := {
+	"graph": Traversal.Kind.GRAPH, "deck": Traversal.Kind.DECK,
+	"dice": Traversal.Kind.DICE, "iso": Traversal.Kind.ISO,
+	"iso_walked": Traversal.Kind.ISO,
+}
+
 func _setup(need: String) -> void:
 	GameState.reset_run_progress()
 	var did: String = Balance.DUNGEONS[0]
 	match need:
 		"deck": did = _dungeon_with(Traversal.Kind.DECK)
 		"dice": did = _dungeon_with(Traversal.Kind.DICE)
-		"iso": did = _dungeon_with(Traversal.Kind.ISO)
+		"iso", "iso_walked": did = _dungeon_with(Traversal.Kind.ISO)
+		# deepest dungeon, or the capture only ever shows worn chests: a vault
+		# cannot roll at depth 1 and that is exactly the screen worth looking at
+		"chest": did = Balance.DUNGEONS[Balance.DUNGEONS.size() - 1]
 	GameState.select_dungeon(did)
 	GameState.enter_dungeon(_run_state())
+
+	# FORCE the model the capture is for, rather than trusting a dungeon to use it.
+	#
+	# `_dungeon_with` falls back to the first dungeon when nothing matches, and since
+	# every dungeon became iso (D88) that fallback is what every legacy shot got: the
+	# graph view handed a `TraversalIso`, which it cannot cast, and the harness hung on
+	# shot five with no error and no output. Twenty-two minutes of a software-GL render
+	# producing four files.
+	#
+	# The three older views are still in the tree as a fallback and still worth
+	# photographing, so this builds the model directly instead of skipping them. A
+	# screenshot harness has no business caring which model the CONTENT selects.
+	if MODEL_FOR.has(need):
+		var kind: int = int(MODEL_FOR[need])
+		var dd := Balance.dungeon(did)
+		if dd == null or dd.traversal != kind:
+			GameState.traversal = Traversal.make(kind)
+			GameState.traversal.generate(dd)
 	var z := Balance.zone_of(did)
 	GameState.current_zone = z.id if z != null else Balance.ZONES[0]
 	match need:
@@ -129,6 +164,31 @@ func _setup(need: String) -> void:
 			GameState.shop_stock = []
 		"event":
 			GameState.pending = {"type": GameState.NodeType.EVENT, "row": 1, "col": 0, "cleared": false}
+		"chest":
+			GameState.pending = {"type": GameState.NodeType.TREASURE, "row": 1, "col": 0, "cleared": false}
+			# a key in hand, so the sealed-chest branch can actually be photographed
+			GameState.keys = 2
+		"iso_walked":
+			# Walk the floor before the screen is built, resolving whatever is stepped
+			# on so the walk keeps going. Uses the model's own first option, which is
+			# the one that gets on with the floor, so the capture shows a plausible
+			# route rather than a random smear.
+			var tv := GameState.traversal
+			for i in 14:
+				if tv == null or tv.is_complete() or tv.options().is_empty():
+					break
+				if not tv.select(0).is_empty():
+					tv.clear_pending()
+			GameState.pending = {}
+		"packs":
+			# Packs renders an empty state with nothing sealed, which is a real screen
+			# but not the one worth looking at. Give it one of each kind.
+			MetaState.add_pack(Balance.PACK_BOSS, Balance.DUNGEONS[0],
+				Balance.PACK_GILDED, "poison")
+			MetaState.add_pack(Balance.PACK_ELITE, Balance.DUNGEONS[mini(1, Balance.DUNGEONS.size() - 1)],
+				Balance.PACK_SEALED, "fortress")
+			MetaState.add_pack(Balance.PACK_TREASURE, Balance.DUNGEONS[0],
+				Balance.PACK_WORN, "swarm")
 		"defeat":
 			# Defeat renders "Nothing to report." on an empty dictionary, which is
 			# correct behaviour and a useless capture. Give it a real death.
@@ -137,6 +197,7 @@ func _setup(need: String) -> void:
 				"tier": Balance.Tier.NORMAL, "turns": 6,
 				"forfeited_cards": 3, "forfeited_gold": 140,
 				"penalty_gold": 25, "penalty_cards": ["strike"],
+				"forfeited_packs": 2,
 			}
 		_:
 			GameState.pending = {"type": GameState.NodeType.COMBAT, "row": 1, "col": 0, "cleared": false}

@@ -40,6 +40,12 @@ var pending: Dictionary = {}     # node the player selected, handed to Combat/Sh
 ## strategy, and a dominant strategy is a broken option.
 var escrow_cards: Array = []   # card ids
 var escrow_gold: int = 0
+## Sealed packs found this run (D80): {"kind": ..., "dungeon": ...}, unopened.
+##
+## At risk with everything else, which is most of the point — an unopened pack is a
+## stake you can see, where "4 cards and 140 gold" is a sentence you read.
+var escrow_packs: Array = []
+
 ## Relics found in this run, held on the same terms as everything else.
 ##
 ## An elite drops one (D68). Granting it straight into MetaState would reopen the
@@ -48,6 +54,14 @@ var escrow_gold: int = 0
 ## LOST once banked; they are simply not banked until the boss falls or a rope is
 ## spent.
 var escrow_relics: Array = []  # relic ids
+
+## Keys found this run, spent on locked chests (D84).
+##
+## Run-scoped and NOT in escrow: a key is a tool for opening things here, not a
+## reward to carry home, so dying loses it the same way it loses the floor you were
+## standing on. Keeping keys between runs would turn the first chest of every run
+## into a formality.
+var keys: int = 0
 
 ## Rolled shop inventory for the node being visited, so re-entering cannot reroll
 ## it. Cleared on leaving the shop and on run reset.
@@ -129,7 +143,7 @@ func spend_gold(n: int) -> bool:
 func commit_escrow() -> Dictionary:
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
 	var result := {"cards": escrow_cards.size(), "gold": escrow_gold,
-		"relics": escrow_relics.size()}
+		"relics": escrow_relics.size(), "packs": escrow_packs.size()}
 	if meta != null:
 		for id in escrow_cards:
 			meta.add_card(id)
@@ -137,19 +151,66 @@ func commit_escrow() -> Dictionary:
 			meta.add_gold(escrow_gold)
 		for rid in escrow_relics:
 			meta.add_relic(rid)
+		for p in escrow_packs:
+			meta.add_pack(String(p.get("kind", Balance.PACK_TREASURE)),
+				String(p.get("dungeon", "")))
 	escrow_cards = []
 	escrow_gold = 0
 	escrow_relics = []
+	escrow_packs = []
 	return result
 
 ## Died or walked away: the run's earnings are lost.
 func forfeit_escrow() -> Dictionary:
 	var result := {"cards": escrow_cards.size(), "gold": escrow_gold,
-		"relics": escrow_relics.size()}
+		"relics": escrow_relics.size(), "packs": escrow_packs.size()}
 	escrow_cards = []
 	escrow_gold = 0
 	escrow_relics = []
+	escrow_packs = []
 	return result
+
+## A sealed pack, found in a treasure or left by an elite or a boss. Carried out
+## or lost with everything else.
+##
+## The tier and the build are rolled HERE, where the pack is found, not on the
+## overworld where it is opened (D81). Two reasons: the label can then state what
+## is inside before the player decides whether to risk carrying it home, and a
+## pack that rolled its contents at opening time would quietly reroll on every
+## load, which is the same bug shops had before `shop_stock` was frozen.
+## `tier_of` forces the tier instead of rolling one: a chest's packs inherit the
+## chest's tier, or a Sealed Chest hands out Gilded packs and the tier printed on
+## the lid means nothing.
+func earn_pack(kind: String, dungeon_of: String = "", tier_of: String = "") -> void:
+	var did: String = dungeon_of if dungeon_of != "" else dungeon_id
+	escrow_packs.append({
+		"kind": kind,
+		"dungeon": did,
+		"tier": tier_of if tier_of in Balance.PACK_TIERS else Balance.roll_pack_tier(kind, dungeon),
+		"build": Balance.roll_pack_build(did),
+	})
+
+## What the run stands to lose, as the four traversal screens state it.
+##
+## One function because there were four copies of this string and packs (D80) had
+## to be added to all of them: a thing that can be forfeited but is never shown
+## while it is at risk is not really in escrow, it is just a surprise on the
+## Defeat screen. Relics are named here too, for the same reason.
+func risk_line() -> String:
+	var parts: Array[String] = ["%d cards" % escrow_cards.size(), "%d gold" % escrow_gold]
+	if not escrow_relics.is_empty():
+		parts.append("%d relic%s" % [escrow_relics.size(),
+			"" if escrow_relics.size() == 1 else "s"])
+	if not escrow_packs.is_empty():
+		parts.append("%d pack%s" % [escrow_packs.size(),
+			"" if escrow_packs.size() == 1 else "s"])
+	var line := "AT RISK: " + ", ".join(parts)
+	# keys are NOT at risk in the same sense — they are spent here or wasted — but a
+	# locked chest you cannot open because you did not know you had a key is the
+	# kind of thing the player is never supposed to discover afterwards
+	if keys > 0:
+		line += "    Keys %d" % keys
+	return line
 
 ## An elite yielded a relic. Held at risk until the boss falls.
 func earn_relic(id: String) -> void:
@@ -176,7 +237,8 @@ func run_to_dict() -> Dictionary:
 		"removals": run_removals,
 		"traversal": traversal.save_state(),
 		"escrow_cards": escrow_cards, "escrow_gold": escrow_gold,
-		"escrow_relics": escrow_relics,
+		"escrow_relics": escrow_relics, "escrow_packs": escrow_packs,
+		"keys": keys,
 		"shop_stock": shop_stock,
 		"combat": combat_state,
 	}
@@ -212,6 +274,24 @@ func run_from_dict(d: Dictionary) -> bool:
 	for rid in d.get("escrow_relics", []):
 		if meta.RELIC_CATALOG.has(rid):
 			escrow_relics.append(rid)
+	escrow_packs = []
+	for p in d.get("escrow_packs", []):
+		# a pack from a dungeon that no longer exists cannot be opened, so drop it
+		# here rather than let it sit in the collection forever
+		if p is Dictionary and String(p.get("dungeon", "")) in Balance.DUNGEONS:
+			# tier and build must survive the round trip: they were rolled where the
+			# pack was found, and rebuilding the dict without them silently
+			# downgraded every carried pack to worn on resume
+			var did2 := String(p.get("dungeon", ""))
+			var tier2 := String(p.get("tier", Balance.PACK_WORN))
+			var bid2 := String(p.get("build", ""))
+			escrow_packs.append({
+				"kind": String(p.get("kind", Balance.PACK_TREASURE)),
+				"dungeon": did2,
+				"tier": tier2 if tier2 in Balance.PACK_TIERS else Balance.PACK_WORN,
+				"build": bid2 if bid2 in Balance.BUILDS else Balance.roll_pack_build(did2),
+			})
+	keys = maxi(0, int(d.get("keys", 0)))
 	shop_stock = d.get("shop_stock", [])
 	combat_state = d.get("combat", {})
 	traversal = Traversal.from_state(d.get("traversal", {}), dungeon_data())
@@ -272,6 +352,8 @@ func reset_run_progress() -> void:
 	escrow_cards = []
 	escrow_gold = 0
 	escrow_relics = []
+	escrow_packs = []
+	keys = 0
 	combat_state = {}
 
 ## Choose which named dungeon to attempt (D6). Sets difficulty from its data.

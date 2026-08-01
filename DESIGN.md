@@ -944,7 +944,13 @@ Lessons already paid for, encoded as invariants in `tests/test_balance.gd`:
 
 - **A tuning pass on a corrected instrument (D75).** Everything tuned before D72 was set against a simulator that modelled a weaker player than the game provides. Re-tuned: the Abyssal Stair no longer out-punishes the Maw a full depth below it, mid-game ceilings now sit above the decks that visit them (so a matched deck is no longer pinned where enemies stop scaling), and relics are priced 40% higher after a relic deck out-cleared two stronger-looking ones at the same dungeon. `DMG_POWER_K` was tried as a global lever and rejected with numbers — it crushed the already-hard cells to fix the soft ones.
 
-- **A fourth way to walk a dungeon: an isometric floor (D74).** From play, and not as a bug report: the graph model is the best of the three and that is the problem, because it is the one that reads most like the game this one stands next to. All three existing models abstract a *route*; none of them is a *place*. `TraversalIso` carves a floor of rooms out of a 6x6 plate, lights the room you stand in and its neighbours, and hides the stair down — so the run is a question of coverage, not of route. The torch pays for one tidy tour and every step past it costs HP, which is the mirror of the deck model's priced dodge: there you pay to see less of a dungeon, here you pay to see more. It walks the same encounter budget as the other three (9.2 against 9.2), the contract test caught a pacing deadlock that only fired 3 runs in 360, and it is plugged into the Warrens so the three opening dungeons teach three different models.
+- **A fourth way to walk a dungeon: an isometric floor (D74).** From play, and not as a bug report: the graph model is the best of the three and that is the problem, because it is the one that reads most like the game this one stands next to. All three existing models abstract a *route*; none of them is a *place*. `TraversalIso` carves a floor of rooms out of a 6x6 plate, lights the room you stand in and its neighbours, and hides the stair down — so the run is a question of coverage, not of route. The torch pays for one tidy tour and every step past it costs HP, which is the mirror of the deck model's priced dodge: there you pay to see less of a dungeon, here you pay to see more. It walks the same encounter budget as the other three (9.2 against 9.2), the contract test caught a pacing deadlock that only fired 3 runs in 360, and it is plugged into the Warrens so the three opening dungeons teach three different models. **The torch did not survive contact with play — see D77.**
+
+- **The floor became a place, and the torch was deleted (D77).** Also from play: no real empty tiles, monsters that do not move, and a wish for bigger spaces. The torch turned out to be a step allowance with an HP overdraft fee that never changed what the player could see, and — fatally — `rooms × 1.4` meant a bigger floor granted proportionally more steps, so growing the floor would have deleted the mechanic anyway. It charged the player for looking around, which is the one thing this model exists to sell. Gone. The floor is now ~30 tiles for a nine-encounter budget with encounters placed by farthest-point spreading, the plate is 12x12 behind a camera that centres on you, and part of the combat budget **walks** — wanderers that step when you step and hunt inside five tiles. Greed is priced on exposure rather than on walking, and being caught costs HP a careful player can avoid. Same budget as the other three (9.2 against 9.2); the mobile content re-created D74's deadlock twice at the same 3-in-360 rate; and the simulator was caught measuring a drunkard's walk, which had been reporting the floor as a flat 72% for every deck in the report.
+
+- **The floor got painted, and most of the work was not drawing (D78).** Four downloaded packs became the iso floor's art. The "tiles" turned out to be seamless *top-down* materials, so the isometric projection is done in the renderer by mapping a diamond's corners to a unit square's — exact, not approximate. Every sprite turned out to be a small figure parked in a big empty canvas, so the installer trims to the alpha box, which makes the sprite anchor free (bottom-centre of a trimmed silhouette is where its feet are). Rock became a *block* with a lifted top and two lit faces, because a flat dark diamond reads as darker ground once the floor has texture; ground and standing art split into two passes so a floor row could not slice the legs off what stood behind it; and the player is drawn last over everything, because correct occlusion by a wall in front of them was realistic and unplayable. Wanderers are spiders and stationary combats are armoured brutes, so the floor says which kind of danger you are looking at before you read a word. Licence status of the packs is unknown and recorded rather than assumed — see `assets/art/iso/README.md`.
+
+- **The floor became a building (D79).** Play report: 30 tiles still did not feel like exploring a dungeon — and the diagnosis was not size. Two thirds of the floor held literally nothing, there was no architecture (one organic blob, every tile the same width, nothing a *place*), and there was only ever one floor. So: rectangular chambers joined by corridors in a shape that differs per dungeon, **a room revealed whole the moment you enter it** while a corridor shows two steps, several smaller floors descended one way with the boss on the last, and treasure sealed in a dead-end vault whose key is across the floor. The pacing was settled by arithmetic BEFORE any of it was built, which killed two designs on paper (three big floors measured ~15 moves per encounter; round-tripping every floor cost ~8) and then caught a third in measurement — fixing the room count per style gave 53-tile floors and 8.6 moves per encounter, so the tile budget is now per DUNGEON and floor size falls as floor count rises. Landed at 6.9 against a ceiling of 7.5 that `tests/test_traversal.gd` now enforces, with the encounter budget still 9.2 against 9.2. Multiple floors needed nothing outside the traversal, because descending regenerates in place and `is_complete()` only fires on the last boss. The D74 deadlock arrived a third time, as the mirror of its own lesson: the exit has to be findable too.
 
 - **Twelve painted rooms, and the filename is the wiring (D73).** Every dungeon has its own backdrop now, and the fourth instance in this log of a hand-typed list rotting next to the manifest that exists to prevent exactly that.
 
@@ -3081,3 +3087,1602 @@ at 120. That confirmation immediately caught a stale number of its own:
 `MAX_ACHIEVABLE_RATIO` still said 6.0 while a maxed loadout now measures 6.09, since
 D72 repriced relics. A constant whose comment says "measured" has to be re-measured
 when the thing it measures moves.
+
+### D77 — The floor became a place: real ground, things walking it, and no torch
+
+Play report on D74's isometric floor: *"I like it a lot, but there are no real empty
+tiles, the monsters don't move, and I'd like to walk more and have bigger spaces."*
+Plus a direct question about the torch — *"I am not that convinced by the idea"* —
+which turned out to be the right instinct, for a reason worth writing down.
+
+**What the torch actually was.** Three lines: `torch = rooms × 1.4` at generation,
+`torch -= 1` per move, and once it hit zero every option carried `hp_cost = 2 +
+depth-1`. What it never did was affect vision — sight was `_reveal_around`, the tile
+you stand on plus its neighbours, and `seen` was sticky. **At torch zero the screen
+looked identical.** So it was not light. It was a step allowance with an overdraft
+fee, wearing light as a costume, and four things followed from that:
+
+* The fiction and the feedback disagreed. A torch that burns out and changes nothing
+  you can see teaches the player "I get fourteen free steps", not "I carry light".
+* It was a tax, not a decision. Nothing to spend it on, no refill, no trade at the
+  moment of choosing — one threshold, evaluated once, near the end of a floor.
+* It was slack. Every room held something, so fourteen torch on a ten-room floor only
+  bit after four wasted moves. Most floors never felt it.
+* It scaled itself into irrelevance, and this is the one that mattered: `rooms × 1.4`
+  means a **bigger** floor hands out proportionally **more** steps. The exact change
+  this entry is about would have made the torch stop existing.
+
+Worse than any of those: it charged the player for looking around, which is the one
+thing this model exists to sell. The torch is deleted.
+
+**What replaces it.** Greed is still priced, but on exposure rather than on walking.
+The floor is now mostly open ground (`ISO_TILES_PER_ENCOUNTER = 3.0`, so ~30 walkable
+tiles for a nine-encounter budget against the old ten), and part of the combat budget
+is not in a room at all — it is **wanderers**, taking a step every time you take one,
+pathing toward you inside `ISO_WANDER_SENSE = 5` and drifting outside it. Exploring
+costs turns, and turns are what the floor charges for.
+
+Wanderers come **out** of the combat budget and are never added to it, or a difficulty
+rating would stop meaning one thing (D14). Measured over 30 runs of all 12 dungeons:
+ISO averages **9.2 encounters against a budget of 9.2**, level with GRAPH (9.2), DECK
+(9.2) and DICE (9.2).
+
+**Three geometry decisions, each of which was wrong the first way round.**
+
+* **Encounters are placed by farthest-point spreading**, not by shuffling a subset.
+  A random subset of a 30-tile floor clumps, and a clump is the *old* dense floor with
+  rock around it — three encounters in adjoining tiles read as one room with three
+  doors, and the new open ground ends up in one corner nobody visits. The test now
+  asserts the property directly: **no two pieces of content adjoin.**
+* **The floor is sized against the whole budget, counted before any of it is lifted
+  off the ground to walk.** Sizing it on what was left afterwards had it exactly
+  backwards — more wanderers gave a *smaller* floor (24 tiles against 27), when a
+  wanderer is the thing that most needs room to roam and to be evaded in.
+* **The camera is not clamped to the plate.** Clamping is right for a board you can
+  see all of and wrong here, for a reason the first capture showed plainly: a diamond
+  plate's bounding box has four empty corners, so clamping near an edge shoved the
+  player token to one side of the window with dead space opposite it. Centring always
+  means the floor scrolls under a token that stays put.
+
+**The D74 deadlock, twice more, wearing new hats.** D74 recorded a pacing deadlock
+that only fired 3 runs in 360. Mobile content re-created it twice at the same rate:
+
+* A wanderer counts as unfinished business, so `options()` refuses the stair while one
+  lives — but `_dist_to_unresolved` did not know where wanderers *were*, so with
+  nothing else left every option scored `away = -1`, the ordering fell back to cell
+  index, and a greedy walker paced between two tiles for ever. **A thing that blocks
+  the exit has to be findable.**
+* Then: the player walks *onto* a wanderer, so `away == 0` — and the awake branch only
+  closed distance when there was distance to close, so at zero the wanderer fell
+  through to the drift branch and politely stepped aside. The walker chased it round
+  the floor for ever, because the thing blocking the stair was the thing it could
+  never catch. Contact has two halves and both must be checked; the zero case first.
+
+Both failed 12 runs in 360 and both would have read as a hang in play and as nothing
+at all in a diff.
+
+**A drift in the simulator that only a big floor could expose.** With the floor
+walking correctly, the Warrens still measured a flat **72% for every deck in the
+report** — starter and fully-relic'd alike, every fight won, HP barely touched. That
+shape is not difficulty, and it was not: `_choose_option` picked **randomly** among
+the non-avoid options. That is right when the options are *encounters* — it stops the
+driver quietly favouring whatever a model lists first — and wrong when they are merely
+*directions*. On the old floor every room held something, so a random step still
+stripped the floor; on 30 tiles of open ground it is a drunkard's walk, and a drunkard
+does not reliably reach the far corner. A quarter of runs simply never found the
+stair. The driver now picks randomly among options that **resolve** something and
+falls back to the model's own first suggestion when none do. The other three models
+only ever offer encounters, so nothing about their numbers moves.
+
+This is the third time the tool has been caught modelling something other than the
+game (D72's weaker player, D74's unpaid `hp_cost`), and the pattern is the same every
+time: **a policy written for one model's option shape silently becomes a measurement
+of that shape.**
+
+**Deleting the torch cost real attrition, and the numbers said so.** With the driver
+fixed, the Warrens completed **100% at every tier** — against 79% for the Ossuary,
+which sits at the same difficulty. Wanderers had not replaced the torch at all,
+because mechanically they were budget combats that walked: same count, same tier, same
+fight. So being **caught** is now priced (`iso_ambush_cost`, `9 + 2×(depth-1)`), which
+is the torch's HP cost levied on the opposite thing — the torch charged for walking,
+which the model exists to sell; this charges for being caught, which is the part a
+careful player can actually avoid. A first attempt at `4 + depth-1` moved 100% to 98%,
+which is what a 5 HP chip is worth against fights this cheap.
+
+| profile | Crypt (d1, graph) | Ossuary (d2, deck) | Warrens (d2, **iso**) |
+|---|---|---|---|
+| Starter, 60 HP | 98% | 80% | **80%** |
+| Early, 70 HP | 100% | — | **99%** |
+| Mid, 90 HP | — | — | **100%** |
+| Status build, 90 HP | — | — | **98%** |
+| Barricade, 90 HP | — | — | **94%** |
+
+The two difficulty-2 dungeons now agree with each other (80% against 80%), and
+completion **climbs with progression** instead of sitting flat — which is the shape
+the pillar asks for and the thing the broken driver was hiding. As in D74 the rates
+move a point or two between runs; the shape is what matters. A mid-game deck clearing
+a difficulty-2 floor outright is not a miss — "you outgrow the Crypt" is the pillar,
+and the Warrens is an opening dungeon.
+
+**What "9.2 against 9.2" does and does not claim, because a spatial model can be
+rushed.** The stair is ordered last but never *withheld* — walking onto it fights the
+boss and ends the floor, whatever is left up there. That is the model's central
+decision and not a leak, but it does mean the budget figure describes a player who
+explores, not one who leaves early. Measured over 60 runs of all 12 dungeons, taking
+the shortest route to the stair the instant its position is known: **12.0 steps, and
+4.6 of 9.2 budgeted encounters fought — 50% of the dungeon skippable.** Three things
+price that rather than forbidding it: half the floor is half the gold and cards, the
+boss is met with a deck that never grew, and D-escrow means the run's takings are only
+banked on a boss kill. What keeps the *measured* number honest is that the stair is
+unmarked and sits at the furthest tile from the entrance, so the 12 steps have to be
+spent discovering it — there is no beeline from turn one, and the greedy driver the
+simulator uses never takes the early line at all (rank 2 sorts last). Worth writing
+down because a future reader comparing 4.6 against the contract would otherwise read
+it as a generation bug.
+
+**Looking at it, twice, again (D56/D57/D74).** Every test green and the first capture
+was one enormous black polygon filling the window with a few grey tiles adrift in it.
+Painting every unknown cell was right on a 6×6 plate, where it read as the stone the
+rooms were cut out of; on a 12×12 plate it is 130-odd black diamonds. Rock is now
+drawn **only where it walls in ground you know about**, so the drawn shape hugs what
+has been explored and grows as the floor is learned. Two further things the capture
+showed that no assertion did:
+
+* Four exits all labelled "Open ground" is a choice with no information in it. A tile
+  now reads as its contents, or "Into the dark" (unseen), or "Open ground" (seen), or
+  "Back the way you came" — which needed a `walked` array distinct from `seen`,
+  because on a floor that is mostly open ground "have I been here?" is the question
+  the player is actually asking, and when every tile held an encounter its contents
+  answered it.
+* The floor is drawn in two greys for the same reason, so your own route back is
+  visible on it. The drawing *is* the map in a model about coverage.
+
+`tools/screenshots.gd` now captures this screen **twice** — at the entrance and a
+third of the way through a floor — because the opening state of a discovery model is
+the least informative picture of it there is, and it was the state that made the rock
+look broken.
+
+**The layout constraint moved rather than disappearing.** The floor used to be the one
+board with no scrolling, so `ISO_GRID` and the tile size were only safe *together* —
+and at 6×6 on 116×58 tiles the plate already drew 406px into 460px of room, meaning
+**7×7 would not have fitted.** The floor could not grow at all. `test_layout.gd` now
+checks that `VIEW_W`/`VIEW_H` fit the window *and* that the plate is **bigger** than
+the view, so nobody shrinks the grid back to where the camera is dead code and the
+floor has stopped being somewhere you discover.
+
+**Deliberately not done.** No tileset, no wall art, no character or monster sprites,
+no multiple floors per dungeon, no line of sight past the sight radius, and no
+distinct wanderer archetypes — a wanderer is a combat from the dungeon's roster. The
+better version of the ambush is "the wanderer takes the first turn of combat" rather
+than a flat HP chip: it would scale with depth and deck for free instead of through a
+tuned constant, but it needs `CombatEngine` to support losing the initiative and the
+simulator to model it, so it is left as the obvious next step. This is still a concept
+test; art and depth are worth spending once the feel is judged.
+
+### D78 — The floor got its art, and most of the work was not drawing
+
+D77 left the isometric floor deliberately unpainted — drawn diamonds and the flat
+encounter glyphs the other traversal views use — on the grounds that art is worth
+spending once the feel is judged. The feel was judged, and four downloaded asset packs
+turned up: seamless ground materials, isometric props, 13 monsters with a facing pair
+each, and a set of flaming swords.
+
+**What the packs actually were, which is not what they looked like.** Two findings
+changed the whole approach and neither is visible from a file listing:
+
+* **The "tiles" are not isometric tiles.** `Free_pixel_tiles_pack` is twelve seamless
+  1024² *top-down* materials — cobblestone, cracked earth, grass, sand. There is no
+  diamond in the pack. So the projection is the renderer's job:
+  `draw_colored_polygon` takes UVs, and mapping a diamond's four corners to the four
+  corners of the unit square **is** an isometric view of a square tile. It is exact
+  rather than approximate, because a diamond is a parallelogram and affine UV
+  interpolation across the two triangles has no seam.
+* **Every sprite is a small figure parked in the bottom of a big empty canvas.**
+  `boss_0_S` is 256×512 with its art inside (12,332)-(223,505). Drawn untrimmed and
+  centred on a tile, a monster comes out a third of the size it should be, floating
+  well above the floor. `tools/install_iso_art.gd` trims each source to its alpha
+  bounding box, and that pays for itself twice: **the trim makes the anchor free.**
+  Bottom-centre of a trimmed sprite is where its feet are, so nothing needs a
+  per-file offset table.
+
+**A diagnostic that reported the opposite of the truth.** The first contact sheet of
+the monster pack came back as a grid of white boxes, which reads as "this art has no
+alpha and is unusable". It has perfect alpha. `Image.blit_rect` **copies** RGBA, so
+every transparent pixel punched a hole straight through the backing colour, and the
+viewer drew those holes white. `blend_rect` is the call. Worth recording because the
+failure inverted the finding: the tool said "no alpha" about art that was entirely
+alpha, and the next step from believing it would have been colour-keying sprites that
+needed nothing done to them.
+
+**Three things the render showed that no assertion could (D56/D57/D74/D77, again).**
+
+* **Rock has to have height.** A wall drawn as a dark flat diamond reads as *darker
+  ground* once the floor is textured — the first pass looked like a stain, not a room.
+  Rock is now a block: the top face lifted by `WALL_LIFT`, plus the two faces that
+  point at the camera, each on its own tint because a single flat value made a run of
+  blocks read as one shapeless mass. That one change is the difference between a grid
+  of tiles and a dungeon with corridors in it.
+* **Ground and standing art need separate passes.** Drawing each tile with its own
+  contents let the next row's floor slice the legs off whatever stood behind it. Flat
+  ground first (it cannot occlude anything), then everything with height, back to
+  front among itself — walls and sprites *together*, since a wall in front of a
+  monster does have to hide its legs.
+* **Correct depth ordering made the game unplayable.** With walls occluding properly,
+  a block standing in the row between the camera and the player hid the player behind
+  it. Realistic, and useless. The player is now drawn last, over everything,
+  deliberately breaking the depth order the pass above is careful to maintain: knowing
+  where you are outranks being correctly occluded by a wall you are standing behind.
+
+**A rig for looking at art, because a normal capture cannot prove it is wired.** The
+fog hides most of the floor by design, the greedy walk used for the explored capture
+*clears* whatever it finds, and any role whose file failed to install silently falls
+back to a flat glyph. So "I did not see a market stall" had three innocent
+explanations and one real one, and the first painted capture showed no sprites at all
+purely because the walker had already cleared everything within sight.
+`tools/IsoArtCheck.tscn` forces one of every role plus all four wanderer designs onto
+one lit floor at the real tile size, so scale, footing and facing are judged in a
+single look.
+
+**What each thing is now, and why that mapping and not another.** The roles are wired
+by meaning rather than by source filename — which is not optional here, because two of
+the four packs differ **only by capitalisation** (`free_pack` props, `Free_pack`
+monsters) and both name their contents `table_N`/`boss_N`. `table_0` tells you nothing
+about whether it is a market stall or a hearth.
+
+| encounter | art | why |
+|---|---|---|
+| combat | grey armoured brute | stands where it is put; a sentinel |
+| elite | gold armoured brute | same silhouette, heavier read |
+| stair / boss | robed reaper on a flame base | the only figure in the packs that looks like a destination |
+| shop | isometric market stall | it is literally a stall of wares |
+| rest | roofed hearth with a lit fire | fire reads as rest without a label |
+| event | apothecary counter with lanterns and jars | something happened here |
+| treasure | flaming sword planted in the floor | a vertical landmark, visible past a wall |
+| wanderer | four spider designs, two facings each | **the things that hunt you are not the things that stand guard** |
+
+That last row is the one that is design rather than decoration. Wanderers are spiders
+and stationary combats are armoured brutes, so the floor tells you which of the two
+kinds of danger you are looking at before you read anything — and four designs mean
+three wanderers on one floor do not read as one monster cloned.
+
+**Deliberately not done.** No player sprite: these packs are monsters, furniture and
+swords, with no hero in them, so the player is still a drawn marker. No animation, no
+wall variety (one material, three face tints), no per-dungeon materials even though
+the pack ships grass, sand and cracked earth — the Warrens is the only iso dungeon, and
+twelve floors' worth of terrain palettes is a decision to make when there is a second
+one. No lighting beyond the three fog tints.
+
+**Licence status is unresolved, and it is recorded rather than assumed.** All four packs
+arrived as bare directories of PNGs with no licence file, no readme and no attribution
+text — `find` over them turns up nothing but images. Names and shape match the free
+tiers of shops like CraftPix and itch.io, whose licences commonly permit *use in a
+game* while forbidding *redistribution of the art*, and committing these files is
+redistribution. `assets/art/iso/README.md` carries the per-file provenance table and
+the flag. Two things make that recoverable rather than a trap: the installer is the
+version-controlled artefact, so the whole directory regenerates from a source folder
+with one command; and every role is looked up through `ResourceLoader.exists` with a
+glyph fallback, so a checkout with `assets/art/iso/` emptied still plays.
+
+### D79 — The floor became a building: rooms, floors, sealed vaults, and a pacing ceiling
+
+Play report on the D77/D78 floor: *"30 tiles doesn't give me the feeling of exploring a
+dungeon."* Correct, and the diagnosis was not tile count. Three numbers said what was
+actually wrong:
+
+* **21 of the 30 tiles held literally nothing** — not a prop, not a coin, not a hint.
+  Exploring them could not be rewarding because there was nothing there to find. Open
+  ground had been added so travel would *exist*; travel without discovery is walking.
+* **There was no architecture.** One organic blob grown from the middle of the plate, so
+  every tile was the same width. Nothing was a *place*, so nothing was a landmark.
+* **There was one floor.** The stair "down" led to the boss and out. A crawl that never
+  descends is not crawling.
+
+Adding thirty more tiles to that gives a longer walk through the same featureless blob,
+which is why the fix is architecture, depth and something to find — not size.
+
+**The arithmetic came first, and it changed the design twice before anything was built.**
+A card battler's loop is short decision → fight → reward, so the number that governs a
+spatial model is **moves per encounter** (~5 on the old floor). Two candidate designs
+died on paper:
+
+* Splitting one dungeon's budget across three 30-tile floors gives **~15 moves per
+  encounter** — the card game buried. So: more floors, each *smaller*.
+* Making every floor a round trip (crawl in, crawl back out) costs ~8 on its own. So:
+  floors are **one-way descents**, and walking back out is reserved as the price of
+  retreat rather than the normal case.
+
+`Balance.ISO_MOVES_PER_ENCOUNTER_MAX` is that budget written down at 7.5, and
+`tests/test_traversal.gd` now walks every dungeon and **fails if the measured average
+exceeds it**. It is the replacement for eyeballing floor sizes, and it earned its keep
+immediately (below).
+
+**Total tiles per dungeon is the budget, not tiles per floor.** The first build fixed the
+room COUNT per style and produced 53-tile floors holding three encounters each: every
+structural invariant passed and it measured **8.6 moves per encounter**. A floor can be
+beautifully built and still be too big for the game it is in. Rooms are now placed until
+they cover a share of `ISO_TILES_PER_DUNGEON / floors`, so **floor size falls as floor
+count rises** — a four-floor dungeon is four small floors — which is the only reason the
+pacing survives being deeper. Measured after: **6.9 moves per encounter**, and the
+encounter budget itself untouched at 9.2 against 9.2.
+
+**Multiple floors needed nothing outside the traversal.** Descending regenerates the
+floor *in place* inside the same `TraversalIso`, and `is_complete()` stays false until
+the last floor's boss dies — so `RunFlow`, the save format, combat and the other three
+models learned nothing. The same trick covers the three new tile types: a stair, a key
+and a vault all resolve *inside* `select()` and hand back `{}`, which is what keeps them
+invisible to a caller that only knows about encounters.
+
+**Architecture, and why it is per dungeon.** Rectangular chambers with at least a tile of
+rock between them, joined by L-shaped corridors — a spanning path first so the floor is
+certainly connected, then `loops` extra links. That loop count is what makes a style feel
+different to walk: zero is a tree where every dead end costs a double walk, three is
+somewhere you can come round behind a thing that is chasing you. Four styles
+(`cells` / `galleries` / `warren` / `halls`) are mapped to the twelve dungeons, and this
+is what replaces "the traversal model differs" as the reason two dungeons do not feel
+alike. Room *bounds* are per style; the *count* is whatever fills the tile budget, so a
+style of small cells naturally needs more of them than a style of big halls.
+
+**A room is revealed whole the moment you enter it**, while a corridor gives you two
+steps and no more. This is the cheapest big win in the whole entry: a uniform sight
+radius everywhere is precisely what made a dungeon feel like a field, and the contrast
+between a blind passage and a hall opening up is the sensation the model exists for.
+
+**Sealed vaults, and the one invariant they rest on.** Treasure — the only purely
+rewarding encounter, and so the right thing to gate — is moved into a **dead-end tile**
+and sealed, with its key placed as far away on the same floor as the geometry allows. The
+dead end is not decoration: **a tile with one way in can never be the only route to
+anywhere**, so a sealed vault can never cut a floor in two or fence off the stairs,
+wherever the generator puts it. The test asserts exactly that, plus that no vault exists
+without a key. If a floor has no dead end free, the treasure simply stays unlocked — a
+floor that cannot be finished is worse than a floor with one fewer puzzle.
+
+A vault is also the first thing here that is **visible but not enterable**, which forced
+sight and movement apart. Sharing one distance field made a sealed vault unreachable and
+therefore *invisible* — the player was never shown the thing they needed a key for, which
+turns a puzzle into an absence. `_dist_from` (walking, respects the seal) and
+`_dist_open` (sight and sound, only rock stops it) are now separate, and the ordering
+that steers a walker automatically stops routing through a vault it cannot open and
+starts once it can.
+
+**The battle system now reaches back into the space.** A resolved fight wakes every
+wanderer within `ISO_NOISE`, so *where* you choose to fight matters and clearing a room
+next to something asleep is no longer free. Lingering past `ISO_LINGER` steps on one
+floor wakes all of it. Both were chosen over spawning extra monsters, which would have
+inflated the encounter budget — waking what is **already counted** is pressure that
+cannot cheat.
+
+**The D74 deadlock, for the third time, and its mirror.** Twice before, the lesson was
+written down as *a thing that blocks the exit has to be findable*. This time the walker
+paced between two tiles once a floor was stripped, because with no content and no
+wanderers left, nothing seeded the goal field, every option scored `away = -1`, and the
+ordering fell back to cell index. The rewrite had dropped the case where **the exit
+itself is the objective**. So the mirror of the old lesson, now also written down: *the
+exit has to be findable too.* Keys are seeded for the same reason — a vault you cannot
+approach is unfinished business whose real destination is its key.
+
+**Looking at it, twice more (D56/D57/D74/D77/D78).** Every test green, and:
+
+* **The hero was standing on the walls.** With walls now everywhere, "draw the player
+  last, over everything" (D78's fix for being hidden) made her look like she was
+  balanced on top of the rock in front of her — and on a floor of one-tile corridors the
+  tile in front of you is usually rock. Blocks between the camera and the player are now
+  held back and drawn **translucent over her** at a third strength, so the wall is still
+  there and she is legibly behind it.
+* **The stairs were nearly invisible** — a dark hole on dark stone. Wrong for the single
+  tile the whole floor is a search for: everything else can be missed and found later.
+  They are now nested diamonds stepping down into black with a lit gold lip, and are
+  deliberately the loudest thing the floor draws.
+
+`tools/IsoArtCheck.tscn` was extended to stage a stair, a vault and a key alongside the
+sprites, because all three are *drawn* rather than sprited — there is no stair, vault or
+key art in any pack — and drawn features are exactly the ones with nothing to fall back
+on if they read badly.
+
+**Balance held without retuning.** The Warrens measures 80% at a starter deck against the
+Ossuary's 74% at the same difficulty, climbing with progression, which is where D77 left
+it.
+
+**Deliberately not done, and all of it deliberate rather than forgotten.** The other three
+traversal models are untouched and still shipping — nothing has been deleted, and this
+was built as a rebuild of `TraversalIso` in place so the comparison is a
+`traversal = N` change in one `.tres`. No overworld, no expedition framing, no banking
+loot by carrying it home, no spending cards on the world, no monster behaviour variety
+(patrollers, sleepers), no doors to shut behind you, and no per-dungeon floor materials
+even though the pack ships grass, sand and cracked earth. Retreat-by-walking-out is
+designed but unbuilt: it needs the run flow, which this pass deliberately did not touch.
+
+### D80 — Sealed packs: a reward that has to survive the walk home
+
+Every card the player earned arrived the same way: a fight ended, three faces
+appeared, one was clicked, and it was in the deck. That is D1's reward loop and it
+works, but it was the *only* channel, and being the only one had two costs.
+
+The first is that the overworld is a menu. Everything waiting there has already
+resolved — gold is a number that went up, a relic is a line in a list. Nothing is
+*pending* when the player gets home, so coming home is administration.
+
+The second was measured before anything was built. The simulator was run with deck
+growth disabled to price what a mid-run card is actually worth: in the opening,
+nothing at all. At depth, 10–25 points of clear rate (the Maw with a maxed deck fell
+68% → 43%). And in two cells a *fixed* deck did better — Fungal Deep 70% → 78%,
+Drowned Market 34% → 46% — because a card added mid-run is a card that dilutes the
+draw it was meant to improve. That is D46's thinning trade-off seen from the other
+side, and it is why this is a second channel and not a replacement: **the reward
+after a fight still joins the run deck, because that decision is a real one.**
+
+A sealed pack is the other channel. It is found in a treasure and left behind by a
+boss, it does not open in the dungeon, and it goes into escrow with everything else
+(D20) — so it can be lost, and the Escape Rope is what carries it out. It opens on
+the overworld, which is the one screen in the game that needed something unresolved
+to happen in it.
+
+**Why it can be handed out freely.** A pack cannot change the run it was found in —
+that is what sealed means. So the coin flip that used to decide whether a treasure
+also held a card is gone: `TREASURE_CARD_CHANCE` is retired and every treasure
+yields a pack. Rationing existed to protect the run deck from dilution, and a reward
+that never touches the run deck does not need rationing. The same reasoning is why
+the simulator does not model packs at all, and says so at the line where it would
+have.
+
+**What is inside is stated before it is opened**, because a pack that hides its
+contents is a slot machine and this game does not have those: a treasure pack is 2
+cards, a boss pack is 3, plus gold that scales with the depth it was found at. The
+cards roll from the pool of the dungeon the pack came from — a pack remembers where
+it was found — so one from the Maw cannot pay out Crypt commons, and a boss pack
+rolls on the boss reward weights.
+
+**What it cost in run difficulty, measured as an A/B.** Comparing against D75's
+table would have been dishonest — the isometric work (D77–D79) landed in between and
+moves the same cells. So both arms were run on the *same* tree, 400 trials, one
+variable: treasure grants a card 55% of the time, against treasure grants a sealed
+pack.
+
+| | card in the deck | sealed pack | |
+|---|---|---|---|
+| Starter @ Crypt / Ossuary / Warrens | 99 / 78 / 83% | 98 / 76 / 81% | −1 / −2 / −2 |
+| Early @ Foundry | 60% | 55% | −5 |
+| Status @ Ember Road | 67% | 65% | −2 |
+| Barricade @ Foundry | 48% | 42% | −6 |
+| Poison @ Fungal Deep | 66% | 68% | +2 |
+| AoE @ Drowned Market | 52% | 46% | −6 |
+| Thorns @ Abyssal Stair / Maw | 28 / 55% | 35 / 47% | +7 / −8 |
+| Relic build @ Sunken Vault | 93% | 94% | +1 |
+| Late @ Abyssal Stair / Maw | 40 / 36% | 34 / 30% | −6 / −6 |
+| Endgame @ Abyssal Stair / Maw | 70 / 70% | 76 / 57% | +6 / −13 |
+
+**Mean −1.1 points across all 34 cells.** The opening moves by a point or two, which
+is the earlier finding restated: a card is worth nothing there. The deep cells swing
+±13 in both directions, which is larger than the effect being measured — at 400
+trials those cells are noisy, and reading −13 at the Maw as a real regression while
+ignoring +7 at the Stair in the same run would be picking the number that tells a
+story. No cell left its band, so nothing was re-tuned. The sim also does not count
+what a pack *pays* — meta cards and gold that make the next run stronger — so the
+true cost to the player is smaller than −1.1 and is paid in a different currency
+than it is refunded.
+
+**One thing this exposed.** The four traversal screens each carried their own copy of
+the at-risk format string, and packs had to appear in all four. They now call
+`GameState.risk_line()`, which also names relics — those have been in escrow since
+D68 and were displayed nowhere while at risk. Something that can be forfeited and is
+never shown is not in escrow; it is a surprise on the Defeat screen. The rope
+confirmation names them too, since the rope is what saves them.
+
+**Not built.** Packs do not stack, have no rarities, and none of them holds a relic.
+Opening one is a reveal, not a choice — a pack that made you pick one of its cards
+would be a second reward screen, and the fight already has that screen.
+
+### D81 — Packs got a type and a tier, and the fusion curve did not move
+
+From play: packs should be scattered more widely, should have a *type* (only certain
+cards inside), and a *rarity* (a common pack cannot hold a legendary) — and since
+the player would then end up with many more cards, levelling should cost more
+copies. Three of those were built. The fourth was measured and dropped, and the
+measurement is the interesting part.
+
+**Type.** A pack is typed by **build**, using the seven archetypes `Balance.BUILDS`
+already defines — each `BuildData` names its own ~10 cards, so the taxonomy the
+builds screen teaches is the taxonomy packs use. A pack found in the Fungal Deep is
+usually "The Long Death", and it contains poison cards.
+
+The pool is the *build's* list, not the dungeon's, and that was decided by
+measurement rather than taste: the overlap between any build and any dungeon pool is
+**1–3 cards**. Intersecting them would not have produced a pack, it would have
+produced a guarantee. So the two reward channels split cleanly, and each now means
+one thing: **a fight reward is the dungeon's cards; a pack is the archetype's.**
+
+**Tier.** Three — worn, sealed, gilded — and a tier is a *cap*: `PACK_TIER_CAP`
+filters the pool by rarity before anything is rolled. A weight of zero would only
+have made a legendary unlikely, and "cannot" was the requirement, so the cap filters
+rather than de-weights. `tests/test_meta.gd` opens 200 worn packs at the deepest
+dungeon and asserts none of them ever produces one. Tier odds move with depth: a
+chest is usually worn, a boss is never worn, and an elite sits between them — which
+makes taking the harder fight the thing that buys the better tier.
+
+**Scattered wider.** Elites now drop a pack alongside their relic, so the three
+sources are treasure, elite and boss — about three packs a run. Several packs made
+one Open button per pack a chore, so the screen grew an Open-all with a single
+combined reveal.
+
+**And then the part that was dropped.** `tools/pack_income.gd` was written to
+measure the currency fusion actually spends. Total cards is the *wrong* number:
+levelling needs copies of the **same** card, and across a 20-card pool volume barely
+moves any single one. The right number is expected copies per run of the card you
+are actually levelling.
+
+| | cards per run | copies of the best single card |
+|---|---|---|
+| before packs were typed | ~10 | ~0.89 |
+| typed, affinity 3× (33% of packs) | 14.4 | Crypt 0.81 · Fungal 0.57 · Maw 0.96 |
+| typed, affinity 8× (57%) | 14.4 | Crypt 1.04 · Fungal 0.75 · Maw 1.44 |
+| typed, affinity 15× (71%) | 14.4 | Crypt 1.16 · Fungal 0.85 · Maw 1.73 |
+
+**At the first weight tried, typed packs made levelling *slower*.** Card volume rose
+44%, and copies of any one card went *down* — spread across seven builds, typed
+packs broadened the collection instead of deepening it, which is the exact opposite
+of the aiming they exist to provide. The premise behind "so require more copies" was
+half right: many more cards, and none of them the ones you needed.
+
+`PACK_AFFINITY_WEIGHT` is the knob that turns volume into concentration, and it was
+set to 8 (about 57% of a dungeon's packs are its own build) — enough that farming the
+Fungal Deep for poison *works*, not so much that the drop is a foregone conclusion.
+That lands targeted income 15–60% above where it was, against 44% more total cards.
+
+**So the fusion curve was not touched.** A 15–60% faster climb does not justify
+repricing a curve that already asks 49 copies for level 15, 194 for level 40 and 862
+for level 100 — at roughly one targeted copy per run, level 40 is two hundred runs
+and level 100 is decorative. Raising the copy cost on top of that would have bought
+the player more clicking for the same progression. If it ever does need repricing,
+the lever is `FUSE_COPIES_STEP` (the curve's steepness), not `FUSE_BASE_COPIES`,
+which would tax the fresh save that cannot afford to fuse at all.
+
+**One thing derived rather than authored.** A dungeon's build affinity is computed
+from how many of that build's cards sit in its own pool, not stored on the dungeon
+resource. A `pack_build` field on twelve `.tres` files would be the D34 duplication
+trap again — it would silently stop matching the pool the first time a card list
+changed. Adding a poison card to the Rot Gardens now makes the Rot Gardens more of a
+poison dungeon without anyone remembering to say so.
+
+**Not built.** Packs still do not stack, none holds a relic, and you cannot buy one.
+The tier a pack rolls is not influenced by anything the player does inside the run
+except choosing to fight the elite.
+
+### D82 — Terrain as a second axis, and the samey test that made the styles earn their keep
+
+D79 gave the iso dungeon architecture but left the variety claim untested. This is Gate 2
+from the validation plan, and it is the cheapest test of the hardest question about
+dropping the other three traversal models: **if two dungeons walked on the same model are
+indistinguishable, the model differing was carrying variety that nothing has replaced.**
+No encounter count and no assertion can answer that. Six floors rendered side by side can.
+
+**Terrain is a separate axis from architecture, deliberately.** Style says what shape the
+place is; terrain says what it is made of. Four styles against four terrains is sixteen
+readings out of eight constants, where folding surface into style would have given four.
+The materials were already sitting unused in the tile pack — `stone`, `earth`, `moss`
+(an overgrown floor between **stone** walls, because grass climbing a wall face reads as a
+hillside rather than a ruin) and `sand`. The dungeon's pair overwrites the generic
+`floor`/`rock` roles at load, so the drawing code never learns terrain exists and a
+terrain with no art installed silently keeps the default.
+
+**The test found that half the styles did not work.** `tools/IsoStyles.tscn` forces
+`TraversalIso` onto any dungeon regardless of its own `traversal` field — so the
+comparison needs no `.tres` edits — walks each one, captures, and `contact_sheet.gd`
+(now with `--cell`/`--cols`) puts them in a grid. First result:
+
+* `halls` and `galleries` read immediately — one big open room against long parallel bars.
+* **`cells` and `warren` were indistinguishable.** They differed by one tile of room width
+  and a loop count, which is nothing to the eye.
+
+**The knob that fixed it was the one that was hardcoded.** Room-versus-corridor ratio was
+a flat 0.75 for every style, and it is the thing the eye actually reads first. It is now
+per style — `fill` 0.90 for a honeycomb of cells against 0.45 for tunnels with chambers
+hung off them — plus `align`, which snaps chamber origins to a lattice so burial cells
+come out cut in ranks. Regularity is a signature that no amount of size variation
+provides. Measured after: `cells` averages 9.0 chambers a floor against `warren`'s 3.3,
+and both same-terrain pairs are now tellable apart by eye (Crypt against Ossuary in stone;
+the Maw against the Warrens in earth), which is the hard half of the test.
+
+**The rig itself was wrong first, in a way that libelled the design.** A flat 22-step walk
+caught the Maw five tiles into its *second* floor, which made a four-floor dungeon look as
+though it had no architecture — when in fact the capture had simply arrived somewhere new
+and dark. Every subject is now shown its first floor at ~65% mapped, stopping if it takes
+the stairs. **A comparison harness that samples inconsistently produces a finding about
+itself**, and this one would have been read as "deep dungeons have no shape".
+
+Pacing held at 6.9 moves per encounter against the 7.5 ceiling, and the encounter budget
+at 9.2 against 9.2. The Warrens measures 84% at a starter deck against the Ossuary's 78%.
+
+Two tables are now asserted rather than trusted, because both are looked up **by dungeon
+id with a silent default**: a typo gives that dungeon the fallback and the variety it was
+supposed to have goes quietly missing. `tests/test_traversal.gd` checks every key is a
+real dungeon, every value exists in the set it indexes, and that at least three of each
+axis are actually in use across the twelve — because twelve dungeons all defaulting to the
+same pair would satisfy every other assertion in the file.
+
+**What Gate 2 answers, and what it does not.** It says the variety lost by dropping the
+other three models *can* be rebuilt inside one model, and that it now has been for the
+axes built so far. It does not say the game is better for it — that still needs Gate 4,
+which is playing it.
+
+---
+
+### D83 — The buttons were a smear, and the reason was mechanical
+
+The main menu drew five horizontal streaks with the text riding over the top border.
+Not a taste problem: `ui_button.png` is 128x83 with a mottled, high-contrast middle,
+and a nine-slice stretches that middle up to 14x across a 1240px button. Every
+lengthwise variation becomes a smear, and the 19/21px texture margins do not fit
+inside a 50px button, so the border squashes as well.
+
+**A nine-slice has a rule, and the rule is checkable.** The top and bottom strips are
+stretched horizontally, so every pixel in them must be identical along X. The left and
+right strips are stretched vertically, so identical along Y. The middle is stretched
+both ways, so it must be one flat colour. Satisfy those three and the frame is exact at
+any size; break any one and it smears in that direction. An illustration tool cannot be
+asked for this reliably, so the kit is **computed** — `tools/gen_ui_kit.gd` evaluates a
+border profile as a function of depth from the nearest edge, per side, which meets the
+rule by construction. Bevel included: a lit top and a shadowed bottom vary only along Y,
+which is exactly what the top and bottom strips are allowed to do.
+
+**The face changed from parchment to slate, so the ink had to stop being a constant.**
+D48 measured the parchment at 0.86 luminance and hardcoded near-black text. The
+generated kit is dark, in the violet the backdrops are lit in, so that constant would
+have painted near-black on near-black. `UITheme.ink_for()` now *measures* the middle of
+whatever frame is installed and returns near-black or warm off-white accordingly, and
+`MenuArtTest` measures the same pair rather than the legacy file against the old
+constant — the test would otherwise have gone on passing while the game was unreadable.
+Measured after: 6.5:1.
+
+**The bug that shipped for one screenshot.** The square icon frame was selected with
+`b.text.length() <= 2`, and almost every call site in the game styles a button *before*
+setting its text. So every button asked for the icon frame and its 6px padding, and
+seven deck-builder buttons drew their text underneath their own border. It is a
+parameter now. The general shape — deriving a style decision from state the caller has
+not set yet — is worth remembering; it fails silently and only on some screens.
+
+**Eight buttons were never styled at all.** `Start Dungeon`, `End Turn`, four
+`Collection` headers and the starter-kit picks build a bare `Button` and rely on the
+global Theme, which D48 already recorded as not resolving styleboxes. They were
+invisible against the old smear and obvious next to a crisp frame. The card-shaped and
+tile-shaped buttons (map nodes, reward cards) are deliberately left alone: they have
+their own sizing language and a 12px carved frame is not it.
+
+### D83b — Three scene backdrops, and a letterbox that was not there
+
+`shop`, `rest` and `event` are installed from generated art, and Tier 5c is wired:
+`PixelArt.scene_art()`, `UI.scene_backdrop()`, and calls from the shop, the encounter
+screen and the rest overlay. Treasure falls back to the event shrine rather than to
+black. The rest overlay's veil goes fully opaque when the art is present — it sits over
+a live traversal view, and a translucent one leaves the floor grid showing through the
+picture.
+
+**The scrim had to be turned through ninety degrees.** The title screen's scrim is a
+left-hand column because a menu is a column. These screens are not: their prose runs the
+full width and stops halfway down. Reusing the column scrim blacked out the left two
+thirds — which is where the merchant and the shrine are — and covered nothing that
+needed covering. It is a top band now, plus a flat 0.25 dim for the lanterns and flames
+that a gradient alone leaves at 1.1:1 against white.
+
+**The letterbox detector was wrong twice before it was right.** `rest.jpg` came back with
+a baked black frame; the obvious test is "dark rows at the edges". That cropped 73 rows
+of painting off `event.jpg`, whose cavern ceiling measures 0.07 — the same as its top
+rows. Darkness does not identify a bar in a set of night-time paintings. **Flatness
+does**: a baked bar is a constant across its width and jpeg noise over real paint is not.
+Rows with a luminance range under 0.008 find `rest`'s frame exactly and correctly leave
+the other two uncropped. Aspect is fixed by cropping the long axis, not by resizing to
+1280x720 — 1344x768 is 1.75 and the game is 1.78, and scaling straight across stretches
+every face in the picture by 2%.
+
+Three of six Tier 5c files exist; `treasure`, `victory` and `defeat` are still to draw,
+as are all five Tier 5b zone backdrops.
+
+### D83c — The generator signs its work, and finding the signature was the hard part
+
+Twelve dungeon backdrops shipped with a four-point sparkle stamped into the
+bottom-right corner, and it survived two milestones unnoticed: at 45px, in a corner
+that combat dims to 0.55, it reads as a highlight. What made it visible was putting
+the twelve corners in a grid — the same trick as D82's style comparison, and the
+second time in this project that *a contact sheet found what no assertion could*.
+
+**Brightness does not identify it.** A "bright blob in the corner" test finds a
+brazier in nine of the twelve. The property that separates a stamp from a brazier is
+not how bright it is but how *repeated* it is: the twelve share one 1280x720 frame,
+so the intersection of "brighter than its own local background" across all twelve is
+the stamp and nothing else. One room's fire is another room's plain wall.
+
+Three things had to be added before that worked:
+
+* **Exclude a margin.** The local mean is clipped within a radius of the window edge,
+  so a light-to-dark boundary there shows a false excess in every image at once —
+  which is precisely what the test looks for. It reported a pillar highlight running
+  to the window edge as part of the mark.
+* **Keep the largest blob only.** One stamp means one component; anything else that
+  survives twelve images is a coincidence between two rooms.
+* **Read the PNGs off disk, not through `ResourceLoader`.** The import cache handed
+  back the pre-write file and made a successful strip look like a failed one.
+
+**Removing it: the obviously-correct idea was the worse one.** The stamp is additive
+light, so in principle it can be subtracted and the drawing underneath survives
+intact — and the twelve images even supply the amount, being the least any of them is
+lit above its own background. But that minimum is a *lower bound*: it is dragged down
+by whichever room has dark linework under the stamp, so it under-subtracts everywhere
+and leaves a crisp negative outline of the star. Measurably and visibly worse than a
+harmonic (Laplace) fill, which is what ships. The fill's cost is that at 4x it reads
+as a smudge where the ink lines were; at 1:1, dimmed, in the corner, it is not
+findable. **Judge it at the size it is seen at.**
+
+`tests/test_art.gd` re-derives the detection independently rather than calling the
+tool, because a check that shares its subject's code cannot catch its subject being
+wrong. It fails if more than 150 px of the corner are lit in every backdrop.
+
+### D83d — Six more backdrops, and a filename that would have overwritten a fight
+
+Tier 5c is complete (`treasure`, `victory`, `defeat` joined shop/rest/event) and
+Tier 5b landed whole: five zone establishing shots behind the zone-select screen.
+
+**`foundry.png` is a zone painting and `bg_foundry.png` is the Foundry's fight
+arena.** The generator names files after what is in them, and the zone id is
+`foundry_zone` while the dungeon id is `foundry`, so installing the establishing
+shot under its own name would have replaced one dungeon's combat backdrop with a
+landscape — with no error anywhere, because both names are valid. Zone art therefore
+lives at `bg_zone_<id>.png` in its own namespace, the installer's table maps source
+names to ids explicitly (the barrows arrived spelled `burrows`, which is the other
+half of why the table exists), and `test_art.gd` asserts the two namespaces cannot
+collide.
+
+**The stamp is stripped BEFORE installing, not after.** The scene backdrops arrive as
+2.33:1 panoramas and the 16:9 crop takes the corner with it — free. The zone shots do
+not: one of the five is 1372x784 with no letterbox at all, and its crop keeps the
+corner. Stripping in the source frame, before any geometry changes, is what lets all
+five agree on where the stamp is. That works across mismatched sizes because the
+detection window is anchored to the bottom-right *corner*, and the generator's inset
+from that corner is fixed — a 1372x784 source lines up with a 1376x768 one inside the
+window even though the images line up nowhere else.
+
+**Three different scrims now, and the difference is layout, not taste.**
+
+* Title screen: a left-hand COLUMN, because a menu is a column.
+* Scene backdrops: a top BAND, because their prose is in the top half and everything
+  below it is a button carrying its own opaque frame.
+* Zone shots: a heavier flat DIM (0.60 against 0.25), because the zone screen is a
+  scrolling list — dungeon names, boss warnings and card lines cross every part of
+  the picture, so there is nowhere a band can help and only the dim reaches it all.
+
+Victory needed a fourth thing: it is the one screen with prose *below* the fold, and
+the one backdrop that is bright there. Its last line measured 1.3:1 over the doorway
+light. A foot scrim, opt-in, takes it to 3.9:1.
+
+### D84 — Chests, keys, vaults, and the generator that was inventing fights
+
+From play: scatter far more packs, make walking worth doing, find keys, open locked
+rooms, and put a reward behind something you have to crack. Built, with one part of
+the request answered by measurement instead of by agreement, and one bug found that
+had nothing to do with chests.
+
+**A chest is not a treasure pile.** Every dungeon now holds four to six of them
+(each dungeon's old count plus four, so relative character survives — but no dungeon
+holds zero, because a dungeon paying nothing when chests are the meta channel would
+collapse the overworld choice onto whichever dungeon pays). A chest has the same
+three tiers a pack does, and the tier decides everything at once: how many packs are
+inside, and what it wants first.
+
+| tier | packs | wants |
+|---|---|---|
+| Worn | 1 | nothing, the lid lifts |
+| Sealed | 2 | a key |
+| Gilded | 3 | the run to prove something |
+
+The packs inside inherit the chest's tier, or the word on the lid means nothing.
+
+**Keys are found, never bought** — the Escape Rope rule (D21) for the same reason: a
+purchasable key makes every locked chest a gold check, and a gold check is a delay
+rather than a decision. They drop from open chests, from fights, and usually from
+elites, so one chest tends to pay for the next and taking the hard fight is what
+buys the better tier.
+
+**Vaults ask, they do not riddle.** A written riddle is solved once and is a lever
+ever after, and this game is replayed hundreds of times — so the "crack it" moment
+is generated from run state instead: *above 70% health*, *carry 150 gold*, *a card
+from The Long Death in your deck*, *a deck of 11 cards or fewer*, *three sealed
+packs already carried*. Every one is knowable before the door and actionable at it,
+which is what separates a puzzle from a coin toss, and none of them needs a writer.
+The gilded coefficient was raised from 2 to 3 after measuring 0.6 vaults per run at
+the deepest dungeon and none at all above depth 2 — too rare to be something a
+player learns to play around.
+
+**More walking, bought rather than granted.** D79 capped moves per encounter at 7.5
+because a spatial model can bury the card game, and the iso floor was already
+sitting at 7.1 — there was no room to simply make it bigger. But the ceiling is a
+*ratio*, and chests are encounters: four more of them raise the denominator, so the
+same ceiling permits a far longer walk. `ISO_TILES_PER_DUNGEON` went 78 → 130, and
+the measured walk came out at **6.8 against the unchanged 7.5**. The dungeon is
+two-thirds bigger and the card game is less buried than before, because every extra
+step now has something at the end of it.
+
+**The fusion curve moved this time, and the numbers say how far.** D81 measured
+typed packs and declined to reprice. Chests are a different scale: targeted income
+went from ~1.15 copies of the card you are levelling per run to **~2.17**.
+`FUSE_COPIES_STEP` 8 → 4 — not 2, which would have cancelled the gain exactly and
+handed the player ten pack openings to buy what three used to buy. At 4 the climb
+genuinely shortens (level 15 in ~28 runs against 43, level 40 in ~133 against 169)
+and still has a tail. The lever is the curve's *steepness* and never
+`FUSE_BASE_COPIES`, which would tax the fresh save that cannot afford to fuse at
+all.
+
+**Chest gold, halved twice.** At the old 25-60 per chest, five chests would have
+been a 5x gold inflation; the simulator buys healing at shops with that gold, so the
+chests would have quietly made the game easier while looking like a card change.
+10-25 still measured +2.3 points and pushed four deep cells above the 50-70% target
+band. At 6-14 a run's chest gold lands near where one treasure used to leave it.
+
+**And then the models came apart, which was not about gold at all.** Grouping the
+remaining difference by traversal model:
+
+| model | cells | mean change |
+|---|---|---|
+| dice | 12 | **+5.1** |
+| deck | 4 | +1.8 |
+| iso | 6 | +0.8 |
+| graph | 12 | **−2.0** |
+
+Halving the gold barely moved those numbers, so the cause was structural. Fights
+actually met per run: graph **5.5 → 7.2**, against an encounter mix that asks for
+four. The graph generator took its *size* from the mix and rolled its *contents*
+from five fixed percentages with COMBAT as the fallback — two sources of truth for
+one shape, the D34 trap again, and it survived only because every dungeon's mix sat
+near 8. Adding four chests grew the map four rows and filled them with the fallback.
+`NODE_CHANCE_*` is retired and `TraversalGraph._weigh()` derives the weights from
+the mix, which is the single source the other three models were already using.
+
+This is the pillar (D14) doing its job in the only way it could: the traversal test
+asserts equal encounter *counts*, and all four models passed it at 13.2 the entire
+time this was broken. The count was never the thing that differed.
+
+**Where it landed, and the honest cost.** After the fix, fights actually met per run
+against a mix that asks for four:
+
+| model | fights/run before → after | difficulty |
+|---|---|---|
+| deck | 3.6 → 3.9 | +1.0 |
+| dice | 4.6 → 4.1 | +5.1 |
+| graph | 5.5 → **4.8** (was 7.2 before the fix) | +2.7 |
+| iso | 6.0 → 6.0 | +1.8 |
+
+**Overall +3.2 points easier than the pre-chest baseline**, and that is not the
+chests — it is what the declared design has always been worth. The graph and the
+dice models were both over-delivering fights relative to their own encounter mix,
+and the run is easier now because two of them stopped. Re-tuning the difficulty
+curve to hide that would be re-hiding it. The number to watch is the last row:
+**the iso model still runs 6.0 fights against a mix asking for four**, which is the
+same class of bug in the model this pass did not touch, and is why that model has
+always measured harshest. It sets its own quota rather than dealing from the mix.
+
+**Chests are their own screen.** From play again, and correct: chests and events
+shared `Encounter.tscn` from when a chest was one line of text either way. Once a
+chest had a tier, a lock, a key cost and a vault condition, one screen made two
+different kinds of moment read as one — an event is a decision you owe an answer to,
+a chest is a thing you found which opens or does not. `Chest.tscn` states the tier
+as a coloured headline, the demand on its own line above the outcome, and the
+contents as pack rows. Escape means Continue there, where the event screen
+deliberately offers no way out. `tests/test_flow.gd` asserts the two routes stay
+separate, since both scenes existing and compiling would not catch a merge.
+
+**Still shared, and the one thing that gives it away:** `bg_treasure.png` has never
+been drawn, so the chest screen falls back to the event backdrop. The two moments
+still look alike until that plate exists — it is listed in ART_ASSETS.md and now
+says why it matters.
+
+**Not built.** Locked *rooms* are locked *chests*: the key is spent at the chest, not
+at a door in the floor plan, so the iso model's geometry is untouched and the
+mechanic works identically in all four models. A door you unlock and walk through
+belongs to the iso work and its files. Keys do not stack into anything, cannot be
+bought or sold, and there is no chest that takes two.
+
+### D85 — The floor was lying about what you were walking towards
+
+Asked whether monster behaviour types imply a bestiary. Checking turned up the defect
+underneath the question, which is worth more than the answer: **the creature drawn on the
+floor had nothing to do with the creature you fought.**
+
+`CombatEngine._spawn_enemies` rolls the archetype at **fight time** from the dungeon's
+roster. The thing walking toward you was given `design = (k + depth) % 4` at spawn — a
+sprite index and nothing else. So you watched a red spider cross a hall and met an
+armoured brute.
+
+That is survivable while a wanderer is "a combat that moves". It stops being survivable the
+moment behaviour types exist, because a patroller and a sleeper only mean something if the
+thing patrolling *is* something. Otherwise a creature walks like a stalker and fights like
+a swarm, decided by two unrelated dice.
+
+**Fights are now cast when the floor is laid out.** `TraversalIso.enemy_of` maps a tile to
+an archetype id, wanderers carry theirs on the monster record, and both ride out on
+`pending["enemy"]`. Three things made this small:
+
+* `CombatEngine.setup` has **always** had `forced_archetype` as its first optional
+  parameter — the named-boss path uses the same idea. The run path was passing `""`. So
+  honouring the traversal's choice is one argument at one call site, not a new mechanism.
+* `Balance.roster_pool` is drawn from the exact pool combat would have rolled from, at the
+  tile's own tier, bosses filtered out. **This moves *when* the choice happens, not *what*
+  gets chosen**, so no distribution and no difficulty moves.
+* The simulator honours it too. That is not optional: a sim that kept rolling its own
+  enemy while the game used the traversal's would be measuring a different distribution —
+  the D72/D74/D77 mistake for a fourth time, and the reason that lesson is now a pillar.
+
+**Silhouettes are derived from what an enemy does, not from a table.** 35 archetypes
+against 13 available designs means families rather than portraits — and family is *better*
+information at a distance anyway, because what you want to know across a hall is the shape
+of the fight, not its name. Three readings: `swarm` comes in numbers, `brute` is tough or
+relentless, `caster` is frail and spends its turns setting something up. Size stays
+independent, so an elite swarm is spiders drawn large rather than a different creature.
+
+**The derivation was wrong twice, and the roster said so.** `rule_count() > 0` looked like
+the mark of a caster and is nothing of the kind — reactive behaviour was handed out across
+the board in D38, so it is nearly universal and put **all 35 archetypes in one family**,
+which the new test caught immediately. Attack frequency was barely better: almost every
+single-spawn enemy alternates attack and utility, so nine of ten sit at 0.50-0.67. What
+actually separates them is **toughness** — brutes measure `hp_mult` 1.00-1.15 against
+casters at 0.85-0.90, with `crypt_hound` the one frail thing that just attacks, which the
+frequency clause catches. Measured split: **swarm 8, brute 6, caster 4**. Read off the
+roster with a throwaway probe rather than guessed, and asserted afterwards, because a
+derivation that quietly collapses into one bucket passes every other check in the file.
+
+**What is asserted now.** Every COMBAT and ELITE tile must have a creature cast, from the
+right tier's pool, and never a boss (a finale leaking into a corridor takes its signature
+with it). Every wanderer likewise. And every family must match at least one enemy. Absence
+is a failure rather than a default, because an uncast fight silently falls back to combat
+rolling its own — which looks like nothing at all and undoes the whole feature.
+
+Pacing 7.0 moves per encounter against the 7.5 ceiling; all four models still agree on the
+budget at 13.2. The Warrens measures **85%** at a starter deck against 84% before the
+change — checked at 60 trials rather than 400, which is the right precision for the claim
+being made: casting cannot move the distribution because it draws from the pool combat
+would have drawn from, so this is a check that nothing broke rather than a re-tuning.
+
+**On the bestiary itself: not built, and the ordering is the point.** A screen was never the
+valuable half. Binding the floor to real creatures is what had to happen first, and it was
+worth doing on its own because it fixed a lie. What a bestiary would add on top is
+*recognition*: a silhouette you have met gets named, one you have not stays "something
+moving" — the fog rule extended from terrain to knowledge, which is the iso model's own
+texture rather than a reference screen bolted to it. It needs `MetaState` to remember what
+has been met, so it is meta-layer work and deliberately not in this pass.
+
+**A collision to resolve, flagged rather than fixed.** D84 (built in parallel) introduced
+`GameState.keys` for chests. D79's iso vaults have their own `TraversalIso.keys`. Two key
+currencies, both called keys, both found on the floor, both spent to open something. The
+iso vault should almost certainly spend the D84 key — one key concept — with the traversal
+*reporting* the requirement and the view paying it, the way every other run resource
+crosses that boundary (D13). Left alone here because merging two features mid-flight is a
+design call, not a cleanup.
+
+### D86 — Two keys, two locks, one idea: resolved by deleting mine
+
+D79 gave the iso floor a sealed dead-end room holding a treasure, with a key placed across
+the floor. D84, built in parallel from a play request, gave chests tiers, locks and
+`GameState.keys`. The collision was worse than a duplicated counter:
+
+* **Two currencies.** `TraversalIso.keys` and `GameState.keys`, both called keys, both
+  found on the floor, both spent to open something — and a key found on an iso floor could
+  not open a chest, which no player would ever predict.
+* **Two locks.** A treasure behind a sealed door, and D84's chest behind its own tier lock.
+  A Sealed-tier chest inside a sealed room wants **two** keys for one reward.
+* **Two meanings of one word.** D84's "vault" is a chest lock that reads your *build*.
+  Mine was a sealed tile. Same word, unrelated mechanics.
+
+**And mine had been dead since the day it was built.** `_seal_treasures` required a tile
+with exactly one walkable neighbour. The D79 architecture rewrite replaced the organic
+carve with rectangles joined corridor-to-corridor, and **rooms of 2x2 and up have no
+dead-end tiles at all** — measured after the fact: 0 sealed rooms and 0 dead ends across
+60 generated floors. The feature had silently produced nothing for its entire life, and
+nothing noticed because the tests only asserted properties *of* a vault ("has one way in",
+"has a key") which are all vacuously true when there are none.
+
+What caught it was writing the assertion the other way round — *sealed rooms generated
+must equal sealed rooms opened* — while wiring the currencies together. **An invariant
+about the members of a set says nothing until something also checks the set is not
+empty.**
+
+**So the fix is deletion, not plumbing.** `SEALED`, `KEY`, and the whole key-mirror
+apparatus are gone from the model. A treasure tile already routes to the Chest screen,
+which already has the tier, the lock and the run's keys — so the iso floor's contribution
+is the *space you walk to reach a chest*, and the lock lives in exactly one place. Three
+things fell out with it:
+
+* The `keys_held` mirror I had just built — a documented input written by the view because
+  a traversal may not read run resources (D13). Correct, and unnecessary the moment the
+  model has nothing to gate.
+* `_blocked()`, which existed only to make a sealed tile impassable.
+* `_dist_open()`. Sight and movement had been split into two distance fields *purely*
+  because a sealed room was visible but not enterable. With that gone they were the same
+  function, and keeping both would have left a comment explaining a distinction that no
+  longer existed.
+
+Zero balance impact, and it is worth saying why that is certain rather than measured: the
+deleted feature was generating nothing. Pacing 6.9 moves per encounter, budget 13.2 across
+all four models, silhouettes 8/6/4.
+
+**The lesson worth keeping.** Two sessions built toward the same play request from
+different ends, and the duplicate was not caught by either one's tests, because each was
+internally consistent. What exposed it was going to *read the other feature* before
+extending mine — and what made the resolution obvious was noticing that the older, more
+developed, measured system already covered the whole idea. **When two features collide,
+check which one is load-bearing before deciding which one to adapt.** Mine was not
+load-bearing; it was not bearing anything at all.
+
+### D87 — WASD on a rotated grid, and the tiles that stopped looking like tiles
+
+Two questions arrived together: should the floor take arrow keys, and should the
+tiles go away entirely in favour of a continuous isometric world, Diablo-style. They
+sound like one question about presentation. They are not, and the second one is the
+interesting half.
+
+**The keyboard was easy and had one real decision in it.** `options()` was already
+indexed by direction and the view already drew one button per exit, so a key press is
+the call the button was already making. What is not obvious is the *mapping*: the
+four grid directions project to the four screen DIAGONALS, never to up or right. Bind
+them grid-relative and W walks you down-right — the complaint every isometric game
+with a rotated keyboard collects. Bound screen-relative, W is the most-up-and-right of
+the four available and the ring of keys maps onto the ring of diagonals.
+
+Which way round it rotates is a genuine coin-flip: ↗ and ↖ are exactly as "up" as each
+other and no argument picks one. So it is **resolved by showing it rather than by
+choosing well** — every move button carries its key letter beside its arrow, and the
+mapping is read off the screen in two steps instead of inferred. A convention that
+cannot be derived should be displayed, not documented.
+
+**Hold-to-walk is paced by the animation, and that is the point.** A step is a TURN
+here: the wanderers move when you move. Held at the OS key-repeat rate, a floor's
+worth of exposure would be spent in about a second and a half with no decision in it
+— which is exactly the greed the torch was removed to charge for (D77). So key repeat
+is dropped, and a held key only rolls into another step when the current one has
+finished walking. A held key also stops on anything that earns a beat: a descent, a
+fight, or something NEW coming into sight. The player who walks into a corridor and
+finds something in it has a decision in front of them, and walking through it because
+a key is still down is the one way this feature could cost somebody a run.
+
+**The tiles: no, and the reason is that the grid is not a rendering choice.**
+
+`ISO_MOVES_PER_ENCOUNTER_MAX` is a ratio of discrete moves to encounters. It is what
+enforces the D14 pillar — every traversal model costs the same — against three other
+models that are all discrete by nature, and it is the specific guard that stops a
+spatial model burying the card game (D79). A continuous world has no move to count.
+Substitute distance or seconds and the comparison to deck/dice/graph stops being
+commensurable; the test at `tests/test_traversal.gd` does not get harder to write, it
+stops having a subject.
+
+Two more, either of which would be enough on its own:
+
+* **Lockstep is the tension.** "It takes a step whenever you do" is the whole exposure
+  mechanic. Continuous movement forces the wanderers real-time, and then either they
+  chase — pathing, aggro, kiting — or they do not and the pressure evaporates. Real-time
+  dodging into a turn-based card fight is a seam between two genres.
+* **Diablo's walking is not this game's walking.** There, movement *is* combat and
+  positioning is the decision. Here the fight is a separate screen, so free-form
+  movement between fights adds fidelity and no decisions — the exact shape of the torch
+  D77 deleted: measured fine, did not feel like anything.
+
+**What the request was actually after was reachable without any of that**, because
+"it should read as a place, not a board" is a presentation problem:
+
+* **The per-tile outline is gone.** On a floor of seamless stone drawn through fog
+  tints, that hairline WAS the grid — the last thing saying the ground is made of
+  cells. Without it, neighbouring tiles at one tint merge into continuous stone and
+  the fog does the delineating it was drawing anyway. The reach highlight stays: at
+  most four of them, and it is an affordance rather than a lattice.
+* **The hero and the wanderers slide between tiles** instead of snapping. Diablo-feel
+  is continuous *animation*, not continuous coordinates — which is the whole trick,
+  and it costs one interpolated point. The camera and the hero are derived from the
+  same one, so she stays nailed to `EYE_Y` and the floor slides under her exactly as
+  it does when she is still.
+
+**One deliberate imprecision, written down rather than fixed.** A sliding wanderer is
+drawn at its DESTINATION tile's turn in the depth sort and offset back from there, so
+for the length of one step it can be a tile out of order with the blocks around it.
+The honest fix is re-sorting the standing pass by interpolated depth every frame — a
+sort per redraw, to correct an error that is one tile wide and lasts an eighth of a
+second. Wanderers also carry no id, so matching one to where it stood a moment ago
+goes by design and type within one step; two of the same design standing a tile apart
+are visibly the same thing twice, and a monster with no match simply appears, which is
+what a monster stepping into sight is supposed to do.
+
+**Measured non-regression, which is the only measurement this entry needs.** Iso moves
+per encounter: **6.9 against the unchanged 7.5 ceiling** — a walk is the same turn it
+always was, drawn over 0.13s instead of instantly. One keypress is one `select()`, one
+entry in `steps`. That separation is the reason the grid was kept when the *look* of
+the grid was dropped, and it is why this entry contains no rebalancing.
+
+`tests/test_layout.gd` gained the guard that matters: **every direction the floor
+offers has a key that walks it.** That failure is silent by construction — a direction
+with no binding behaves exactly like a direction with a wall in it, so the only symptom
+is a quarter of the floor being unreachable by keyboard with nothing saying why.
+
+### D88 — Every dungeon became the crawl, and the other three models had been hiding a discount
+
+All twelve `.tres` files now say `traversal = 3`. The switch itself is one line each. What it
+exposed is the entry.
+
+**Saves needed no migration, by a property already in the code.** `Traversal.from_state`
+rebuilds a model from the `kind` stored *in the save*, not from the dungeon file — so a run
+in progress on a node graph finishes on a node graph, and only new runs are isometric. That
+was not designed for this; it is a consequence of each model owning its own serialisation
+(D22), and it is why a switch this broad cost nothing at the save layer.
+
+**Then the measurements came back and half the game was broken.** The Foundry at difficulty
+3 with an Early deck fell from 63% completion to **0%**. The Abyssal Stair went 47% to 4%.
+Two separate causes, and the second was the interesting one.
+
+**Cause one: a constant fitted to a single dungeon.** `iso_ambush_cost` was
+`9 + 2×(depth-1)`, tuned when exactly one dungeon used this model to make *that* dungeon
+land where a difficulty-2 dungeon should. Applied to twelve it was a depth-scaling HP tax
+stacked on dungeons already scaled for depth: 26 HP off an 80-point bar at d3, before a
+single fight. It is now **7% of max HP**, floored at 3. A flat number cannot be right at
+both 60 HP and 220 HP — it is a third of the opening bar and a rounding error by the
+endgame — and depth-scaling it only chooses which end is wrong. A percentage is the same
+*decision* everywhere, which is what a price for carelessness should be.
+
+**Cause two: iso is the only model with nothing to skip.** This is the one worth
+remembering. Measured fights actually *met*, per model, against a budget of 13.2:
+
+| model | fights met | how it skips |
+|---|---|---|
+| graph | 4.5–5.1 | a route misses the nodes on the other routes |
+| dice | **3.5–4.1** | overshoot sails past spaces |
+| deck | 4.9 **+ 1.1 dodged** | pay HP to discard the card |
+| iso | **5.9–6.0** | nothing. You strip the floor |
+
+So three models had been quietly delivering a *discount* on their own budgets — the dice
+worst of all, meeting barely a third of it — and every dungeon's difficulty was tuned
+against whichever discount it happened to have. Moving them all to the model with no
+discount handed each one a full extra fight. **"Equal encounter counts are not equal cost"
+was already a pillar; this is the same lesson from the other side — a model's skip is part
+of its price, and deleting the skip is a difficulty change nothing in the budget can see.**
+
+**So the spatial model needed a spatial way to decline.** A tile holding a fight now also
+offers to **slip past** it for HP, reusing `Balance.deck_avoid_cost` unchanged — the same
+number, the same rising shape, because it is the same decision. It is ranked below even the
+stairs, so a player leaning on the first button still faces everything and the headless
+walkers still measure the full budget. The plumbing cost almost nothing: `_choose_option`
+has evaluated `action: "avoid"` since the deck model existed, and the view already paid
+option prices for the ambush.
+
+| profile / dungeon | before (mixed models) | all-iso, no slip | all-iso + slip |
+|---|---|---|---|
+| Crypt d1, starter | 99% | 95% | 100% |
+| Ossuary d2, starter | 68% | 48% | 62% |
+| Warrens d2, starter | 85% | 99% | 99% |
+| Foundry d3, Early | 63% | **8%** | 36% |
+| Foundry d3, Status | 85% | 60% | 66% |
+| Drowned Market d6, Late | 52% | 51% | 98% |
+| Abyssal Stair d7, Thorns | 47% | 14% | 16% |
+| Maw d8, Late | 40% | 15% | 22% |
+| Maw d8, Endgame | 75% | 41% | 90% |
+
+**A harness that selected by name went dark at the worst moment.** The avoid calibration —
+the check that a priced dodge is not a *dominant* strategy (D20) — filtered on
+`traversal == Kind.DECK`. With no deck dungeons it matched nothing and printed a header
+with no rows: the tool that grades this exact mechanic fell silent on the turn a new model
+inherited it. It now asks the model whether it prices a skip, by **walking** a floor and
+looking, because a spatial model only offers one when you are standing next to a fight and
+peeking at the opening options answers "no". *A harness that selects by name goes quiet when
+the name changes; one that selects by behaviour follows it.*
+
+**And the repaired harness immediately caught the mechanic it grades.** With the calibration
+running again, two cells fail D20 outright — *always-slip clears more often than
+always-fight*, which makes the skip a dominant strategy and therefore a removed decision:
+
+    The Foundry    Early    face 13% | smart 36% (71% dodged) | avoid 43% (98% dodged)
+    The Ember Road Status   face 52% | smart 61% (71% dodged) | avoid 79% (98% dodged)
+
+Borrowing `deck_avoid_cost` unchanged was the wrong instinct after all, and the reason is
+structural rather than numeric: **the deck offers one dodge per revealed card from a pile
+that runs out, while a floor offers a slip at every fight standing on it.** Same price, far
+more opportunities. Two candidate levers, neither pulled here because each needs its own
+measured cycle: a steeper rise than `DECK_AVOID_STEP`'s +50%, or refusing to *offer* a slip
+the player cannot afford — the payment is currently clamped so it can never be lethal, which
+is correct for an unavoidable ambush and wrong for a price the player chose, because it makes
+slipping past everything survivable by construction. **Left failing and visible rather than
+quietly tuned**, since the tool now reports it on every run.
+
+**Not finished, and the remaining gap is specific.** The deep dungeons at mid progression
+are still harder than they were: the Abyssal Stair at d7 sits at 16% against 47%, the Maw at
+d8 at 22% against 40%. The cause is legible — those were the *dice* dungeons, tuned against
+the model that met barely 3.5 of ~13 budgeted encounters, so they carry the largest
+discount to lose. Two levers, neither yet pulled, and both needing measurement rather than
+a guess: `deck_avoid_cost` has never been exercised above d6 and its rising multiplier may
+be too steep where it now runs (13 HP, then 20, then 26 at d8), and the d7-d8 enemy scaling
+was set with a third of its budget effectively skippable. The endgame cells are already
+*better* than before (Maw 75% → 90%), so this is a mid-game shape problem, not a global one.
+
+**Deliberately not done.** The other three models are still in the tree and still work —
+nothing was deleted. That is the fallback and the comparison baseline, and the argument for
+deleting them is now stronger than it was, because a model no dungeon uses is a model
+nothing measures: their numbers above are the last ones anyone will collect unless a
+dungeon points at them again.
+
+### D83e — Card frames, computed; and the illustration hook that was treating paintings as icons
+
+Two halves of "make the cards match the art".
+
+**The frames are generated, like the buttons (D83).** `Icons.card_frame()` has been
+wired since the frame kit landed and had no files behind it, so every card in the
+game drew the 2px flat rarity border instead. `tools/gen_ui_kit.gd` now emits
+`frame_card.png` plus one per rarity: the same carved slate profile as the buttons,
+so the hand and the HUD are the same object, with the rarity as a **coloured line
+set into the stone** rather than a tint over the whole frame. Rarity has to be read
+across seven overlapping cards at 150px wide, and a tinted frame is only legible
+next to a differently-tinted one.
+
+The margins are 14px, not the 40/40/48/56 ART_ASSETS specs. A card is 150x132 on
+screen: a 48px top margin plus a 56px bottom one leaves 28px of stretchable middle,
+Godot scales the margins down to fit, and the carved edge draws squashed. Exactly the
+failure the buttons had. The spec numbers were written for a portrait card that this
+game does not have.
+
+**One call was returning two different kinds of picture.** `PixelArt.card_art()`
+gives back either a 16x16 slice of the CC0 atlas or a painted 320x240 family
+illustration, and `UI.card_button` treated both as an icon: tinted by rarity, held
+at 22% opacity, aspect-centred. That is right for the atlas slice, which is a hint of
+colour behind the name. It is wrong for a painting — a violet wash at 22% over an
+illustration is mud, and it would have made Tier 3 look not worth drawing. A painted
+one is now full-bleed, untinted, at 55%, with a gradient scrim from the card's
+midpoint down so the rules text and the damage/Block numbers survive whatever the
+illustration does there. The brief asks for a dark lower half as well, because a
+brief is not a guarantee.
+
+Not done: `ui/card_back.png` is in the manifest and nothing loads it — the deck
+traversal reveals cards face-down and draws no back. That is a wiring gap, not an
+art gap, and it is left alone rather than half-filled.
+
+### D90 — The art pipeline had a backdrop-shaped hole in it, and the brief was lying about which way the enemies face
+
+The question was whether to generate the remaining art with one image model, in a
+coherent style. The answer is yes and it needed almost no argument — twelve dungeon
+backdrops already came out of one, and they are the thing ART.md §1 calls "the style
+bible". What the question exposed is that **the model was never the reason the rest of
+the game is incoherent**, and that starting to generate against the brief as written
+would have produced 35 files that were wrong in the same way.
+
+**Three findings, in ascending order of how much they would have cost.**
+
+**1. Two generators is two dialects.** `main_menu.jpg` and the twelve dungeons came
+from one tool; the six scene backdrops and five zone shots from another. No prompt
+reconciles that, and it is visible in a contact sheet. The fix is not a better
+adjective, it is **image conditioning**: `bg_crypt.png` attached to every request,
+including the ones that look nothing like a crypt, plus one style block that is
+identical across all ~156 calls and is never improved between images. A hundred
+individually-tuned prompts drift a little each, and a hundred little drifts is the
+four visual languages again.
+
+**2. Not everything on the list may be generated, and the file that says which had no
+way to say it.** `ART_ASSETS.md` listed the nine-slice frames next to the enemies with
+the same weight, when the frames are *computed* by `tools/gen_ui_kit.gd` for a
+mechanical reason that has already cost this project a release-blocking smear (D83):
+a nine-slice survives a 14x stretch only if its strips are constant along the stretch
+axis. So `art_manifest.gd` grew a `Kind` per row — PAINT, SCENE, KIT, SHEET, LICENCE —
+and a second output mode:
+
+    godot --headless --script tools/art_manifest.gd -- --prompts > ART_PROMPTS.md
+
+Same tables, same catalogues, so the prompt sheet cannot go stale against the game the
+way a hand-kept one would. It emits the style block once, a per-tier recipe, and one
+subject line per file — and, for each tier, which of its files are **not** for a
+generator and why. The expensive mistake here is not a bad painting. It is a good
+painting of a thing that had to be computed.
+
+The 8-frame VFX sheets are marked SHEET for the same class of reason: eight plausible
+frames of eight different explosions read as a strobe, not an impact. That is not a
+prompt problem.
+
+**3. The brief said "facing left", and the game has faced the viewer since D77.**
+ART.md's Tier 2 section still described the side-on arena that the head-on framing
+replaced, along with a `FLOOR_LINE` constant that no longer exists and two numbers
+(34% enemy height, 68% standing line) that the code contradicts. The live values are
+`HORIZON_LINE = 0.68` and `STAND_LINE = 0.72` — **deliberately different numbers**,
+because a figure standing exactly on the wall/floor junction is at the far end of the
+corridor rather than in the fight — and 38%. Thirty-five enemies generated against the
+stale section would each have been individually fine and collectively unusable: a
+corridor of monsters looking at the wall.
+
+Worth noting *why* it went stale while `ART_ASSETS.md` stayed correct. The manifest is
+generated and the brief is prose; the generated file had already been updated at its
+source and the prose had not. That is the D34 habit in its purest form, and the fix
+applied here is the same one: ART.md no longer restates a single count or constant
+that the manifest computes.
+
+**What was actually missing from the pipeline: alpha.** All three existing installers
+assume an opaque 16:9 frame. Every remaining tier — 35 enemies, 30 relics, 10 powers —
+is a subject on transparent at a fixed canvas size, and no image tool produces that.
+It produces a painting of a monster in a room. `tools/install_cutouts.gd` is the
+missing half: matte, despeckle, trim, scale, anchor.
+
+Four decisions in it are worth keeping:
+
+* **Matte by flood-fill from the border, not by chroma key.** The obvious approach is
+  to ask for the subject on a key colour and drop that colour. There is no safe key:
+  the five zone accents are cyan, orange, acid-green, deep-blue and *magenta* (ART.md
+  §2), so every obvious key is somebody's light source. Filling inward from the border
+  and requiring connectivity keeps a patch of stone inside the subject that happens to
+  match the field from being punched out into a hole.
+* **Refuse rather than guess.** If under 80% of the border agrees with its own average,
+  the image is a painting of a room and the tool says so instead of cutting a hole in
+  a wall. Likewise if what survives is under 2% or over 92% of the frame.
+* **The despeckle pass is load-bearing, not tidiness.** `strip_sparkle.gd` cannot help
+  here — it finds the watermark by intersecting "brighter than its surroundings" across
+  images that share one frame, and a batch of cutouts at different sizes with different
+  silhouettes shares no frame. It does not need to: the stamp is in the corner, the
+  corner is background, the matte takes it. What it *leaves* is a small opaque island
+  in the corner, which would then drag the trim box out to meet it and shrink the
+  monster to fit beside its own watermark. Components under 8% of the largest are
+  dropped, and the count is printed, because a silently-deleted limb and a
+  silently-deleted watermark look identical from inside the tool.
+* **Bottom-anchoring is per-family, not a flag.** Enemies are placed with their feet on
+  `STAND_LINE`, so transparent padding under the subject is that enemy hovering by
+  exactly that much, in every fight, forever — a defect that is invisible in the file
+  and obvious in the game. Relics and powers sit in a square slot and are centred. The
+  installer trims to the alpha bounding box and puts the lowest opaque pixel on the
+  canvas's last row; measured on fixtures, bottom gap 0px for enemies and 2px for a
+  centred relic.
+
+Name matching earns its complexity for the same reason D73 did: **the filename is the
+wiring.** A generator names its output after the prompt, so sources are matched against
+both the id and the display name with copy-numbers stripped — `The Grave-Sexton (2).png`
+lands on `grave_sexton.png` — and anything unmatched is listed loudly at the end,
+because a file nobody could place is art that was made and will never load, which from
+the game's side is indistinguishable from art that was never made at all.
+
+**Not done, deliberately.** No art was generated in this entry. The 21 status symbols
+need a white-and-alpha flatten step on the way in that does not exist yet — they are
+specced monochrome-tintable because callers tint by rarity and fade spent states, and
+a coloured icon cannot be tinted, only muddied. That step is a real piece of work and
+pretending the tier is unblocked would be the half-added content D42 exists to catch.
+
+### D89 — The art that could not be committed, and the half of it worth generating
+
+The request was "I do not like the game assets and they prevent us to commit — can we
+generate new ones that go with the background style?" The second clause turned out to
+be the literal problem, and it was already written down: `assets/art/iso/README.md`
+said, in its own heading, **"Licence status: UNKNOWN for the floor, NON-COMMERCIAL for
+the hero."**
+
+* The four floor packs arrived as bare `~/Downloads` directories with no licence file,
+  no readme and no attribution of any kind. Their shape matches the free tiers that
+  CraftPix and itch.io hand out, which commonly permit *use in a game* while forbidding
+  **redistribution of the art**. Committing a file to a repository is redistribution.
+* The hero is Engvee's prototyping hero, whose store page states its terms in prose:
+  "for prototyping, **non-commercial** use". Not unknown — known, and disqualifying.
+
+Nothing had been committed yet (`assets/art/iso/` was entirely untracked), so this was
+caught before it became a licence problem rather than after. That is luck, not process,
+and the process gap is dealt with below.
+
+**Materials: generated, and better than what they replace.** `tools/gen_iso_art.gd`
+computes ten seamless textures — a ground/wall pair per terrain in
+`Balance.ISO_TERRAINS`, plus the bare fallback names. Deterministic, so a regenerate is
+a real diff rather than ten mystery binaries.
+
+The part worth keeping is how the colour is decided. "Goes with the painted backdrops"
+is a judgement, and judgements drift, so it is made mechanical: **each terrain's ramp
+is sampled from the floor band of the backdrops of the dungeons that actually use that
+terrain.** The Warrens are `earth`, so the Warrens' iso floor is built out of the
+colours of the floor in `bg_warrens.png`, taken below `PixelArt.HORIZON_LINE` — the
+same constant `tests/test_art.gd` already asserts every backdrop agrees with, so the
+two cannot drift. Repaint a backdrop and the floor follows. It is D34's rule applied to
+pixels: derived, not matched by eye.
+
+**Two failed palettes before the third worked, and both failures are instructive.**
+
+* Indexing one sample per percentile gave worked stone `#3c0c00 #2d2136 #22346a
+  #773c22` — a red, a purple, a blue and a brown. Four dungeons feed that ramp, and
+  consecutive luminances belong to whichever painting happened to own that brightness.
+* Averaging a window around each percentile fixed the incoherence and left a hue
+  *sweep*: dark violet climbing to pink. The brightest percentile of a floor band is
+  not floor at all — it is the braziers these rooms are lit by.
+
+What works is taking chroma and value from **different places**. Hue and saturation are
+one saturation-weighted circular mean over the middle of the distribution — the colour
+of the ground itself. The value ramp is the percentile spread — how that ground is lit.
+No stop can drift to a different hue because there is only one hue. **A material is one
+surface lit across a range, and a sampler has to be built to produce that rather than
+hoping the statistics land there.**
+
+Two smaller measured corrections: absolute level is set by the view, not sampled (these
+paintings are dim, and `iso_run.gd` multiplies by fog tints again — shipped as sampled
+the floor was near-black with no headroom left to dim); and the normaliser backs its
+factor off rather than clamping per channel, because clamping pinned red at 1.0 while
+green and blue kept scaling and turned the brightest stone into `#ffc5dc`.
+
+**Seams are measured, not assumed.** Every pattern is evaluated on a torus. The check
+compares the wrap step against the interior as a control, and the first run reported
+worked stone at **3.95x** — which was not a visible seam but a bad probe: the control
+sampled a single column at x=128, which happened to fall inside a cobble where
+neighbours are nearly identical. Averaged over every interior column instead, the same
+file measures **1.64x**, and the four floors land between 0.55x and 1.64x. *A control
+has to be representative of the whole texture, or the ratio measures where you put the
+probe.*
+
+**Figures: rejected, then partly reinstated when the rejection was tested.**
+
+*(Revised. The first version of this entry ended here with the figures deleted. A
+capture of the combat screen taken afterwards showed the judgement had been made
+against the wrong comparison, and the reversal is recorded rather than edited away.)*
+
+**Figures: generated, looked at, and thrown away.** The same pipeline drew the hero,
+three monster families, the wanderers, the furniture, and 35 combat plates whose
+silhouette proportions were derived from each archetype's own fight data — bulk from
+`hp_mult`, reach from `dmg_mult`, count from `count_max`, family from
+`Balance.iso_family` itself, which already sorts archetypes from their numbers for
+exactly this reason.
+
+The derivation worked. The art did not. On the contact sheet the brutes read as coffins
+with antennae, the robed figures as lava lamps, the campfire as a traffic cone, the
+chest as a plain box. **It was worse than the CC0 pixel sprites it was meant to replace
+and worse than the drawn fallback already in the code**, so it is recorded here and not
+shipped, and the three files that made it are deleted rather than left in the tree
+looking like the pipeline.
+
+Worth being exact about the mistake, because it was predicted before it was made: the
+plan offered was *materials procedurally, figures as designed markers*, on the stated
+grounds that procedural generation handles seamless surfaces well and figures badly.
+That is what the evidence then showed. **Building the thing you have just argued
+against, because the code is right there, is how a scoped pass turns into a rejected
+one.**
+
+Two things survive the deletion. `scripts/art_palette.gd` is the sampler, which the
+material generator uses and any future one will. And the finding that a *marker* and a
+*failed monster* are not the same object: `iso_run.gd` already falls back to a lit
+ground ring and a lantern-bright pip and treats that as the real marker rather than a
+degraded one, which is better than what was drawn to replace it.
+
+**The process gap, which is the durable part.** `tests/test_art.gd` had a licence check
+already — over a hand-written list of four directories. `assets/art/iso/` was not on it,
+which is exactly how thirty-three unlicensed files sat in the tree for a milestone with
+a README next to them announcing the problem to nobody. The check now **discovers**
+every directory under `assets/` holding a PNG, and requires each file to be accounted
+for in one of three ways: a licence file beside it, a README (its own or its parent's)
+naming a generator that exists, or a `.gitignore` pattern keeping it out of the
+repository. It reports **98 PNGs across 7 directories**, and it found a real gap on its
+first run — the UI frame kit is generated by `tools/gen_ui_kit.gd` and nothing in its
+own directory said so.
+
+*An invariant guarded by a hand-kept list of places is guarded nowhere new.* The same
+lesson as the empty-set one two entries earlier, in a different costume: the assertion
+was fine and the enumeration was what rotted.
+
+**The reversal, and what actually decided it.** The plates were rejected from a contact
+sheet at 4x actual size, viewed in isolation, against an imagined alternative. Then the
+combat screen was photographed: the enemy standing in front of that painted crypt is a
+16x16 tile scaled to 240px and modulated dark, and it reads as a **black pixelated
+cross**. The claim "worse than the CC0 sprites it was meant to replace" had never been
+tested against the thing it named.
+
+Rebuilt and shipped for the arena. Two defects carried the original failure, and both
+are the kind that only a capture finds:
+
+* **No waist and no gap between the legs.** A silhouette running from shoulder to floor
+  at constant width is a coffin whatever is drawn on it. The head now sits clear of the
+  shoulder line on a neck and the legs are separate shapes with air between them;
+  `ArtShapes.measure` reports a **waist ratio** and the generator prints the worst on
+  every run. Brutes measure 0.40–0.44 against a coffin's 1.00.
+* **`BODY_DARK = 0.10` was rendering at about 0.50.** It was run through a transform
+  carrying a 0.25 floor, so the constants said "dark silhouette" while the screen showed
+  a pale pink creature floating in front of the room rather than standing in it. *A
+  constant named DARK has to survive the transform applied to it.*
+
+A third, cheaper lesson sits between those two: the first re-capture still showed the
+Kenney sprite, because the plates had been written after the last `--import` and
+`ResourceLoader.exists()` answers for the imported resource. A generated PNG with no
+sidecar is invisible to the game and looks exactly like a generator that did nothing.
+
+**So the corrected rule is narrower than the one first written here.** Not "procedural
+figures are bad" — procedural figures at *arena* size, judged in context, are a clear
+improvement on a magnified 16x16 tile. What is bad is judging art on a contact sheet
+against an alternative you have not photographed. The iso floor's own figures are still
+absent, and that is now a scope decision rather than a verdict: the fallback ring and
+pip are good, and the same generator could dress that floor whenever it is wanted.
+
+**And then the isometric floor got them too.** Once the plates worked in the arena the
+same generator dressed the floor: hero, three monster families, four wanderer designs
+and four pieces of furniture. `ArtShapes.brute/caster/swarm` are shared between the two
+generators, which is a rule rather than a saving — D85 casts the enemy when the floor is
+laid out, so a wanderer crossing a hall IS the fight it will become, and the thing you
+see coming has to be the thing you meet. Two copies of those tables would drift the
+moment one screen was tweaked.
+
+**What went out with it.** Generated art made three things dead, and dead art is worse
+than no art because it looks like a decision:
+
+* `assets/pixel/enemies/` — 41 CC0 tiles handed out **by sort order**, needing a
+  12-entry override table to stop bosses inheriting trash-mob faces. Gone with the
+  machinery: `enemy_sprite`, `enemy_sprites`, `OVERRIDES`. Plates are keyed by id, so
+  "two enemies share a face" and "adding an archetype reshuffles everyone downstream"
+  are now impossible rather than merely tested for. Two tests changed shape as a result
+  — `test_content` measured *sprite headroom*, meaning how many spare tiles remained
+  before the next archetype started sharing, and that quantity no longer exists.
+* `assets/pixel/ui/` — the Kenney UI pack, with **zero callers**. The procedural frame
+  kit replaced it and nobody deleted it.
+* `tools/install_iso_art.gd` — the installer for the unlicensable packs, along with the
+  `.gitignore` block holding their filenames out of the repository. Both were scaffolding
+  for a problem that no longer exists.
+
+Figures for the isometric floor are no longer outstanding. What remains outstanding is
+*painted* art rather than designed markers, and the brief for commissioning it exists
+and is generated from the code that consumes it (`tools/art_manifest.gd`: canvas,
+anchor, standing line, lighting direction, and why a pale-footed figure dissolves into
+these backdrops).
+
+### D91 — Twenty-one icons that had to be one image, and an alpha channel taken from the wrong place first
+
+Two tiers were left blocked at the end of D90 and both were blocked for the same
+un-obvious reason: **the unit of work is the set, not the file.**
+
+**Why a sheet.** The 21 status symbols, the 7 intent telegraphs, the 10 power sigils
+and the 7+7 map icons share a requirement that no individual file can satisfy — they
+have to be **distinguishable from each other**. Seven intents that each read as "angry
+shape" have failed even if every one of them is handsome, and the intent telegraph is
+the core read of the whole combat system (ART.md Tier 1c). Requested one at a time,
+each request is blind to the other six, and the third one comes back as a shield again.
+Requested as one gridded image, the model sees the set while drawing it and consistency
+of hand costs nothing. `tools/install_sheet.gd` slices the grid, mattes and trims each
+cell individually — so an icon that sits off-centre in its cell still lands centred in
+its own file — and names the cells against the catalogue.
+
+**The cost is positional assignment, which this project already has a scar from.**
+`PixelArt.enemy_sprite()` hands sprites to archetypes by sort order and needed a
+12-entry override table to stop bosses inheriting trash-mob faces; D73 was about
+deleting exactly that. A sheet has no filename per cell, so it cannot be avoided here —
+only made survivable, in three ways. The order is **not implicit**: `ART_PROMPTS.md`
+prints it into the prompt from the same tables `install_sheet.gd` reads back, so the
+order asked for and the order installed are one list. The mapping is **printed on every
+run**, with a standing instruction to check it against the sheet. And a cell whose
+subject touches its own edge is **reported as probably clipped**, because that is the
+one misalignment the per-cell trim cannot repair. A set installed one cell out is 21
+correct icons on 21 wrong meanings, and nothing downstream would notice.
+
+**The monochrome flatten, and the matte that was wrong for it.** The symbols are
+specced tintable — `Icons` tints by rarity and fades for spent states, and a coloured
+glyph cannot be tinted, only muddied. The obvious implementation was to reuse the
+flood-fill matte from D90 and then paint the result white. That is wrong, and not for a
+subtle reason: **a flood fill resolves every pixel to in or out**, which turns a glyph's
+anti-aliased edge into a staircase — immediately visible, because these are authored at
+64px and the canvas is scaled up to 3x on a 4K display (D65). Alpha comes from
+**luminance** instead, which keeps the edge as the partial alpha it already was.
+Measured on a fixture: 1080 visible pixels, of which 378 are partial alpha and zero are
+non-white. There is nothing lost by discarding the hue, because the destination is one
+colour by contract.
+
+Two corrections inside that, both found by fixtures rather than by reading:
+
+* **Polarity is read off the border, not assumed.** A generator asked for "white glyph
+  on black" returns black-on-white often enough that hardcoding the direction would
+  silently invert part of a set — and an inverted glyph is not obviously wrong in a
+  thumbnail, it is a filled square with a hole in it.
+* **An empty cell has to be recognised as empty, not normalised into one.** A 5x5 grid
+  holding 21 symbols has four spare cells. The autocontrast that stretches field-to-peak
+  into 0-255 will happily divide an empty cell's sensor noise by its own tiny span and
+  produce a confident, fully opaque field of static — which then passes every coverage
+  check there is, because it *is* covered. A dynamic-range floor rejects the cell before
+  the stretch runs.
+
+**The refactor that came with it, and why it was not optional.** `install_cutouts.gd`
+already contained matte, despeckle, erode, trim, scale and anchor. `install_sheet.gd`
+needs all six. Copying them would have produced two implementations of "what a cutout
+is" that agree today and diverge on the first tuning change — the D34 habit that has
+cost this project four bugs. They live in `tools/cutout_lib.gd`, deliberately **not** a
+`class_name`: these are diagnostics that never ship, and a global class would put them
+in the game's class list beside `CardData` and `EnemyData`.
+
+**Also fixed here: a D-number clash.** Two entries were numbered D88 — the traversal
+consolidation and D90's art-pipeline entry, written in parallel sessions. The art one is
+renumbered, and its references in AGENTS.md with it. This is the second time (see
+`097069c`), and both times the cause was the same: an entry appended to the log while
+another session held a stale idea of the last number. Worth checking `grep '^### D'`
+before appending, not after.
+
+**Still not done.** No art has been generated. What is unblocked is the whole icon half
+of the list — 21 symbols, 7 intents, 10 powers, 14 map icons, 6 dice — as five sheet
+requests instead of 58 individual ones.
+
+**One miscount, caught by reading the output rather than the code.** Tier 4 reported 26
+files as generable when five of them are computed nine-slices — the `MAP_KIT` loop was
+the one table-walk that did not pass `_kind_of(e)`, so its per-row kinds were silently
+replaced by the section default. The tags were right and the plumbing dropped them,
+which is the failure mode a per-row override always has: it is invisible unless the
+default happens to be wrong. Generable total 156 -> 151.
