@@ -6,6 +6,11 @@
 ## off mid-word. Nothing in the suite could see it: the scene booted, the buttons
 ## worked, only the words were missing.
 ##
+## The hand is measured TWICE, at two sizes: the five combat deals, and the eleven
+## real play reaches with two relics and one fused draw card (D116). `Balance.HAND_SIZE`
+## is the opening hand, not the hand — and the fan gives every extra card its width out
+## of the card before it, so the size that had never been measured was the dangerous one.
+##
 ## A SCENE, not a `--script` test: line counts only exist once a tree has been laid
 ## out, and autoloads are absent in headless script runs.
 ## Run: godot --headless res://tests/CardTextTest.tscn
@@ -23,10 +28,24 @@ func _ready() -> void:
 	# would otherwise be measured against 560 pixels of vertical slack the player
 	# never has — the same trap PlayableTest documents, walked into again the moment
 	# this test started measuring rects instead of only font sizes.
-	get_window().size = Vector2i(
-		int(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
-		int(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
+	var design := Vector2(
+		float(ProjectSettings.get_setting("display/window/size/viewport_width", 1280)),
+		float(ProjectSettings.get_setting("display/window/size/viewport_height", 720)))
+	get_window().size = Vector2i(design)
 	await get_tree().process_frame
+	# ...and then PROVE it took, rather than trusting the assignment. The project
+	# stretches `canvas_items` with aspect "expand", so the visible rect follows the
+	# WINDOW: one taller than the design gives every rect below it vertical slack the
+	# player does not have, and every geometry check here silently passes on a screen
+	# nobody plays. That is not hypothetical — the screenshot harness renders 1280x800
+	# on a 16:10 desktop and hid a clipping bug that way (D115). One line, and the
+	# trustworthiness of everything below stops being an assumption.
+	var frame := get_viewport().get_visible_rect().size
+	if not frame.is_equal_approx(design):
+		_fails += 1
+		print("FAIL measuring a %.0fx%.0f layout in a %.0fx%.0f frame" % [
+			design.x, design.y, frame.x, frame.y])
+	print("  measured in a %.0fx%.0f frame" % [frame.x, frame.y])
 
 	MetaState.path_prefix = SANDBOX
 	MetaState.slot = 0
@@ -36,6 +55,10 @@ func _ready() -> void:
 	# what breaks, and a starter deck contains none of them.
 	await _check_every_card()
 	await _check_live_hand()
+	# ...and again at the size real play reaches, which is not the size combat deals.
+	# LAST, deliberately: it grants relics and puts a fused card in the collection, so
+	# anything that wants the plain starter state has to run before it.
+	await _check_large_hand()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -115,14 +138,7 @@ func _check_every_card() -> void:
 func _check_live_hand() -> void:
 	# a real fight, not just the scene: the hand only exists once the engine is set up
 	GameState.select_dungeon(Balance.DUNGEONS[0])
-	var deck: Array[CardData] = []
-	for id in MetaState.collection:
-		var entry: Dictionary = MetaState.collection[id]
-		for i in int(entry["count"]):
-			var c := (load(MetaState.CATALOG[id]) as CardData).duplicate()
-			c.level = int(entry["level"])
-			deck.append(c)
-	GameState.enter_dungeon(deck)
+	GameState.enter_dungeon(_collection_deck())
 	GameState.pending = {"type": GameState.NodeType.COMBAT}
 	GameState.combat_state = {}
 	var scene := load("res://scenes/Combat.tscn") as PackedScene
@@ -145,57 +161,9 @@ func _check_live_hand() -> void:
 	if seen == 0:
 		_fails += 1; print("FAIL combat rendered no card text at all")
 
-	# --- the hand is a fan, and it fits ------------------------------------------
-	#
-	# Every one of these was broken at some point while building the layout, each
-	# time found only by rendering it and looking: cards running off the bottom edge,
-	# the vitals line overflowing its box and passing under the leftmost card, and the
-	# rightmost card tucking behind the power orb. A still image cannot keep them
-	# fixed, so the rects are measured.
 	var vp := get_viewport().get_visible_rect()
-	var cards := _cards(inst)
-	if cards.size() < 3:
-		_fails += 1; print("FAIL only %d cards in hand to measure" % cards.size())
-	var rots := {}
-	var lowest_y := -1.0e9
-	var middle_y := 0.0
-	for k in cards.size():
-		var holder: Control = cards[k]
-		var r := holder.get_global_rect()
-		# A card in hand HANGS OFF the bottom edge on purpose (Combat.HAND_PEEK) —
-		# that is what buys a portrait card its height. So the assertion is no longer
-		# "the card is on screen", which would now fail by design; it is **the part
-		# that identifies the card is on screen**: the picture band and the name strip
-		# under it, which is also where the cost and the headline numbers live.
-		# Without this the peek could be tuned to any value at all and nothing would
-		# notice until a player could not tell two cards apart.
-		var ident := roundf(holder.size.y
-				* (UITheme.CARD_ART_BAND + UITheme.CARD_NAME_BAND)) \
-			+ roundf(holder.size.x * UITheme.CARD_PAD)
-		if r.position.y < 0.0:
-			_fails += 1
-			print("FAIL card %s starts at y %.0f, above a %.0f-tall frame" % [
-				holder.get_meta("card_id"), r.position.y, vp.size.y])
-		if r.position.y + ident > vp.size.y + 1.0:
-			_fails += 1
-			print("FAIL card %s hangs too far: picture+name end at y %.0f in a %.0f-tall frame" % [
-				holder.get_meta("card_id"), r.position.y + ident, vp.size.y])
-		if r.position.x < 0.0 or r.end.x > vp.size.x + 1.0:
-			_fails += 1
-			print("FAIL card %s spans x %.0f-%.0f, outside a %.0f-wide frame" % [
-				holder.get_meta("card_id"), r.position.x, r.end.x, vp.size.x])
-		rots[snappedf(holder.rotation, 0.001)] = true
-		if k == 0 or k == cards.size() - 1:
-			lowest_y = maxf(lowest_y, r.position.y)
-		if k == cards.size() / 2:
-			middle_y = r.position.y
-	# a fan, not a row: the cards are tilted, and the middle of it rides higher
-	if rots.size() < 3:
-		_fails += 1; print("FAIL the hand is not fanned — %d distinct angles" % rots.size())
-	if middle_y >= lowest_y:
-		_fails += 1
-		print("FAIL the hand has no arc: middle card at y %.0f, outer at y %.0f" % [
-			middle_y, lowest_y])
+	var cards := _hand_cards(inst)
+	_check_fan(inst, cards, "a dealt hand of %d" % cards.size())
 	# Everything in the bottom band has to be ON the screen. `PRESET_BOTTOM_LEFT`
 	# puts a box's TOP edge on the bottom of the frame, so the entire HUD and both
 	# controls rendered below it — and nothing in the suite noticed, because every
@@ -217,35 +185,6 @@ func _check_live_hand() -> void:
 			print("FAIL %s is off screen: %.0f,%.0f to %.0f,%.0f in a %.0fx%.0f frame" % [
 				named[0], wr.position.x, wr.position.y, wr.end.x, wr.end.y,
 				vp.size.x, vp.size.y])
-
-	# --- the name a RESTING card shows must not be under the next card ------------
-	#
-	# A resting card shows its name, its cost and its headline number and nothing else,
-	# and the fan lays the next card on top of this one's right-hand edge — so the name
-	# was the one thing being hidden. A captured five-card hand read "Smith's Fu",
-	# "Prepare", "Bludgeo", "Bite", "Shiv": three of five unidentifiable without
-	# hovering (D97). None of the checks above can see it — every card was on screen,
-	# fanned, arced and clear of both corners while being unreadable.
-	#
-	# The last card is drawn on top of the rest, so it is the one card allowed the
-	# whole face; everything before it is measured against its right-hand neighbour.
-	for k in maxi(0, cards.size() - 1):
-		var holder3: Control = cards[k]
-		if not holder3.has_meta("name_label"):
-			_fails += 1
-			print("FAIL card %s exposes no name label to measure" % holder3.get_meta("card_id"))
-			continue
-		var nm: Control = holder3.get_meta("name_label")
-		if nm == null or not nm.visible:
-			continue
-		# Tolerance is a whole character of the smallest font the fitter will use: the
-		# holders are rotated, and get_global_rect() is axis-aligned, so both edges
-		# carry a little slop. The defect this guards against is ~35% of a card wide.
-		var covered := (cards[k + 1] as Control).get_global_rect().position.x
-		if nm.get_global_rect().end.x > covered + 7.0:
-			_fails += 1
-			print("FAIL the name on %s runs to x %.0f, under the next card at x %.0f" % [
-				holder3.get_meta("card_id"), nm.get_global_rect().end.x, covered])
 
 	# --- hovering a card must show the WHOLE card --------------------------------
 	#
@@ -279,19 +218,6 @@ func _check_live_hand() -> void:
 		await get_tree().process_frame
 		if open4.is_valid():
 			open4.call(false)
-
-	# ...and the hand must not run under the things parked in both bottom corners
-	for zone in [["the vitals", inst.status_label], ["End Turn", inst.end_btn],
-			["the power orb", inst.power_btn]]:
-		var other: Control = zone[1]
-		if other == null or not other.visible:
-			continue
-		var orect := other.get_global_rect()
-		for holder2 in cards:
-			if (holder2 as Control).get_global_rect().intersects(orect):
-				_fails += 1
-				print("FAIL card %s overlaps %s" % [holder2.get_meta("card_id"), zone[0]])
-				break
 
 	# --- the number has to be readable WITHOUT hovering ---------------------------
 	#
@@ -353,6 +279,270 @@ func _check_live_hand() -> void:
 		break
 	inst.queue_free()
 	await get_tree().process_frame
+
+## The geometry a hand of ANY size has to keep, in one place so that a hand bigger
+## than the one combat deals can be put through exactly the same measurements
+## instead of a second set of them that quietly drifts (D116). Three things:
+## every card's identifying part is on screen, a resting card's name is not under
+## its right-hand neighbour, and no card runs under either bottom corner.
+##
+## `cards` must be in HAND order — the order the fan stacks them in, which is what
+## makes "the next card" mean anything. See `_hand_cards()`.
+func _check_fan(inst: Node, cards: Array[Control], tag: String) -> void:
+	# Every one of these was broken at some point while building the layout, each
+	# time found only by rendering it and looking: cards running off the bottom edge,
+	# the vitals line overflowing its box and passing under the leftmost card, and the
+	# rightmost card tucking behind the power orb. A still image cannot keep them
+	# fixed, so the rects are measured.
+	var vp := get_viewport().get_visible_rect()
+	if cards.size() < 3:
+		_fails += 1; print("FAIL only %d cards in hand to measure [%s]" % [cards.size(), tag])
+	var rots := {}
+	var lowest_y := -1.0e9
+	var middle_y := 0.0
+	for k in cards.size():
+		var holder: Control = cards[k]
+		var r := holder.get_global_rect()
+		# A card in hand HANGS OFF the bottom edge on purpose (Combat.HAND_PEEK) —
+		# that is what buys a portrait card its height. So the assertion is no longer
+		# "the card is on screen", which would now fail by design; it is **the part
+		# that identifies the card is on screen**: the picture band and the name strip
+		# under it, which is also where the cost and the headline numbers live.
+		# Without this the peek could be tuned to any value at all and nothing would
+		# notice until a player could not tell two cards apart.
+		var ident := roundf(holder.size.y
+				* (UITheme.CARD_ART_BAND + UITheme.CARD_NAME_BAND)) \
+			+ roundf(holder.size.x * UITheme.CARD_PAD)
+		if r.position.y < 0.0:
+			_fails += 1
+			print("FAIL [%s] card %s starts at y %.0f, above a %.0f-tall frame" % [
+				tag, holder.get_meta("card_id"), r.position.y, vp.size.y])
+		if r.position.y + ident > vp.size.y + 1.0:
+			_fails += 1
+			print("FAIL [%s] card %s hangs too far: picture+name end at y %.0f in a %.0f-tall frame" % [
+				tag, holder.get_meta("card_id"), r.position.y + ident, vp.size.y])
+		if r.position.x < 0.0 or r.end.x > vp.size.x + 1.0:
+			_fails += 1
+			print("FAIL [%s] card %s spans x %.0f-%.0f, outside a %.0f-wide frame" % [
+				tag, holder.get_meta("card_id"), r.position.x, r.end.x, vp.size.x])
+		rots[snappedf(holder.rotation, 0.001)] = true
+		if k == 0 or k == cards.size() - 1:
+			lowest_y = maxf(lowest_y, r.position.y)
+		if k == cards.size() / 2:
+			middle_y = r.position.y
+	# a fan, not a row: the cards are tilted, and the middle of it rides higher
+	if rots.size() < 3:
+		_fails += 1
+		print("FAIL [%s] the hand is not fanned — %d distinct angles" % [tag, rots.size()])
+	if middle_y >= lowest_y:
+		_fails += 1
+		print("FAIL [%s] the hand has no arc: middle card at y %.0f, outer at y %.0f" % [
+			tag, middle_y, lowest_y])
+
+	# --- the name a RESTING card shows must not be under the next card ------------
+	#
+	# A resting card shows its name, its cost and its headline number and nothing else,
+	# and the fan lays the next card on top of this one's right-hand edge — so the name
+	# was the one thing being hidden. A captured five-card hand read "Smith's Fu",
+	# "Prepare", "Bludgeo", "Bite", "Shiv": three of five unidentifiable without
+	# hovering (D97). None of the checks above can see it — every card was on screen,
+	# fanned, arced and clear of both corners while being unreadable.
+	#
+	# The last card is drawn on top of the rest, so it is the one card allowed the
+	# whole face; everything before it is measured against its right-hand neighbour.
+	for k in maxi(0, cards.size() - 1):
+		var holder3: Control = cards[k]
+		if not holder3.has_meta("name_label"):
+			_fails += 1
+			print("FAIL [%s] card %s exposes no name label to measure" % [
+				tag, holder3.get_meta("card_id")])
+			continue
+		var nm: Control = holder3.get_meta("name_label")
+		if nm == null or not nm.visible:
+			continue
+		# Tolerance is a whole character of the smallest font the fitter will use: the
+		# holders are rotated, and get_global_rect() is axis-aligned, so both edges
+		# carry a little slop. The defect this guards against is ~35% of a card wide.
+		var covered := (cards[k + 1] as Control).get_global_rect().position.x
+		if nm.get_global_rect().end.x > covered + 7.0:
+			_fails += 1
+			print("FAIL [%s] the name on %s runs to x %.0f, under the next card at x %.0f" % [
+				tag, holder3.get_meta("card_id"), nm.get_global_rect().end.x, covered])
+
+	# ...and the hand must not run under the things parked in both bottom corners
+	for zone in [["the vitals", inst.status_label], ["End Turn", inst.end_btn],
+			["the power orb", inst.power_btn]]:
+		var other: Control = zone[1]
+		if other == null or not other.visible:
+			continue
+		var orect := other.get_global_rect()
+		for holder2 in cards:
+			if (holder2 as Control).get_global_rect().intersects(orect):
+				_fails += 1
+				print("FAIL [%s] card %s overlaps %s" % [
+					tag, holder2.get_meta("card_id"), zone[0]])
+				break
+
+## The same three guards against the hand REAL PLAY reaches, which is not the hand
+## combat deals.
+##
+## `Balance.HAND_SIZE` is 5 and every measurement above was taken at five, but
+## nothing holds the hand there: Keen Lens draws one more every turn, Scholar's Lens
+## draws two more on every third turn, and eleven cards in the catalogue draw on
+## play. The fan's step is `min(card * FAN_OVERLAP, (room - card) / (n - 1))`, so
+## each additional card takes width away from the one before it — a large hand is
+## precisely where the name fitter is most likely to fail, and until now it had never
+## been measured at anything but five.
+##
+## The size is not picked, it is added up out of content that exists:
+##     5   Balance.HAND_SIZE
+##    +1   Keen Lens — extra_draw 1, every turn
+##    +2   Scholar's Lens — ON_TURN_START every 3rd turn, DRAW 2 (so: turn 3)
+##    +4   a fused See It Coming — cost 0, Draw 3, and a common's draw budget of 1
+##         buys it a level_cap of 2, so ONE fusion makes it Draw 4
+##    -1   the card leaves the hand to be played
+##   = 11, which is also about the ceiling a 13-card starter deck can hold up.
+##
+## Every card of that hand is dealt by the engine down the paths the game uses:
+## relics owned in MetaState, a fresh Combat scene, two real End Turns, one real
+## press on a card in hand. Assembling eleven widgets by hand would have been ten
+## lines shorter and would have proved something about the test instead of the game.
+func _check_large_hand() -> void:
+	for rid in ["keen_lens", "scholars_lens"]:
+		if not MetaState.add_relic(rid):
+			_fails += 1; print("FAIL cannot grant %s to build a large hand" % rid)
+	# In the collection the way FUSION leaves a levelled card: copies spent, one left.
+	# The deck is built from the collection, so this card reaches the fight through
+	# the same path as every other card in it.
+	MetaState.collection["see_it_coming"] = {"count": 1, "level": 2}
+	GameState.select_dungeon(Balance.DUNGEONS[0])
+	GameState.enter_dungeon(_collection_deck())
+	GameState.pending = {"type": GameState.NodeType.COMBAT}
+	# A NEW fight, not the one just measured: `Combat._snapshot()` left that one in
+	# `GameState.combat_state`, and combat resumes from that when it is there — which
+	# would restore the `extra_draw` saved before the relics above were owned.
+	GameState.combat_state = {}
+	var scene := load("res://scenes/Combat.tscn") as PackedScene
+	if scene == null:
+		_fails += 1; print("FAIL cannot load Combat.tscn"); return
+	var inst := scene.instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var eng = inst.eng
+	if eng == null:
+		_fails += 1; print("FAIL the large-hand fight has no engine"); return
+	var sic: CardData = _find_card(eng, "see_it_coming")
+	if sic == null:
+		_fails += 1; print("FAIL the fused draw card is not in the run deck"); return
+
+	# Turn 3, because that is the turn Scholar's Lens fires on. Driven through the
+	# handler the End Turn button is wired to, so the hand is dealt by `start_turn()`
+	# and laid out by `_refresh()` exactly as it is in play.
+	for t in 2:
+		# The enemies act in between and none of this is about surviving them: a dead
+		# player routes to the defeat screen and there is no hand left to measure.
+		# Topping the HP up is the arrangement; the hand is the subject.
+		eng.player.hp = eng.player.max_hp
+		if t == 1:
+			_stack_draw(eng, sic)
+		inst._on_end_turn()
+		await get_tree().process_frame
+		await get_tree().process_frame
+	if eng.turn != 3:
+		_fails += 1; print("FAIL two End Turns left the fight on turn %d" % eng.turn)
+	if not (sic in eng.hand):
+		_fails += 1; print("FAIL %s was stacked on the draw pile and not drawn" % sic.id)
+	else:
+		inst._on_card_pressed(sic)
+		await get_tree().process_frame
+		await get_tree().process_frame
+
+	# What the arithmetic in the doc comment above claims, read back off the content
+	# rather than restated as 11: if a relic is retuned or the card is renumbered this
+	# says so, instead of silently measuring a smaller hand and passing.
+	var want: int = Balance.HAND_SIZE + eng.extra_draw \
+		+ _relic_draw(eng, "scholars_lens") + sic.eff_draw() - 1
+	var cards := _hand_cards(inst)
+	print("  large hand: %d cards (%d expected: %d dealt + %d relic draw + %d from %s)" % [
+		cards.size(), want, Balance.HAND_SIZE, eng.extra_draw + _relic_draw(eng, "scholars_lens"),
+		sic.eff_draw(), sic.name])
+	if cards.size() < want:
+		_fails += 1
+		print("FAIL only %d cards in the large hand, expected %d — the size the rest of this check measures is not the size it claims" % [
+			cards.size(), want])
+	_check_fan(inst, cards, "a played-up hand of %d" % cards.size())
+	# How the fan SURVIVES eleven cards, reported rather than asserted, because it is
+	# the number the next person will want and it is not a pass/fail: the step drops to
+	# 41.6px, so `fit_name` hands the name a 24px slot and the fitter buys the fit with
+	# type size. Measured at 7-9px for a hand of eleven, against the 14px floor this
+	# suite puts under HOVERED text. Nothing is clipped and nothing is covered — the
+	# name is inside its slot, legally, and too small to read at arm's length. An
+	# assertion here would be a design change (a cap on hand width, or a second row),
+	# and that belongs to whoever owns the layout, not to the test that found it.
+	var tiniest := 999
+	for h in cards:
+		var nm2: Label = h.get_meta("name_label")
+		if nm2 != null and nm2.visible:
+			tiniest = mini(tiniest, nm2.get_theme_font_size("font_size"))
+	print("  smallest resting card NAME in a %d-card hand: %dpx" % [cards.size(), tiniest])
+	inst.queue_free()
+	await get_tree().process_frame
+
+## The run deck the collection makes, at the levels the collection holds — the same
+## thing the deck builder hands to a run.
+func _collection_deck() -> Array[CardData]:
+	var deck: Array[CardData] = []
+	for id in MetaState.collection:
+		var entry: Dictionary = MetaState.collection[id]
+		for i in int(entry["count"]):
+			var c := (load(MetaState.CATALOG[id]) as CardData).duplicate()
+			c.level = int(entry["level"])
+			deck.append(c)
+	return deck
+
+func _find_card(eng, id: String) -> CardData:
+	for pile in [eng.draw_pile, eng.hand, eng.discard_pile]:
+		for c in pile:
+			if c.id == id:
+				return c
+	return null
+
+## Put a card the deck already contains on top of the draw pile, so the next draw
+## takes it. `CombatEngine.draw_cards` pops from the BACK, so the top is the end.
+##
+## This fixes the ORDER a shuffle could have dealt anyway; it never adds a card the
+## player does not hold. Waiting for the shuffle to volunteer the one card the
+## measurement needs would make the suite flaky instead of honest.
+func _stack_draw(eng, card: CardData) -> void:
+	for pile in [eng.draw_pile, eng.hand, eng.discard_pile]:
+		pile.erase(card)
+	eng.draw_pile.push_back(card)
+
+## What a triggered relic's DRAW effect is worth per firing, read off the relic.
+func _relic_draw(eng, id: String) -> int:
+	for r in eng.relics:
+		if r == null or r.id != id:
+			continue
+		for i in r.trigger_count():
+			if r.effect[i] == RelicData.Effect.DRAW:
+				return int(r.effect_value[i])
+	return 0
+
+## The hand as the FAN sees it: the widget for each card, in `eng.hand` order.
+##
+## Not `_cards()`, which walks the tree. Tree order is creation order, and the two
+## stop agreeing the moment a card is played — the played card's widget is still in
+## the tree (flying out on `fx_layer`) and the cards drawn to replace it are appended
+## at the end. Measuring "the next card along" against that order would compare
+## neighbours that are not neighbours.
+func _hand_cards(inst: Node) -> Array[Control]:
+	var out: Array[Control] = []
+	for card in inst.eng.hand:
+		var holder: Control = inst.card_widgets.get(card)
+		if holder != null and is_instance_valid(holder):
+			out.append(holder)
+	return out
 
 ## Two distinct failures, both of which read as "I cannot see the text":
 ## the label clips (fewer lines drawn than the text needs), or the label is drawn
