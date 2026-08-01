@@ -143,6 +143,27 @@ const REDO_DIRS := {
 	"enemies/": REDO_SILHOUETTE,
 }
 
+## Files a `REDO_DIRS` rule no longer applies to, because they have been repainted.
+##
+## A family of thirty-five is not repainted in one sitting, and halfway through, both
+## available answers are wrong: leave the directory rule alone and the sheet asks for
+## twelve files that are already done, or drop it and it stops asking for the
+## twenty-three that are not. Narrowing the key worked for `iso/` because the two halves
+## happened to have different prefixes; these do not, and inventing a prefix that only
+## exists to encode progress would be worse than saying it plainly.
+##
+## So this is the progress record, and it is the SHORTER of the two lists on purpose —
+## it starts empty, grows as re-rolls land, and the moment it reaches the whole family
+## the `REDO_DIRS` line comes out and this goes with it. The same shrink-to-nothing the
+## table above is built around (D122).
+const REDO_CLEARED := [
+	# Tier 2, painted in D122. Order is the sheet they came in on, three per row.
+	"enemies/bone_picker.png", "enemies/crypt_hound.png", "enemies/cultist.png",
+	"enemies/grave_sexton.png", "enemies/marrow_abbot.png", "enemies/ossuary_wretch.png",
+	"enemies/abyss_horror.png", "enemies/bellows_brute.png", "enemies/bellows_master.png",
+	"enemies/bog_lurker.png", "enemies/brood_mother.png", "enemies/brute.png",
+]
+
 ## The defect recorded against a file, or "" if there is none. Every reader goes
 ## through this rather than indexing `REDO`, so the directory rule cannot be honoured
 ## in one place and forgotten in another — which is exactly how the prompt sheet and
@@ -150,6 +171,8 @@ const REDO_DIRS := {
 func _redo(rel: String) -> String:
 	if REDO.has(rel):
 		return String(REDO[rel])
+	if rel in REDO_CLEARED:
+		return ""
 	for prefix in REDO_DIRS:
 		if rel.begins_with(String(prefix)):
 			return String(REDO_DIRS[prefix])

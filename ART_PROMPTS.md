@@ -9,7 +9,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**36 files can be generated.** The rest of the list cannot, and the sections below
+**24 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -28,7 +28,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 36 times.
+   improve it between images. Its job is to be identical 24 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -86,22 +86,13 @@ Nothing to generate here.
 
 Subject alone on a FLAT, EVEN field of a single colour that appears nowhere in the subject — that field is what `tools/install_cutouts.gd` mattes away, and it refuses any image whose border is not flat rather than cutting a hole in a painted wall. Full body, feet included, nothing cropped by the frame edge. No ground, no floor, no shadow, no pedestal, no background scenery. Facing the viewer, lit from above-front. One monster per image. Generate at 1024x1024 and let the installer scale down: the boss files are rendered at 1.34x the ordinary size and an upscaled boss is a soft boss.
 
-**35 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+**23 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
 
-*All 35 have the same defect: a procedural SILHOUETTE from `tools/gen_enemy_art.gd`, not a painting: measured luma 0.17-0.23 with a flat empty interior behind a one-sided rim light, so at the 240px it draws at, in front of a painted room, it is a dark shape with no face, no weapon and no material. It was the right placeholder — it replaced 41 unlabelled 16x16 tiles handed out by sort order — but it reads as finished art and is not (D122).*
+*All 23 have the same defect: a procedural SILHOUETTE from `tools/gen_enemy_art.gd`, not a painting: measured luma 0.17-0.23 with a flat empty interior behind a one-sided rim light, so at the 240px it draws at, in front of a painted room, it is a dark shape with no face, no weapon and no material. It was the right placeholder — it replaced 41 unlabelled 16x16 tiles handed out by sort order — but it reads as finished art and is not (D122).*
 
 | save as | size | subject |
 |---|---|---|
-| `enemies/abyss_horror.png` | 512x512 | **The Maw Itself.** The BOSS of The Maw. Tanky — draw it heavy. In a fight it attacks, makes you vulnerable and empowers itself. |
-| `enemies/bellows_brute.png` | 256x256 | **Bellows Brute.** Appears in: The Ember Road. Tanky — draw it heavy. Hits hard. In a fight it attacks and defends. |
-| `enemies/bellows_master.png` | 512x512 | **The Bellows-Master.** The BOSS of The Ember Road. In a fight it attacks and empowers itself. |
-| `enemies/bog_lurker.png` | 256x256 | **Bog Lurker.** Appears in: The Rot Gardens, The Sunken Vault, The Drowned Market, The Abyssal Stair, The Maw. Tanky — draw it heavy. In a fight it attacks and defends. |
-| `enemies/bone_picker.png` | 256x256 | **Bone Picker.** Appears in: The Crypt, The Ossuary, The Warrens. Fights in groups of 1-2, so it must read at small size. In a fight it attacks. |
-| `enemies/brood_mother.png` | 512x512 | **The Brood-Mother.** The BOSS of The Warrens. Tanky — draw it heavy. In a fight it attacks and empowers itself. |
-| `enemies/brute.png` | 256x256 | **Brute.** Appears in: The Foundry, The Slag Pits. Tanky — draw it heavy. Hits hard. In a fight it attacks and defends. |
 | `enemies/cinder_knight.png` | 512x512 | **The Cinder Knight.** The BOSS of The Slag Pits. Tanky — draw it heavy. In a fight it attacks, defends and empowers itself. |
-| `enemies/crypt_hound.png` | 256x256 | **Crypt Hound.** Appears in: The Crypt. In a fight it attacks. |
-| `enemies/cultist.png` | 256x256 | **Cultist.** Appears in: The Crypt, The Foundry. In a fight it attacks and empowers itself. |
 | `enemies/deep_warden.png` | 512x512 | **The Deep Warden.** The BOSS of The Sunken Vault. Tanky — draw it heavy. In a fight it attacks, defends and empowers itself. |
 | `enemies/drowned_thrall.png` | 256x256 | **Drowned Thrall.** Appears in: The Sunken Vault, The Drowned Market, The Abyssal Stair, The Maw. Fights in groups of 1-3, so it must read at small size. In a fight it attacks. |
 | `enemies/ember_hound.png` | 256x256 | **Ember Hound.** Appears in: The Ember Road. Fights in groups of 2-2, so it must read at small size. Hits hard. In a fight it attacks and empowers itself. |
@@ -109,15 +100,12 @@ Subject alone on a FLAT, EVEN field of a single colour that appears nowhere in t
 | `enemies/forge_hound.png` | 256x256 | **Forge Hound.** Appears in: The Foundry, The Slag Pits. Fights in groups of 1-2, so it must read at small size. Hits hard. In a fight it attacks and empowers itself. |
 | `enemies/fungal_host.png` | 256x256 | **Fungal Host.** Appears in: The Fungal Deep. Fights in groups of 2-3, so it must read at small size. In a fight it attacks. |
 | `enemies/grave_moth.png` | 256x256 | **Grave Moth.** Appears in: The Warrens. Fights in groups of 2-3, so it must read at small size. In a fight it attacks. |
-| `enemies/grave_sexton.png` | 512x512 | **The Grave-Sexton.** The BOSS of The Crypt. In a fight it attacks, defends and empowers itself. |
 | `enemies/hexer.png` | 256x256 | **Hexer.** Appears in: The Warrens. In a fight it attacks, makes you vulnerable and weakens you. |
 | `enemies/last_vendor.png` | 512x512 | **The Last Vendor.** The BOSS of The Drowned Market. Tanky — draw it heavy. In a fight it attacks, weakens you and defends. |
 | `enemies/market_ghoul.png` | 256x256 | **Market Ghoul.** Appears in: The Drowned Market. Fights in groups of 1-3, so it must read at small size. In a fight it attacks. |
-| `enemies/marrow_abbot.png` | 512x512 | **The Marrow-Abbot.** The BOSS of The Ossuary. Tanky — draw it heavy. In a fight it attacks, makes you vulnerable and defends. |
 | `enemies/marrow_priest.png` | 256x256 | **Marrow Priest.** Appears in: The Ossuary. In a fight it makes you vulnerable, attacks and weakens you. |
 | `enemies/maw_tender.png` | 256x256 | **Maw Tender.** Appears in: The Abyssal Stair, The Maw. Tanky — draw it heavy. In a fight it attacks, empowers itself and defends. |
 | `enemies/mycelial_lord.png` | 512x512 | **The Mycelial Lord.** The BOSS of The Fungal Deep. Tanky — draw it heavy. In a fight it makes you vulnerable, attacks and defends. |
-| `enemies/ossuary_wretch.png` | 256x256 | **Ossuary Wretch.** Appears in: The Ossuary. Fights in groups of 2-3, so it must read at small size. In a fight it attacks. |
 | `enemies/pale_acolyte.png` | 256x256 | **Pale Acolyte.** Appears in: The Sunken Vault, The Drowned Market. In a fight it attacks, makes you vulnerable and empowers itself. |
 | `enemies/plague_rat.png` | 256x256 | **Plague Rat.** Appears in: The Warrens, The Rot Gardens. Fights in groups of 2-3, so it must read at small size. Fragile — draw it slight. In a fight it attacks. |
 | `enemies/rat_swarm.png` | 256x256 | **Rat.** Appears in: The Warrens. Fights in groups of 2-3, so it must read at small size. Fragile — draw it slight. In a fight it attacks. |
