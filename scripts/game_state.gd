@@ -193,28 +193,80 @@ func earn_pack(kind: String, dungeon_of: String = "", tier_of: String = "") -> v
 		"build": Balance.roll_pack_build(did),
 	})
 
-## What the run stands to lose, as the run screens state it.
+## What the run stands to lose, one phrase per kind of thing in escrow.
 ##
-## One function because there were four copies of this string — one per traversal
-## screen, back when there were four (D94) — and packs (D80) had to be added to all
-## of them: a thing that can be forfeited but is never shown
-## while it is at risk is not really in escrow, it is just a surprise on the
-## Defeat screen. Relics are named here too, for the same reason.
-func risk_line() -> String:
-	var parts: Array[String] = ["%d cards" % escrow_cards.size(), "%d gold" % escrow_gold]
+## One function because there were four copies of this list — one per traversal screen,
+## back when there were four (D94) — and packs (D80) had to be added to all of them: a
+## thing that can be forfeited but is never shown while it is at risk is not really in
+## escrow, it is just a surprise on the Defeat screen. Relics are named for the same
+## reason (D68).
+##
+## The PARTS rather than only the sentence, because the sentence was being taken apart
+## again by its readers: the crawl header split it on runs of spaces to give each fact
+## its own Label (D115) and the pause menu did `trim_prefix("AT RISK: ")`. Two screens
+## reverse-engineering one function's punctuation is D34's duplicated-table shape in
+## string form — the wording moves, both readers are silently wrong, and nothing fails
+## (D116).
+##
+## `PackedStringArray` and not a Dictionary of counts: every caller wants display text,
+## and handing back numbers would push the pluralisation and the which-kinds-to-mention
+## rule out into each of them, which is the duplication being removed. Anyone who needs
+## to do arithmetic on the escrow reads the four lists, which are right here.
+##
+## Cards and gold are always named, even at zero, so the crawl's escrow frame always has
+## a subject sitting inside it; `at_risk()` is what answers whether there is anything in
+## it worth lighting up.
+func risk_parts() -> PackedStringArray:
+	var parts := PackedStringArray(["%d cards" % escrow_cards.size(),
+		"%d gold" % escrow_gold])
 	if not escrow_relics.is_empty():
 		parts.append("%d relic%s" % [escrow_relics.size(),
 			"" if escrow_relics.size() == 1 else "s"])
 	if not escrow_packs.is_empty():
 		parts.append("%d pack%s" % [escrow_packs.size(),
 			"" if escrow_packs.size() == 1 else "s"])
-	var line := "AT RISK: " + ", ".join(parts)
-	# keys are NOT at risk in the same sense — they are spent here or wasted — but a
-	# locked chest you cannot open because you did not know you had a key is the
-	# kind of thing the player is never supposed to discover afterwards
-	if keys > 0:
-		line += "    Keys %d" % keys
-	return line
+	return parts
+
+## The same facts as the one line of prose the run screens have always shown.
+##
+## Kept as a function rather than left to callers because "AT RISK: a, b, c" is a
+## wording several screens share, and one writer of it is the entire point of the
+## original; it is now a join over `risk_parts()` instead of the place the parts are
+## built. Keys used to ride the tail of this string and no longer do — see
+## `keys_phrase()` for why they were never at risk in the sense this line claims.
+func risk_line() -> String:
+	return "AT RISK: " + ", ".join(risk_parts())
+
+## Is anything actually in escrow?
+##
+## Its own predicate because the crawl's alarm frame needs the question answered and was
+## answering it itself out of the four lists (D115) — a second definition of "at risk",
+## sitting a file away from `risk_parts()` and free to drift from it. The last time a
+## fifth forfeitable thing appeared, packs had to be added to four separate copies of
+## this idea; that is the cost being avoided (D34, D116).
+##
+## Keys are deliberately not counted: they are spent on this floor or wasted, never
+## taken off you.
+func at_risk() -> bool:
+	return (not escrow_cards.is_empty()) or escrow_gold > 0 \
+		or (not escrow_relics.is_empty()) or (not escrow_packs.is_empty())
+
+## Keys in hand, as a phrase, or "" when there are none.
+##
+## Keys were appended to `risk_line()` behind a run of spaces, and every reader of that
+## line then had to disagree with it. The crawl stripped them off the tail and moved them
+## to the floor's own row, because a frame meaning "this can be taken off you" is the
+## wrong container for them (D115). Worse, the pause menu wraps the line in "secured by
+## beating the boss" and the rope prompt in "you keep everything found here", and a key
+## is neither secured nor kept — the run ends and it is gone. So they come out of that
+## sentence (D116).
+##
+## They still have to be stated somewhere on every screen that showed them: a locked
+## chest you cannot open because you did not know you had a key is the kind of thing the
+## player is never supposed to discover afterwards. Empty rather than "Keys 0" so a row
+## with nothing to say closes up.
+func keys_phrase() -> String:
+	return "" if keys <= 0 else "Keys %d" % keys
 
 ## An elite yielded a relic. Held at risk until the boss falls.
 func earn_relic(id: String) -> void:

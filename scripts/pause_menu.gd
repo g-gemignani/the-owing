@@ -24,18 +24,31 @@ func _build() -> void:
 	UI.label(col, "%s    HP %d/%d    %d gold banked" % [
 		dd.name if dd != null else "No dungeon", GameState.hp, GameState.max_hp, MetaState.gold])
 	var ropes := MetaState.item_count("escape_rope")
+	# The parts, joined into this screen's own sentences, rather than `risk_line()` with
+	# its prefix trimmed back off. A reader that undoes its writer's formatting is wrong
+	# the moment the writer rewords, and silently: `trim_prefix` on a string that no
+	# longer starts that way returns it whole (D116). Both sentences want the same list.
+	var risked := ", ".join(GameState.risk_parts())
 	if GameState.in_run():
-		UI.label(col, "At risk in this run: %s — secured by beating the boss, or by using an Escape Rope." % [
-			GameState.risk_line().trim_prefix("AT RISK: ")])
-	UI.label(col, "Escape Ropes held: %d" % ropes)
+		UI.label(col, "At risk in this run: %s — secured by beating the boss, or by using an Escape Rope." % [risked])
+	# Keys belong on the "held" line and not in the sentence above, which promises the
+	# boss or a rope will secure everything it names. A key is secured by neither — it is
+	# spent on this floor or wasted when the run ends — and it rode the tail of that
+	# sentence until D116. It still has to be stated, or a player pauses in front of a
+	# locked chest with no way to find out whether they can open it.
+	var held := "Escape Ropes held: %d" % ropes
+	var keys_held := GameState.keys_phrase()
+	if keys_held != "":
+		held += "    " + keys_held
+	UI.label(col, held)
 	UI.spacer(col)
 
 	match confirming:
 		Confirm.ROPE:
 			# the rope is the only thing that carries a sealed pack out of a run you
-			# are not going to finish, so it has to be named in the choice
-			UI.label(col, "Use an Escape Rope? You keep everything found here (%s), but the dungeon stays uncleared — no relic, no unlock." % [
-				GameState.risk_line().trim_prefix("AT RISK: ")])
+			# are not going to finish, so it has to be named in the choice — and only
+			# what it actually carries, which keys never were
+			UI.label(col, "Use an Escape Rope? You keep everything found here (%s), but the dungeon stays uncleared — no relic, no unlock." % [risked])
 			var r := UI.row(col, 8)
 			UI.button(r, "Use the rope", func(): _use_rope(), 38.0)
 			UI.exit_button(r, "Keep going", func(): _cancel(), 38.0)

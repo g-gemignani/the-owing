@@ -893,17 +893,19 @@ func _on_floor_input(event: InputEvent) -> void:
 
 # --- state --------------------------------------------------------------------
 
-## Break one of the model's pre-joined header lines back into its phrases.
+## Break `TraversalIso.status()` back into its phrases.
 ##
-## `TraversalIso.status()` and `GameState.risk_line()` both hand back a string that has
-## already been glued together with runs of spaces, and that gluing is the whole defect:
-## nothing downstream can then break the line anywhere except inside a phrase. Splitting
-## on the runs gives each fact back its own Label. What this really wants is for those
-## two to return their parts — the seam is described in D114 — but they are read by other
-## screens and this one is not allowed to change them.
+## The model hands back a string already glued together with runs of spaces, and that
+## gluing is the whole defect: nothing downstream can then break the line anywhere except
+## inside a phrase. Splitting on the runs gives each fact back its own Label.
 ##
-## Runs of two or more, so it does not matter that one joins with three spaces and the
-## other with four; a phrase's own spaces are single.
+## `GameState.risk_line()` had the same shape and no longer needs this — it hands over
+## `risk_parts()` now (D116). `status()` was left joined on purpose rather than half
+## migrated with it: it is a virtual on the `Traversal` seam (`scripts/traversal.gd`), so
+## a parts accessor is the base class's to declare or every future model gets to invent
+## its own name for it, and the seam is a wider change than one screen's header.
+##
+## Runs of two or more, so a phrase's own single spaces survive.
 func _phrases(line: String) -> PackedStringArray:
 	var out := PackedStringArray()
 	for p in line.split("  ", false):
@@ -943,26 +945,32 @@ func _refresh_header(tv: TraversalIso) -> void:
 	if GameState.hp * HURT_AT <= GameState.max_hp:
 		(vitals_box.get_child(1) as Label).add_theme_color_override("font_color", HURT_INK)
 
-	var risk := _phrases(GameState.risk_line())
-	risk_label.text = risk[0] if risk.size() > 0 else "AT RISK: nothing"
+	# One string, read straight: `risk_line()` is now nothing but the escrow facts, so
+	# there is no tail to split off and move (D116). It stays ONE Label rather than one
+	# per phrase, unlike the two rows either side of it: the frame is what marks the
+	# escrow total as a single thing, and a total broken across two rows inside one frame
+	# would read as two alarms rather than as one that wrapped.
+	risk_label.text = GameState.risk_line()
 	ropes_label.text = "Ropes %d" % MetaState.item_count("escape_rope")
-	# Lit only when there is something in escrow. The four lists are read directly
-	# rather than sniffed out of the formatted line, which would be a second place
-	# deciding what "at risk" means.
-	var staked: bool = not (GameState.escrow_cards.is_empty() and GameState.escrow_gold == 0
-		and GameState.escrow_relics.is_empty() and GameState.escrow_packs.is_empty())
+	# Lit only when there is something in escrow, and GameState is asked rather than
+	# told: deciding that here out of the four lists is a second definition of "at risk"
+	# living a file away from the one that prints it, free to drift the next time
+	# something becomes forfeitable (D34, D116).
+	var staked := GameState.at_risk()
 	risk_frame.add_theme_stylebox_override("panel", risk_sb_lit if staked else risk_sb_cold)
 	var stake_ink := RISK_LIT if staked else RISK_COLD
 	risk_label.add_theme_color_override("font_color", stake_ink)
 	ropes_label.add_theme_color_override("font_color", stake_ink.darkened(0.18))
 
-	# Keys arrive on the tail of `risk_line()` but are NOT at risk in the same sense —
-	# they are spent on this floor or wasted, as GameState says where it builds the
-	# line — so they belong with the floor's bookkeeping rather than inside a frame
-	# that means "this can be taken off you".
 	var below := _phrases(tv.status())
-	for i in range(1, risk.size()):
-		below.append(risk[i])
+	# Keys go with the floor's bookkeeping, not inside a frame that means "this can be
+	# taken off you": they are spent on this floor or wasted, never forfeited. This used
+	# to be done by stripping them off the tail of `risk_line()`; GameState hands them
+	# over as their own phrase now, and says there why they are not in that sentence at
+	# all any more (D116).
+	var held := GameState.keys_phrase()
+	if held != "":
+		below.append(held)
 	_fill_row(floor_box, below, UITheme.font(), FLOOR_INK)
 
 func _refresh() -> void:

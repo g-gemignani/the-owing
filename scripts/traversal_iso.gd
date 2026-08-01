@@ -1037,8 +1037,16 @@ func status() -> String:
 	for s in seen:
 		if bool(s):
 			mapped += 1
-	# Kept terse deliberately: this shares one header line with HP, deck, gold and the
-	# at-risk totals, and an earlier wording pushed that line onto a second row.
+	# Terse because it used to have to fit one header row beside HP, deck, gold and the
+	# at-risk totals, and a longer wording pushed that row onto a second line. That
+	# constraint is gone: the crawl gives every fact its own Label and wraps BETWEEN
+	# facts now, at any content length (D115). What survives of the old note is only that
+	# this is still a pre-joined string the header has to split back apart to lay out.
+	# The parts belong here the way `GameState.risk_parts()` does (D116) — but `status()`
+	# is the `Traversal` seam's virtual, so that accessor is the base class's to declare,
+	# and adding it on this override alone would leave the next model free to name it
+	# something else. Rewording the phrases is a separate decision either way: it changes
+	# what the crawl says about itself.
 	var out := "Floor %d/%d   %d/%d cleared   %d/%d mapped" % [
 		depth + 1, floors, cleared, maxi(1, quota), mapped, maxi(1, tiles)]
 	if mons.size() > 0:
