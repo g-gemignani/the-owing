@@ -192,6 +192,12 @@ func effect_text(live_damage: int = -1, live_block: int = -1) -> String:
 ## Value of one point of Block relative to one point of damage.
 const BLOCK_VALUE := 0.65
 
+## What hitting every enemy is worth. Average living enemies is only ~1.3: groups
+## exist but most encounters are single-target, so AoE is worth far less than
+## "effect x enemies". Applies to damage AND to debuffs, because `_resolve()`
+## spreads both.
+const AOE_SPREAD := 1.35
+
 # --- levelling: every level a player buys must move a number ------------------
 #
 # It did not. Measured across the whole game before this rewrite: 3,559 of the
@@ -474,9 +480,7 @@ func _power_value_uncached() -> float:
 	# multi-hit and AoE multiply the damage a single card delivers
 	var dmg := float(eff_damage()) * float(maxi(1, hits))
 	if aoe:
-		# Average living enemies is only ~1.3: groups exist but most encounters are
-		# single-target, so AoE is worth far less than "damage x enemies".
-		dmg *= 1.35
+		dmg *= AOE_SPREAD
 	if damage_from_block:
 		dmg += 8.0   # scales off Block rather than its own number
 	if strength_mult > 0:
@@ -509,8 +513,7 @@ func _power_value_uncached() -> float:
 	# ~4 other cards in a typical hand, at the same discount Block gets everywhere
 	v += float(block_per_card_in_hand) * 4.0 * BLOCK_VALUE
 	# debuffs are worth roughly the damage they enable/prevent over their duration
-	v += eff_vulnerable() * 2.0
-	v += eff_weak() * 2.0
+	var debuff := eff_vulnerable() * 2.0 + eff_weak() * 2.0
 	# Permanent self-buffs compound: +1 Strength is +1 on EVERY attack for the rest
 	# of the fight, so they price well above the same number of one-off damage.
 	## Calibrated against measured run completion, not intuition: at 6.0/5.0 the
@@ -521,7 +524,15 @@ func _power_value_uncached() -> float:
 	v += eff_draw() * 1.5
 	# Poison ignores Block, but it is back-loaded and wasted when a fight ends
 	# early, so it prices below the same number of immediate damage.
-	v += eff_poison() * 2.0
+	debuff += eff_poison() * 2.0
+	# `aoe` spreads DEBUFFS as well as damage — see `_resolve()` in combat_engine,
+	# which builds its debuff target list from every living enemy. Only the damage
+	# half was ever charged for it, so a mass-poison card was priced as though it
+	# hit one enemy and enemy scaling under-reacted to the decks built around it.
+	# Blight Bloom, Pandemic, Hex, Noxious Cloud and Plague Bearer are all AoE with
+	# no damage at all, which is to say they were priced entirely on the half of
+	# the rule that did not apply to them.
+	v += debuff * (AOE_SPREAD if aoe else 1.0)
 	v += eff_thorns() * 2.2   # conditional: only pays when the enemy attacks you
 	v += eff_heal() * 0.8
 	v += energy_gain * 15.0        # an extra card this turn
