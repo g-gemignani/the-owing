@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**209 files wanted · 74 already present · 135 to provide.**
+**183 files wanted · 108 already present · 75 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -19,7 +19,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 0 — frame kit and control chrome
 
-*24 files, 8 still to provide.* Highest leverage in the whole list: one kit and every screen stops looking broken.
+*24 files, 7 still to provide.* Highest leverage in the whole list: one kit and every screen stops looking broken.
 
 | ? | file | size | what it is |
 |---|---|---|---|
@@ -37,20 +37,20 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `ui/frame_card_rarity_2.png` | 320x448 | Rare — blue inlay, brighter metal. |
 | x | `ui/frame_card_rarity_3.png` | 320x448 | Epic — violet inlay, glow. |
 | x | `ui/frame_card_rarity_4.png` | 320x448 | Legendary — gold, ornate, unmistakable at a glance. |
-|   | `ui/card_back.png` | 320x448 | The back of a card. REQUIRED by the deck traversal, which reveals cards face-down. |
+| x | `ui/card_back.png` | 320x448 | The back of a card. NOTHING LOADS THIS TODAY — the deck traversal that required it went in D94, and combat's piles are the text 'Draw 12 - Discard 3'. Painted and installed anyway in D112, so it is waiting for whatever draws a face-down card next rather than blocking it. |
 |   | `ui/divider.png` | 128x16 | Tileable horizontally. A carved rule between sections. |
-|   | `ui/dropdown.png` | 192x96 | Nine-slice 32/32/28/28, matching the button. OptionButton is unstyled today. |
+|   | `ui/dropdown.png` | 192x96 | Nine-slice 32/32/28/28, matching the button. `UITheme` already wires OptionButton to this name and skips it while the file is absent, so the dropdown falls back to Godot's grey chrome — the wiring is done, the picture is what is missing. |
 | x | `ui/dropdown_arrow.png` | 32x32 | The open/close chevron. |
-|   | `ui/slider_track.png` | 128x24 | Tileable horizontally. HSlider is unstyled today. |
+|   | `ui/slider_track.png` | 128x24 | Tileable horizontally. The grabber beside it is installed; HSlider takes this name the moment it exists, and runs on Godot's default groove until then. |
 | x | `ui/slider_grabber.png` | 48x48 | The slider handle. |
-|   | `ui/scrollbar_track.png` | 24x128 | Tileable vertically. VScrollBar is unstyled today. |
+|   | `ui/scrollbar_track.png` | 24x128 | Tileable vertically. The thumb beside it is installed; VScrollBar takes this name the moment it exists, and runs on Godot's default well until then. |
 | x | `ui/scrollbar_grabber.png` | 24x48 | The scrollbar thumb. |
 | x | `ui/checkbox_on.png` | 64x64 | Checked. Settings screen. |
 | x | `ui/checkbox_off.png` | 64x64 | Unchecked. |
 
 ## Tier 1b — vitals and selection
 
-*9 files, 9 still to provide.* HP, Block and Energy are all plain text today.
+*9 files, 4 still to provide.* HP, Block and Energy are all plain text today.
 
 | ? | file | size | what it is |
 |---|---|---|---|
@@ -58,53 +58,53 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 |   | `ui/bar_hp_fill.png` | 32x48 | Tileable horizontally. Current HP. |
 |   | `ui/bar_hp_loss.png` | 32x48 | Tileable. The slice about to be lost — this is how the enemy's telegraphed damage gets shown on the bar. |
 |   | `ui/bar_block_fill.png` | 32x48 | Tileable. Block, stacked over HP. |
-|   | `ui/energy_orb_full.png` | 128x128 | One unspent energy. Replaces the text 'Energy 3/3'. |
-|   | `ui/energy_orb_empty.png` | 128x128 | One spent energy, same silhouette. |
-|   | `ui/orb_glow.png` | 192x192 | Additive bloom for a spend/gain flash. |
-|   | `ui/target_ring.png` | 256x256 | Ring/reticle marking the targeted enemy. Replaces the '> ' text prefix. |
-|   | `ui/card_glow.png` | 320x448 | Additive edge glow: this card is affordable right now. Nothing marks it today. |
+| x | `ui/energy_orb_full.png` | 128x128 | One unspent energy. Replaces the text 'Energy 3/3'. |
+| x | `ui/energy_orb_empty.png` | 128x128 | One spent energy, same silhouette. |
+| x | `ui/orb_glow.png` | 192x192 | Additive bloom for a spend/gain flash. |
+| x | `ui/target_ring.png` | 256x256 | Ring/reticle marking the targeted enemy. Replaces the '> ' text prefix. |
+| x | `ui/card_glow.png` | 320x448 | Additive edge glow: this card is affordable right now. Nothing marks it today. |
 
 ## Tier 1c — intent telegraphs
 
-*7 files, 7 still to provide.* Currently the string 'hit 5'.
+*7 files, 0 still to provide.* Currently the string 'hit 5'.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-|   | `ui/intent_attack.png` | 96x96 | Incoming single attack. |
-|   | `ui/intent_attack_multi.png` | 96x96 | Incoming multi-hit. |
-|   | `ui/intent_block.png` | 96x96 | It will defend. |
-|   | `ui/intent_buff.png` | 96x96 | It will strengthen itself. |
-|   | `ui/intent_debuff.png` | 96x96 | It will weaken you. |
-|   | `ui/intent_poison.png` | 96x96 | It will poison you. |
-|   | `ui/intent_unknown.png` | 96x96 | Intent hidden. |
+| x | `ui/intent_attack.png` | 96x96 | Incoming single attack. |
+| x | `ui/intent_attack_multi.png` | 96x96 | Incoming multi-hit. |
+| x | `ui/intent_block.png` | 96x96 | It will defend. |
+| x | `ui/intent_buff.png` | 96x96 | It will strengthen itself. |
+| x | `ui/intent_debuff.png` | 96x96 | It will weaken you. |
+| x | `ui/intent_poison.png` | 96x96 | It will poison you. |
+| x | `ui/intent_unknown.png` | 96x96 | Intent hidden. |
 
 ## Tier 1d — status symbols
 
-*21 files, 21 still to provide.* Monochrome and tintable, please: callers tint by rarity and fade spent states.
+*21 files, 0 still to provide.* Monochrome and tintable, please: callers tint by rarity and fade spent states.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-|   | `ui/sym_attack.png` | 64x64 | Damage. |
-|   | `ui/sym_block.png` | 64x64 | Block. |
-|   | `ui/sym_pierce.png` | 64x64 | Damage that ignores Block. |
-|   | `ui/sym_poison.png` | 64x64 | Poison stacks. |
-|   | `ui/sym_thorns.png` | 64x64 | Damage returned to attackers. |
-|   | `ui/sym_vulnerable.png` | 64x64 | Takes +50% damage. |
-|   | `ui/sym_weak.png` | 64x64 | Deals -25% damage. |
-|   | `ui/sym_strength.png` | 64x64 | +damage per attack. |
-|   | `ui/sym_dexterity.png` | 64x64 | +block per block card. |
-|   | `ui/sym_retain.png` | 64x64 | Stays in hand at end of turn. |
-|   | `ui/sym_exhaust.png` | 64x64 | Playable once per fight. |
-|   | `ui/sym_hp.png` | 64x64 | Health. |
-|   | `ui/sym_heal.png` | 64x64 | Healing. |
-|   | `ui/sym_energy.png` | 64x64 | Energy. |
-|   | `ui/sym_gold.png` | 64x64 | Gold. |
-|   | `ui/sym_card.png` | 64x64 | A card. |
-|   | `ui/sym_dice.png` | 64x64 | A die / the dice board. |
-|   | `ui/sym_skull.png` | 64x64 | Elite or boss. |
-|   | `ui/sym_campfire.png` | 64x64 | Rest. |
-|   | `ui/sym_rope.png` | 64x64 | Escape Rope. |
-|   | `ui/sym_chest.png` | 64x64 | Treasure. |
+| x | `ui/sym_attack.png` | 64x64 | Damage. |
+| x | `ui/sym_block.png` | 64x64 | Block. |
+| x | `ui/sym_pierce.png` | 64x64 | Damage that ignores Block. |
+| x | `ui/sym_poison.png` | 64x64 | Poison stacks. |
+| x | `ui/sym_thorns.png` | 64x64 | Damage returned to attackers. |
+| x | `ui/sym_vulnerable.png` | 64x64 | Takes +50% damage. |
+| x | `ui/sym_weak.png` | 64x64 | Deals -25% damage. |
+| x | `ui/sym_strength.png` | 64x64 | +damage per attack. |
+| x | `ui/sym_dexterity.png` | 64x64 | +block per block card. |
+| x | `ui/sym_retain.png` | 64x64 | Stays in hand at end of turn. |
+| x | `ui/sym_exhaust.png` | 64x64 | Playable once per fight. |
+| x | `ui/sym_hp.png` | 64x64 | Health. |
+| x | `ui/sym_heal.png` | 64x64 | Healing. |
+| x | `ui/sym_energy.png` | 64x64 | Energy. |
+| x | `ui/sym_gold.png` | 64x64 | Gold. |
+| x | `ui/sym_card.png` | 64x64 | A card. |
+| x | `ui/sym_dice.png` | 64x64 | A die / the dice board. |
+| x | `ui/sym_skull.png` | 64x64 | Elite or boss. |
+| x | `ui/sym_campfire.png` | 64x64 | Rest. |
+| x | `ui/sym_rope.png` | 64x64 | Escape Rope. |
+| x | `ui/sym_chest.png` | 64x64 | Treasure. |
 
 ## Tier 1e — combat VFX
 
@@ -121,7 +121,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 2 — enemies
 
-*35 files, 0 still to provide.* FACING THE VIEWER (the fight is framed head-on into the corridor; there is no hero on screen), lit from above-front to match the backdrops. Transparent, NO baked ground shadow — the stage draws a contact mark. **Feet flush with the bottom edge of the canvas, no bottom padding**: every enemy is placed on one standing line (`PixelArt.STAND_LINE`, 72% of frame height), so padding at the bottom of the file makes that enemy hover. That line sits BELOW the painted horizon — the backdrops put the wall/floor junction at ~68% (`PixelArt.HORIZON_LINE`), and a figure standing on the junction is at the far end of the corridor rather than in the fight. Rendered height is 38% of the frame for an ordinary enemy, 1.14x for an elite and 1.34x for a boss, so draw the boss files with the detail that survives being the biggest thing on screen. Weight the silhouette low and dark — the floor is the BRIGHTEST band in every painted backdrop, so a pale-footed enemy dissolves into it. Filenames are archetype ids: `PixelArt.enemy_art(id)` looks them up directly, so a file lands on the enemy it was drawn for. (Do NOT put them in `assets/pixel/enemies/`, which is assigned positionally and would hand your file to whichever archetype the sort order reaches.)
+*35 files, 0 still to provide.* FACING THE VIEWER (the fight is framed head-on into the corridor; there is no hero on screen), lit from above-front to match the backdrops. Transparent, NO baked ground shadow — the stage draws a contact mark. **Feet flush with the bottom edge of the canvas, no bottom padding**: every enemy is placed on one standing line (`PixelArt.STAND_LINE`, 72% of frame height), so padding at the bottom of the file makes that enemy hover. That line sits BELOW the painted horizon — the backdrops put the wall/floor junction at ~68% (`PixelArt.HORIZON_LINE`), and a figure standing on the junction is at the far end of the corridor rather than in the fight. Rendered height is 38% of the frame for an ordinary enemy, 1.14x for an elite and 1.34x for a boss, so draw the boss files with the detail that survives being the biggest thing on screen. Weight the silhouette low and dark — the floor is the BRIGHTEST band in every painted backdrop, so a pale-footed enemy dissolves into it. Filenames are archetype ids: `PixelArt.enemy_art(id)` looks them up directly, so a file lands on the enemy it was drawn for. There is no second source behind this any more: the positionally-assigned CC0 sprite pool went away with the assignment that handed it out (D89), so a missing plate is a missing enemy rather than a wrong one.
 
 | ? | file | size | what it is |
 |---|---|---|---|
@@ -170,48 +170,15 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 |   | `cards/attack.png` | 320x240 | 28 cards: All You Have, Bite, Cheap Shot, Counterblow, ... |
 |   | `cards/attack_aoe.png` | 320x240 | 5 cards: Black Tide, Clear the Room, Massacre, Reap, ... |
 |   | `cards/attack_multi.png` | 320x240 | 5 cards: Cull, Keep Hitting, Pressure, Sword Dance, ... |
-|   | `cards/block.png` | 320x240 | 19 cards: Anvil Stance, Brace, Bulwark, Clear Mind, ... |
-|   | `cards/dexterity.png` | 320x240 | 2 cards: Light on It, Stone Skin |
-|   | `cards/draw.png` | 320x240 | 5 cards: Abyssal Gift, Focus, Kick, Read Ahead, ... |
+|   | `cards/block.png` | 320x240 | 18 cards: Anvil Stance, Brace, Bulwark, Cover, ... |
+|   | `cards/dexterity.png` | 320x240 | 3 cards: Clear Mind, Light on It, Stone Skin |
+|   | `cards/draw.png` | 320x240 | 4 cards: Abyssal Gift, Kick, Read Ahead, See It Coming |
 |   | `cards/heal.png` | 320x240 | 5 cards: Bandage, Bloodlust, Deep Breath, Second Heart, ... |
 |   | `cards/poison.png` | 320x240 | 12 cards: Blight Bloom, Creeping Death, Noxious Cloud, Pandemic, ... |
-|   | `cards/strength.png` | 320x240 | 5 cards: Red Mind, Smith's Fury, Something Worse, Undying, ... |
+|   | `cards/strength.png` | 320x240 | 6 cards: Focus, Red Mind, Smith's Fury, Something Worse, ... |
 |   | `cards/thorns.png` | 320x240 | 8 cards: Bramble Armour, Bristle, Iron Will, Molten Core, ... |
 |   | `cards/vulnerable.png` | 320x240 | 3 cards: Hex, Stumble, Wither |
 |   | `cards/weak.png` | 320x240 | 3 cards: Cold Read, Put the Fear, Smoke Bomb |
-
-## Tier 4 — map and traversal
-
-*26 files, 26 still to provide.* The graph map draws no icons at all today, and nothing connects its nodes.
-
-| ? | file | size | what it is |
-|---|---|---|---|
-|   | `ui/node_combat.png` | 128x128 | An ordinary fight. |
-|   | `ui/node_elite.png` | 128x128 | A harder fight, worth more. |
-|   | `ui/node_rest.png` | 128x128 | A campfire: heal, or work on the deck. |
-|   | `ui/node_boss.png` | 128x128 | The named finale of the dungeon. |
-|   | `ui/node_shop.png` | 128x128 | A merchant. |
-|   | `ui/node_event.png` | 128x128 | A choice with consequences. |
-|   | `ui/node_treasure.png` | 128x128 | Gold, sometimes a card. |
-|   | `ui/tile_combat.png` | 128x128 | Dice-track version of the same: An ordinary fight. |
-|   | `ui/tile_elite.png` | 128x128 | Dice-track version of the same: A harder fight, worth more. |
-|   | `ui/tile_rest.png` | 128x128 | Dice-track version of the same: A campfire: heal, or work on the deck. |
-|   | `ui/tile_boss.png` | 128x128 | Dice-track version of the same: The named finale of the dungeon. |
-|   | `ui/tile_shop.png` | 128x128 | Dice-track version of the same: A merchant. |
-|   | `ui/tile_event.png` | 128x128 | Dice-track version of the same: A choice with consequences. |
-|   | `ui/tile_treasure.png` | 128x128 | Dice-track version of the same: Gold, sometimes a card. |
-|   | `ui/die_1.png` | 128x128 | A die showing 1. The two dice are currently the text 'dice: [3, 2]'. |
-|   | `ui/die_2.png` | 128x128 | A die showing 2. The two dice are currently the text 'dice: [3, 2]'. |
-|   | `ui/die_3.png` | 128x128 | A die showing 3. The two dice are currently the text 'dice: [3, 2]'. |
-|   | `ui/die_4.png` | 128x128 | A die showing 4. The two dice are currently the text 'dice: [3, 2]'. |
-|   | `ui/die_5.png` | 128x128 | A die showing 5. The two dice are currently the text 'dice: [3, 2]'. |
-|   | `ui/die_6.png` | 128x128 | A die showing 6. The two dice are currently the text 'dice: [3, 2]'. |
-|   | `ui/node_frame_available.png` | 192x192 | Nine-slice. This node can be entered — must be unmistakable. |
-|   | `ui/node_frame_cleared.png` | 192x192 | Already taken. Spent, dimmed. |
-|   | `ui/node_frame_locked.png` | 192x192 | Not reachable from here. |
-|   | `ui/map_path.png` | 32x16 | Tileable horizontally. The link between nodes — NOTHING connects them today. |
-|   | `ui/token_player.png` | 128x128 | The player's marker on the dice track. |
-|   | `ui/reveal_frame.png` | 320x448 | Nine-slice. Housing for the card the deck traversal reveals. |
 
 ## Tier 5 — dungeon battle backdrops
 

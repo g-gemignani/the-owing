@@ -39,6 +39,44 @@ enum Kind {
 	LICENCE,  ## a download with a licence, not a drawing.
 }
 
+## Files that EXIST and are WRONG, so the prompt sheet has to keep asking for them.
+##
+## ART_PROMPTS.md lists what is absent, which is the right default and is also why a
+## bad file is invisible to it: the moment something lands, correct or not, the sheet
+## stops mentioning it and the defect has nowhere to be recorded except a person's
+## memory. Every line here is a defect with evidence behind it, and the line comes
+## OUT when the re-roll lands — so this shrinks to empty and is not a catalogue.
+##
+## It deliberately does not try to DETECT anything. `tests/test_art.gd` measures each
+## backdrop's floor and says in its own comments that the number is confidently wrong
+## about half the time; four of the six backdrops it flagged as 14-21 points off were
+## checked by eye and are fine (D109). A generated re-roll list built on that would
+## throw away good paintings, so this is a hand-kept list of things somebody LOOKED at.
+## Shared, because the seven intent telegraphs have ONE defect between them: they came
+## on a sheet, and the sheet was drawn as nine stone tiles instead of seven symbols on
+## a field. Seven copies of the same sentence is what a shared constant is for.
+const REDO_TILED := "drawn on its own stone tile, so the matte keeps the tile and the icon installs as an opaque plaque rather than a cutout; the symbol on it is dark violet on dark violet as well, which at 96px over a dark backdrop is not a read. One defect across the whole sheet — re-roll all seven together (D112)"
+
+const REDO := {
+	"ui/intent_attack.png": REDO_TILED,
+	"ui/intent_attack_multi.png": REDO_TILED,
+	"ui/intent_block.png": REDO_TILED,
+	"ui/intent_buff.png": REDO_TILED,
+	"ui/intent_debuff.png": REDO_TILED,
+	"ui/intent_poison.png": REDO_TILED,
+	"ui/intent_unknown.png": REDO_TILED,
+	"ui/dropdown_arrow.png":
+		"a cyan bloom is painted on the FIELD under the chevron, and the matte can only stop where the bloom stops being field-coloured — so it installs as the chevron sitting on a hard-edged opaque disc, which takes a third of a 32px icon (D112)",
+	"ui/target_ring.png":
+		"the middle is not empty: a warm bloom fills the ring, so the reticle covers the enemy it is supposed to mark, and where the same bloom spills across the four gaps it holds a wedge of background the matte cannot reach (D112)",
+	"bg_abyssal_stair.png":
+		"no floor where the fight is: the paved ground starts ~75% down, below the 72% standing line, so its enemies stand in the tunnel mouth (D109)",
+	"bg_drowned_market.png":
+		"has FIGURES in it — robed shapes at the far end of the room — and the brief for this tier says an empty room, no figures, no creatures",
+	"bg_warrens.png":
+		"has the words THE WARRENS painted into the wall, which a rename or a translation turns into a lie",
+}
+
 ## Fixed assets: nothing in `resources/` implies these, so they are listed.
 ## [path, size, brief] — or [path, size, brief, kind] where the row differs from its
 ## section's default. The frame kit is the mixed one: the frames themselves are
@@ -58,16 +96,16 @@ const FRAME_KIT := [
 	["ui/frame_card_rarity_2.png", "320x448", "Rare — blue inlay, brighter metal."],
 	["ui/frame_card_rarity_3.png", "320x448", "Epic — violet inlay, glow."],
 	["ui/frame_card_rarity_4.png", "320x448", "Legendary — gold, ornate, unmistakable at a glance."],
-	["ui/card_back.png", "320x448", "The back of a card. REQUIRED by the deck traversal, which reveals cards face-down.", Kind.SCENE,
+	["ui/card_back.png", "320x448", "The back of a card. NOTHING LOADS THIS TODAY — the deck traversal that required it went in D94, and combat's piles are the text 'Draw 12 - Discard 3'. Painted and installed anyway in D112, so it is waiting for whatever draws a face-down card next rather than blocking it.", Kind.SCENE,
 		"A carved stone tablet seen face-on, filling the frame, one worn sigil cut into its centre — a closed eye pressed into rock. Symmetrical, quiet, nothing that reads as a face."],
 	["ui/divider.png", "128x16", "Tileable horizontally. A carved rule between sections."],
-	["ui/dropdown.png", "192x96", "Nine-slice 32/32/28/28, matching the button. OptionButton is unstyled today."],
+	["ui/dropdown.png", "192x96", "Nine-slice 32/32/28/28, matching the button. `UITheme` already wires OptionButton to this name and skips it while the file is absent, so the dropdown falls back to Godot's grey chrome — the wiring is done, the picture is what is missing."],
 	["ui/dropdown_arrow.png", "32x32", "The open/close chevron.", Kind.PAINT,
-		"A small chevron of chipped iron pointing down. One solid shape, centred."],
-	["ui/slider_track.png", "128x24", "Tileable horizontally. HSlider is unstyled today."],
+		"A small chevron of chipped iron pointing down. One solid shape, centred. The field around it stays FLAT and EMPTY — no glow, no light, no bloom spilling onto it; anything painted on the field is cut away with the field and leaves a hard edge where it was cut."],
+	["ui/slider_track.png", "128x24", "Tileable horizontally. The grabber beside it is installed; HSlider takes this name the moment it exists, and runs on Godot's default groove until then."],
 	["ui/slider_grabber.png", "48x48", "The slider handle.", Kind.PAINT,
 		"A short bar of worn iron with a groove across its middle, seen face-on."],
-	["ui/scrollbar_track.png", "24x128", "Tileable vertically. VScrollBar is unstyled today."],
+	["ui/scrollbar_track.png", "24x128", "Tileable vertically. The thumb beside it is installed; VScrollBar takes this name the moment it exists, and runs on Godot's default well until then."],
 	["ui/scrollbar_grabber.png", "24x48", "The scrollbar thumb.", Kind.PAINT,
 		"A narrow vertical slug of worn iron, rounded at both ends."],
 	["ui/checkbox_on.png", "64x64", "Checked. Settings screen.", Kind.PAINT,
@@ -100,7 +138,7 @@ const VITALS := [
 	["ui/orb_glow.png", "192x192", "Additive bloom for a spend/gain flash.", Kind.PAINT,
 		"A soft round bloom of warm light on black, brightest at the centre, fading to nothing at the edge. No object, only the glow."],
 	["ui/target_ring.png", "256x256", "Ring/reticle marking the targeted enemy. Replaces the '> ' text prefix.", Kind.PAINT,
-		"A ring of worn iron broken into four arcs with gaps between them, the inner edge notched like a sight. Face-on, empty in the middle."],
+		"A ring of worn iron broken into four arcs with gaps between them, the inner edge notched like a sight. Face-on. The middle is EMPTY and so are the four gaps — plain flat field showing through, the same colour as the field outside the ring, with no glow, no light and nothing behind it. An enemy is drawn inside this ring and has to be visible through it."],
 	["ui/card_glow.png", "320x448", "Additive edge glow: this card is affordable right now. Nothing marks it today.", Kind.PAINT,
 		"A tall rounded halo of warm light on black, brightest along its edge and fading inward. No card, only the light that would spill around one."],
 ]
@@ -167,30 +205,15 @@ const VFX := [
 	["fx/death_dissolve.png", "8 frames of 256x256", "An enemy coming apart. Plays on the kill."],
 ]
 
-## Encounter kinds, in Traversal.Enc order. Used by the graph map (which draws NO
-## icons today), the dice board and the deck traversal.
-## [id, meaning, object]. Same split as SYMBOLS: "A choice with consequences" is what
-## the node MEANS and cannot be drawn, so each kind also names one object. The node
-## and tile sets share these, which is the point — the recipe asks for the node set
-## re-framed for the tiles rather than fourteen separate ideas.
-const ENCOUNTERS := [
-	["combat", "An ordinary fight.", "Two crossed blades."],
-	["elite", "A harder fight, worth more.", "Two crossed blades with a skull set behind them."],
-	["rest", "A campfire: heal, or work on the deck.", "Three logs stacked, one flame above them."],
-	["boss", "The named finale of the dungeon.", "A crown of iron thorns resting on a skull."],
-	["shop", "A merchant.", "A hanging balance, its two pans uneven."],
-	["event", "A choice with consequences.", "A stone waymarker at a fork, two arms pointing different ways."],
-	["treasure", "Gold, sometimes a card.", "A chest with its lid open, light coming out of it."],
-]
-
-const MAP_KIT := [
-	["ui/node_frame_available.png", "192x192", "Nine-slice. This node can be entered — must be unmistakable.", Kind.KIT],
-	["ui/node_frame_cleared.png", "192x192", "Already taken. Spent, dimmed.", Kind.KIT],
-	["ui/node_frame_locked.png", "192x192", "Not reachable from here.", Kind.KIT],
-	["ui/map_path.png", "32x16", "Tileable horizontally. The link between nodes — NOTHING connects them today.", Kind.KIT],
-	["ui/token_player.png", "128x128", "The player's marker on the dice track."],
-	["ui/reveal_frame.png", "320x448", "Nine-slice. Housing for the card the deck traversal reveals.", Kind.KIT],
-]
+## Tier 4 — map and traversal — used to live here: seven `node_*` icons, seven
+## `tile_*` icons, six dice faces and a six-file map kit, 26 files in all. They were
+## the art for the graph map, the dice board and the deck draw, and all three models
+## were deleted in D94 after D88 moved every dungeon onto the isometric crawl. The
+## crawl's own markers are generated by `tools/gen_iso_markers.gd` and live in
+## `assets/art/iso/`, so they are not a shopping-list item and never were. Briefing an
+## artist on a screen that no longer exists is the expensive half of a stale manifest,
+## which is the whole reason this file is generated (D101). The tier numbering below
+## keeps its gap so the captures in ART.md §6 still line up.
 
 const SHELL := [
 	["fonts/display.ttf", "-", "Display face for titles and card names. Needs an OFL/SIL licence, recorded like the Kenney ones. THE GAME HAS NO CUSTOM FONT — everything is Godot's default.", Kind.LICENCE],
@@ -304,8 +327,8 @@ func _init() -> void:
 
 	_section("Tier 1c — intent telegraphs", "Currently the string 'hit 5'.",
 		Kind.PAINT,
-		"One symbol per cell, centred, filling ~70% of its cell, on a flat even field. These are read in under a second on a crowded screen, so silhouette beats detail: a shape that survives being described in three words. Keeping the seven mutually distinguishable AS SILHOUETTES is the actual requirement, and it is the one that is lost when they are asked for one at a time — each request is blind to the other six.",
-		"A 3x3 grid at 768x768 or larger, flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- intents <sheet.png>`")
+		"One symbol per cell, centred, filling ~70% of its cell, on a flat even field. These are read in under a second on a crowded screen, so silhouette beats detail: a shape that survives being described in three words. Each symbol is one solid shape in a value clearly separated from that field — a dark shape on a dark field is not a read at 96px, and the silhouette is the whole job. Keeping the seven mutually distinguishable AS SILHOUETTES is the actual requirement, and it is the one that is lost when they are asked for one at a time — each request is blind to the other six. A symbol painted onto its own stone tile installs as an opaque plaque instead of a cutout, because the tile is then the subject and only the gutter between tiles is field (D112).",
+		"A 3x3 grid at 768x768 or larger: seven symbols and two spare cells. The grid is a LAYOUT and not something drawn — no tile, no plaque, no panel, no border and no mortar line anywhere in the image; ONE flat even colour runs edge to edge behind all nine cells, and that colour is the only background there is. Fill the first seven cells in order, left to right then top to bottom, and leave the last two as bare flat colour. Draw exactly seven symbols and no more: a skipped cell in the middle of the run, or an eighth symbol invented to fill a spare one, puts every symbol after it on the wrong meaning. Nothing touches a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- intents <sheet.png>`")
 	for e in INTENTS:
 		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
 
@@ -313,7 +336,7 @@ func _init() -> void:
 		"Monochrome and tintable, please: callers tint by rarity and fade spent states.",
 		Kind.PAINT,
 		"OVERRIDE THE PALETTE LINE IN THE PREAMBLE: these are SINGLE-COLOUR — flat white glyphs on a flat near-black field, no gradient, no interior shading, no ink outline (the shape IS the ink). `Icons` tints them by rarity and fades them for spent states, and that behaviour is load-bearing: a coloured icon cannot be tinted, only muddied. The installer takes alpha from LUMINANCE and throws the colour away, so an anti-aliased edge survives and a hue does not. Read at 48px: one idea per symbol, no scene, no object in a setting.",
-		"A 5x5 grid at 1280x1280 or larger (21 glyphs, 4 cells spare — leave them empty), flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- symbols <sheet.png>`")
+		"A 5x5 grid at 1280x1280 or larger: twenty-one glyphs and four spare cells. Fill the first twenty-one cells in order, left to right then top to bottom, and leave the last four as bare background. Draw exactly twenty-one glyphs and no more: an extra glyph invented to fill a spare cell, or a duplicate of one already drawn, puts every glyph after it on the wrong meaning. Flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- symbols <sheet.png>`")
 	for e in SYMBOLS:
 		_add("ui/sym_%s.png" % String(e[0]), "64x64", String(e[1]), null, String(e[2]))
 
@@ -326,7 +349,6 @@ func _init() -> void:
 	# --- data-driven from here down ------------------------------------------
 	_enemies()
 	_cards()
-	_map_and_traversal()
 	_backdrops()
 	_relics()
 	_powers()
@@ -379,7 +401,7 @@ func _enemies() -> void:
 				rosters[aid] = []
 			(rosters[aid] as Array).append(dd.name)
 
-	var enemy_note := "FACING THE VIEWER (the fight is framed head-on into the corridor; there is no hero on screen), lit from above-front to match the backdrops. Transparent, NO baked ground shadow — the stage draws a contact mark. **Feet flush with the bottom edge of the canvas, no bottom padding**: every enemy is placed on one standing line (`PixelArt.STAND_LINE`, 72% of frame height), so padding at the bottom of the file makes that enemy hover. That line sits BELOW the painted horizon — the backdrops put the wall/floor junction at ~68% (`PixelArt.HORIZON_LINE`), and a figure standing on the junction is at the far end of the corridor rather than in the fight. Rendered height is 38% of the frame for an ordinary enemy, 1.14x for an elite and 1.34x for a boss, so draw the boss files with the detail that survives being the biggest thing on screen. Weight the silhouette low and dark — the floor is the BRIGHTEST band in every painted backdrop, so a pale-footed enemy dissolves into it. Filenames are archetype ids: `PixelArt.enemy_art(id)` looks them up directly, so a file lands on the enemy it was drawn for. (Do NOT put them in `assets/pixel/enemies/`, which is assigned positionally and would hand your file to whichever archetype the sort order reaches.)"
+	var enemy_note := "FACING THE VIEWER (the fight is framed head-on into the corridor; there is no hero on screen), lit from above-front to match the backdrops. Transparent, NO baked ground shadow — the stage draws a contact mark. **Feet flush with the bottom edge of the canvas, no bottom padding**: every enemy is placed on one standing line (`PixelArt.STAND_LINE`, 72% of frame height), so padding at the bottom of the file makes that enemy hover. That line sits BELOW the painted horizon — the backdrops put the wall/floor junction at ~68% (`PixelArt.HORIZON_LINE`), and a figure standing on the junction is at the far end of the corridor rather than in the fight. Rendered height is 38% of the frame for an ordinary enemy, 1.14x for an elite and 1.34x for a boss, so draw the boss files with the detail that survives being the biggest thing on screen. Weight the silhouette low and dark — the floor is the BRIGHTEST band in every painted backdrop, so a pale-footed enemy dissolves into it. Filenames are archetype ids: `PixelArt.enemy_art(id)` looks them up directly, so a file lands on the enemy it was drawn for. There is no second source behind this any more: the positionally-assigned CC0 sprite pool went away with the assignment that handed it out (D89), so a missing plate is a missing enemy rather than a wrong one."
 	_section("Tier 2 — enemies", enemy_note, Kind.PAINT,
 		"Subject alone on a FLAT, EVEN field of a single colour that appears nowhere in the subject — that field is what `tools/install_cutouts.gd` mattes away, and it refuses any image whose border is not flat rather than cutting a hole in a painted wall. Full body, feet included, nothing cropped by the frame edge. No ground, no floor, no shadow, no pedestal, no background scenery. Facing the viewer, lit from above-front. One monster per image. Generate at 1024x1024 and let the installer scale down: the boss files are rendered at 1.34x the ordinary size and an upscaled boss is a soft boss.")
 	for aid in PixelArt.archetype_ids():
@@ -449,29 +471,6 @@ func _cards() -> void:
 				", ..." if names.size() > sample.size() else ""],
 			null, String(CARD_ART[f]))
 
-func _map_and_traversal() -> void:
-	_section("Tier 4 — map and traversal",
-		"The graph map draws no icons at all today, and nothing connects its nodes.",
-		Kind.PAINT,
-		"Cutouts: one object per cell, centred, no ground shadow, on a flat even field. **This tier is THREE sheets, not one** — the seven `node_*` icons, the seven `tile_*` icons, and the six dice faces — and the tool takes them separately: `install_sheet.gd -- nodes|tiles|dice <sheet.png>`, each with its cells in the order of the table below. The seven encounter kinds appear twice because the graph map and the dice track show the same seven meanings, so draw the node set and re-frame it for the tiles rather than inventing fourteen ideas. The node frames and the path segment are computed, not painted, for the Tier 0 reason.")
-	for e in ENCOUNTERS:
-		_add("ui/node_%s.png" % String(e[0]), "128x128", String(e[1]), null, String(e[2]))
-	for e in ENCOUNTERS:
-		_add("ui/tile_%s.png" % String(e[0]), "128x128",
-			"Dice-track version of the same: %s" % String(e[1]), null,
-			"%s Re-framed for the dice track: the same object, set into a shallow square tile." % String(e[2]))
-	# The brief quotes the placeholder string it replaces, which is useful in the
-	# shopping list and forbidden in a prompt — the style block bans numerals, and
-	# a die's pips are the one place that has to be said carefully.
-	for i in 6:
-		_add("ui/die_%d.png" % (i + 1), "128x128",
-			"A die showing %d. The two dice are currently the text 'dice: [3, 2]'." % (i + 1),
-			null,
-			"A stone die resting square to the viewer, its upward face carrying %s round pip%s, deeply cut. No digits anywhere." % [
-				["one", "two", "three", "four", "five", "six"][i], "" if i == 0 else "s"])
-	for e in MAP_KIT:
-		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
-
 ## How many dungeons are still on the 16x16 fallback tile. COUNTED, not written down:
 ## this line read "nine of twelve" while nine of them were being installed, which is
 ## the restated-number habit this project keeps paying for (D34).
@@ -489,7 +488,7 @@ func _backdrops() -> void:
 	_section("Tier 5 — dungeon battle backdrops",
 		"%s Match `bg_crypt.png`: symmetrical one-point perspective, 20-35%% luminance, light source kept OUT of the top and bottom 34%% where the combat text sits. NO text painted into the image — `bg_warrens.png` has a 'THE WARRENS' sign in it, which a rename or a translation turns into a lie." % _backdrop_gap(),
 		Kind.SCENE,
-		"Full-bleed 16:9, opaque, no transparency and no cutout. Symmetrical one-point perspective, vanishing point centred, foreground framing elements at the left and right thirds — every dungeon reuses that skeleton so twelve rooms feel like one dungeon. The wall/floor junction sits at 68% of the frame height (`PixelArt.HORIZON_LINE`); `tests/test_art.gd` measures it and fails a backdrop more than 10 points off, because a backdrop with its floor elsewhere does not look broken on its own — it makes that dungeon's enemies hover. Keep the light source OUT of the top and bottom 34%, where the combat text sits. Empty room: no figures, no creatures.")
+		"Full-bleed 16:9, opaque, no transparency and no cutout. Symmetrical one-point perspective, vanishing point centred, foreground framing elements at the left and right thirds — every dungeon reuses that skeleton so twelve rooms feel like one dungeon. THE GROUND IS THE PART THAT MATTERS, so compose it first: the back wall meets the floor a little over two thirds down, and from there the floor is unbroken open ground all the way to the bottom edge of the frame. Figures are stood on that floor just under the junction, so the band from two thirds down to three quarters down the frame must be plain walkable ground — nothing rising through it, no water, no rubble pile, no undergrowth, no altar, no steps, no pit, and no darkness the eye reads as a hole. If the ground starts lower than that band, whatever is standing on it appears to hover in mid-air. Keep the light source OUT of the top and bottom 34%, where the combat text sits. Empty room: no figures, no creatures, and nothing anywhere in the image that reads as writing.")
 	for did in Balance.DUNGEONS:
 		var dd := Balance.dungeon(did)
 		if dd == null:
@@ -534,7 +533,7 @@ func _powers() -> void:
 		"A power is fired once per turn, every turn, so its icon is seen constantly. Several currently share one monochrome glyph.",
 		Kind.PAINT,
 		"A SIGIL, not an object: a carved or inlaid emblem, roughly circular, centred in its cell, on a flat even field for the matte. Unlike the relics these are abstract — the power is an ability, not a thing you picked up — and unlike the Tier 1d symbols they are full-colour and never tinted. Ten of them are pressed in the same corner of the same screen all game, so being distinguishable from each other at a glance is the requirement, which is why they are drawn together.",
-		"A 4x3 grid at 1024x768 or larger (10 sigils, 2 cells spare — leave them empty), flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- powers <sheet.png>`")
+		"A 4x3 grid at 1024x768 or larger: ten sigils and two spare cells. Fill the first ten cells in order, left to right then top to bottom, and leave the last two as bare background. Draw exactly ten sigils and no more: an extra one invented to fill a spare cell puts every sigil after it on the wrong meaning. Flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- powers <sheet.png>`")
 	for pid in Balance.POWERS:
 		var p := Balance.power(pid)
 		if p == null:
@@ -609,10 +608,16 @@ func _emit_prompts() -> void:
 	print("(D73), and the installers also matte, trim, anchor and resize:")
 	print("")
 	print("```bash")
-	print("godot --headless --script tools/strip_sparkle.gd -- /tmp/staging   # backdrops only")
+	print("godot --headless --script tools/strip_sparkle.gd -- /tmp/staging")
 	print("godot --headless --script tools/install_cutouts.gd -- enemies /tmp/staging")
 	print("godot --headless --import")
 	print("```")
+	print("")
+	print("Strip FIRST, on the whole batch at once, before anything crops or resizes —")
+	print("the stamp is found by intersecting the images against each other, so they have")
+	print("to still agree on where it is. A matted cutout survives skipping it, because")
+	print("the corner is field and the matte takes it; anything installed OPAQUE or as a")
+	print("bloom does not, and keeps the stamp in the shipped file (D112).")
 	print("")
 	for s in _sections:
 		_emit_prompt_section(s)
@@ -625,10 +630,16 @@ func _emit_prompt_section(s: Array) -> void:
 	var rows: Array = []
 	var have := 0
 	var blocked: Array = []
+	var redone: Array = []
 	for i in range(start, start + count):
 		var r: Array = _rows[i]
 		if not _generable(r[4]):
 			blocked.append(r)
+		elif REDO.has(String(r[0])):
+			# Present but wrong. Asked for again, and listed separately from the ones
+			# that were never drawn, because the two need different care: a re-roll is
+			# replacing something that already passed once.
+			redone.append(r)
 		elif bool(r[3]):
 			have += 1
 		else:
@@ -639,7 +650,7 @@ func _emit_prompt_section(s: Array) -> void:
 		print("*%d of these %d files are NOT for a generator: %s* — %s" % [
 			blocked.size(), count, _blocked_reason(blocked), _blocked_list(blocked)])
 		print("")
-	if rows.is_empty():
+	if rows.is_empty() and redone.is_empty():
 		print("Nothing to generate here%s." % ("" if have == 0 else " — all %d present" % have))
 		print("")
 		return
@@ -650,19 +661,65 @@ func _emit_prompt_section(s: Array) -> void:
 		# The table below IS the reading order, and `install_sheet.gd` derives the same
 		# order from the same tables — so the order asked for and the order installed
 		# cannot drift apart the way a restated list would.
-		print("**Generate this tier as ONE image, not %d.** %s" % [rows.size(), String(s[5])])
+		# rows AND re-rolls: a sheet tier is redrawn whole, so a re-roll of one cell is
+		# a re-roll of the sheet, and counting only `rows` printed "not 0" for a tier
+		# whose every cell was a re-roll (D112).
+		print("**Generate this tier as ONE image, not %d.** %s" % [
+			rows.size() + redone.size(), String(s[5])])
 		print("Cells in the order of the table below, left to right then top to bottom.")
 		print("")
-	print("**%d to generate%s.** Style block above, then one of these as the last line:" % [
-		rows.size(), "" if have == 0 else ", %d already present" % have])
-	print("")
-	print("| save as | subject |")
-	print("|---|---|")
+	if not rows.is_empty():
+		print("**%d to generate%s.** Style block above, then one of these as the last line:" % [
+			rows.size(), "" if have == 0 else ", %d already present" % have])
+		print("")
+		_prompt_table(rows)
+	# The re-rolls carry their own reason, so whoever pastes one knows what to look for
+	# in what comes back. A re-roll with no stated defect is how a bad file gets
+	# replaced by a differently bad file.
+	if not redone.is_empty():
+		# ONE line, and it has to START with the asterisk: `gen_pollinations.py`
+		# recognises operator prose by the line's first character, so a wrapped second
+		# line is picked up as art direction and pasted into the prompt (D109).
+		print("**%d to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back." % redone.size())
+		print("")
+		var reasons := {}
+		for r in redone:
+			reasons[String(REDO[String(r[0])])] = true
+		if reasons.size() == 1 and redone.size() > 1:
+			# One defect across the whole set — said once. A seven-row table repeating
+			# one sentence seven times is a table nobody finishes reading, and the
+			# sentence is the part that has to land.
+			#
+			# The leading asterisk is load-bearing for the same reason the RE-ROLL
+			# header's is: `gen_pollinations.py` tells operator prose from art
+			# direction by the line's first character, and without it this sentence was
+			# pasted into the prompt — telling the generator that the picture it had
+			# not drawn yet was already wrong (D112).
+			print("*All %d have the same defect: %s.*" % [
+				redone.size(), reasons.keys()[0]])
+		else:
+			print("| save as | size | what is wrong with the one we have |")
+			print("|---|---|---|")
+			for r in redone:
+				print("| `%s` | %s | %s |" % [String(r[0]), String(r[1]),
+					String(REDO[String(r[0])]).replace("|", "\\|")])
+		print("")
+		_prompt_table(redone)
+
+## The subject table. Carries the target SIZE per row, because the shape of the
+## request is per FILE and not per tier: Tier 0 is five square-ish cutouts and one
+## portrait card back, and a tier-wide "generate a square image" asked for the card
+## back at 1:1 when the card is 320x448 (D109). `gen_pollinations.py` reads this
+## column and picks the aspect from it.
+func _prompt_table(rows: Array) -> void:
+	print("| save as | size | subject |")
+	print("|---|---|---|")
 	for r in rows:
 		# The prompt sheet asks for a drawing, so it prefers the subject; the
 		# brief is the fallback for rows whose brief is already visual.
 		var subject := String(r[5]) if String(r[5]) != "" else String(r[2])
-		print("| `%s` | %s |" % [String(r[0]), subject.replace("|", "\\|")])
+		print("| `%s` | %s | %s |" % [String(r[0]), String(r[1]),
+			subject.replace("|", "\\|")])
 	print("")
 
 func _generable(k: Kind) -> bool:

@@ -2,7 +2,7 @@
 ##
 ##   godot --headless --script tools/install_sheet.gd -- symbols <sheet.png> [--dry]
 ##   godot --headless --script tools/install_sheet.gd -- intents <sheet.png>
-##   godot --headless --script tools/install_sheet.gd -- powers|nodes|tiles|dice <sheet.png>
+##   godot --headless --script tools/install_sheet.gd -- powers <sheet.png>
 ##   godot --headless --import
 ##
 ## **Why a sheet at all, when `install_cutouts.gd` already installs one file per
@@ -26,6 +26,20 @@
 ## cell still lands centred in its file. What that cannot fix is a subject that runs
 ## OUT of its cell, so a bounding box touching a cell edge is reported: it means the
 ## generator did not respect the grid and that icon is clipped.
+##
+## **`--cells=` is for the sheet that came back with the right pictures in the wrong
+## boxes.** Asked for 21 glyphs and 4 empty cells, a generator will hand back 25
+## glyphs — the 21, plus four it invented — and every target after the first insert
+## is then reading the cell next door. The set is not wrong and re-rolling it throws
+## away 21 good drawings to fix a counting mistake, so instead the caller says which
+## source cell each target comes from, in target order:
+##
+##   ... -- symbols sheet.png --cells=0,1,2,5,6,7,8,11,9,10,13,14,15,16,17,18,19,21,22,23,24
+##
+## It is a hand-made list read off the sheet by eye, which is why it is an argument
+## and not a table in here: the next misaligned sheet is misaligned differently, and
+## a stored permutation would be right once and silently wrong afterwards. The
+## mapping is printed either way — check it (D112).
 extends SceneTree
 
 const Cut := preload("res://tools/cutout_lib.gd")
@@ -41,9 +55,6 @@ const SETS := {
 	"symbols": [64, true],
 	"intents": [96, false],
 	"powers": [128, false],
-	"nodes": [128, false],
-	"tiles": [128, false],
-	"dice": [128, false],
 }
 
 var _dry := false
@@ -55,16 +66,20 @@ func _init() -> void:
 	var positional: Array[String] = []
 	var cols := 0
 	var rows := 0
+	var cells: Array[int] = []
 	for a in args:
 		var s := String(a)
 		if s.begins_with("--cols="):
 			cols = int(s.trim_prefix("--cols="))
 		elif s.begins_with("--rows="):
 			rows = int(s.trim_prefix("--rows="))
+		elif s.begins_with("--cells="):
+			for c in s.trim_prefix("--cells=").split(",", false):
+				cells.append(int(c))
 		elif not s.begins_with("--"):
 			positional.append(s)
 	if positional.size() < 2 or not SETS.has(positional[0]):
-		print("usage: -- <%s> <sheet.png> [--cols=N] [--rows=N] [--dry]" % "|".join(SETS.keys()))
+		print("usage: -- <%s> <sheet.png> [--cols=N] [--rows=N] [--cells=i,j,k...] [--dry]" % "|".join(SETS.keys()))
 		quit(2)
 		return
 
@@ -91,6 +106,20 @@ func _init() -> void:
 			cols, rows, cols * rows, set_name, targets.size()])
 		quit(2)
 		return
+	if not cells.is_empty():
+		# Refused rather than padded or truncated: a permutation one entry short is a
+		# whole set shifted by one from that point on, which is the exact failure this
+		# argument exists to undo.
+		if cells.size() != targets.size():
+			print("--cells lists %d cells and %s needs %d, in target order" % [
+				cells.size(), set_name, targets.size()])
+			quit(2)
+			return
+		for c in cells:
+			if c < 0 or c >= cols * rows:
+				print("--cells names cell %d, which is outside a %dx%d grid" % [c, cols, rows])
+				quit(2)
+				return
 
 	var cw := sheet.get_width() / cols
 	var ch := sheet.get_height() / rows
@@ -107,8 +136,9 @@ func _init() -> void:
 	for i in targets.size():
 		var rel: String = targets[i][0]
 		var label: String = targets[i][1]
-		var cx := i % cols
-		var cy := i / cols
+		var src: int = cells[i] if not cells.is_empty() else i
+		var cx := src % cols
+		var cy := src / cols
 		var cell := sheet.get_region(Rect2i(cx * cw, cy * ch, cw, ch))
 		var note := Cut.cut_mono(cell, canvas) if mono \
 			else Cut.cut(cell, canvas, false)
@@ -160,13 +190,8 @@ func _ids(set_name: String) -> Array:
 			for pid in Balance.POWERS:
 				var p := Balance.power(pid)
 				out.append(["powers/%s.png" % pid, p.name if p != null else pid])
-		"nodes":
-			for e in Manifest.ENCOUNTERS:
-				out.append(["ui/node_%s.png" % String(e[0]), String(e[1])])
-		"tiles":
-			for e in Manifest.ENCOUNTERS:
-				out.append(["ui/tile_%s.png" % String(e[0]), String(e[1])])
-		"dice":
-			for i in 6:
-				out.append(["ui/die_%d.png" % (i + 1), "showing %d" % (i + 1)])
+	# `nodes`, `tiles` and `dice` used to be here — the graph map's icons, the dice
+	# track's, and six die faces. All three models went in D94 and the manifest stopped
+	# asking for the art in D111. An installer for files nothing loads is a way to
+	# spend an afternoon painting a screen that does not exist.
 	return out

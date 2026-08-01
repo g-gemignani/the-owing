@@ -94,7 +94,50 @@ ASPECT = {
     "1024x768": "a 4:3 landscape image",
     "1280x720": "a 16:9 landscape image",
     "1600x480": "a 10:3 wide banner image",
+    "960x1344": "a portrait 5:7 image",
 }
+
+# The shape of a request is per FILE, not per tier, and tier 0 is where that bit:
+# five square-ish cutouts and one card BACK, which is 320x448 because the card is
+# 150x214. A tier-wide "generate a square 1:1 image" was asking for a portrait asset
+# at 1:1, so whatever came back had to be squashed into the card or cropped (D109).
+# ART_PROMPTS.md now carries each row's target size and these two derive from it.
+ASPECT_NAMES = [
+    (1 / 1, "a square 1:1 image"),
+    (4 / 3, "a 4:3 landscape image"),
+    (16 / 9, "a 16:9 landscape image"),
+    (10 / 3, "a 10:3 wide banner image"),
+    (3 / 4, "a 3:4 portrait image"),
+    (5 / 7, "a portrait 5:7 image"),
+    (2 / 3, "a 2:3 portrait image"),
+]
+
+
+def parse_size(size: str) -> tuple[int, int] | None:
+    m = re.fullmatch(r"(\d+)x(\d+)", size.strip())
+    return (int(m.group(1)), int(m.group(2))) if m else None
+
+
+def aspect_words(size: str) -> str:
+    """The nearest named shape for a WxH, by ratio."""
+    wh = parse_size(size)
+    if wh is None:
+        return size
+    ratio = wh[0] / wh[1]
+    return min(ASPECT_NAMES, key=lambda p: abs(p[0] / ratio - 1.0))[1]
+
+
+def gen_size(size: str) -> str:
+    """A generation size for an asset size: the smallest whole multiple whose long
+    edge clears 1024. A whole multiple keeps the aspect EXACT, which a snapped-to-16
+    scale factor does not — and the aspect is the entire point of computing this."""
+    wh = parse_size(size)
+    if wh is None:
+        return size
+    k = 1
+    while max(wh) * k < 1024:
+        k += 1
+    return f"{wh[0] * k}x{wh[1] * k}"
 
 
 # A tier's prose is written for someone READING ART_PROMPTS.md, and only some of
@@ -124,7 +167,9 @@ class Tier:
         self.title = title
         self.preamble: list[str] = []
         self.rows: list[tuple[str, str]] = []
+        self.sizes: dict[str, str] = {}   # save-as path -> that file's target size
         self.install = ""
+        self.grid = ""    # a sheet tier's rows x cols and its spare-cell rule
         self.sheet = False
 
     @property
@@ -135,6 +180,29 @@ class Tier:
     @property
     def size(self) -> str:
         return TIER_RULES.get(self.key, {}).get("size", "1024x1024")
+
+    def _row_size(self, name: str) -> str | None:
+        """The target size of the row whose save-as basename is `name`."""
+        for path, size in self.sizes.items():
+            if pathlib.PurePosixPath(path).name == name:
+                return size
+        return None
+
+    def shape_of(self, name: str) -> str:
+        """The shape to ASK for, per file. Falls back to the tier default when the
+        row carries no size, or when its aspect matches the tier's anyway — so the
+        tiers that were already right keep the exact wording they had."""
+        size = self._row_size(name)
+        if size is None or aspect_words(size) == ASPECT.get(self.size, self.size):
+            return ASPECT.get(self.size, self.size)
+        return aspect_words(size)
+
+    def size_of(self, name: str) -> str:
+        """Same rule, for the API route's `size` parameter."""
+        size = self._row_size(name)
+        if size is None or aspect_words(size) == ASPECT.get(self.size, self.size):
+            return self.size
+        return gen_size(size)
 
     @property
     def groups(self) -> list[tuple[str, str]]:
@@ -163,9 +231,22 @@ def parse_prompts(text: str) -> tuple[str, list[Tier]]:
         if current is None:
             continue
 
+        # Two columns (save as | subject) or three (save as | size | subject). The
+        # size column is what makes the shape per-file; a row without one falls back
+        # to the tier default, so an older sheet still parses.
         row = re.match(r"^\|\s*`([^`]+)`\s*\|\s*(.*?)\s*\|\s*$", line)
         if row:
-            current.rows.append((row.group(1), row.group(2)))
+            path, rest = row.group(1), row.group(2)
+            parts = [c.strip() for c in rest.split("|")]
+            if len(parts) >= 2 and parse_size(parts[0]):
+                current.sizes[path] = parts[0]
+                subject = parts[-1]
+            else:
+                subject = rest
+            # A re-roll row lists the same file twice: once in the "what is wrong"
+            # table and once in the subject table. Keep the LAST, which is the subject.
+            current.rows = [r for r in current.rows if r[0] != path]
+            current.rows.append((path, subject))
             continue
         # Checked BEFORE the install line: in the sheet tiers both live on one
         # line ("...as ONE image, not 7. ... Install: `godot ...`").
@@ -174,6 +255,17 @@ def parse_prompts(text: str) -> tuple[str, list[Tier]]:
         if "install_" in line and "godot" in line:
             match = re.search(r"godot --headless[^`]*", line)
             current.install = (match.group(0) if match else line).strip().strip("`")
+            # The same line carries the GRID — how many rows and columns, and what to
+            # do with the spare cells — and that half is art direction, not operator
+            # prose. Dropping the whole line dropped it: tier 1c came back as nine
+            # stone tiles with its seven symbols scattered over cells 0-3, 5, 6 and 8,
+            # and tier 1d came back with 25 glyphs where 21 were asked for, because
+            # neither prompt ever said the grid. Both then install one cell out, which
+            # is 21 correct drawings on 21 wrong meanings (D112). The bold count that
+            # opens the line IS operator prose ("as ONE image, not 7") and goes.
+            head = re.sub(r"\*\*[^*]*\*\*", "", line.split("Install:")[0]).strip()
+            if head:
+                current.grid = head
             continue
         stripped = line.strip()
         # Skip table chrome, the not-for-a-generator notes, and the count line.
@@ -201,18 +293,37 @@ def compose_sheet(style: str, tier: Tier, rows: list[tuple[str, str]]) -> str:
     parts = [style]
     if tier.direction:
         parts.append(tier.direction)
+    # The grid FIRST, because "a grid containing 21 cells" is not a geometry and a
+    # model handed no rows and columns picks its own — then fills the ones the
+    # subject list did not reach.
+    if tier.grid:
+        parts.append(tier.grid)
     parts.append(
-        f"A single grid image containing {len(rows)} cells, in this exact order "
-        f"left to right then top to bottom. Nothing touching a cell edge.\n{cells}"
+        f"A single grid image containing {len(rows)} filled cells, in this exact "
+        f"order left to right then top to bottom. Nothing touching a cell edge.\n"
+        f"{cells}"
     )
     return "\n\n".join(parts)
 
 
 # Mirrors FAMILIES in tools/install_cutouts.gd. A tier whose targets live in one
-# of these directories installs with that tool; the loose `ui/` cutouts in tiers
-# 0, 1b and 7 have no installer, and the sheet sets say so themselves via the
-# Install: line ART_PROMPTS.md carries.
+# of these directories installs with that tool; the sheet sets say so themselves
+# via the Install: line ART_PROMPTS.md carries.
 CUTOUT_FAMILIES = {"enemies", "relics", "powers", "cards"}
+
+# Mirrors KIT in tools/install_chrome.gd, for the same reason and with the same
+# hazard: this is a second copy of a list, and a name added there and not here goes
+# quiet rather than loud. It is by NAME and not by the `ui/` directory because the
+# directory is not the question — tier 7's logo, splash and cursors are also `ui/`
+# and genuinely have no installer, so a directory rule would send someone to a tool
+# that would refuse all four. Until D112 the sheet told the operator that nothing
+# covered ANY of these, which is how the six HUD files got matted by hand.
+CHROME_NAMES = {
+    "dropdown_arrow", "slider_grabber", "scrollbar_grabber",
+    "checkbox_on", "checkbox_off",
+    "energy_orb_full", "energy_orb_empty", "target_ring",
+    "orb_glow", "card_glow", "card_back",
+}
 
 
 def install_hints(tier: Tier, jobs: list[tuple[str, str]]) -> list[str]:
@@ -227,10 +338,24 @@ def install_hints(tier: Tier, jobs: list[tuple[str, str]]) -> list[str]:
     if tier.install:
         return [tier.install]
     families = {pathlib.PurePosixPath(p).parent.name for p, _ in tier.rows}
-    return [
+    hints = [
         f"godot --headless --script tools/install_cutouts.gd -- {f} <staging dir>"
         for f in sorted(families & CUTOUT_FAMILIES)
     ]
+    # Backdrops sit at the ROOT of assets/art/, so they have no family directory for
+    # the rule above to match on and the sheet told you no installer covered them —
+    # which is wrong, and would have had someone hand-copying a 1280x720 file into
+    # place. They are recognised by the one thing that does identify them: the
+    # `bg_` prefix the loader resolves them by (D109).
+    if any(pathlib.PurePosixPath(p).name.startswith("bg_") for p, _ in tier.rows):
+        hints.append(
+            "godot --headless --script tools/install_backdrops.gd -- <staging dir>"
+        )
+    if any(pathlib.PurePosixPath(p).stem in CHROME_NAMES for p, _ in tier.rows):
+        hints.append(
+            "godot --headless --script tools/install_chrome.gd -- <staging dir>"
+        )
+    return hints
 
 
 def build_jobs(style: str, tier: Tier, only: str | None) -> list[tuple[str, str]]:
@@ -302,19 +427,32 @@ def render_browser(style: str, tiers: list[Tier], only: str | None) -> str:
         "the installers matte, trim, anchor and resize, and the filename is the "
         "wiring (D73)."
     )
+    w(
+        "5. Take the chat UI's corner watermark off the whole staging directory "
+        "**before** the installer touches it: `godot --headless --script "
+        "tools/strip_sparkle.gd -- <staging dir>`. It finds the stamp by "
+        "intersecting the images against each other, so it needs the batch intact "
+        "and unresized, and it needs at least four of them. A matted cutout would "
+        "survive without this — the corner is field and the matte takes it — but "
+        "anything installed opaque or as a bloom ships the stamp (D112)."
+    )
     w("")
     w("| tier | pastes | shape | title |")
     w("|---|---|---|---|")
     for tier, jobs in jobs_by_tier:
-        shape = ASPECT.get(tier.size, tier.size)
-        w(f"| {tier.key} | {len(jobs)} | {shape} | {tier.title} |")
+        shapes = sorted({tier.shape_of(n) for n, _ in jobs})
+        w(f"| {tier.key} | {len(jobs)} | {', '.join(shapes)} | {tier.title} |")
     w("")
 
     for tier, jobs in jobs_by_tier:
         w(f"## Tier {tier.key} — {tier.title}")
         w("")
-        shape = ASPECT.get(tier.size, tier.size)
-        w(f"{len(jobs)} paste{'s' if len(jobs) != 1 else ''}, each {shape}.")
+        shapes = sorted({tier.shape_of(n) for n, _ in jobs})
+        # "each a square image" is a lie the moment one file in the tier is not, and
+        # tier 0 and tier 7 both mix shapes — so the shape is stated per paste below
+        # and only summarised here.
+        w(f"{len(jobs)} paste{'s' if len(jobs) != 1 else ''}, "
+          + (f"each {shapes[0]}." if len(shapes) == 1 else "shape stated per paste."))
         hints = install_hints(tier, jobs)
         w("")
         if hints:
@@ -331,7 +469,7 @@ def render_browser(style: str, tiers: list[Tier], only: str | None) -> str:
             w(f"### `{name}`")
             w("")
             w("```")
-            w(f"Generate {shape}.")
+            w(f"Generate {tier.shape_of(name)}.")
             w("")
             w(prompt)
             w("```")
@@ -501,7 +639,7 @@ def main() -> int:
     if args.dry_run:
         for name, prompt in jobs:
             print("=" * 72)
-            print(f"{name}   [{tier.size}, model={args.model}, ref={STYLE_REFERENCE.name}]")
+            print(f"{name}   [{tier.size_of(name)}, model={args.model}, ref={STYLE_REFERENCE.name}]")
             print("-" * 72)
             print(prompt)
         print("=" * 72)
@@ -520,7 +658,7 @@ def main() -> int:
     for i, (name, prompt) in enumerate(jobs, 1):
         print(f"[{i}/{len(jobs)}] {name} ... ", end="", flush=True)
         try:
-            data = post_multipart(prompt, args.model, tier.size, key)
+            data = post_multipart(prompt, args.model, tier.size_of(name), key)
         except Exception as exc:  # noqa: BLE001 - report and keep going
             print(f"FAIL {exc}")
             failed += 1
@@ -536,7 +674,7 @@ def main() -> int:
                 "model": args.model,
                 "tier": tier.key,
                 "title": tier.title,
-                "size": tier.size,
+                "size": tier.size_of(name),
                 "style_reference": str(STYLE_REFERENCE.relative_to(REPO)),
                 "endpoint": ENDPOINT,
                 "wrote": wrote,

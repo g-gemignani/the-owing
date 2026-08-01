@@ -8,7 +8,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**111 files can be generated.** The rest of the list cannot, and the sections below
+**56 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -22,7 +22,7 @@ painting of a thing that had to be computed.
    nothing like it. It is the style bible (ART.md §2) and image-conditioning is a
    stronger constraint on palette and line weight than any adjective.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 111 times.
+   improve it between images. Its job is to be identical 56 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -39,10 +39,16 @@ each section — never by copying files in by hand. The filename is the wiring
 (D73), and the installers also matte, trim, anchor and resize:
 
 ```bash
-godot --headless --script tools/strip_sparkle.gd -- /tmp/staging   # backdrops only
+godot --headless --script tools/strip_sparkle.gd -- /tmp/staging
 godot --headless --script tools/install_cutouts.gd -- enemies /tmp/staging
 godot --headless --import
 ```
+
+Strip FIRST, on the whole batch at once, before anything crops or resizes —
+the stamp is found by intersecting the images against each other, so they have
+to still agree on where it is. A matted cutout survives skipping it, because
+the corner is field and the matte takes it; anything installed OPAQUE or as a
+bloom does not, and keeps the stamp in the shipped file (D112).
 
 ## Tier 0 — frame kit and control chrome
 
@@ -50,11 +56,15 @@ godot --headless --import
 
 DO NOT GENERATE the nine-slices and tileable strips in this tier. A nine-slice survives being stretched to 14x only if its top and bottom strips are constant along X, its left and right constant along Y, and its centre one flat colour; a painting breaks all three and smears (D83). They come out of `tools/gen_ui_kit.gd`. The loose objects listed as paintable below are ordinary cutouts. Each loose object — the chevron, the bar, the slug, the two sockets — stands alone on a FLAT, EVEN field of a single colour, centred, with no wall, no room, no floor, no shadow and no scenery of any kind; that flat field is what gets cut away, and an object painted into a setting cannot be cut out of it. The card tablet is the one exception and fills its frame edge to edge. Three of the first five came back painted into a cave wall because this tier said none of that (D105).
 
-**1 to generate, 5 already present.** Style block above, then one of these as the last line:
+**1 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
 
-| save as | subject |
-|---|---|
-| `ui/card_back.png` | A carved stone tablet seen face-on, filling the frame, one worn sigil cut into its centre — a closed eye pressed into rock. Symmetrical, quiet, nothing that reads as a face. |
+| save as | size | what is wrong with the one we have |
+|---|---|---|
+| `ui/dropdown_arrow.png` | 32x32 | a cyan bloom is painted on the FIELD under the chevron, and the matte can only stop where the bloom stops being field-coloured — so it installs as the chevron sitting on a hard-edged opaque disc, which takes a third of a 32px icon (D112) |
+
+| save as | size | subject |
+|---|---|---|
+| `ui/dropdown_arrow.png` | 32x32 | A small chevron of chipped iron pointing down. One solid shape, centred. The field around it stays FLAT and EMPTY — no glow, no light, no bloom spilling onto it; anything painted on the field is cut away with the field and leaves a hard edge where it was cut. |
 
 ## Tier 1b — vitals and selection
 
@@ -62,67 +72,40 @@ DO NOT GENERATE the nine-slices and tileable strips in this tier. A nine-slice s
 
 Bar housings and fills are computed for the same reason as Tier 0 — a fill is a strip tiled along its length. The orbs and rings are cutouts: one object, centred, transparent, no ground shadow.
 
-**5 to generate.** Style block above, then one of these as the last line:
+**1 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
 
-| save as | subject |
-|---|---|
-| `ui/energy_orb_full.png` | A round orb of cut stone lit from within by one warm point at its heart. Whole, and about to be spent. |
-| `ui/energy_orb_empty.png` | The same orb with the light gone out of it: cold grey stone, the silhouette unchanged. |
-| `ui/orb_glow.png` | A soft round bloom of warm light on black, brightest at the centre, fading to nothing at the edge. No object, only the glow. |
-| `ui/target_ring.png` | A ring of worn iron broken into four arcs with gaps between them, the inner edge notched like a sight. Face-on, empty in the middle. |
-| `ui/card_glow.png` | A tall rounded halo of warm light on black, brightest along its edge and fading inward. No card, only the light that would spill around one. |
+| save as | size | what is wrong with the one we have |
+|---|---|---|
+| `ui/target_ring.png` | 256x256 | the middle is not empty: a warm bloom fills the ring, so the reticle covers the enemy it is supposed to mark, and where the same bloom spills across the four gaps it holds a wedge of background the matte cannot reach (D112) |
+
+| save as | size | subject |
+|---|---|---|
+| `ui/target_ring.png` | 256x256 | A ring of worn iron broken into four arcs with gaps between them, the inner edge notched like a sight. Face-on. The middle is EMPTY and so are the four gaps — plain flat field showing through, the same colour as the field outside the ring, with no glow, no light and nothing behind it. An enemy is drawn inside this ring and has to be visible through it. |
 
 ## Tier 1c — intent telegraphs
 
-One symbol per cell, centred, filling ~70% of its cell, on a flat even field. These are read in under a second on a crowded screen, so silhouette beats detail: a shape that survives being described in three words. Keeping the seven mutually distinguishable AS SILHOUETTES is the actual requirement, and it is the one that is lost when they are asked for one at a time — each request is blind to the other six.
+One symbol per cell, centred, filling ~70% of its cell, on a flat even field. These are read in under a second on a crowded screen, so silhouette beats detail: a shape that survives being described in three words. Each symbol is one solid shape in a value clearly separated from that field — a dark shape on a dark field is not a read at 96px, and the silhouette is the whole job. Keeping the seven mutually distinguishable AS SILHOUETTES is the actual requirement, and it is the one that is lost when they are asked for one at a time — each request is blind to the other six. A symbol painted onto its own stone tile installs as an opaque plaque instead of a cutout, because the tile is then the subject and only the gutter between tiles is field (D112).
 
-**Generate this tier as ONE image, not 7.** A 3x3 grid at 768x768 or larger, flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- intents <sheet.png>`
+**Generate this tier as ONE image, not 7.** A 3x3 grid at 768x768 or larger: seven symbols and two spare cells. The grid is a LAYOUT and not something drawn — no tile, no plaque, no panel, no border and no mortar line anywhere in the image; ONE flat even colour runs edge to edge behind all nine cells, and that colour is the only background there is. Fill the first seven cells in order, left to right then top to bottom, and leave the last two as bare flat colour. Draw exactly seven symbols and no more: a skipped cell in the middle of the run, or an eighth symbol invented to fill a spare one, puts every symbol after it on the wrong meaning. Nothing touches a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- intents <sheet.png>`
 Cells in the order of the table below, left to right then top to bottom.
 
-**7 to generate.** Style block above, then one of these as the last line:
+**7 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
 
-| save as | subject |
-|---|---|
-| `ui/intent_attack.png` | One heavy blade driving down, point toward the viewer. |
-| `ui/intent_attack_multi.png` | Three narrow blades fanned side by side, driving down together. |
-| `ui/intent_block.png` | A slab shield face-on, broad and flat, its rim raised. |
-| `ui/intent_buff.png` | A blunt arrow rising out of a clenched fist. |
-| `ui/intent_debuff.png` | A blunt arrow driving down into an open, sagging hand. |
-| `ui/intent_poison.png` | One fat droplet falling, a bubble rising through it. |
-| `ui/intent_unknown.png` | A closed eye, the lid drawn down. Nothing to read. |
+*All 7 have the same defect: drawn on its own stone tile, so the matte keeps the tile and the icon installs as an opaque plaque rather than a cutout; the symbol on it is dark violet on dark violet as well, which at 96px over a dark backdrop is not a read. One defect across the whole sheet — re-roll all seven together (D112).*
+
+| save as | size | subject |
+|---|---|---|
+| `ui/intent_attack.png` | 96x96 | One heavy blade driving down, point toward the viewer. |
+| `ui/intent_attack_multi.png` | 96x96 | Three narrow blades fanned side by side, driving down together. |
+| `ui/intent_block.png` | 96x96 | A slab shield face-on, broad and flat, its rim raised. |
+| `ui/intent_buff.png` | 96x96 | A blunt arrow rising out of a clenched fist. |
+| `ui/intent_debuff.png` | 96x96 | A blunt arrow driving down into an open, sagging hand. |
+| `ui/intent_poison.png` | 96x96 | One fat droplet falling, a bubble rising through it. |
+| `ui/intent_unknown.png` | 96x96 | A closed eye, the lid drawn down. Nothing to read. |
 
 ## Tier 1d — status symbols
 
-OVERRIDE THE PALETTE LINE IN THE PREAMBLE: these are SINGLE-COLOUR — flat white glyphs on a flat near-black field, no gradient, no interior shading, no ink outline (the shape IS the ink). `Icons` tints them by rarity and fades them for spent states, and that behaviour is load-bearing: a coloured icon cannot be tinted, only muddied. The installer takes alpha from LUMINANCE and throws the colour away, so an anti-aliased edge survives and a hue does not. Read at 48px: one idea per symbol, no scene, no object in a setting.
-
-**Generate this tier as ONE image, not 21.** A 5x5 grid at 1280x1280 or larger (21 glyphs, 4 cells spare — leave them empty), flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- symbols <sheet.png>`
-Cells in the order of the table below, left to right then top to bottom.
-
-**21 to generate.** Style block above, then one of these as the last line:
-
-| save as | subject |
-|---|---|
-| `ui/sym_attack.png` | A notched blade, point up. |
-| `ui/sym_block.png` | A slab shield, face-on. |
-| `ui/sym_pierce.png` | A narrow spike passing clean through a broken shield. |
-| `ui/sym_poison.png` | A fat droplet with a bubble caught in it. |
-| `ui/sym_thorns.png` | A closed ring of barbs, every point turned outward. |
-| `ui/sym_vulnerable.png` | A shield split top to bottom, the crack open. |
-| `ui/sym_weak.png` | A drooping arm, the fist come unclenched. |
-| `ui/sym_strength.png` | A clenched fist, knuckles forward. |
-| `ui/sym_dexterity.png` | A tilted buckler glancing a blow aside. |
-| `ui/sym_retain.png` | A closed hand holding a single card edge-on. |
-| `ui/sym_exhaust.png` | A card curling into ash from one corner. |
-| `ui/sym_hp.png` | A blunt anatomical heart, not a valentine. |
-| `ui/sym_heal.png` | Two strips of linen crossed over a heart. |
-| `ui/sym_energy.png` | A round orb with one point of light at its centre. |
-| `ui/sym_gold.png` | Three coins stacked, seen edge-on. |
-| `ui/sym_card.png` | One card, corners rounded, its face blank. |
-| `ui/sym_dice.png` | A cube seen at an angle, its faces marked with round pips. |
-| `ui/sym_skull.png` | A skull, jaw closed, face-on. |
-| `ui/sym_campfire.png` | Three logs stacked, one flame above them. |
-| `ui/sym_rope.png` | A coiled rope with one end hanging free. |
-| `ui/sym_chest.png` | A small chest, lid shut, one iron band across it. |
+Nothing to generate here — all 21 present.
 
 ## Tier 1e — combat VFX
 
@@ -140,56 +123,38 @@ A filled 4:3 rectangle, not a cutout. It is the picture band across the top of a
 
 **12 to generate.** Style block above, then one of these as the last line:
 
-| save as | subject |
-|---|---|
-| `cards/attack.png` | One heavy blade coming down through the frame, caught at the moment it lands. The stroke is the subject; no wielder needs to be in shot. |
-| `cards/attack_aoe.png` | A single stroke opening one wide arc clean across the frame, catching several shapes at once in the dark to either side. |
-| `cards/attack_multi.png` | The same blade struck three times over, its arcs overlapping, each one fainter than the last. |
-| `cards/block.png` | A slab of shield-iron braced square against the frame, a blow breaking apart on it. |
-| `cards/dexterity.png` | A blow glancing off a tilted buckler and away — the shape of the deflection, not the impact. |
-| `cards/draw.png` | A hand of cards fanning open, the topmost one lifting free of the rest. |
-| `cards/heal.png` | Strips of linen drawn tight over a wound, one warm point of light behind them. |
-| `cards/poison.png` | A green fume settling low across the frame, beading on cold stone. |
-| `cards/strength.png` | A fist closing on a hammer's grip, the knuckles going white. |
-| `cards/thorns.png` | A barbed ring closed around a reaching hand, every point turned outward. |
-| `cards/vulnerable.png` | A shield split top to bottom, the crack open and dark. |
-| `cards/weak.png` | An arm gone slack, the weapon dropping out of an opening hand. |
-
-## Tier 4 — map and traversal
-
-*5 of these 26 files are NOT for a generator: computed by `tools/gen_ui_kit.gd`* — `node_frame_available.png`, `node_frame_cleared.png`, `node_frame_locked.png`, `map_path.png`, `reveal_frame.png`
-
-Cutouts: one object per cell, centred, no ground shadow, on a flat even field. **This tier is THREE sheets, not one** — the seven `node_*` icons, the seven `tile_*` icons, and the six dice faces — and the tool takes them separately: `install_sheet.gd -- nodes|tiles|dice <sheet.png>`, each with its cells in the order of the table below. The seven encounter kinds appear twice because the graph map and the dice track show the same seven meanings, so draw the node set and re-frame it for the tiles rather than inventing fourteen ideas. The node frames and the path segment are computed, not painted, for the Tier 0 reason.
-
-**21 to generate.** Style block above, then one of these as the last line:
-
-| save as | subject |
-|---|---|
-| `ui/node_combat.png` | Two crossed blades. |
-| `ui/node_elite.png` | Two crossed blades with a skull set behind them. |
-| `ui/node_rest.png` | Three logs stacked, one flame above them. |
-| `ui/node_boss.png` | A crown of iron thorns resting on a skull. |
-| `ui/node_shop.png` | A hanging balance, its two pans uneven. |
-| `ui/node_event.png` | A stone waymarker at a fork, two arms pointing different ways. |
-| `ui/node_treasure.png` | A chest with its lid open, light coming out of it. |
-| `ui/tile_combat.png` | Two crossed blades. Re-framed for the dice track: the same object, set into a shallow square tile. |
-| `ui/tile_elite.png` | Two crossed blades with a skull set behind them. Re-framed for the dice track: the same object, set into a shallow square tile. |
-| `ui/tile_rest.png` | Three logs stacked, one flame above them. Re-framed for the dice track: the same object, set into a shallow square tile. |
-| `ui/tile_boss.png` | A crown of iron thorns resting on a skull. Re-framed for the dice track: the same object, set into a shallow square tile. |
-| `ui/tile_shop.png` | A hanging balance, its two pans uneven. Re-framed for the dice track: the same object, set into a shallow square tile. |
-| `ui/tile_event.png` | A stone waymarker at a fork, two arms pointing different ways. Re-framed for the dice track: the same object, set into a shallow square tile. |
-| `ui/tile_treasure.png` | A chest with its lid open, light coming out of it. Re-framed for the dice track: the same object, set into a shallow square tile. |
-| `ui/die_1.png` | A stone die resting square to the viewer, its upward face carrying one round pip, deeply cut. No digits anywhere. |
-| `ui/die_2.png` | A stone die resting square to the viewer, its upward face carrying two round pips, deeply cut. No digits anywhere. |
-| `ui/die_3.png` | A stone die resting square to the viewer, its upward face carrying three round pips, deeply cut. No digits anywhere. |
-| `ui/die_4.png` | A stone die resting square to the viewer, its upward face carrying four round pips, deeply cut. No digits anywhere. |
-| `ui/die_5.png` | A stone die resting square to the viewer, its upward face carrying five round pips, deeply cut. No digits anywhere. |
-| `ui/die_6.png` | A stone die resting square to the viewer, its upward face carrying six round pips, deeply cut. No digits anywhere. |
-| `ui/token_player.png` | The player's marker on the dice track. |
+| save as | size | subject |
+|---|---|---|
+| `cards/attack.png` | 320x240 | One heavy blade coming down through the frame, caught at the moment it lands. The stroke is the subject; no wielder needs to be in shot. |
+| `cards/attack_aoe.png` | 320x240 | A single stroke opening one wide arc clean across the frame, catching several shapes at once in the dark to either side. |
+| `cards/attack_multi.png` | 320x240 | The same blade struck three times over, its arcs overlapping, each one fainter than the last. |
+| `cards/block.png` | 320x240 | A slab of shield-iron braced square against the frame, a blow breaking apart on it. |
+| `cards/dexterity.png` | 320x240 | A blow glancing off a tilted buckler and away — the shape of the deflection, not the impact. |
+| `cards/draw.png` | 320x240 | A hand of cards fanning open, the topmost one lifting free of the rest. |
+| `cards/heal.png` | 320x240 | Strips of linen drawn tight over a wound, one warm point of light behind them. |
+| `cards/poison.png` | 320x240 | A green fume settling low across the frame, beading on cold stone. |
+| `cards/strength.png` | 320x240 | A fist closing on a hammer's grip, the knuckles going white. |
+| `cards/thorns.png` | 320x240 | A barbed ring closed around a reaching hand, every point turned outward. |
+| `cards/vulnerable.png` | 320x240 | A shield split top to bottom, the crack open and dark. |
+| `cards/weak.png` | 320x240 | An arm gone slack, the weapon dropping out of an opening hand. |
 
 ## Tier 5 — dungeon battle backdrops
 
-Nothing to generate here — all 12 present.
+Full-bleed 16:9, opaque, no transparency and no cutout. Symmetrical one-point perspective, vanishing point centred, foreground framing elements at the left and right thirds — every dungeon reuses that skeleton so twelve rooms feel like one dungeon. THE GROUND IS THE PART THAT MATTERS, so compose it first: the back wall meets the floor a little over two thirds down, and from there the floor is unbroken open ground all the way to the bottom edge of the frame. Figures are stood on that floor just under the junction, so the band from two thirds down to three quarters down the frame must be plain walkable ground — nothing rising through it, no water, no rubble pile, no undergrowth, no altar, no steps, no pit, and no darkness the eye reads as a hole. If the ground starts lower than that band, whatever is standing on it appears to hover in mid-air. Keep the light source OUT of the top and bottom 34%, where the combat text sits. Empty room: no figures, no creatures, and nothing anywhere in the image that reads as writing.
+
+**3 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+
+| save as | size | what is wrong with the one we have |
+|---|---|---|
+| `bg_warrens.png` | 1280x720 | has the words THE WARRENS painted into the wall, which a rename or a translation turns into a lie |
+| `bg_drowned_market.png` | 1280x720 | has FIGURES in it — robed shapes at the far end of the room — and the brief for this tier says an empty room, no figures, no creatures |
+| `bg_abyssal_stair.png` | 1280x720 | no floor where the fight is: the paved ground starts ~75% down, below the 72% standing line, so its enemies stand in the tunnel mouth (D109) |
+
+| save as | size | subject |
+|---|---|---|
+| `bg_warrens.png` | 1280x720 | The Warrens (difficulty 2, The Hollow Barrows). Overrun. Nothing here fights alone, and the tunnels double back.  Its boss is The Brood-Mother. Light: cold cyan. |
+| `bg_drowned_market.png` | 1280x720 | The Drowned Market (difficulty 6, The Sunken Deeps). Stalls, still stocked. Vendors, still present.  Its boss is The Last Vendor. Light: deep blue. |
+| `bg_abyssal_stair.png` | 1280x720 | The Abyssal Stair (difficulty 7, The Sunken Deeps). Down, and then further down. The steps are not all stone.  Its boss is The False Step. Light: deep blue. |
 
 ## Tier 5b — zone backdrops
 
@@ -205,60 +170,60 @@ One OBJECT, three-quarter view, centred, on a flat even field for the matte. Lit
 
 **30 to generate.** Style block above, then one of these as the last line:
 
-| save as | subject |
-|---|---|
-| `relics/ancient_battery.png` | Ancient Battery — +1 Energy each turn. |
-| `relics/balanced_grip.png` | Balanced Grip — Start each combat with 1 Dexterity. |
-| `relics/bone_charm.png` | Bone Charm — Whenever an enemy dies, draw 1. |
-| `relics/bulwark_plate.png` | Bulwark Plate — Start each combat with 18 Block. |
-| `relics/chipped_whetstone.png` | Chipped Whetstone — Every 2nd turn, gain 1 Strength. |
-| `relics/coin_purse.png` | Coin Purse — Gain 40% more gold. |
-| `relics/crown_of_thorns.png` | Crown of Thorns — Whenever an enemy dies, deal 4 to all enemies. |
-| `relics/duelists_glove.png` | Duelist's Glove — Every 3rd card you play in a turn, deal 5 to all. |
-| `relics/eternal_furnace.png` | Eternal Furnace — Every 3rd turn, deal 6 to all enemies. |
-| `relics/field_kit.png` | Field Kit — Play 2 cards in a turn to draw 1. |
-| `relics/giants_marrow.png` | Giant's Marrow — +40 max HP. |
-| `relics/healing_idol.png` | Healing Idol — Heal 6 HP after each victory. |
-| `relics/hearth_stone.png` | Hearth Stone — +25 max HP. |
-| `relics/iron_heart.png` | Iron Heart — +20 max HP. |
-| `relics/iron_ration.png` | Iron Ration — +15 max HP. |
-| `relics/keen_lens.png` | Keen Lens — Draw 1 extra card each turn. |
-| `relics/kite_shield.png` | Kite Shield — Start each combat with 8 Block. |
-| `relics/leather_wrap.png` | Leather Wrap — Start each combat with 4 Block. |
-| `relics/lucky_penny.png` | Lucky Penny — Every 4th turn, gain 1 Energy. |
-| `relics/merchants_seal.png` | Merchant's Seal — Gain 60% more gold. |
-| `relics/padded_vest.png` | Padded Vest — Start each combat with 6 Block. |
-| `relics/reliquary_heart.png` | Reliquary Heart — Below 50% HP, gain 3 Strength. Once per combat. |
-| `relics/scholars_lens.png` | Scholar's Lens — Every 3rd turn, draw 2. |
-| `relics/surgeons_thread.png` | Surgeon's Thread — Below 40% HP, heal 12. Once per combat. |
-| `relics/tin_cup.png` | Tin Cup — Gain 20% more gold. |
-| `relics/tower_shield.png` | Tower Shield — Start each combat with 12 Block. |
-| `relics/warlords_banner.png` | Warlord's Banner — Start each combat with 3 Strength. |
-| `relics/weighted_soles.png` | Weighted Soles — Unspent Block converts to 4 Block next turn. |
-| `relics/whetstone.png` | Whetstone — Start each combat with 2 Strength. |
-| `relics/worn_boots.png` | Worn Boots — +10 max HP. |
+| save as | size | subject |
+|---|---|---|
+| `relics/ancient_battery.png` | 128x128 | Ancient Battery — +1 Energy each turn. |
+| `relics/balanced_grip.png` | 128x128 | Balanced Grip — Start each combat with 1 Dexterity. |
+| `relics/bone_charm.png` | 128x128 | Bone Charm — Whenever an enemy dies, draw 1. |
+| `relics/bulwark_plate.png` | 128x128 | Bulwark Plate — Start each combat with 18 Block. |
+| `relics/chipped_whetstone.png` | 128x128 | Chipped Whetstone — Every 2nd turn, gain 1 Strength. |
+| `relics/coin_purse.png` | 128x128 | Coin Purse — Gain 40% more gold. |
+| `relics/crown_of_thorns.png` | 128x128 | Crown of Thorns — Whenever an enemy dies, deal 4 to all enemies. |
+| `relics/duelists_glove.png` | 128x128 | Duelist's Glove — Every 3rd card you play in a turn, deal 5 to all. |
+| `relics/eternal_furnace.png` | 128x128 | Eternal Furnace — Every 3rd turn, deal 6 to all enemies. |
+| `relics/field_kit.png` | 128x128 | Field Kit — Play 2 cards in a turn to draw 1. |
+| `relics/giants_marrow.png` | 128x128 | Giant's Marrow — +40 max HP. |
+| `relics/healing_idol.png` | 128x128 | Healing Idol — Heal 6 HP after each victory. |
+| `relics/hearth_stone.png` | 128x128 | Hearth Stone — +25 max HP. |
+| `relics/iron_heart.png` | 128x128 | Iron Heart — +20 max HP. |
+| `relics/iron_ration.png` | 128x128 | Iron Ration — +15 max HP. |
+| `relics/keen_lens.png` | 128x128 | Keen Lens — Draw 1 extra card each turn. |
+| `relics/kite_shield.png` | 128x128 | Kite Shield — Start each combat with 8 Block. |
+| `relics/leather_wrap.png` | 128x128 | Leather Wrap — Start each combat with 4 Block. |
+| `relics/lucky_penny.png` | 128x128 | Lucky Penny — Every 4th turn, gain 1 Energy. |
+| `relics/merchants_seal.png` | 128x128 | Merchant's Seal — Gain 60% more gold. |
+| `relics/padded_vest.png` | 128x128 | Padded Vest — Start each combat with 6 Block. |
+| `relics/reliquary_heart.png` | 128x128 | Reliquary Heart — Below 50% HP, gain 3 Strength. Once per combat. |
+| `relics/scholars_lens.png` | 128x128 | Scholar's Lens — Every 3rd turn, draw 2. |
+| `relics/surgeons_thread.png` | 128x128 | Surgeon's Thread — Below 40% HP, heal 12. Once per combat. |
+| `relics/tin_cup.png` | 128x128 | Tin Cup — Gain 20% more gold. |
+| `relics/tower_shield.png` | 128x128 | Tower Shield — Start each combat with 12 Block. |
+| `relics/warlords_banner.png` | 128x128 | Warlord's Banner — Start each combat with 3 Strength. |
+| `relics/weighted_soles.png` | 128x128 | Weighted Soles — Unspent Block converts to 4 Block next turn. |
+| `relics/whetstone.png` | 128x128 | Whetstone — Start each combat with 2 Strength. |
+| `relics/worn_boots.png` | 128x128 | Worn Boots — +10 max HP. |
 
 ## Tier 6b — power icons
 
 A SIGIL, not an object: a carved or inlaid emblem, roughly circular, centred in its cell, on a flat even field for the matte. Unlike the relics these are abstract — the power is an ability, not a thing you picked up — and unlike the Tier 1d symbols they are full-colour and never tinted. Ten of them are pressed in the same corner of the same screen all game, so being distinguishable from each other at a glance is the requirement, which is why they are drawn together.
 
-**Generate this tier as ONE image, not 10.** A 4x3 grid at 1024x768 or larger (10 sigils, 2 cells spare — leave them empty), flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- powers <sheet.png>`
+**Generate this tier as ONE image, not 10.** A 4x3 grid at 1024x768 or larger: ten sigils and two spare cells. Fill the first ten cells in order, left to right then top to bottom, and leave the last two as bare background. Draw exactly ten sigils and no more: an extra one invented to fill a spare cell puts every sigil after it on the wrong meaning. Flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- powers <sheet.png>`
 Cells in the order of the table below, left to right then top to bottom.
 
 **10 to generate.** Style block above, then one of these as the last line:
 
-| save as | subject |
-|---|---|
-| `powers/bulwark.png` | Bulwark — Gain 6 Block. |
-| `powers/foresight.png` | Foresight — Draw 1 card. Free. |
-| `powers/scythe.png` | Scythe — Deal 4 damage to ALL enemies. |
-| `powers/blight.png` | Blight — Apply 3 Poison. |
-| `powers/expose.png` | Expose — Apply 2 Vulnerable. |
-| `powers/bramble.png` | Bramble — Gain 3 Thorns. |
-| `powers/kindle.png` | Kindle — Gain 1 Strength. |
-| `powers/overwhelm.png` | Overwhelm — Deal 7 damage. |
-| `powers/siphon.png` | Siphon — Deal 3 damage. Heal for it. |
-| `powers/push_on.png` | Push On — Gain 1 Energy. Costs 5 HP. |
+| save as | size | subject |
+|---|---|---|
+| `powers/bulwark.png` | 128x128 | Bulwark — Gain 6 Block. |
+| `powers/foresight.png` | 128x128 | Foresight — Draw 1 card. Free. |
+| `powers/scythe.png` | 128x128 | Scythe — Deal 4 damage to ALL enemies. |
+| `powers/blight.png` | 128x128 | Blight — Apply 3 Poison. |
+| `powers/expose.png` | 128x128 | Expose — Apply 2 Vulnerable. |
+| `powers/bramble.png` | 128x128 | Bramble — Gain 3 Thorns. |
+| `powers/kindle.png` | 128x128 | Kindle — Gain 1 Strength. |
+| `powers/overwhelm.png` | 128x128 | Overwhelm — Deal 7 damage. |
+| `powers/siphon.png` | 128x128 | Siphon — Deal 3 damage. Heal for it. |
+| `powers/push_on.png` | 128x128 | Push On — Gain 1 Energy. Costs 5 HP. |
 
 ## Tier 7 — identity and shell
 
@@ -268,10 +233,10 @@ The fonts are licensed downloads (OFL/SIL), recorded like the Kenney ones. The l
 
 **4 to generate.** Style block above, then one of these as the last line:
 
-| save as | subject |
-|---|---|
-| `ui/logo.png` | An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind. |
-| `ui/boot_splash.png` | A shut iron door at the foot of a stair, one lantern burning above it, seen head-on. Nobody in frame. |
-| `ui/cursor.png` | A slim iron spike pointing up and to the left. One solid shape. |
-| `ui/cursor_press.png` | The same iron spike, shorter and driven in, its tip flared. |
+| save as | size | subject |
+|---|---|---|
+| `ui/logo.png` | 1600x480 | An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind. |
+| `ui/boot_splash.png` | 1280x720 | A shut iron door at the foot of a stair, one lantern burning above it, seen head-on. Nobody in frame. |
+| `ui/cursor.png` | 64x64 | A slim iron spike pointing up and to the left. One solid shape. |
+| `ui/cursor_press.png` | 64x64 | The same iron spike, shorter and driven in, its tip flared. |
 
