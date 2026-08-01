@@ -7,7 +7,7 @@ licence files under `assets/pixel/` and `assets/audio/`.
 
 | file                     | used by                        | origin                       |
 |--------------------------|--------------------------------|------------------------------|
-| main_menu.jpg            | scenes/MainMenu                | generated (Gemini 2.5 Flash) |
+| main_menu.jpg            | scenes/MainMenu                | generated (Gemini 2.5 Flash) — RE-ROLL, off-style (D114) |
 | bg_&lt;dungeon_id&gt;.png      | the fight in that dungeon (12) | generated (Gemini 2.5 Flash) |
 | bg_shop.png              | scenes/Shop                    | generated (Leonardo)         |
 | bg_rest.png              | the rest overlay, RunFlow      | generated (Leonardo)         |
@@ -33,6 +33,12 @@ with `bg_crypt.png` attached to every request as the style reference — that im
 conditioning does more for coherence than any wording. The wording itself is generated:
 `ART_PROMPTS.md`, from `tools/art_manifest.gd -- --prompts`.
 
+**And one generator is not one dialect.** `main_menu.jpg` came off the same Gemini as
+the twelve dungeons and matches none of them: flat vector silhouettes, no ink outline
+anywhere, a ninth the outline density of the rooms it shipped beside. Which is the
+argument for the style reference rather than against picking one tool — the tool was
+already the same, only the wording differed, and the wording is what drifted (D114).
+
 Rendered with LINEAR filtering — the project sets NEAREST globally for pixel art
 (`project.godot`), which turns smooth illustration into jagged edges.
 
@@ -42,9 +48,15 @@ Do not drop the generated file in by hand. The filename is the wiring, and the
 installers also strip the letterbox and crop to 16:9 rather than squashing:
 
     godot --headless --script tools/install_backdrops.gd -- <src_dir>        # dungeons
-    godot --headless --script tools/install_scene_backdrops.gd -- <src_dir>  # shop/rest/event/...
+    godot --headless --script tools/install_scene_backdrops.gd -- <src_dir>  # shop/rest/event/... + main_menu
     godot --headless --script tools/strip_sparkle.gd                         # see below
     godot --headless --import
+
+The title art rides the scene installer, under the source name `main_menu` or `title`.
+It is the only backdrop with no `bg_` prefix and the only one that is currently a .jpg,
+because it predates these tools; installing writes `main_menu.png` and deletes the
+superseded .jpg. Nothing spells that extension — `PixelArt.title_art_path()` resolves
+it, PNG first, so the swap lands in one step instead of leaving a blank title screen.
 
 ## Installing cutouts — enemies, relics, powers, card art
 

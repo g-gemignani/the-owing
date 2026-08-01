@@ -7046,10 +7046,25 @@ only because no footed set had ever arrived on a sheet.
 fault and named the ink outline six times; the result visibly carries contour lines and
 still measures **1.2%** on D114's own metric — identical to the file it replaced, below
 `bg_crypt`'s 3.2%. It is installed, the superseded `.jpg` is gone as D114 designed, and
-it stays on the re-roll list. Worth recording that the metric is suspect on very dark
-images — a 0.08 luminance delta is a large ask of a picture whose whole range is
-0.0–0.25, and `bg_warrens` now scores 2.1%, under the 2.8–12.2% band D114 quoted. The
-honest position is that neither the picture nor the measurement is cleared.
+it stays on the re-roll list.
+
+**The obvious excuse was tested and does not hold, which is why it is written down.**
+D114's threshold is a fixed 0.08 luminance delta, and the title art is a moonless ridge
+at night — so the reasonable suspicion is that the metric was reporting *darkness*
+rather than *absence of ink*, and that re-rolling against it would be chasing the wrong
+fault for a second time. Measured: each image's luminance stretched to fill 0..1 across
+its own 1st–99th percentile, then the identical test re-run. Normalised, `main_menu`
+scores **3.6%** against 5.1–15.4% for the dungeons — still the lowest of the set, still
+below `bg_warrens` and `bg_crypt`. Its 1st–99th span is 0.469 against the dungeons'
+0.511–0.650, so it is barely more compressed than they are and the compression cannot
+account for a 3x gap. The picture is genuinely under-inked and the metric is sound.
+
+Two things fall out of that control run and are worth keeping. `bg_warrens` scores 2.1%
+absolute, under the 2.8–12.2% band D114 quoted, and 5.1% normalised — comfortably inside
+the dungeon spread, so it is fine and the absolute number merely under-reports a dim
+room. And `ui/boot_splash.png` lands at 1.3% / 4.7% with the narrowest span in the set
+(0.410); it is a lantern in the dark and meant to be, but it is the next file this metric
+will flag, and it should be judged on a render before anybody re-rolls it.
 
 **On capture.** Autocropping a screenshot against a black overlay is right for a cutout,
 whose subject sits on a field the generator never paints pure black. It silently eats a

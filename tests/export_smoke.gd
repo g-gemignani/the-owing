@@ -38,7 +38,7 @@ func _init() -> void:
 		fails += 1; print("FAIL card illustrations missing after export")
 	if PixelArt.backdrop_texture(Balance.ZONES[0]) == null:
 		fails += 1; print("FAIL zone backdrops missing after export")
-	if not ResourceLoader.exists("res://assets/art/main_menu.jpg"):
+	if PixelArt.title_art_path() == "":
 		fails += 1; print("FAIL title art missing after export")
 
 	# --- content survives packing ---

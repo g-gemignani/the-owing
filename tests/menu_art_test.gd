@@ -80,7 +80,7 @@ func _ready() -> void:
 				frac * 100.0, UI.SCRIM_HOLD * 100.0])
 
 	# --- worst-pixel contrast, because averages do not read text ---
-	var img := Image.load_from_file("res://assets/art/main_menu.jpg")
+	var img := Image.load_from_file(PixelArt.title_art_path())
 	if img == null:
 		_fails += 1
 		print("FAIL cannot read the title art to check contrast")

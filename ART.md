@@ -14,7 +14,7 @@ before and after any art pass (§7). Nothing here was inferred from source code 
 
 ---
 
-## 1. The diagnosis: four visual languages, fighting
+## 1. The diagnosis: five visual languages, fighting
 
 *Written against the 16-capture pass. Three things named here have since been fixed and
 are marked in place: the dungeon backdrops were all installed (D73), the 41 Kenney enemy
@@ -22,12 +22,17 @@ sprites were replaced by 35 generated plates (D89), and the frame kit became com
 rather than painted (D83). The diagnosis is kept rather than deleted because the
 reasoning is what the rest of the file is built on.*
 
+*It also undercounted, and the miscount survived twelve decisions because it was in the
+column nobody re-reads: `main_menu.jpg` was filed under "painted, inked" and it is not
+inked at all, so the dialects were five and the table said four (D114).*
+
 The game is not short of art. It is short of art that **agrees**. Right now five
-screens' worth of assets speak four unrelated dialects:
+screens' worth of assets speak five unrelated dialects — four, as first counted:
 
 | language | assets | verdict |
 |---|---|---|
-| **Painted, inked illustration** | `main_menu.jpg` + all 12 dungeon backdrops | **This is the game.** Keep. |
+| **Painted, inked illustration** | all 12 dungeon backdrops | **This is the game.** Keep. |
+| **Flat vector illustration** | `main_menu.jpg` | *Was counted as inked here and it is not (D114) — no outline anywhere, a ninth the outline density of the rooms it shipped beside. On the re-roll list.* |
 | **Kenney 16×16 pixel art** | 41 enemy sprites, 5 zone tiles, 1 card sheet | Off-style, and semantically arbitrary — *the 41 enemy sprites are gone (D89); the zone tiles and the card sheet remain* |
 | **Hand-authored 16×16 mono glyphs** | 13 in `PixelArt.GLYPHS` | Off-style, too small to read as art |
 | **A stretched illustration pretending to be a frame** | `ui_button.png`, `ui_panel.png` | Actively damaging — see below |
