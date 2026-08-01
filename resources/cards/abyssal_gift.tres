@@ -6,7 +6,7 @@
 script = ExtResource("1")
 id = "abyssal_gift"
 name = "Abyssal Gift"
-description = "Pay 8 HP. Gain 1 Energy. Draw 2."
+description = "Pay 8 HP. Gain 1 Energy. Draw 2. Exhaust."
 cost = 0
 type = 1
 rarity = 2
@@ -14,3 +14,4 @@ level = 1
 energy_gain = 1
 draw = 2
 hp_cost = 8
+exhaust = true

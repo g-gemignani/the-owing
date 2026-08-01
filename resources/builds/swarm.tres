@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "swarm"
 name = "The Wide Cut"
 description = "One swing, many answers."
-cards = PackedStringArray("cleave", "whirlwind", "riptide", "black_tide", "massacre", "smoke_bomb", "hex", "sword_dance", "cull", "pressure")
+cards = PackedStringArray("reap", "clear_the_room", "riptide", "black_tide", "massacre", "smoke_bomb", "hex", "sword_dance", "cull", "pressure")

@@ -4,12 +4,11 @@
 
 [resource]
 script = ExtResource("1")
-id = "jab"
-name = "Jab"
-description = "Deal 4 damage. +3 if the target is debuffed."
-cost = 0
-type = 0
-rarity = 0
+id = "bristle"
+name = "Bristle"
+description = "Gain 9 Thorns."
+cost = 2
+type = 2
+rarity = 3
 level = 1
-damage = 4
-bonus_vs_debuffed = 3
+gain_thorns = 9

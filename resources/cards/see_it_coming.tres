@@ -4,12 +4,12 @@
 
 [resource]
 script = ExtResource("1")
-id = "jab"
-name = "Jab"
-description = "Deal 4 damage. +3 if the target is debuffed."
+id = "see_it_coming"
+name = "See It Coming"
+description = "Draw 3. Exhaust."
 cost = 0
-type = 0
-rarity = 0
+type = 1
+rarity = 1
 level = 1
-damage = 4
-bonus_vs_debuffed = 3
+draw = 3
+exhaust = true

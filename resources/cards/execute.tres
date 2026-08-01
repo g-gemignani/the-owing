@@ -6,9 +6,10 @@
 script = ExtResource("1")
 id = "execute"
 name = "Execute"
-description = "Deal 12 damage."
+description = "Deal 12 damage. +1 Energy on kill."
 cost = 2
 type = 0
 rarity = 0
 level = 1
 damage = 12
+energy_on_kill = true

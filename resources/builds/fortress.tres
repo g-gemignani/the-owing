@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "fortress"
 name = "The Closed Door"
 description = "Nothing gets through. Eventually, something gets out."
-cards = PackedStringArray("guard", "shield_wall", "entrench", "bulwark", "impervious", "barricade", "last_stand", "body_slam", "anvil_stance", "survival_instinct")
+cards = PackedStringArray("guard", "shield_wall", "double_down", "bulwark", "shut_out", "set_stone", "last_stand", "ram", "anvil_stance", "survival_instinct")

@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "strength"
 name = "The Rising Arm"
 description = "Every hit teaches the next one."
-cards = PackedStringArray("inflame", "forge_strike", "smiths_fury", "berserker_rage", "heavy_swing", "bloodlust", "demon_form", "perfected_strike", "searing_blow", "whetted_edge")
+cards = PackedStringArray("work_up", "forge_strike", "smiths_fury", "red_mind", "heavy_swing", "bloodlust", "something_worse", "drilled", "grinding_down", "whetted_edge")

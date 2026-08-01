@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "thorns"
 name = "The Bramble Wall"
 description = "Let them come to you, and make the coming expensive."
-cards = PackedStringArray("riposte", "caltrops", "spiked_guard", "bramble_armour", "iron_will", "juggernaut", "thorn_crown", "molten_core")
+cards = PackedStringArray("riposte", "sharp_ground", "spiked_guard", "bramble_armour", "iron_will", "bristle", "thorn_crown", "molten_core")

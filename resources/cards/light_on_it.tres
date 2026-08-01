@@ -4,12 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "jab"
-name = "Jab"
-description = "Deal 4 damage. +3 if the target is debuffed."
-cost = 0
-type = 0
-rarity = 0
+id = "light_on_it"
+name = "Light on It"
+description = "Gain 2 Dexterity (permanent)."
+cost = 1
+type = 2
+rarity = 2
 level = 1
-damage = 4
-bonus_vs_debuffed = 3
+damage = 0
+block = 0
+draw = 0
+gain_dexterity = 3

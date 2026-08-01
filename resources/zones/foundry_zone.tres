@@ -9,4 +9,4 @@ name = "The Ashen Foundry"
 description = "Hammers, heat, and things that hit back."
 unlock_after_clears = 2
 dungeons = PackedStringArray("foundry", "ember_road", "slag_pits")
-card_pool = PackedStringArray("bite", "cheap_shot", "cut_and_run", "defend", "feint", "heavy_swing", "impervious", "iron_will", "massacre", "pandemic", "pressure", "salt_the_wound", "second_wind", "slash", "stone_skin", "strike", "survival_instinct", "terrify", "virulence", "whetted_edge")
+card_pool = PackedStringArray("bite", "cheap_shot", "in_and_out", "cover", "feint", "heavy_swing", "shut_out", "iron_will", "massacre", "pandemic", "pressure", "salt_the_wound", "stitch", "gash", "stone_skin", "hack", "survival_instinct", "put_the_fear", "virulence", "whetted_edge")

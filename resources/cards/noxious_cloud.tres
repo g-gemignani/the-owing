@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "noxious_cloud"
 name = "Noxious Cloud"
-description = "Apply 3 Poison to ALL enemies."
+description = "Apply 3 Poison and 1 Weak to ALL enemies."
 cost = 2
 type = 1
 rarity = 2
 level = 1
 apply_poison = 3
 aoe = true
+apply_weak = 1

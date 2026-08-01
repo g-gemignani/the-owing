@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "vampire"
 name = "The Red Ledger"
 description = "Take what you need out of whatever is in front of you."
-cards = PackedStringArray("leech", "lifedrain", "sanguine_feast", "exsanguinate", "bite", "blood_price", "second_heart", "iron_lung")
+cards = PackedStringArray("leech", "lifedrain", "sanguine_feast", "exsanguinate", "bite", "old_debt", "second_heart", "iron_lung")

@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "poison"
 name = "The Long Death"
 description = "Damage that ignores Block entirely, if you live long enough to collect it."
-cards = PackedStringArray("venom_fang", "rupture", "plague_bearer", "noxious_cloud", "virulence", "blight_bloom", "spore_burst", "rot_touch", "creeping_death", "pandemic", "plague_heart", "scrape")
+cards = PackedStringArray("venom_fang", "split", "plague_bearer", "noxious_cloud", "virulence", "blight_bloom", "spore_burst", "rot_touch", "creeping_death", "pandemic", "plague_heart", "scrape")

@@ -4,12 +4,13 @@
 
 [resource]
 script = ExtResource("1")
-id = "jab"
-name = "Jab"
-description = "Deal 4 damage. +3 if the target is debuffed."
-cost = 0
+id = "keep_hitting"
+name = "Keep Hitting"
+description = "Deal 3 damage twice. Grows +1 per play."
+cost = 1
 type = 0
-rarity = 0
+rarity = 1
 level = 1
-damage = 4
-bonus_vs_debuffed = 3
+damage = 3
+hits = 2
+grows = 1

@@ -9,4 +9,4 @@ name = "The Verdant Rot"
 description = "Everything here is already dying. It has opinions about company."
 unlock_after_clears = 4
 dungeons = PackedStringArray("fungal_deep", "rot_gardens")
-card_pool = PackedStringArray("abyssal_gift", "barricade", "blight_bloom", "blood_price", "bloodlust", "cold_read", "dagger_throw", "defend", "dodge_roll", "finisher", "heavy_blade", "juggernaut", "kelp_snare", "plague_heart", "smoke_bomb", "strike")
+card_pool = PackedStringArray("abyssal_gift", "set_stone", "blight_bloom", "old_debt", "bloodlust", "cold_read", "thrown_iron", "cover", "give_ground", "last_word", "dead_weight", "bristle", "kelp_snare", "plague_heart", "smoke_bomb", "hack")

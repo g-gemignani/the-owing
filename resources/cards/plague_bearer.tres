@@ -6,11 +6,11 @@
 script = ExtResource("1")
 id = "plague_bearer"
 name = "Plague Bearer"
-description = "Deal 4 damage. Apply 4 Poison. Exhaust."
+description = "Apply 4 Poison to ALL enemies. Exhaust."
 cost = 1
-type = 0
+type = 1
 rarity = 2
 level = 1
-damage = 4
+aoe = true
 apply_poison = 4
 exhaust = true

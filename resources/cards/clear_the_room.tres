@@ -4,12 +4,13 @@
 
 [resource]
 script = ExtResource("1")
-id = "jab"
-name = "Jab"
-description = "Deal 4 damage. +3 if the target is debuffed."
-cost = 0
+id = "clear_the_room"
+name = "Clear the Room"
+description = "Deal 5 damage twice to ALL enemies."
+cost = 2
 type = 0
-rarity = 0
+rarity = 2
 level = 1
-damage = 4
-bonus_vs_debuffed = 3
+damage = 5
+hits = 2
+aoe = true

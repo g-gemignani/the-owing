@@ -17,7 +17,16 @@ var slot: int = 0
 ## corrupted once, an in-progress run destroyed once, and the collection changed
 ## under a tool a third time. Opting IN to real paths (`path_prefix = ""` after
 ## boot) is a deliberate act; opting out was too easy to forget.
-static var path_prefix := "t_headless_" if DisplayServer.get_name() == "headless" else ""
+##
+## One sandbox for every headless process is only safe while they run one at a time.
+## `tests/run.sh` runs suites concurrently, so it hands each one its own name in
+## DECKCRAWL_SANDBOX; without that, two suites share `t_headless_save_0.json` and
+## whichever writes second decides what the first one reads back. A suite that sets
+## `path_prefix` itself still wins — this is the floor, not the policy.
+static var _sandbox := OS.get_environment("DECKCRAWL_SANDBOX")
+static var path_prefix := (
+	("t_%s_" % _sandbox if _sandbox != "" else "t_headless_")
+	if DisplayServer.get_name() == "headless" else "")
 
 static func path_for(s: int) -> String:
 	if path_prefix != "":
@@ -121,57 +130,57 @@ func _notification(what: int) -> void:
 ## All cards that can exist. id -> resource path. Add new cards here.
 const CATALOG := {
 	"abyssal_gift": "res://resources/cards/abyssal_gift.tres",
-	"adrenaline": "res://resources/cards/adrenaline.tres",
+	"kick": "res://resources/cards/kick.tres",
 	"anvil_stance": "res://resources/cards/anvil_stance.tres",
 	"bandage": "res://resources/cards/bandage.tres",
-	"barricade": "res://resources/cards/barricade.tres",
-	"bash": "res://resources/cards/bash.tres",
-	"battle_trance": "res://resources/cards/battle_trance.tres",
-	"berserker_rage": "res://resources/cards/berserker_rage.tres",
+	"set_stone": "res://resources/cards/set_stone.tres",
+	"stave_in": "res://resources/cards/stave_in.tres",
+	"see_it_coming": "res://resources/cards/see_it_coming.tres",
+	"red_mind": "res://resources/cards/red_mind.tres",
 	"bite": "res://resources/cards/bite.tres",
 	"black_tide": "res://resources/cards/black_tide.tres",
 	"blight_bloom": "res://resources/cards/blight_bloom.tres",
-	"blood_price": "res://resources/cards/blood_price.tres",
+	"old_debt": "res://resources/cards/old_debt.tres",
 	"bloodlust": "res://resources/cards/bloodlust.tres",
-	"bludgeon": "res://resources/cards/bludgeon.tres",
-	"body_slam": "res://resources/cards/body_slam.tres",
+	"all_you_have": "res://resources/cards/all_you_have.tres",
+	"ram": "res://resources/cards/ram.tres",
 	"brace": "res://resources/cards/brace.tres",
 	"bramble_armour": "res://resources/cards/bramble_armour.tres",
 	"bulwark": "res://resources/cards/bulwark.tres",
-	"caltrops": "res://resources/cards/caltrops.tres",
+	"sharp_ground": "res://resources/cards/sharp_ground.tres",
 	"cheap_shot": "res://resources/cards/cheap_shot.tres",
 	"clear_mind": "res://resources/cards/clear_mind.tres",
-	"cleave": "res://resources/cards/cleave.tres",
+	"reap": "res://resources/cards/reap.tres",
 	"cold_read": "res://resources/cards/cold_read.tres",
 	"counterblow": "res://resources/cards/counterblow.tres",
 	"creeping_death": "res://resources/cards/creeping_death.tres",
 	"cull": "res://resources/cards/cull.tres",
-	"cut_and_run": "res://resources/cards/cut_and_run.tres",
-	"dagger_throw": "res://resources/cards/dagger_throw.tres",
+	"in_and_out": "res://resources/cards/in_and_out.tres",
+	"thrown_iron": "res://resources/cards/thrown_iron.tres",
 	"decapitate": "res://resources/cards/decapitate.tres",
 	"deep_breath": "res://resources/cards/deep_breath.tres",
-	"defend": "res://resources/cards/defend.tres",
-	"demon_form": "res://resources/cards/demon_form.tres",
-	"dodge_roll": "res://resources/cards/dodge_roll.tres",
-	"entrench": "res://resources/cards/entrench.tres",
+	"cover": "res://resources/cards/cover.tres",
+	"something_worse": "res://resources/cards/something_worse.tres",
+	"give_ground": "res://resources/cards/give_ground.tres",
+	"double_down": "res://resources/cards/double_down.tres",
 	"execute": "res://resources/cards/execute.tres",
 	"exsanguinate": "res://resources/cards/exsanguinate.tres",
 	"feint": "res://resources/cards/feint.tres",
-	"finisher": "res://resources/cards/finisher.tres",
+	"last_word": "res://resources/cards/last_word.tres",
 	"focus": "res://resources/cards/focus.tres",
-	"footwork": "res://resources/cards/footwork.tres",
+	"light_on_it": "res://resources/cards/light_on_it.tres",
 	"forge_strike": "res://resources/cards/forge_strike.tres",
 	"guard": "res://resources/cards/guard.tres",
-	"heavy_blade": "res://resources/cards/heavy_blade.tres",
+	"dead_weight": "res://resources/cards/dead_weight.tres",
 	"heavy_swing": "res://resources/cards/heavy_swing.tres",
 	"hex": "res://resources/cards/hex.tres",
-	"impervious": "res://resources/cards/impervious.tres",
-	"inflame": "res://resources/cards/inflame.tres",
+	"shut_out": "res://resources/cards/shut_out.tres",
+	"work_up": "res://resources/cards/work_up.tres",
 	"iron_lung": "res://resources/cards/iron_lung.tres",
-	"iron_wave": "res://resources/cards/iron_wave.tres",
+	"shoulder": "res://resources/cards/shoulder.tres",
 	"iron_will": "res://resources/cards/iron_will.tres",
 	"jab": "res://resources/cards/jab.tres",
-	"juggernaut": "res://resources/cards/juggernaut.tres",
+	"bristle": "res://resources/cards/bristle.tres",
 	"kelp_snare": "res://resources/cards/kelp_snare.tres",
 	"last_stand": "res://resources/cards/last_stand.tres",
 	"leech": "res://resources/cards/leech.tres",
@@ -180,45 +189,45 @@ const CATALOG := {
 	"molten_core": "res://resources/cards/molten_core.tres",
 	"noxious_cloud": "res://resources/cards/noxious_cloud.tres",
 	"pandemic": "res://resources/cards/pandemic.tres",
-	"perfected_strike": "res://resources/cards/perfected_strike.tres",
+	"drilled": "res://resources/cards/drilled.tres",
 	"plague_bearer": "res://resources/cards/plague_bearer.tres",
 	"plague_heart": "res://resources/cards/plague_heart.tres",
-	"prepared": "res://resources/cards/prepared.tres",
+	"read_ahead": "res://resources/cards/read_ahead.tres",
 	"pressure": "res://resources/cards/pressure.tres",
-	"pummel": "res://resources/cards/pummel.tres",
+	"keep_hitting": "res://resources/cards/keep_hitting.tres",
 	"rally": "res://resources/cards/rally.tres",
 	"riposte": "res://resources/cards/riposte.tres",
 	"riptide": "res://resources/cards/riptide.tres",
 	"rot_touch": "res://resources/cards/rot_touch.tres",
-	"rupture": "res://resources/cards/rupture.tres",
+	"split": "res://resources/cards/split.tres",
 	"salt_the_wound": "res://resources/cards/salt_the_wound.tres",
 	"sanguine_feast": "res://resources/cards/sanguine_feast.tres",
 	"scrape": "res://resources/cards/scrape.tres",
-	"searing_blow": "res://resources/cards/searing_blow.tres",
+	"grinding_down": "res://resources/cards/grinding_down.tres",
 	"second_heart": "res://resources/cards/second_heart.tres",
-	"second_wind": "res://resources/cards/second_wind.tres",
+	"stitch": "res://resources/cards/stitch.tres",
 	"shield_wall": "res://resources/cards/shield_wall.tres",
-	"shiv": "res://resources/cards/shiv.tres",
-	"shrug_it_off": "res://resources/cards/shrug_it_off.tres",
+	"nick": "res://resources/cards/nick.tres",
+	"take_it": "res://resources/cards/take_it.tres",
 	"sidestep": "res://resources/cards/sidestep.tres",
-	"slash": "res://resources/cards/slash.tres",
+	"gash": "res://resources/cards/gash.tres",
 	"smiths_fury": "res://resources/cards/smiths_fury.tres",
 	"smoke_bomb": "res://resources/cards/smoke_bomb.tres",
 	"spiked_guard": "res://resources/cards/spiked_guard.tres",
 	"spore_burst": "res://resources/cards/spore_burst.tres",
 	"stone_skin": "res://resources/cards/stone_skin.tres",
-	"strike": "res://resources/cards/strike.tres",
+	"hack": "res://resources/cards/hack.tres",
 	"stumble": "res://resources/cards/stumble.tres",
 	"survival_instinct": "res://resources/cards/survival_instinct.tres",
 	"sword_dance": "res://resources/cards/sword_dance.tres",
-	"terrify": "res://resources/cards/terrify.tres",
+	"put_the_fear": "res://resources/cards/put_the_fear.tres",
 	"thorn_crown": "res://resources/cards/thorn_crown.tres",
-	"twin_strike": "res://resources/cards/twin_strike.tres",
+	"two_quick": "res://resources/cards/two_quick.tres",
 	"undying": "res://resources/cards/undying.tres",
 	"venom_fang": "res://resources/cards/venom_fang.tres",
 	"virulence": "res://resources/cards/virulence.tres",
 	"whetted_edge": "res://resources/cards/whetted_edge.tres",
-	"whirlwind": "res://resources/cards/whirlwind.tres",
+	"clear_the_room": "res://resources/cards/clear_the_room.tres",
 	"wither": "res://resources/cards/wither.tres",
 }
 
@@ -277,15 +286,15 @@ const CONSUMABLES := {
 const STARTER_KITS := {
 	"blade": {
 		"name": "Blade", "hint": "Aggressive. Points toward Tempo and Strength.",
-		"cards": {"strike": 5, "defend": 3, "jab": 2, "twin_strike": 2},
+		"cards": {"hack": 5, "cover": 3, "jab": 2, "two_quick": 2},
 	},
 	"wall": {
 		"name": "Wall", "hint": "Defensive. Points toward Fortress and Thorns.",
-		"cards": {"strike": 3, "defend": 5, "guard": 2, "shrug_it_off": 2},
+		"cards": {"hack": 3, "cover": 5, "guard": 2, "take_it": 2},
 	},
 	"cunning": {
 		"name": "Cunning", "hint": "Cheap and fast. Points toward Tempo and Swarm.",
-		"cards": {"strike": 4, "defend": 3, "shiv": 2, "prepared": 3},
+		"cards": {"hack": 4, "cover": 3, "nick": 2, "read_ahead": 3},
 	},
 }
 
@@ -991,7 +1000,7 @@ func _migrate(data: Dictionary, from_version: int) -> Dictionary:
 		if not d.has("relics"):
 			d["relics"] = []
 		if not d.has("decks"):
-			d["decks"] = {"Starter": {"strike": 4, "defend": 4}}
+			d["decks"] = {"Starter": {"hack": 4, "cover": 4}}
 		if not d.has("cleared_dungeons"):
 			d["cleared_dungeons"] = []
 		if not d.has("gold"):
@@ -1010,7 +1019,7 @@ func _apply(parsed: Dictionary) -> void:
 		var e = parsed["collection"][id]
 		collection[id] = {"count": int(e["count"]), "level": int(e["level"])}
 	if collection.is_empty():
-		collection = {"strike": {"count": 4, "level": 1}, "defend": {"count": 4, "level": 1}}
+		collection = {"hack": {"count": 4, "level": 1}, "cover": {"count": 4, "level": 1}}
 
 	decks = {}
 	for dn in parsed.get("decks", {}):
