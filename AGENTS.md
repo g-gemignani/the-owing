@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D112 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D115 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -394,7 +394,19 @@ These are failure modes that have actually bitten this project. Treat each as a 
   generator, one style block, `bg_crypt.png` attached to every request as the style
   reference — the coherence comes from the ask being the same, not from the model
   (D90). Which files may be generated at all is in `ART_PROMPTS.md`, and it is a real
-  question: nine-slices are computed (D83) and animations are not stills.
+  question: nine-slices are computed (D83) and animations are not stills. **One
+  generator is necessary and not sufficient:** `main_menu.jpg` came off the same tool as
+  the twelve dungeons and matches none of them — flat vector shapes, a ninth their ink
+  density — because it was asked for in different words (D114). The wording is the part
+  that drifts, which is what the reference image is for.
+- **A file that exists is invisible to a shopping list, so a bad one has nowhere to be
+  recorded.** `ART_PROMPTS.md` prints what is absent; the moment anything lands, correct
+  or not, the sheet stops mentioning it. That is what `REDO` in `tools/art_manifest.gd`
+  is for — a hand-kept list of defects somebody LOOKED at, each with its measurement,
+  emptied as re-rolls land. It only works if a row exists to key on: the title art was
+  off-style for thirteen decisions because Tier 7 listed the logo over it and the splash
+  before it and not the painting itself (D114). A re-roll counts in the sheet's total —
+  it is the same prompt sent again.
 - **A prompt sheet is read by two audiences and only one of them paints.** The per-tier
   prose in ART_PROMPTS.md mixes art direction with notes to the operator — which files are
   computed, which installer takes the sheet, why a decision was made — and pasting it whole
@@ -453,7 +465,20 @@ These are failure modes that have actually bitten this project. Treat each as a 
   hand-kept list of files that exist and are wrong, each with the evidence, each line
   deleted when the re-roll lands (D109, D112). It deliberately detects nothing: the one
   measurement available guessed wrong about half the time, and a re-roll list built on a
-  bad measurement throws away good paintings.
+  bad measurement throws away good paintings. **The largest instance of this went unseen
+  for the whole project and is still open:** ART_PROMPTS.md says of the enemies "nothing
+  to generate here — all 35 present", and twenty-nine of those thirty-five plates are
+  featureless coloured silhouettes (D115). They are present, so the count cannot see
+  them, and every capture of the combat screen ever taken happened to roll one of the six
+  that are paintings. If a tier's files were produced in bulk by a tool, "present" is a
+  statement about the tool having run, not about the art.
+
+- **An asset on disk is not an asset in the game, and nothing tells you.** The 21 painted
+  status symbols shipped in D112 and were read by exactly nothing until D115 — the loader
+  had a bitmap fallback, so the screens looked the same as before and no test could fail.
+  Installing art and wiring art are two jobs; the manifest tracks the first and there is
+  no equivalent for the second. When a tier lands, `grep` for one of its filenames before
+  calling it done.
 
 - **A generated document is only as current as the tool that writes it, and a tool
   advertises a deleted screen forever.** `art_manifest.gd` briefed 26 icons for the graph
@@ -474,7 +499,11 @@ scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      pixel/ (CC0 Kenney) and art/ (generated backdrops + painted UI frames)
 tests/       37 suites + run.sh; export.sh and export_ready.sh need templates
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
-             screenshots.gd (renders every screen to PNG), art_manifest.gd,
+             screenshots.gd (renders every screen to PNG — drive it under
+             `Xvfb -screen 0 1280x720x24`, NOT on the desktop, or a 16:10 monitor
+             plus `stretch/aspect="expand"` hands you a 1280x800 viewport and hides
+             everything that only clips at the shipped height — D115),
+             art_manifest.gd,
              install_backdrops.gd, install_scene_backdrops.gd,
              install_cutouts.gd (mattes/trims/anchors enemies, relics, powers — D90),
              install_sheet.gd (slices an icon-set sheet into its files — D91),
@@ -493,7 +522,7 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              text-only model because the style reference is mandatory — D100.
              `--browser` prints the same prompts for pasting into a chat UI
              by hand, no key — it prints its own paste count — D102)
-DESIGN.md    the full reasoning, decision by decision (D1–D112)
+DESIGN.md    the full reasoning, decision by decision (D1–D115)
 ART.md       the art brief: the diagnosis, the style, the reasoning
 ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
              whether it exists yet. Never edit by hand; regenerate it.

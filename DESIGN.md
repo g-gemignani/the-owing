@@ -6184,3 +6184,261 @@ than held back. Nothing loads any of them yet — intent still renders as the st
 `hit 5` — so an opaque plaque on disk costs nothing, and a file that is present and
 listed in `REDO` is a defect with evidence attached, where a file that was never saved is
 a defect nobody can look at.
+
+### D113 — Two controls in one list, drawn from two different rules
+
+**The slider handle was nearly twice the checkbox beside it.** Both are theme ICONS in
+the same settings list, and Godot blits an icon at its texture's own pixel size, so what
+each one drew was whatever its asset happened to be: the checkbox capped to 26 by
+`icon_max_width` (D107), the slider handle uncapped at its installed 48x48. They are the
+same kind of thing at the same eye level, and any difference between them reads as one of
+the two being wrong rather than as a deliberate hierarchy. One number now, `CONTROL_ICON`,
+renamed from `CHECKBOX_ICON` because it stopped being about checkboxes.
+
+**`icon_max_width` is a Button constant, so the slider needed a different lever.** Only
+Button and its subclasses read it; `HSlider` draws `grabber` at `get_size()` and offers no
+constant, no scale and no override. So the only lever on a slider is the SIZE OF THE
+TEXTURE handed to it, which is why `kit_icon()` resamples rather than setting a constant —
+the one place in this file that pre-scales art instead of asking the theme to.
+
+**It is deliberately not on `kit_frame`'s path.** A nine-slice must never be pre-scaled:
+its slice margins are in texture pixels, and resampling moves the border out from under
+them, which is the smearing D83 is about. `kit_icon` also returns the texture untouched
+when it already fits, so nothing is resampled for the sake of it, and null when the file
+is absent — the same contract as `PixelArt.ui_kit`, so every caller's `!= null` gate still
+means "the art is installed" and the kit can keep arriving in pieces.
+
+**Capping beats shrinking the file, and that is a real choice.** `slider_grabber.png` stays
+48x48 on disk. The layout is a fixed 1280x720 that `canvas_items` scales to the window, so
+on a 4K display every asset is drawn at 3x — an asset shrunk to 26 on disk would be soft
+there, while a 48px source scaled to a 26-unit box has headroom to spare. The size a
+control draws at is a property of the row it sits in, not of the painting, so it belongs in
+the theme.
+
+### D114 — The most-seen painting in the game was off-style, and the doc said it was the style
+
+The title screen does not match the rest of the art, and it took someone looking at it to
+notice, because every document that mentions it said the opposite.
+
+**What is actually wrong with it.** Not the palette, which is the thing you would guess
+and the thing a re-roll would have chased. `main_menu.jpg` measures mean luminance 20.2%,
+inside the style block's 20-35% band, and its saturation sits between `bg_crypt`'s and
+`bg_the_maw`'s. The defect is the FIRST line of the style block — *every form carries a
+dark ink outline* — and it carries none. Measured as the share of pixels that are a local
+luminance minimum by more than 0.08 against both neighbours two pixels out:
+
+| image | ink-line pixels |
+|---|---|
+| `main_menu.jpg` | **1.2%** |
+| `bg_crypt.png` (the style reference) | 2.8% |
+| `bg_sunken_vault.png` | 8.0% |
+| `bg_warrens.png` | 10.9% |
+| `bg_the_maw.png` | 11.0% |
+| `bg_ossuary.png` | 12.2% |
+
+It is a ninth the outline density of a typical room and less than half of `bg_crypt` — and
+`bg_crypt` is the floor of that set, being the most open composition in it. What is on the
+title screen is flat vector silhouettes: firs, mountains and a fortress spire as filled
+shapes with no line around them.
+
+**It could not be on the re-roll list, because no row named it.** `REDO` is keyed by the
+manifest's own paths, and Tier 7 listed the logo that sits on top of the title art, the
+boot splash shown before it and the cursor that moves over it — not the picture itself. So
+the file was invisible to the sheet in both directions: never asked for, because it exists,
+and never re-rolled, because nothing knew it was there. It now has a row, and the sheet
+prints it with the measurement as its stated defect.
+
+**Two documents asserted it was fine, and one of them argued from it.** ART.md §1's
+dialect table filed it under *"Painted, inked illustration — this is the game, keep"*
+beside the twelve dungeons, so the count of fighting visual languages was five and the
+heading said four; that miscount survived thirteen decisions because it was in the column
+nobody re-reads. Worse, ART_PROMPTS.md's rule 1 used it as the *example* of the two-tool
+problem — "`main_menu.jpg` and the dungeons from one, the scene and zone backdrops from
+another." But `assets/art/README.md` records the provenance, and the title art and all
+twelve dungeons came off the SAME Gemini. So the file it named as one tool's coherent
+output is the counterexample to the rule it was illustrating.
+
+**That inverts the lesson, and rule 1 now says so.** One generator is necessary and not
+sufficient: the same tool, asked twice in two wordings, produced two dialects. Which is an
+argument FOR rule 2 rather than against rule 1 — the reference image and the fixed style
+block exist precisely because the wording is the part that drifts, and `main_menu.jpg` is
+what a request sent without them looks like.
+
+**The count on the sheet was low by eleven and is now right.** `**N files can be
+generated**` counted rows whose file is absent, so the twelve re-rolls were excluded while
+their tables were printed below — the header read 56 while the tiers asked for 67. A
+re-roll is the same prompt sent again and costs the same as a first draft, so it counts:
+68.
+
+**Landing the re-roll needed an installer route and a resolver, and the resolver is the
+load-bearing half.** The title art is the one painting with no `bg_` prefix and the one
+that is a `.jpg`, because it predates the installers — which is also how it escaped them.
+It now rides `install_scene_backdrops.gd` (same job: full-bleed 16:9, opaque, letterbox
+stripped, cropped rather than squashed) under the source name `main_menu` or `title`, and
+that tool only writes PNG. Four places spelled the `.jpg` path — `main_menu.gd` and three
+tests — and if the install had left them behind, the failure would have been SILENT:
+`UI.screen()` treats a missing backdrop as "not drawn yet" and draws the menu on flat
+colour, so the symptom of a half-landed swap is a title screen that looks deliberate.
+`PixelArt.title_art_path()` resolves the extension in one place, PNG first, and the
+installer deletes the superseded `.jpg` rather than leaving two answers to the question.
+
+**Deliberately not done: the `.jpg` was not converted to PNG now.** Normalising the
+extension ahead of the re-roll would mean re-encoding and 16:9-cropping a file that is
+about to be replaced anyway, to fix a wart the resolver already covers. The swap happens
+once, when the new painting lands.
+
+---
+
+### D115 — The card tier could never have installed, and the generator was blamed for it
+
+Found while harvesting the first card illustration. `tools/install_cutouts.gd -- cards`
+refuses every source it is given:
+
+```
+FAIL  block.png   background is not flat (28% of the border agrees, need 80%)
+                  — this looks like a painting of a room, not a subject on a field
+wrote 0, failed 1
+```
+
+**The installer is right and the routing is wrong.** `Cut.cut()` mattes anything whose
+opaque fraction is above 0.995, which every card illustration is, because a card
+illustration *is a filled rectangle*. Its own brief says so in the first sentence — "A
+filled 4:3 rectangle, not a cutout" — and then the sheet tells you to install it with
+the tool whose entire job is cutting subjects off fields. The matte then hunts for a
+flat border on art that deliberately bleeds to all four edges, fails to find one, and
+refuses. Correctly. **0 of 12 could ever have landed**, at any quality, from any
+generator, however good the painting.
+
+Three families are a subject that must be cut out of its field; one is a picture that
+fills its frame. That distinction already existed in the manifest as `Kind.SCENE`
+versus `Kind.PAINT` — it just never reached the installer, which had one code path.
+`FAMILIES` now carries a fourth flag and cards take `Cut.fill()`: cover-crop to the
+canvas, centre the overflow, no matte, no trim, no alpha. Cover rather than squash, so
+a source a few percent off 4:3 loses a sliver instead of stretching its subject.
+
+**What made this expensive is what it looked like.** A tier failing 12/12 with a
+message about flat backgrounds reads as "the generator keeps painting rooms" — a
+prompt problem, and there *was* a real prompt problem in the same tier the same
+afternoon (the painted cost numerals, above). Two defects in one tier, one of them
+loud and cosmetic, and the loud one hides the structural one. **A whole tier failing
+identically is evidence about the pipeline, not about the art**: one bad generation is
+a generation, twelve identical refusals are a route.
+
+It also went unnoticed because nothing had ever reached the installer. The tier has
+been 0/12 since it was written, so the first file to arrive was the first test the
+code path ever had. A route with no traffic is not a working route; it is an untested
+one, and `ART_PROMPTS.md` printed its install command all the while.
+
+### D115 — The art was on disk and nothing read it, and the screens were being judged 80 rows too tall
+
+A sweep of the cheap defects, run as five parallel agents. Four of the five found
+something the brief had wrong, which is most of what this entry is for.
+
+**The painted symbols were installed and unreachable.** D112 landed 21 status symbols at
+`ui/sym_*.png`; `grep` found zero call sites. `PixelArt.symbol()` built a 16x16 bitmap
+from `GLYPHS` and `ui_kit()` sat directly beside it already doing the resolve needed, so
+the fix is that `symbol()` prefers the painted file and falls back. **12 of 13 glyph
+names now serve painted art** — the brief said 18 names and was wrong: `stone`, `forge`,
+`rot`, `deeps` and `void` are in a separate `PATTERNS` const for tiling zone backdrops
+and were never symbols. `heart` reaches `sym_hp.png` through a one-entry alias; `book`
+has no painting and keeps its bitmap, which is why the fallback is not dead code.
+
+The tint contract was verified by reading pixels rather than the docstring: every opaque
+pixel in the painted files is pure white, because `install_sheet.gd` runs the symbols set
+through `cut_mono`, which takes alpha from luminance and throws the colour away. One real
+difference: the bitmaps encode shading as grey at full alpha, the paintings as white at
+partial alpha, so a painted glyph's soft interior reads as translucent rather than as a
+darker tint.
+
+**This broke `tests/test_art.gd` in 16 places, and the test was wrong.** It asserted
+symbols are *exactly* 16x16, then counted lit pixels in a hardcoded `for y in 16 / for x
+in 16` window — which on a 64px glyph samples only the top-left quadrant, so four painted
+symbols read as "nearly empty" with their subject untouched in the middle of the frame.
+Neither claim was what the test was protecting. It now asserts **square and a multiple of
+16** (every consumer centres the glyph in a square box, so a non-square glyph arrives
+letterboxed) and scans the real image with the emptiness floor as the *fraction*
+`12/256` always meant. An absolute count is not scale-free: 12 lit pixels is a glyph at
+16x16 and a fleck of dust at 64x64.
+
+**Eight files marked GENERATED, DO NOT PAINT had never been generated.** `divider`,
+`dropdown`, `slider_track`, `scrollbar_track`, `bar_frame` and the three bar fills.
+`gen_ui_kit.gd` gained one primitive: `_strip()` copies a single line of pixels along the
+long axis, so **tileability is structural rather than checked afterwards** — column x and
+x+1 are literally the same pixels, and no seam can exist. That is D83's nine-slice rule
+in one axis, and it is the reason these are computed and not painted.
+
+The first cut of the two grooves failed its own eye check (D56): the channel floor sat at
+the background's own luminance, 0.05 against 0.07, so at 4x they drew as two hairlines
+with a hole between them rather than a channel. Lifting the floor to the level the
+already-installed `slider_grabber` stone sits at fixed it.
+
+**And the eighth file activated a latent bug three feet away.** `ui_theme.gd` hardcoded
+`INK` as OptionButton's font colour, chosen when the kit was parchment and harmless for
+as long as `dropdown.png` was absent, because the whole block is skipped while the file
+does not exist. The moment it existed: near-black text on a face of luminance 0.067,
+**1.27:1**, which is not low contrast but invisible, and it would have taken the three
+filter dropdowns and the settings dropdowns out together. `ink_for()` already existed to
+measure ink off the middle of the art. **Compensating in the artwork was considered and
+rejected** — a paler dropdown face would then have swallowed `dropdown_arrow.png`, which
+is a pale carved-stone chevron. The frame was right; the ink was guessed.
+
+**The crawl header wrapped mid-phrase because the unit of wrapping was the string.** Nine
+statistics concatenated into one `Label` broke inside `AT RISK: 0 cards, 0 gold`. A
+shorter string is not the fix and neither is a smaller font: **the unit of wrapping has
+to be the FACT**. Every statistic is its own `Label` in a flow container now, so a row
+that runs out of width breaks between facts and there is nothing left inside one to
+break — which holds at any content length, verified against a forced worst case
+(`The Drowned Market (d12)`, `Gold 999999`, `AT RISK: 99 cards, 99999 gold, 30 relics, 12
+packs`). Importance became expressible once the facts were separate: the escrow figure
+and the ropes that answer it share the header's only frame, dim while empty and lit amber
+the moment something is in it, because an alarm that is on from the first step of every
+run is wallpaper by the third.
+
+**One rarity vocabulary, seven spellings.** `CardData.Rarity.keys()` was indexed at eight
+call sites which had each picked their own casing, so three shouted `[RARE]`, three said
+`rare` and one said `Rare`. `CardData.rarity_word()` derives the word from the keys
+rather than holding a table, because a private copy of a shared classification is D34 in
+better clothes. `rarity_badge()` exists because the *brackets* had drifted too, as a
+literal in four format strings. Relics and powers correctly share this scale —
+`relic_data.gd` declares `@export var rarity: CardData.Rarity` and `power_data.gd extends
+CardData` — so only the enum's *name* is misleading, and renaming it would move persisted
+ordinals that `.tres` files and saves store raw.
+
+## The screens were being judged at 1280x800, not 1280x720
+
+`project.godot` sets `window/size/mode=3` (fullscreen) with `stretch/aspect="expand"`, so
+`tools/Screenshots.tscn` on a 16:10 monitor renders a **1280x800 logical viewport** — 80
+rows the shipped game does not have. Every capture used to write ART.md and REVIEW.md is
+3072x1920, which is 1280x800. The harness's own header documents the
+`Xvfb -screen 0 1280x720x24` invocation for exactly this reason and nobody had used it.
+
+It was hiding a live defect: the crawl's two stacked full-width footer buttons pushed
+`Menu` half off the bottom edge, and had been doing so for as long as the header wrapped.
+`Collection` and `Menu` are side by side now, recovering ~60px without taking any height
+from the floor viewport.
+
+**What this does NOT invalidate:** `CardTextTest` sets `get_window().size` from the
+project settings explicitly, so the hand assertions were always measured at 720. The
+guard added in D97 — no resting card's name may run under its right-hand neighbour — is
+sound and non-vacuous. Its real gap is narrower: it only ever runs on the hand combat
+deals, and `Balance.HAND_SIZE` is 5, so a hand pushed past five by draw effects against
+`FAN_OVERLAP` 0.88 is unmeasured.
+
+## What the 720 render found instead: 29 of the 35 enemies are flat silhouettes
+
+`ART_PROMPTS.md` says of Tier 2, **"Nothing to generate here — all 35 present."** The
+plates are present. Six of them are paintings and twenty-nine are featureless coloured
+humanoids — `cultist.png` is a flat brown figure with no interior detail at all, and it
+is the shipped plate, not a missing-art fallback. The file sizes are the tell and there
+is no ambiguity in them: six plates at 70-577KB, then a cliff to 21KB and below for the
+other twenty-nine.
+
+Every earlier capture of the combat screen happened to roll Bone Pickers, which is one of
+the six, so the screen looked finished in every review this project has written.
+
+**This is D109's finding in the largest content tier in the game, and the mechanism built
+for it was never pointed here.** `REDO` exists precisely because a list of what is
+*absent* cannot see a file that arrived *wrong*; the moment something lands the sheet goes
+quiet. Twenty-nine plates landed, the sheet went quiet, and the shopping list has said
+enemies are done ever since. The counts cannot catch it either — they count presence, and
+these are present. Nothing measured them and nothing was going to.
