@@ -68,15 +68,19 @@ func _refresh() -> void:
 		row.add_theme_constant_override("separation", UITheme.sep(10))
 		list_box.add_child(row)
 
-		# illustration first, then the symbol that actually states what it does
-		var art := TextureRect.new()
-		art.texture = PixelArt.card_art(card.id, Icons.card_family(card))
-		art.custom_minimum_size = Vector2(UITheme.px(28), UITheme.px(28))
-		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		art.modulate = Icons.rarity_colour(card.rarity)
-		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(art)
+		# What one more level buys, quoted to the inspector as well as to the row: the
+		# fuse buttons below price the next level, and the card being priced is
+		# exactly the thing this screen never showed you.
+		var cap0: int = MetaState.max_level(id)
+		var gain0: String = card.level_up_text(int(entry["level"]) + 1)
+		var note := ""
+		if gain0 != "" and int(entry["level"]) < cap0:
+			note = "Level %d of %d.\nOne more level: %s" % [
+				int(entry["level"]), cap0, gain0]
+
+		# The illustration is the way into the full card — see UI.inspect_thumb — then
+		# the symbol that states what it does.
+		UI.inspect_thumb(row, card, UITheme.px(28), note)
 		var pic := TextureRect.new()
 		pic.texture = Icons.tex(Icons.for_card(card))
 		pic.custom_minimum_size = Vector2(UITheme.px(32), UITheme.px(32))
@@ -92,25 +96,23 @@ func _refresh() -> void:
 			stats += "dmg %d " % card.eff_damage()
 		if card.eff_block() > 0:
 			stats += "blk %d " % card.eff_block()
-		var cap: int = MetaState.max_level(id)
 		# no empty "()" on a card whose numbers are not damage or block
 		var stat_txt := stats.strip_edges()
 		lbl.text = "%s  [%s]  Lv%d/%d  x%d%s" % [
-			card.name, CardData.Rarity.keys()[card.rarity], entry["level"], cap,
+			card.name, CardData.Rarity.keys()[card.rarity], entry["level"], cap0,
 			entry["count"], "   (%s)" % stat_txt if stat_txt != "" else ""]
 		row.add_child(lbl)
 		# What the next level BUYS. The buttons have always quoted the price; the
 		# benefit was left for the player to infer, which is not a decision anyone
 		# can make well against a shop that states its prices AND its goods.
-		var gain: String = card.level_up_text(int(entry["level"]) + 1)
-		if gain != "" and int(entry["level"]) < cap:
+		if gain0 != "" and int(entry["level"]) < cap0:
 			var next := Label.new()
 			next.custom_minimum_size.x = UITheme.px(220)
 			next.add_theme_color_override("font_color", Color(0.72, 0.86, 0.68))
-			next.text = "next: %s" % gain
+			next.text = "next: %s" % gain0
 			row.add_child(next)
 			UI.hoverable(next, "What one more level gives this card. Level %d of %d." % [
-				int(entry["level"]) + 1, cap])
+				int(entry["level"]) + 1, cap0])
 		# on the row, so hovering the art or the fuse buttons explains the card too
 		UI.hoverable(row, Icons.card_tooltip(card))
 

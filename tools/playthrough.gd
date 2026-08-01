@@ -32,7 +32,7 @@ func _init() -> void:
 		m.loadout_size(sel), Balance.MIN_DECK_SIZE, Balance.MAX_DECK_SIZE, m.deck_valid(sel)])
 	if m.loadout_size(sel) == Balance.MIN_DECK_SIZE:
 		notes.append("starter deck is exactly the legal minimum: the deck builder offers no real choice on run 1")
-	if m.fusable_levels("strike") == 0:
+	if m.fusable_levels("hack") == 0:
 		notes.append("cannot fuse anything on a fresh save (needs %d copies) — fusion is invisible until several runs in" % (Balance.MIN_KEEP + 2))
 
 	# play through dungeons in unlock order, greedily
@@ -176,7 +176,7 @@ func _best_loadout(m) -> Dictionary:
 	ids.sort_custom(func(a, b):
 		var ca := load(m.CATALOG[a]) as CardData
 		var cb := load(m.CATALOG[b]) as CardData
-		return ca.power_value() / maxf(1.0, ca.cost) > cb.power_value() / maxf(1.0, cb.cost))
+		return ca.power_value() / maxf(1.0, ca.eff_cost()) > cb.power_value() / maxf(1.0, cb.eff_cost()))
 	var out := {}
 	var total := 0
 	for id in ids:
@@ -202,7 +202,7 @@ func _turn(e: CombatEngine) -> void:
 	while again and not e.over():
 		again = false
 		for c in e.hand.duplicate():
-			if e.can_play(c) and c.draw > 0:
+			if e.can_play(c) and c.eff_draw() > 0:
 				e.play_card(c); again = true; break
 	# finish it if a single card can
 	for c in e.hand.duplicate():
@@ -244,7 +244,7 @@ func _best(e: CombatEngine, want_damage: bool) -> CardData:
 		var amt: int = (c.hit_damage() * maxi(1, c.hits)) if want_damage else c.eff_block()
 		if amt <= 0:
 			continue
-		var v := float(amt) / maxf(1.0, float(c.cost))
+		var v := float(amt) / maxf(1.0, float(c.eff_cost()))
 		if v > bv:
 			bv = v
 			best = c

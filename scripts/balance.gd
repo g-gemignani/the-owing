@@ -121,22 +121,74 @@ const MAX_DECK_SIZE := 20
 ## CardData.BLOCK_VALUE: (4x6 + 4x5x0.65) / 8 energy = 4.625 per energy.
 ## Recomputed whenever the weighting changes, so the reference deck stays ratio 1.0.
 const BASELINE_CARD_POWER := 4.625
+# --- the ratio axis was rescaled by D109, and everything measured against it moved
+#
+# Levelling used to leave 77% of a card's level-ups doing nothing, and the fix
+# (CardData._spread) made growth linear. That took a maxed common from 21 damage to
+# 107, and the strongest reachable deck from ratio 6.1 to 31.7.
+#
+# Every constant below is a SLOPE against ratio or a POINT on it, so none of them
+# survived that unchanged. Two ways of moving them were tried and only the second
+# one measured:
+#
+# **A single analytic stretch of the axis did not work.** Mapping each constant
+# through one factor satisfied every predicate in tests/test_balance.gd — and made
+# the game a walkover. Measured against a HEAD baseline at 120 trials: Barricade at
+# the Foundry 24% -> 100% run completion, Thorns at the Abyssal Stair 6% -> 97%, AoE
+# at the Drowned Market 42% -> 97%. The suite guards the SHAPE of the curve and the
+# shape was intact; what moved was the height, which only the simulator sees. A
+# constant that says "measured" has to be measured by the thing that measures play.
+#
+# **What these are instead.** Anchored on matched-progression cells from that same
+# baseline — enemy HP fitted to hold fight LENGTH at the Mid and Thorns anchors,
+# enemy damage and pierce fitted as far as the maxed-deck guard allows. Fight
+# lengths now land within ~0.5 turns of baseline across every profile and the early
+# game is unchanged within noise.
+#
+# **What is still open, stated plainly.** Fused archetype decks remain easier than
+# baseline by a mean of 14 points, worst at Barricade (+67 at the Foundry, +49 at
+# the Sunken Vault). The mechanism is not in this file: a Lv15 Cover now grants 20
+# Block where it used to grant 10, so a block deck's defensive pool doubled, while
+# enemy damage growth is bounded above by the D36 guard that a maxed deck must not
+# be punished for its power. Raising DMG_POWER_K to 0.09 or beyond fails that guard;
+# raising ESCALATION_PER_TURN to 0.10 was tried and hurt the UNFUSED deck more than
+# the fused one (Early at the Foundry 32% -> 8%), which is the wrong trade. Closing
+# it belongs in `CardData.power_value`'s Block pricing or in the archetype cards,
+# not in another pass over these numbers.
+
 ## Only part of the player's throughput goes into damage (the rest into block),
 ## so HP scaling below 1.0 keeps fight LENGTH roughly flat as decks improve.
-const HP_POWER_K := 0.5
+## Was 0.5. Fitted to hold fight length at the Mid (Lv15, ratio 6.4) and Thorns
+## (Lv15, ratio 7.7) anchors rather than mapped.
+const HP_POWER_K := 0.68
 ## Kept low deliberately: difficulty should come from choosing a deeper dungeon,
 ## not from the player's own progression. Scaling incoming damage steeply with
 ## deck power punishes offense-heavy decks that have no extra block to answer it.
-const DMG_POWER_K := 0.15
-const POWER_RATIO_CAP := 4.5  # room for maxed decks; sub-linear card growth keeps this reachable
+##
+## Was 0.15. This is the constant the whole retune is pinched by: the mid-game wants
+## it HIGHER (block pools doubled and this is what reaches through them) and the
+## maxed-deck guard wants it LOWER (at depth, pierce multiplies it against a deck
+## that already bled for its own power). Measured ceiling before that guard fails:
+## 0.07. 0.060 is the most attrition the guard allows.
+const DMG_POWER_K := 0.060
+## The knee where further ratio starts to compress, and now a BACKSTOP rather than a
+## working part: it sits above the strongest reachable deck (31.7), so nothing a
+## player can build is softened.
+##
+## It used to sit below the reachable maximum, and that is what broke the first
+## retune. `soften_ratio` is sqrt, so the wider the raw range the more it eats: at
+## the old range it turned 7.1 into 6.1, but at the new one it turned 31.7 into 13.8
+## — enemies were being scaled for less than half the deck they were facing.
+const POWER_RATIO_CAP := 33.0
 
 ## Past this ratio a deck is not "a player with a good build" any more — it is the
 ## thing the deepest dungeons exist to test. Two rules switch on above it (extra
 ## enemy HP, and pierce that scales with the deck), and NOTHING below it changes,
 ## which is what keeps every cell D45 tuned exactly where it was. Chosen as the top
-## of the build band: the archetype decks measure 2.4-4.0, fully-relic'd late ones
-## 4.3-5.9.
-const HIGH_POWER_FLOOR := 3.0
+## of the build band, RE-MEASURED after D109 stretched the axis: the archetype decks
+## now measure 4.6-11.0 (poison 4.6, barricade 4.6, status 5.6, thorns 7.7, AoE
+## 11.0) and fully-relic'd late ones 20.5-31.7. Was 3.0 against a 2.4-4.0 band.
+const HIGH_POWER_FLOOR := 11.1
 ## Extra enemy HP per point of ratio above the floor.
 ##
 ## Without it, more power made the game EASIER at the top: `HP_POWER_K` at 0.5
@@ -147,7 +199,15 @@ const HIGH_POWER_FLOOR := 3.0
 ## costs the middle everything (measured: Barricade 55% -> 29% at the Foundry, AoE
 ## 72% -> 6% at the Drowned Market), because it lengthens fights at EVERY ratio and
 ## escalation then compounds on the decks that were already slow.
-const HP_POWER_K_HIGH := 0.5
+##
+## The one constant here that is NOT the plain axis map (which would give 0.217).
+## `soften_ratio` compresses the top of the range twice over — once in
+## `power_ratio`, once in `scaling_ratio` — so above the floor the scaling ratio
+## grows slower than the player's raw throughput does, and at the mapped value the
+## deepest dungeon's fights measured 3.3 turns against 3.5 at the floor: shortening
+## with power, which is exactly the D52 regression. 0.38 is where they stop
+## shortening, pinned by the test rather than chosen.
+const HP_POWER_K_HIGH := 0.52
 
 # --- the ratchet: a dungeon only matches you so far ---
 ## Enemies used to scale against the player's power with NO upper bound, at every
@@ -167,19 +227,27 @@ const HP_POWER_K_HIGH := 0.5
 ## mid-game the player was above the ceiling of every dungeon and the whole
 ## back half of the game was a walkover at 100% completion and single-digit HP
 ## loss. The ratchet is meant to let you outgrow the CRYPT, not the Maw.
+## Was 1.4 on the old axis.
 const RATIO_CEILING_BASE := 1.4
 ## Set so the deepest dungeon's ceiling clears the maximum achievable ratio with
 ## room to spare; see MAX_ACHIEVABLE_RATIO and the test that pins the relationship.
-const RATIO_CEILING_PER_DEPTH := 0.90
+## A slope in ratio-per-depth, so D109 multiplied it rather than dividing: was 0.90.
+## The deepest dungeon (d8) now ceilings at 33.25 against a reachable 31.7.
+const RATIO_CEILING_PER_DEPTH := 4.55
 
 ## The strongest ratio a fully-built player can reach: maxed card levels plus a
 ## full relic set. Measured with tools/sim_balance.gd, not guessed. The deepest
 ## dungeon must scale past this or the endgame stops resisting.
 ##
-## Re-measured at 6.09 after D75 repriced relics — a constant whose comment says
-## "measured" has to be re-measured when the thing it measures moves, or it becomes
-## the fourth restated number in this file to quietly go stale.
-const MAX_ACHIEVABLE_RATIO := 6.1
+## Re-measured at 31.67 after D109 rebuilt level scaling — the third time this
+## constant has moved because the thing it measures moved. A constant whose comment
+## says "measured" has to be re-measured, or it becomes the fourth restated number
+## in this file to quietly go stale. (6.09 after D75 repriced relics; 4.55 before.)
+##
+## No longer softened on the way here: POWER_RATIO_CAP is above it by design, so this
+## is the deck's raw power per energy. 20 maxed commons, six relics, a maxed power.
+## tests/test_upgrade.gd fails if a maxed deck climbs past it.
+const MAX_ACHIEVABLE_RATIO := 31.7
 
 ## The power level `difficulty` will scale its enemies to match.
 static func ratio_ceiling(difficulty: int) -> float:
@@ -199,16 +267,21 @@ static func deck_power(deck: Array) -> float:
 	return p
 
 ## Total energy needed to play the whole deck (min 1 to avoid divide-by-zero).
+##
+## `eff_cost`, because levelling a rule-only card buys its energy cost down and this
+## is the denominator of `power_ratio`. Reading the authored cost here would let a
+## maxed Set Stone deck play more per turn than the ratchet had priced it for —
+## exactly the unpriced-throughput hole relics and powers each opened once.
 static func deck_cost(deck: Array) -> float:
 	var c := 0.0
 	for card in deck:
-		c += card.cost
+		c += card.eff_cost()
 	return maxf(1.0, c)
 
 # --- powers (once-per-turn abilities) ---
 const POWER_DIR := "res://resources/powers/"
-const POWERS := ["bulwark", "foresight", "cleave", "blight", "expose", "bramble",
-	"kindle", "overwhelm", "siphon", "second_wind"]
+const POWERS := ["bulwark", "foresight", "scythe", "blight", "expose", "bramble",
+	"kindle", "overwhelm", "siphon", "push_on"]
 
 
 # --- resource caches ---------------------------------------------------------
@@ -300,7 +373,7 @@ static func power_ratio_bonus(p, deck_per_energy: float = BASELINE_CARD_POWER) -
 	# energy_gain is handled multiplicatively by throughput_multiplier; counting it
 	# here as well would charge for the same effect twice
 	var gained: float = (p.power_value() - float(p.energy_gain) * 15.0) * POWER_RELIABILITY
-	var displaced: float = float(p.cost) * deck_per_energy
+	var displaced: float = float(p.eff_cost()) * deck_per_energy
 	# a power the player would simply never fire cannot make enemies tougher
 	return maxf(0.0, gained - displaced) / (float(MAX_ENERGY) * BASELINE_CARD_POWER)
 
@@ -399,19 +472,55 @@ const ENCOUNTER_TREASURES := 1
 ## HP is a rounding error against a fight that costs 17-31% of a health bar, and a
 ## flat cost gets *cheaper* with depth while fights get dearer.
 ##
-## Two changes make it a trade again. It scales with depth — through the dungeon's
+## Two changes made it a trade again. It scales with depth — through the dungeon's
 ## difficulty, not the player's max HP, because a Traversal must never read run
 ## resources (D13) — and it RISES with each dodge already taken this run, the same
-## shape as `removal_price`. The first dodge is the one you want; the fourth should
-## be unaffordable. Tuned so dodging every fight in a dungeon costs ~70% of the
-## health bar and arrives at the boss with no gold and no rewards.
-const AVOID_BASE_HP := 6
-const AVOID_PER_DEPTH := 1
-const AVOID_STEP := 0.5
+## shape as `removal_price`. The first dodge is the one you want; the last should be
+## unaffordable. The target: **dodging every fight a dungeon offers costs
+## `AVOID_TOTAL_FRACTION` of the health bar** and arrives at the boss with no gold
+## and no rewards.
+##
+## **That target was missed by half for two years, because the ladder was a fixed
+## climb and the staircase changed height under it (D99).** The old constants were
+## `6 + depth` per rung with a +0.5 step, tuned so FOUR rungs came to ~70% of the
+## bar — four being `ENCOUNTER_COMBATS + ENCOUNTER_ELITES`, the global default mix.
+## Two later changes moved the real number and neither touched this: encounter mixes
+## became per-dungeon (D84), and the crawl takes wanderers **out** of the combat
+## budget (D88) — and a wanderer cannot be slipped past, it walks to you. Measured,
+## the crawl offers **two or three** dodges, never four, so the real bill came to
+## **25-46%** of the bar and was exactly 25% in six of the twelve dungeons. Dodging
+## the whole dungeon cost a quarter of a health bar. `tests/test_traversal.gd`
+## asserted the total was at least half a bar and passed, because it computed the
+## rung count from the same global constant rather than from the dungeon.
+##
+## So the ladder is now sized to the staircase: `avoid_cost` takes how many dodges
+## the dungeon actually offers and solves for the base that lands the WHOLE ladder
+## on the target. A dungeon that offers two charges more per dodge than one that
+## offers four, which is the correct answer and the one a fixed rung cannot give.
+## `TraversalIso` counts its own dodgeable fights at generation and hands the number
+## over; nothing derives it a second time.
+##
+## `AVOID_STEP` is 1.0, not the old 0.5: the second slip costs twice the first and
+## the third three times it. A steeper climb is what keeps the FIRST rung affordable
+## while the total still reaches the target on a two-rung ladder — at 0.5 a two-dodge
+## dungeon had to charge 28% of the bar up front to reach 70%, past the point where
+## anyone would ever use the first one.
+const AVOID_TOTAL_FRACTION := 0.70
+const AVOID_STEP := 1.0
 
-static func avoid_cost(difficulty: int, already_avoided: int) -> int:
-	var base := float(AVOID_BASE_HP + AVOID_PER_DEPTH * (maxi(1, difficulty) - 1))
-	return int(round(base * (1.0 + AVOID_STEP * float(maxi(0, already_avoided)))))
+## What dodging EVERY fight in this dungeon should cost, as a fraction of a health
+## bar derived from depth (not from the player, per D13).
+static func avoid_budget(difficulty: int) -> float:
+	return AVOID_TOTAL_FRACTION * float(BASE_MAX_HP + (maxi(1, difficulty) - 1) * HP_PER_DUNGEON)
+
+## Price of the next dodge. `dodgeable` is how many this dungeon offers in total —
+## ask the traversal, do not re-derive it.
+static func avoid_cost(difficulty: int, already_avoided: int, dodgeable: int) -> int:
+	var n := maxi(1, dodgeable)
+	# sum of (1 + STEP*i) for i in 0..n-1, in units of `base`
+	var rungs := float(n) + AVOID_STEP * float(n * (n - 1)) * 0.5
+	var base := avoid_budget(difficulty) / rungs
+	return maxi(1, int(round(base * (1.0 + AVOID_STEP * float(maxi(0, already_avoided))))))
 
 ## Iso model: the floor is a place, most of it is empty, and something else is
 ## walking it.
@@ -1253,7 +1362,14 @@ const PIERCE_PER_DEPTH := 0.032
 ## fights pay it every turn — and a Barricade deck sits at 2.4. Measured: scaling
 ## from ratio 1 instead took Barricade run completion from 59% to 31%, which
 ## deletes an archetype in order to fix the endgame.
-const PIERCE_PER_RATIO := 0.5
+##
+## Was 0.5, on an axis whose excess above the floor topped out at 2.8. It now tops
+## out near 20, and left alone this pinned the clamp at 0.5 — half of every hit
+## going straight through Block — and cost a maxed deck 74 HP a fight at depth 6
+## against a starter's 34. A slope against ratio, so D109 scaled it down with the
+## axis; the remainder of the maxed-deck budget went to DMG_POWER_K instead, which
+## reaches mid-game block pools that pierce at depth cannot.
+const PIERCE_PER_RATIO := 0.020
 
 ## Fraction of a hit that goes straight to HP: depth, raised by how far past
 ## `HIGH_POWER_FLOOR` the deck has grown — capped by the dungeon, as ever.

@@ -5,8 +5,8 @@ extends Control
 
 const CARD_DIR := "res://resources/cards/"
 ## Fallback pool when a dungeon defines none (D6: dungeons own their card pools).
-const DEFAULT_POOL := ["strike", "defend", "bash", "iron_wave", "clear_mind",
-	"terrify", "inflame", "footwork", "barricade"]
+const DEFAULT_POOL := ["hack", "cover", "stave_in", "shoulder", "clear_mind",
+	"put_the_fear", "work_up", "light_on_it", "set_stone"]
 
 var eng: CombatEngine
 var tier: int = Balance.Tier.NORMAL
@@ -282,8 +282,8 @@ func _build_ui() -> void:
 	hand_box.anchor_right = 1.0
 	hand_box.anchor_top = 1.0
 	hand_box.anchor_bottom = 1.0
-	hand_box.offset_top = -(UITheme.card_size().y + UITheme.px(FAN_ARC) + UITheme.px(14))
-	hand_box.offset_bottom = -UITheme.px(20)
+	hand_box.offset_top = -(UITheme.card_size().y * HAND_PEEK + UITheme.px(FAN_ARC))
+	hand_box.offset_bottom = 0.0
 
 	reward_box = VBoxContainer.new()
 	reward_box.add_theme_constant_override("separation", UITheme.sep())
@@ -604,6 +604,25 @@ const FAN_TILT := 0.075        ## radians at the outermost card
 const FAN_ARC := 22.0          ## how much higher the middle of the fan rides
 const FAN_OVERLAP := 0.88      ## fraction of a card's width between neighbours
 
+## How much of a card is above the bottom edge of the screen at rest. The rest of
+## it hangs off, deliberately.
+##
+## A portrait card that had to fit on screen whole would have to be short, and a
+## short card is the one the old layout had: a picture too small to be a picture
+## and a rules band too small to hold rules, which is why the text was hidden
+## until you hovered. Letting the bottom go off-frame buys the height back for
+## free, because the bottom of a card is its least urgent part — what you scan a
+## hand for is cost, name, picture and the headline number, and every one of those
+## is in the top half by construction (see `UI.card_button`).
+##
+## The invariant this has to keep is that the visible part is the identifying
+## part; `CardTextTest` measures it rather than trusting this comment.
+const HAND_PEEK := 0.74
+
+## Clearance between a lifted card and the frame, so a hovered card is read
+## against the screen rather than jammed into its edge.
+const HOVER_MARGIN := 10.0
+
 func _place_hand() -> void:
 	var n := eng.hand.size()
 	if n == 0:
@@ -626,6 +645,15 @@ func _place_hand() -> void:
 		var cr := controls_box.get_global_rect()
 		if cr.size.x > 1.0:
 			right = minf(right, cr.position.x - UITheme.px(14))
+	# A tilted card is WIDER than a card. It turns about its bottom centre, so its
+	# top corner swings out by height x sin(tilt) — and that is a number the card's
+	# height controls, which is why a reserve that was correct for a 132px-tall card
+	# put a 214px one 16px inside the vitals. Only the outermost pair are tilted the
+	# full amount, and a hovered card straightens before it lifts, so this is a
+	# resting-state correction and it belongs on both edges.
+	var swing := base.y * sin(FAN_TILT)
+	left += swing
+	right -= swing
 	var room := maxf(base.x, right - left)
 	# The step has to leave room for the WIDTH of the outermost cards, not just for
 	# their centres: `room / n` put the leftmost card's edge 21px inside the vitals,
@@ -647,7 +675,7 @@ func _place_hand() -> void:
 		# hand order, so card i is covered by card i+1 and only `step` of it is left;
 		# the last one is on top of everything and keeps the lot. Without this the name
 		# — the only thing a resting card shows — is laid out across a width the player
-		# cannot see (D96).
+		# cannot see (D97).
 		if holder.has_meta("fit_name"):
 			(holder.get_meta("fit_name") as Callable).call(base.x if i == n - 1 else step)
 		# rotation and growth both happen about the bottom-centre, so a card pivots
@@ -660,7 +688,18 @@ func _place_hand() -> void:
 		# it up from the bottom instead pushed the whole fan off the screen edge.
 		var pos := Vector2(cx - span * 0.5 + step * float(i) - base.x * 0.5,
 			f * f * arc)
-		holder.set_meta("fan", {"pos": pos, "rot": rot, "lift": base.y * 0.34})
+		# How far this card must rise to be read WHOLE. Not a constant fraction: the
+		# card hangs off the bottom edge by design, the fan's outer cards hang off
+		# further than its middle ones, and hover scales about the bottom-centre pivot
+		# — so the bottom edge does not move when the card grows, and every pixel of
+		# the enlargement goes upward. Solve for the lift that puts the bottom edge
+		# HOVER_MARGIN inside the frame and the whole card follows, because the top
+		# edge is then bottom - height*scale, which the band above the hand has room
+		# for. Computing it per card is what makes "displays in full" true for the
+		# outermost card and not just the middle one.
+		var bottom := hand_box.global_position.y + pos.y + base.y
+		var lift := maxf(0.0, bottom - (vp.y - UITheme.px(HOVER_MARGIN)))
+		holder.set_meta("fan", {"pos": pos, "rot": rot, "lift": lift})
 		# do not fight the hover: a card being read owns its own transform
 		if holder.z_index == 0:
 			holder.position = pos
@@ -681,7 +720,7 @@ func _refresh_power() -> void:
 		return
 	power_btn.visible = true
 	power_ring.visible = true
-	power_btn.text = "%s\n%s" % [p.name, "free" if p.cost == 0 else "%dE" % p.cost]
+	power_btn.text = "%s\n%s" % [p.name, "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()]
 	power_btn.disabled = not eng.can_use_power()
 	# spent or unaffordable reads on the ring, not only in the tooltip: the orb is
 	# small, so its STATE has to be visible from the shape rather than the words
@@ -689,10 +728,10 @@ func _refresh_power() -> void:
 	var why := ""
 	if eng.power_used:
 		why = "\nAlready used this turn."
-	elif p.cost > eng.energy:
-		why = "\nNeeds %d energy, you have %d." % [p.cost, eng.energy]
-	elif p.hp_cost > 0 and eng.player.hp <= p.hp_cost:
-		why = "\nCosts %d HP and would be lethal." % p.hp_cost
+	elif p.eff_cost() > eng.energy:
+		why = "\nNeeds %d energy, you have %d." % [p.eff_cost(), eng.energy]
+	elif p.eff_hp_cost() > 0 and eng.player.hp <= p.eff_hp_cost():
+		why = "\nCosts %d HP and would be lethal." % p.eff_hp_cost()
 	UI.hoverable(power_btn, "%s\n%s\nOnce per turn, every turn.%s" % [
 		p.name, p.effect_text(), why])
 

@@ -7,8 +7,8 @@ enum Type { ATTACK, SKILL, POWER }
 enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 
 ## Stable identity — keys the persistent collection. Matches the .tres stem.
-@export var id: String = "strike"
-@export var name: String = "Strike"
+@export var id: String = "hack"
+@export var name: String = "Hack"
 @export var description: String = "Deal 6 damage."
 @export var cost: int = 1
 @export var type: Type = Type.ATTACK
@@ -159,8 +159,8 @@ func effect_text(live_damage: int = -1, live_block: int = -1) -> String:
 		parts.append("Heal %d" % eff_heal())
 	if energy_gain > 0:
 		parts.append("+%d Energy" % energy_gain)
-	if draw > 0:
-		parts.append("Draw %d" % draw)
+	if eff_draw() > 0:
+		parts.append("Draw %d" % eff_draw())
 	if eff_vulnerable() > 0:
 		parts.append("Vulnerable %d" % eff_vulnerable())
 	if eff_weak() > 0:
@@ -177,8 +177,8 @@ func effect_text(live_damage: int = -1, live_block: int = -1) -> String:
 		parts.append("Block stops expiring")
 	if grows > 0:
 		parts.append("Grows +%d per play" % grows)
-	if hp_cost > 0:
-		parts.append("Costs %d HP" % hp_cost)
+	if eff_hp_cost() > 0:
+		parts.append("Costs %d HP" % eff_hp_cost())
 	if retain:
 		parts.append("Retain")
 	if exhaust:
@@ -189,37 +189,172 @@ func effect_text(live_damage: int = -1, live_block: int = -1) -> String:
 		return description
 	return ". ".join(parts) + "."
 
-## Effective numbers after level scaling.
-##
-## Scaling is deliberately SUB-LINEAR (sqrt). Upgrade tracks run to 100 levels for
-## commons, and a linear +3/level would put a maxed Strike at ~300 damage — far
-## past anything enemy scaling can answer, so the whole curve would collapse.
-## sqrt keeps a maxed card ~3-4x its base: a long grind whose early levels feel
-## big and whose late levels are incremental, which is also the RPG feel we want.
-## Gain per level, BY RARITY. Rarer cards gain more per level because their level
-## tracks are shorter (caps derive from drop weight: common 100, legendary 5).
-## With one flat gain the scaling was inverted — a maxed common reached 3.5x while
-## a maxed legendary reached only 1.5x, i.e. grinding commons beat every legendary.
-## These values are chosen so the MAXED multiplier ascends with rarity instead:
-## common 3.5x, uncommon 3.8x, rare 4.2x, epic 4.6x, legendary 5.0x.
 ## Value of one point of Block relative to one point of damage.
 const BLOCK_VALUE := 0.65
 
-const LEVEL_GAIN_BY_RARITY := [0.251, 0.448, 0.855, 1.80, 2.00]
-## Status magnitudes grow more slowly than raw numbers (a stack multiplies every
-## later action), but follow the same rarity logic.
-const STATUS_GAIN_BY_RARITY := [0.5, 0.7, 1.0, 1.6, 1.8]
+# --- levelling: every level a player buys must move a number ------------------
+#
+# It did not. Measured across the whole game before this rewrite: 3,559 of the
+# 4,640 card level-ups (77%) and 44 of the 63 power level-ups changed nothing at
+# all, and eight cards — Focus, Read Ahead, See It Coming, Kick, Abyssal Gift,
+# Ram, Double Down, Set Stone — changed nothing at ANY level. Commons were the
+# worst at 86% dead, so the cards a player levels first were the ones that lied
+# most.
+#
+# The old shape was `base + round(base * rate * sqrt(level - 1))`: a curve picked
+# for feel and then handed to integer rounding, which eats every step smaller
+# than half a point. A common card's ENTIRE track was +15 damage spread over 99
+# levels, so 84 of them landed on the number below. Statuses were worse: +5 over
+# a hundred levels.
+#
+# This cannot be retuned, only rebuilt, because the constraint is arithmetic: a
+# track can never be longer than the number of integer steps it has to give. So
+# both halves move.
+#
+#   * growth is at least +1 per level BY CONSTRUCTION (`_spread`), not by tuning
+#   * a card that cannot pay for a long track gets a short one (`level_cap`)
+#
+# What it costs, stated plainly rather than buried: growth is now LINEAR in level
+# where it used to be sub-linear, so a maxed common Hack deals ~107 instead of
+# 21. That ceiling is five times the old one and the entire difficulty ratchet
+# was re-measured against it — see D109.
 
-func level_gain() -> float:
-	return float(LEVEL_GAIN_BY_RARITY[clampi(rarity, 0, LEVEL_GAIN_BY_RARITY.size() - 1)])
+## Gain per level for the numbers a card LEADS with (damage, block, heal), as a
+## multiple of the base and floored at one point per level.
+##
+## Ascends steeply with rarity because the tracks descend the other way (common
+## 100 levels, legendary 5). At a fixed base these land maxed values of
+## 107 / 123 / 136 / 143 / 157 — rarer still ends up stronger.
+##
+## What is gone is the maxed MULTIPLIER ladder the old model advertised (3.5x
+## rising to 5.0x). With a +1 floor a common's 99 levels are worth +99 on their
+## own, and no shorter track can be a bigger multiple of the same base. Absolute
+## maxed power is what ascends now, which is what "grinding commons must not beat
+## a legendary" always actually meant.
+const LEVEL_RATE_BY_RARITY := [0.17, 0.50, 1.55, 5.70, 6.30]
 
-func status_gain() -> float:
-	return float(STATUS_GAIN_BY_RARITY[clampi(rarity, 0, STATUS_GAIN_BY_RARITY.size() - 1)])
+## Statuses are the one axis that CANNOT take a point per level. A stack is a
+## multiplier on every later action, so 100 Vulnerable is not a strong card — it
+## is a fight that is over before it starts. These are a budget for the WHOLE
+## track rather than a rate, and a card whose only axis is a status gets a track
+## short enough to spend it (`level_cap`) instead of a long one that mostly does
+## nothing.
+const STATUS_BUDGET_BY_RARITY := [4, 5, 6, 7, 8]
 
-func _growth(base: int, level: int) -> int:
-	if base <= 0 or level <= 1:
+## Same reasoning, harder. An extra card drawn is the most valuable single point
+## in the game, so these budgets are tiny and the tracks they buy are two or three
+## levels long. Short and honest beats a hundred levels of "Draw 1".
+const DRAW_BUDGET_BY_RARITY := [1, 1, 2, 2, 3]
+
+## How hard the surplus above one-point-per-level leans on the early levels.
+##
+## 1.0 is a straight line, 0.5 is the old sqrt. 0.5 measured badly on SHORT tracks:
+## a nine-step power track gives its first level sqrt(1/9) = a third of the entire
+## budget, which took Overwhelm from 7 damage to 38 on the single cheapest upgrade
+## in its track and made every level after it a disappointment. 0.8 keeps early
+## levels the better buy without that cliff (Overwhelm 7 -> 23 -> ... -> 105), and
+## on a hundred-step common track the difference is invisible either way.
+const FRONTLOAD_EXP := 0.8
+
+## Spread `budget` points across a `cap`-long track; return the value at `level`.
+##
+## Two regimes, and the first is the whole point of the rewrite:
+##
+##   budget >= steps   every step is at least +1 (the linear term) and the surplus
+##                     is front-loaded, so early levels still feel bigger than late
+##                     ones. Everything a card leads with is in this regime, because
+##                     `_headline_budget` floors the budget at one per step.
+##   budget <  steps   there is not enough to go round, so it spreads evenly and
+##                     some levels do not move THIS number. Only ever reached by a
+##                     card's secondary numbers — `level_cap` guarantees the card's
+##                     best axis is always in the first regime, so the CARD still
+##                     improves even on a level where its status does not.
+##
+## The linear term is not a stylistic choice: two reals a whole point apart cannot
+## round to the same integer, which is exactly the guarantee the old sqrt curve
+## could not make.
+static func _spread(base: int, budget: int, level: int, cap: int) -> int:
+	var steps := maxi(1, cap - 1)
+	var k := clampi(level - 1, 0, steps)
+	if k == 0 or budget <= 0:
 		return maxi(0, base)
-	return base + int(round(base * level_gain() * sqrt(float(level - 1))))
+	if budget >= steps:
+		var surplus := float(budget - steps) * pow(float(k) / float(steps), FRONTLOAD_EXP)
+		return base + k + int(round(surplus))
+	return base + int(round(float(budget) * float(k) / float(steps)))
+
+func _headline_budget(base: int) -> int:
+	if base <= 0:
+		return 0
+	var rate: float = LEVEL_RATE_BY_RARITY[clampi(rarity, 0, LEVEL_RATE_BY_RARITY.size() - 1)]
+	var steps := maxi(1, level_cap() - 1)
+	# the floor is what makes the level land; the rate is what makes a big card
+	# grow like a big card instead of converging on every other card of its rarity
+	return maxi(steps, int(round(float(base) * rate * float(steps))))
+
+func _status_budget(base: int) -> int:
+	if base <= 0:
+		return 0
+	return int(STATUS_BUDGET_BY_RARITY[clampi(rarity, 0, STATUS_BUDGET_BY_RARITY.size() - 1)])
+
+func _draw_budget() -> int:
+	if draw <= 0:
+		return 0
+	return int(DRAW_BUDGET_BY_RARITY[clampi(rarity, 0, DRAW_BUDGET_BY_RARITY.size() - 1)])
+
+## HP paid can be bought down, never away: blood magic that costs nothing is not
+## blood magic, and `power_value` prices the cost it would be removing.
+func _hp_cost_budget() -> int:
+	return maxi(0, hp_cost - 1)
+
+## The biggest stack this card applies or gains. Statuses share one budget, so the
+## track only has to be long enough for the largest of them.
+func _max_status() -> int:
+	return maxi(maxi(maxi(apply_vulnerable, apply_weak), maxi(apply_poison, gain_thorns)),
+		maxi(gain_strength, gain_dexterity))
+
+## The LAST RESORT axis, and the reason Set Stone has a level track at all.
+##
+## Set Stone is `retain_block` and nothing else: no damage, no block, no status, no
+## draw — literally no number for a level to move, and it was selling four of them.
+## Energy is the one thing every card has. It is only opened for cards with nothing
+## else to grow, because a card that got both cheaper AND bigger every level would
+## quietly double-dip on `power_ratio`, which is power PER ENERGY.
+##
+## A card comes down to 1 energy; a card already at 1 can reach 0.
+func _cost_budget() -> int:
+	if cost <= 0 or damage > 0 or block > 0 or heal > 0 \
+			or _max_status() > 0 or draw > 0 or hp_cost > 0:
+		return 0
+	return maxi(cost - 1, 1)
+
+## How many levels this card actually has to sell.
+##
+## Rarity still sets the LONGEST a track may be — `Balance.max_level`, derived from
+## drop weight, common 100 down to legendary 5, unchanged. What is new is the
+## ceiling under it: a card can only be as long as it has improvements, so a card
+## with no number to grow stops early rather than selling empty levels.
+##
+## Anything with damage, block or heal fills its whole rarity track, because
+## `_headline_budget` floors that budget at one point per step. Everything else is
+## as long as its budget: Expose (2 Vulnerable, uncommon) sells five levels, Focus
+## (Draw 1, common) sells one, Set Stone sells two.
+var _cap_cache := -1
+var _cap_cache_rarity := -1
+
+func level_cap() -> int:
+	if _cap_cache_rarity == rarity and _cap_cache > 0:
+		return _cap_cache
+	var track: int = Balance.max_level(rarity)
+	var cap := track
+	if damage <= 0 and block <= 0 and heal <= 0:
+		var budget := maxi(_status_budget(_max_status()), _draw_budget())
+		budget = maxi(budget, _hp_cost_budget())
+		budget = maxi(budget, _cost_budget())
+		cap = clampi(1 + budget, 1, track)
+	_cap_cache_rarity = rarity
+	_cap_cache = cap
+	return cap
 
 ## What levelling this card to `target_level` actually buys: "dmg 9→10, blk 5→6".
 ## Empty when nothing measurable changes.
@@ -239,6 +374,7 @@ func level_up_text(target_level: int) -> String:
 			["dmg", eff_damage(), after.eff_damage()],
 			["blk", eff_block(), after.eff_block()],
 			["heal", eff_heal(), after.eff_heal()],
+			["draw", eff_draw(), after.eff_draw()],
 			["poison", eff_poison(), after.eff_poison()],
 			["vuln", eff_vulnerable(), after.eff_vulnerable()],
 			["weak", eff_weak(), after.eff_weak()],
@@ -249,41 +385,64 @@ func level_up_text(target_level: int) -> String:
 		var now: int = pair[2]
 		if now > before:
 			parts.append("%s %d→%d" % [pair[0], before, now])
+	# ...and the two that improve by getting SMALLER. Left out, a Set Stone level
+	# read as buying nothing, which is the exact bug this whole pass is about.
+	for pair2 in [
+			["energy", eff_cost(), after.eff_cost()],
+			["hp cost", eff_hp_cost(), after.eff_hp_cost()]]:
+		var before2: int = pair2[1]
+		var now2: int = pair2[2]
+		if now2 < before2:
+			parts.append("%s %d→%d" % [pair2[0], before2, now2])
 	return ", ".join(parts)
 
 func eff_damage() -> int:
-	return _growth(damage, level)
+	return _spread(damage, _headline_budget(damage), level, level_cap())
 
 func eff_block() -> int:
-	return _growth(block, level)
-
-## Status magnitudes grow far more slowly than raw numbers: a stack is a
-## multiplier on every later action, so it compounds much harder than +N damage.
-func _status_growth(base: int, level: int) -> int:
-	if base <= 0:
-		return 0
-	return base + int(round(sqrt(float(maxi(0, level - 1))) * status_gain()))
-
-func eff_vulnerable() -> int:
-	return _status_growth(apply_vulnerable, level)
-
-func eff_weak() -> int:
-	return _status_growth(apply_weak, level)
-
-func eff_strength() -> int:
-	return _status_growth(gain_strength, level)
-
-func eff_dexterity() -> int:
-	return _status_growth(gain_dexterity, level)
-
-func eff_poison() -> int:
-	return _status_growth(apply_poison, level)
-
-func eff_thorns() -> int:
-	return _status_growth(gain_thorns, level)
+	return _spread(block, _headline_budget(block), level, level_cap())
 
 func eff_heal() -> int:
-	return _growth(heal, level)
+	return _spread(heal, _headline_budget(heal), level, level_cap())
+
+func eff_vulnerable() -> int:
+	return _spread(apply_vulnerable, _status_budget(apply_vulnerable), level, level_cap())
+
+func eff_weak() -> int:
+	return _spread(apply_weak, _status_budget(apply_weak), level, level_cap())
+
+func eff_strength() -> int:
+	return _spread(gain_strength, _status_budget(gain_strength), level, level_cap())
+
+func eff_dexterity() -> int:
+	return _spread(gain_dexterity, _status_budget(gain_dexterity), level, level_cap())
+
+func eff_poison() -> int:
+	return _spread(apply_poison, _status_budget(apply_poison), level, level_cap())
+
+func eff_thorns() -> int:
+	return _spread(gain_thorns, _status_budget(gain_thorns), level, level_cap())
+
+func eff_draw() -> int:
+	return _spread(draw, _draw_budget(), level, level_cap())
+
+# --- the two numbers a level makes SMALLER ------------------------------------
+#
+# Everything above is a number going up. These two go down, and they exist because
+# a card whose whole identity is a rule — Set Stone, Ram, Double Down — has nothing
+# to grow, and was selling levels that bought nothing at all. `_spread` is reused
+# unchanged: it returns how much of the budget has been SPENT by this level, and
+# the cost is what is left.
+
+## HP paid to play, bought down toward 1.
+func eff_hp_cost() -> int:
+	return maxi(0, hp_cost - _spread(0, _hp_cost_budget(), level, level_cap()))
+
+## Energy cost. Only ever moves for cards with no number of their own — see
+## `_cost_budget`. Every read of a card's price must come through here, or a
+## levelled card charges the player one number and shows another (D50).
+func eff_cost() -> int:
+	return maxi(0, cost - _spread(0, _cost_budget(), level, level_cap()))
 
 ## Runtime-only: accumulated bonus from `grows`, reset each combat.
 var growth: int = 0
@@ -359,7 +518,7 @@ func _power_value_uncached() -> float:
 	## enemy scaling ran past them (thorns builds fell 69% -> 46%).
 	v += eff_strength() * 4.5
 	v += eff_dexterity() * 4.0
-	v += draw * 1.5
+	v += eff_draw() * 1.5
 	# Poison ignores Block, but it is back-loaded and wasted when a fight ends
 	# early, so it prices below the same number of immediate damage.
 	v += eff_poison() * 2.0
@@ -369,7 +528,9 @@ func _power_value_uncached() -> float:
 	v += grows * 5.0               # compounds over a fight
 	if double_block:
 		v += 12.0
-	v -= hp_cost * 1.2          # a real cost, priced against it
+	# a real cost, priced against it — and levels buy it DOWN, so the levelled
+	# number is what has to be charged or the discount arrives unpriced
+	v -= eff_hp_cost() * 1.2
 	if retain:
 		v += 3.0
 	if exhaust:

@@ -81,7 +81,7 @@ static func _key_of(id: String, key: String, collection: Dictionary,
 		return id
 	match key:
 		"cost":
-			return int(card.cost)
+			return int(card.eff_cost())
 		"rarity":
 			return int(card.rarity)
 		"power":

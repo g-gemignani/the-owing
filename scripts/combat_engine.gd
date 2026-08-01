@@ -301,10 +301,13 @@ func draw_cards(n: int) -> void:
 		hand.append(draw_pile.pop_back())
 
 func can_play(card: CardData) -> bool:
-	if card.cost > energy:
+	# eff_cost / eff_hp_cost, not the authored fields: levels buy both of these
+	# DOWN, and a card the player has paid to make cheaper has to actually be
+	# cheaper at the one place the game checks whether it can be afforded.
+	if card.eff_cost() > energy:
 		return false
 	# an HP cost must never be lethal: paying it has to leave you alive
-	if card.hp_cost > 0 and player.hp <= card.hp_cost:
+	if card.eff_hp_cost() > 0 and player.hp <= card.eff_hp_cost():
 		return false
 	return true
 
@@ -385,15 +388,15 @@ func _apply_relic_effect(r: RelicData, ei: int, amount: int) -> String:
 func can_use_power() -> bool:
 	if power == null or power_used or over():
 		return false
-	if power.cost > energy:
+	if power.eff_cost() > energy:
 		return false
 	# an HP cost must never be lethal, same rule as a card
-	return not (power.hp_cost > 0 and player.hp <= power.hp_cost)
+	return not (power.eff_hp_cost() > 0 and player.hp <= power.eff_hp_cost())
 
 func use_power() -> String:
 	if not can_use_power():
 		return ""
-	energy -= power.cost
+	energy -= power.eff_cost()
 	power_used = true
 	var msg := _resolve(power)
 	return msg if msg != "" else "%s used." % power.name
@@ -402,7 +405,7 @@ func use_power() -> String:
 func play_card(card: CardData) -> String:
 	if not can_play(card):
 		return ""
-	energy -= card.cost
+	energy -= card.eff_cost()
 	cards_played_this_turn += 1
 	var msg := _resolve(card)
 	hand.erase(card)
@@ -483,9 +486,9 @@ func card_text(card: CardData) -> String:
 func _resolve(card: CardData) -> String:
 	var foe := current_target()
 	var msg := ""
-	if card.hp_cost > 0:
-		player.hp = maxi(1, player.hp - card.hp_cost)
-		msg += "Paid %d HP. " % card.hp_cost
+	if card.eff_hp_cost() > 0:
+		player.hp = maxi(1, player.hp - card.eff_hp_cost())
+		msg += "Paid %d HP. " % card.eff_hp_cost()
 
 	# --- damage: multi-hit, AoE, Block-scaled, Strength-scaled ---
 	var base_dmg := card_base_damage(card)
@@ -583,9 +586,9 @@ func _resolve(card: CardData) -> String:
 	if card.grows > 0:
 		card.growth += card.grows
 		msg += "(grows +%d) " % card.grows
-	if card.draw > 0:
-		draw_cards(card.draw)
-		msg += "Draw %d." % card.draw
+	if card.eff_draw() > 0:
+		draw_cards(card.eff_draw())
+		msg += "Draw %d." % card.eff_draw()
 	return msg
 
 ## Discard hand, every living enemy acts, next turn begins if the player survives.

@@ -9,8 +9,8 @@ func _init() -> void:
 	var fails := 0
 
 	# --- ratio is deck-SIZE invariant: energy is the constraint, not card count ---
-	var small := _deck({"strike": 4, "defend": 4})
-	var big := _deck({"strike": 8, "defend": 8})
+	var small := _deck({"hack": 4, "cover": 4})
+	var big := _deck({"hack": 8, "cover": 8})
 	if abs(Balance.power_ratio(small) - Balance.power_ratio(big)) > 0.001:
 		fails += 1; print("FAIL ratio not size-invariant: %.3f vs %.3f" % [
 			Balance.power_ratio(small), Balance.power_ratio(big)])
@@ -20,13 +20,13 @@ func _init() -> void:
 		fails += 1; print("FAIL starter ratio != 1.0: %.3f" % Balance.power_ratio(small))
 
 	# --- fusing (higher level) raises the ratio ---
-	var lv1 := _deck({"strike": 4, "defend": 4}, 1)
-	var lv3 := _deck({"strike": 4, "defend": 4}, 3)
+	var lv1 := _deck({"hack": 4, "cover": 4}, 1)
+	var lv3 := _deck({"hack": 4, "cover": 4}, 3)
 	if Balance.power_ratio(lv3) <= Balance.power_ratio(lv1):
 		fails += 1; print("FAIL fusion does not raise ratio")
 
 	# --- ratio is capped ---
-	var huge := _deck({"strike": 4, "defend": 4}, 30)
+	var huge := _deck({"hack": 4, "cover": 4}, 30)
 	if Balance.power_ratio(huge) > Balance.POWER_RATIO_CAP + 0.001:
 		fails += 1; print("FAIL ratio cap breached ", Balance.power_ratio(huge))
 
@@ -196,7 +196,12 @@ func _init() -> void:
 	# player power is free. Measured exactly that — fully-equipped late decks pinned
 	# the old cap and cleared the deepest dungeons 100% of the time.
 	var prev_r := 0.0
-	for raw in [1.0, 2.0, 4.0, Balance.POWER_RATIO_CAP, 6.0, 9.0, 15.0, 40.0]:
+	# straddle the knee wherever it currently sits: a literal list stopped doing
+	# that the moment POWER_RATIO_CAP moved past 6.0, and then asserted that a
+	# DESCENDING sequence ascended
+	var knee: float = Balance.POWER_RATIO_CAP
+	for raw in [1.0, knee * 0.25, knee * 0.5, knee, knee + 0.5, knee * 1.5,
+			knee * 2.5, knee * 5.0]:
 		var soft: float = Balance.soften_ratio(raw)
 		if soft <= prev_r:
 			fails += 1; print("FAIL scaling plateaus at raw ratio %.1f (%.2f)" % [raw, soft])
@@ -231,9 +236,9 @@ func _init() -> void:
 	if CardData.BLOCK_VALUE < 0.4:
 		fails += 1; print("FAIL block priced so low that defensive decks are undercharged")
 	# adding block must raise the ratio LESS than adding the same amount of damage
-	var base_deck := _deck({"strike": 4, "defend": 4})
-	var plus_dmg := _deck({"strike": 5, "defend": 4})
-	var plus_blk := _deck({"strike": 4, "defend": 5})
+	var base_deck := _deck({"hack": 4, "cover": 4})
+	var plus_dmg := _deck({"hack": 5, "cover": 4})
+	var plus_blk := _deck({"hack": 4, "cover": 5})
 	var r_base: float = Balance.power_ratio(base_deck)
 	var r_dmg: float = Balance.power_ratio(plus_dmg)
 	var r_blk: float = Balance.power_ratio(plus_blk)
@@ -245,8 +250,8 @@ func _init() -> void:
 	# --- a strictly stronger loadout must scale to a higher ratio, never lower ---
 	# (an "endgame" profile once measured WORSE than a weaker one; it turned out to
 	# be a different, worse deck rather than a stronger one, but the check is cheap)
-	var lv1_deck := _deck({"strike": 4, "defend": 4, "bash": 2}, 1)
-	var lv40_deck := _deck({"strike": 4, "defend": 4, "bash": 2}, 40)
+	var lv1_deck := _deck({"hack": 4, "cover": 4, "stave_in": 2}, 1)
+	var lv40_deck := _deck({"hack": 4, "cover": 4, "stave_in": 2}, 40)
 	if Balance.power_ratio(lv40_deck) <= Balance.power_ratio(lv1_deck):
 		fails += 1; print("FAIL levelling the same deck did not raise its ratio")
 	var relic := load(Balance.RELIC_DIR + "iron_heart.tres") as RelicData

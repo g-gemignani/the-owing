@@ -5,6 +5,12 @@
 ##   growth — rarer cards gain MORE per level, because their level tracks are
 ##            shorter (caps derive from drop weight). With one flat gain the
 ##            scaling inverted and grinding commons beat every legendary.
+##
+## D109 rebuilt level scaling so no level-up is empty, which put a floor of +1 per
+## level under every track. A common's hundred levels are therefore worth +99 on
+## their own, and the growth ladder had to be re-pitched steeply enough to stay
+## ahead of that — see CardData.LEVEL_RATE_BY_RARITY. The check below is unchanged
+## because the property is unchanged; only the constants that satisfy it moved.
 ## Run: godot --headless --script tests/test_rarity.gd
 extends SceneTree
 
@@ -22,7 +28,7 @@ func _init() -> void:
 	# --- maxed multiplier must ASCEND with rarity ---
 	var prev_mult := 0.0
 	for r in NAMES.size():
-		var probe := (load(DIR + "strike.tres") as CardData).duplicate()
+		var probe := (load(DIR + "hack.tres") as CardData).duplicate()
 		probe.rarity = r
 		probe.level = Balance.max_level(r)
 		var mult := float(probe.eff_damage()) / 6.0
@@ -84,20 +90,11 @@ func _init() -> void:
 	if int(by_rarity.get(4, 0)) > int(by_rarity.get(0, 0)) / 3:
 		fails += 1; print("FAIL too many legendaries")
 
-	# --- no accidental duplicates: two cards with identical stats is a bug ---
-	var sigs := {}
-	for id in ids:
-		var c := load(m.CATALOG[id]) as CardData
-		var sig := "|".join([str(c.cost), str(c.damage), str(c.block), str(c.draw),
-			str(c.hits), str(c.heal), str(c.energy_gain), str(c.hp_cost),
-			str(c.strength_mult), str(c.aoe), str(c.exhaust), str(c.retain),
-			str(c.lifesteal), str(c.double_block), str(c.damage_from_block),
-			str(c.grows), str(c.retain_block),
-			str(c.apply_poison), str(c.apply_vulnerable), str(c.apply_weak),
-			str(c.gain_thorns), str(c.gain_strength), str(c.gain_dexterity)])
-		if sigs.has(sig):
-			fails += 1; print("FAIL %s is stat-identical to %s" % [id, sigs[sig]])
-		sigs[sig] = id
+	# Duplicate cards are checked in tests/test_distinct.gd, which also catches the
+	# case this could not: a card that is not identical to another but is beaten by
+	# it outright. The list of mechanics lived here as a hand-copied second copy and
+	# had drifted seven fields behind card_data.gd, so Jab and Nick — which differ by
+	# a combo bonus — read as the same card. One list, one place.
 
 	# --- every card must be obtainable somewhere ---
 	var obtainable := {}

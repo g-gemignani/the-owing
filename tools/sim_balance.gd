@@ -10,14 +10,50 @@ extends SceneTree
 const DEFAULT_TRIALS := 400
 static var TRIALS := DEFAULT_TRIALS
 
-static func _read_trials() -> void:
+## Narrowing, for when the thing being retuned is ONE cell.
+##
+## The avoid calibration is most of a full run's wall clock, and a price is tuned by
+## changing a constant and measuring again. Without a way to ask for one dungeon at a
+## time that loop is the whole report, which in practice means the constant gets guessed
+## instead — and guessing at prices is what D57 was.
+##
+##     -- --only=fungal_deep --profile=poison --calibration-only --cal-trials=600
+static var ONLY := ""       ## comma-separated dungeon ids; empty = all
+static var PROFILE := ""    ## substring of a profile name, case-insensitive
+static var REPORT := true   ## --calibration-only turns the per-cell report off
+static var CAL_TRIALS := CALIBRATION_TRIALS
+
+static func _read_args() -> void:
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--trials="):
 			TRIALS = maxi(10, int(arg.substr(9)))
+		elif arg.begins_with("--cal-trials="):
+			CAL_TRIALS = maxi(10, int(arg.substr(13)))
+		elif arg.begins_with("--only="):
+			ONLY = arg.substr(7)
+		elif arg.begins_with("--profile="):
+			PROFILE = arg.substr(10).to_lower()
+		elif arg == "--calibration-only":
+			REPORT = false
+
+## Filters are ADDITIVE narrowings of the full report, never a different measurement:
+## every cell they let through is measured exactly as it would be in a full run.
+static func _wanted(dungeon_id: String, profile_name: String) -> bool:
+	if ONLY != "" and not (dungeon_id in ONLY.split(",")):
+		return false
+	if PROFILE != "" and profile_name.to_lower().find(PROFILE) == -1:
+		return false
+	return true
+
 const CARD_DIR := "res://resources/cards/"
 
 func _init() -> void:
-	_read_trials()
+	_read_args()
+	if not REPORT:
+		_avoid_calibration()
+		_print_budget()
+		quit()
+		return
 	print("=== Balance report (%d trials per cell) ===" % TRIALS)
 	print("RUN = full-dungeon completion with persistent HP (the metric that matters).")
 	print("Per-fight rates are full-HP diagnostics only.\n")
@@ -35,6 +71,8 @@ func _init() -> void:
 			(profile.get("relics", []) as Array).size(),
 			prof_power.name if prof_power != null else "none"])
 		for dungeon_id in profile["dungeons"]:
+			if not _wanted(dungeon_id, String(profile["name"])):
+				continue
 			var dd := Balance.dungeon(dungeon_id)
 			var dungeon: int = dd.difficulty if dd != null else 1
 			var roster: Array = Array(dd.enemy_roster) if dd != null and dd.has_roster() else []
@@ -88,16 +126,20 @@ func _print_budget() -> void:
 ## each other. The property that matters is D20's: **a dominant strategy is a
 ## removed decision.** If ALWAYS-AVOID clears more often than SMART, the price is
 ## wrong; if it clears far less, dodging is decoration.
+##
+## The default trial count; `--cal-trials=` overrides it into `CAL_TRIALS`.
 const CALIBRATION_TRIALS := 150
 
 func _avoid_calibration() -> void:
-	print("\n=== Avoid calibration (%d trials per cell) ===" % CALIBRATION_TRIALS)
+	print("\n=== Avoid calibration (%d trials per cell) ===" % CAL_TRIALS)
 	print("Any dungeon that prices a skip — asked of the dungeon, not assumed.")
 	print("A price is right when SMART >= both fixed lines of play.\n")
 	var t_cal := Time.get_ticks_usec()
 	for profile in _profiles():
 		var deck: Array[CardData] = profile["deck"]
 		for dungeon_id in profile["dungeons"]:
+			if not _wanted(dungeon_id, String(profile["name"])):
+				continue
 			var dd := Balance.dungeon(dungeon_id)
 			# Ask the DUNGEON whether it prices a skip, rather than naming the model that
 			# used to. This filtered on `Kind.DECK`, and when D88 moved every dungeon onto
@@ -137,7 +179,7 @@ func _avoid_calibration() -> void:
 			var cells: Array = []
 			for mode in [Policy.ALWAYS_FACE, Policy.SMART, Policy.ALWAYS_AVOID]:
 				cells.append(_measure_run(dungeon_id, deck, relics, roster, mode,
-					CALIBRATION_TRIALS, maxi(int(profile.get("clears", 0)),
+					CAL_TRIALS, maxi(int(profile.get("clears", 0)),
 						Balance.effective_gate(dungeon_id)), _power_of(profile)))
 			print("   %-18s %-24s face %3.0f%% | smart %3.0f%% (%2.0f%% dodged) | avoid %3.0f%% (%2.0f%% dodged)" % [
 				dd.name, profile["name"],
@@ -146,6 +188,17 @@ func _avoid_calibration() -> void:
 				cells[2]["complete"] * 100.0, cells[2]["avoid_rate"] * 100.0])
 			if cells[2]["complete"] > cells[1]["complete"] + 0.05:
 				print("      ^ ALWAYS-AVOID beats the smart line: the dodge is underpriced")
+			# The other direction, which went unreported until D99 and is a different
+			# fault with a different owner. Dodging costs HP and forfeits the reward, and
+			# the reward joins the run deck — so at depth, where a fight is dear in HP but
+			# the boss is decided by deck power, declining fights can be right on HP and
+			# wrong on the run. `cost_est` only knows HP, so SMART cannot see that trade
+			# and degenerates toward always-avoid exactly where the loot matters most.
+			# That is the DRIVER's ceiling, not the price's: printed rather than tuned
+			# away, because raising FACE_BIAS until this line disappears would be fitting
+			# the policy to the scoreboard.
+			elif cells[0]["complete"] > cells[1]["complete"] + 0.05:
+				print("      ^ ALWAYS-FACE beats the smart line: the driver is over-dodging (it prices HP, not loot)")
 	_tick("avoid_calibration", t_cal)
 
 ## Simulate a full dungeon: walk a random path through the real generated map,
@@ -373,7 +426,8 @@ enum Policy { SMART, ALWAYS_FACE, ALWAYS_AVOID }
 ## the gold that buys healing later, is worth some HP. 1.0 would dodge on a tie.
 const FACE_BIAS := 1.35
 ## A fight whose *average* cost is this close to what is left is a coin flip, and
-## paying a known price beats rolling for it.
+## paying a known price beats rolling for it — but only when the price is the
+## cheaper of the two. See `_choose_option`.
 const LETHAL_MARGIN := 1.6
 
 func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
@@ -406,8 +460,17 @@ func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
 				pass
 			_:
 				if affordable and expected >= 0.0:
-					if expected * LETHAL_MARGIN >= float(hp):
-						return avoid          # facing this might end the run
+					# Facing this might end the run — but a dodge dearer than the fight
+					# does not save you from that, it just spends the same HP and forfeits
+					# the loot as well. The `cost < expected` half of this test was
+					# missing, and while the dodge was underpriced (D99) it never bit:
+					# every dodge was cheaper than every fight, so the guard was free.
+					# Repricing exposed it — at the Sunken Vault the driver was paying 23
+					# of its last 30 HP to skip a fight averaging 20, and SMART came in 14
+					# points BELOW never dodging at all. A harness is only evidence if its
+					# driver is as competent as the thing it judges (D26).
+					if expected * LETHAL_MARGIN >= float(hp) and float(cost) < expected:
+						return avoid          # cheaper AND it might otherwise end the run
 					if expected > float(cost) * FACE_BIAS:
 						return avoid          # the dodge is simply cheaper
 
@@ -467,70 +530,70 @@ func _profiles() -> Array:
 	out.append({
 		"name": "Starter (fresh run)",
 		"clears": 0, "power_level": 1,
-		"deck": _deck({"strike": 4, "defend": 4}),
+		"deck": _deck({"hack": 4, "cover": 4}),
 		"dungeons": ["crypt", "ossuary", "warrens"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Early (rewards added)",
 		"clears": 1, "power_level": 1,
-		"deck": _deck({"strike": 5, "defend": 4, "bash": 2, "iron_wave": 2}),
+		"deck": _deck({"hack": 5, "cover": 4, "stave_in": 2, "shoulder": 2}),
 		"dungeons": ["crypt", "warrens", "foundry"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Mid (fused Lv15)",
 		"clears": 3, "power_level": 2,
-		"deck": _deck({"strike": 5, "defend": 4, "bash": 3, "iron_wave": 3, "clear_mind": 2}, 15),
+		"deck": _deck({"hack": 5, "cover": 4, "stave_in": 3, "shoulder": 3, "clear_mind": 2}, 15),
 		"dungeons": ["warrens", "foundry", "ember_road"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Status build (Lv15)",
 		"clears": 3, "power_level": 2,
-		"deck": _deck({"strike": 5, "defend": 4, "bash": 2, "terrify": 2, "inflame": 2, "footwork": 1}, 15),
+		"deck": _deck({"hack": 5, "cover": 4, "stave_in": 2, "put_the_fear": 2, "work_up": 2, "light_on_it": 1}, 15),
 		"dungeons": ["warrens", "foundry", "ember_road"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Barricade build (Lv15, legend Lv5)",
 		"clears": 3, "power_level": 2,
-		"deck": _deck({"strike": 5, "defend": 6, "footwork": 2, "iron_wave": 3}, 15) + _deck({"barricade": 1}, 5),
+		"deck": _deck({"hack": 5, "cover": 6, "light_on_it": 2, "shoulder": 3}, 15) + _deck({"set_stone": 1}, 5),
 		"dungeons": ["warrens", "foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Poison build (Lv15)",
 		"clears": 4, "power_level": 2,
-		"deck": _deck({"strike": 3, "defend": 4, "venom_fang": 3, "rupture": 3, "noxious_cloud": 1, "smoke_bomb": 2}, 15),
+		"deck": _deck({"hack": 3, "cover": 4, "venom_fang": 3, "split": 3, "noxious_cloud": 1, "smoke_bomb": 2}, 15),
 		"dungeons": ["fungal_deep", "rot_gardens"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "AoE build (Lv15)",
 		"clears": 5, "power_level": 2,
-		"deck": _deck({"strike": 2, "defend": 4, "cleave": 3, "whirlwind": 2, "hex": 1, "shrug_it_off": 3}, 15),
+		"deck": _deck({"hack": 2, "cover": 4, "reap": 3, "clear_the_room": 2, "hex": 1, "take_it": 3}, 15),
 		"dungeons": ["rot_gardens", "drowned_market"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Thorns build (Lv15)",
 		"clears": 5, "power_level": 2,
-		"deck": _deck({"strike": 3, "defend": 4, "riposte": 3, "caltrops": 2, "juggernaut": 1, "iron_will": 2, "survival_instinct": 2}, 15),
+		"deck": _deck({"hack": 3, "cover": 4, "riposte": 3, "sharp_ground": 2, "bristle": 1, "iron_will": 2, "survival_instinct": 2}, 15),
 		"dungeons": ["slag_pits", "abyssal_stair", "the_maw"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Maxed commons (Lv100)",
 		"clears": 6, "power_level": 3,
-		"deck": _deck({"strike": 8, "defend": 8, "iron_wave": 4}, 100),
+		"deck": _deck({"hack": 8, "cover": 8, "shoulder": 4}, 100),
 		"dungeons": ["foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Relic build (Lv15 + 4 relics)",
 		"clears": 4, "power_level": 2,
-		"deck": _deck({"strike": 5, "defend": 5, "bash": 3, "iron_wave": 3}, 15),
+		"deck": _deck({"hack": 5, "cover": 5, "stave_in": 3, "shoulder": 3}, 15),
 		"dungeons": ["warrens", "foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 		"relics": _relics(["iron_heart", "kite_shield", "whetstone", "ancient_battery"]),
@@ -538,8 +601,8 @@ func _profiles() -> Array:
 	out.append({
 		"name": "Late (Lv40 + 6 relics)",
 		"clears": 8, "power_level": 3,
-		"deck": _deck({"strike": 4, "defend": 4, "bash": 3, "iron_wave": 3, "heavy_blade": 3,
-			"shrug_it_off": 3}, 40),
+		"deck": _deck({"hack": 4, "cover": 4, "stave_in": 3, "shoulder": 3, "dead_weight": 3,
+			"take_it": 3}, 40),
 		"dungeons": ["drowned_market", "abyssal_stair", "the_maw"],
 		"hp_mult": 1.0,
 		"relics": _relics(["iron_heart", "kite_shield", "whetstone", "giants_marrow",
@@ -550,8 +613,8 @@ func _profiles() -> Array:
 		# its relics: a strictly stronger loadout, so its win rate must not be lower.
 		"name": "Endgame (Late deck, Lv100)",
 		"clears": 10, "power_level": 4,
-		"deck": _deck({"strike": 4, "defend": 4, "bash": 3, "iron_wave": 3, "heavy_blade": 3,
-			"shrug_it_off": 3}, 100),
+		"deck": _deck({"hack": 4, "cover": 4, "stave_in": 3, "shoulder": 3, "dead_weight": 3,
+			"take_it": 3}, 100),
 		"dungeons": ["abyssal_stair", "the_maw"],
 		"hp_mult": 1.0,
 		"relics": _relics(["iron_heart", "kite_shield", "whetstone", "giants_marrow",
@@ -560,7 +623,7 @@ func _profiles() -> Array:
 	out.append({
 		"name": "Deep (fused Lv40)",
 		"clears": 6, "power_level": 3,
-		"deck": _deck({"strike": 6, "defend": 5, "bash": 4, "iron_wave": 3, "clear_mind": 2}, 40),
+		"deck": _deck({"hack": 6, "cover": 5, "stave_in": 4, "shoulder": 3, "clear_mind": 2}, 40),
 		"dungeons": ["foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 	})
@@ -715,9 +778,19 @@ func _pick_target(eng: CombatEngine) -> void:
 	if best >= 0:
 		eng.set_target(best)
 
+## No turn the rules can produce plays this many cards; reaching it means the
+## play policy has found a loop rather than a strong hand.
+const PLAY_GUARD := 400
+
 func _play_powers(eng: CombatEngine) -> void:
 	var again := true
-	while again and not eng.over():
+	# guard: a zero-cost card that draws returns via the discard, so "play
+	# everything you can" is a closed loop and `over()` never comes. Cards are
+	# bounded so this cannot fire (tests/test_degenerate.gd), and it stays because
+	# the simulator is run by hand — a hang here costs a person, not CI.
+	var guard := 0
+	while again and not eng.over() and guard < PLAY_GUARD:
+		guard += 1
 		again = false
 		for c in eng.hand.duplicate():
 			if eng.can_play(c) and (c.retain_block or c.eff_strength() > 0 or c.eff_dexterity() > 0):
@@ -725,10 +798,16 @@ func _play_powers(eng: CombatEngine) -> void:
 
 func _play_draw(eng: CombatEngine) -> void:
 	var again := true
-	while again and not eng.over():
+	# guard: a zero-cost card that draws returns via the discard, so "play
+	# everything you can" is a closed loop and `over()` never comes. Cards are
+	# bounded so this cannot fire (tests/test_degenerate.gd), and it stays because
+	# the simulator is run by hand — a hang here costs a person, not CI.
+	var guard := 0
+	while again and not eng.over() and guard < PLAY_GUARD:
+		guard += 1
 		again = false
 		for c in eng.hand.duplicate():
-			if eng.can_play(c) and c.draw > 0:
+			if eng.can_play(c) and c.eff_draw() > 0:
 				eng.play_card(c); again = true; break
 
 ## True if the enemy can be killed with the energy in hand this turn.
@@ -739,10 +818,10 @@ func _try_lethal(eng: CombatEngine) -> bool:
 	# greedy by damage per energy
 	var pool := eng.hand.duplicate()
 	pool.sort_custom(func(a, b):
-		return float(a.eff_damage()) / maxf(1.0, a.cost) > float(b.eff_damage()) / maxf(1.0, b.cost))
+		return float(a.eff_damage()) / maxf(1.0, a.eff_cost()) > float(b.eff_damage()) / maxf(1.0, b.eff_cost()))
 	for c in pool:
-		if c.eff_damage() > 0 and c.cost <= budget:
-			budget -= c.cost
+		if c.eff_damage() > 0 and c.eff_cost() <= budget:
+			budget -= c.eff_cost()
 			plan.append(c)
 			var foe0 := eng.current_target()
 			if foe0 != null:
@@ -767,7 +846,13 @@ func _block_incoming(eng: CombatEngine) -> void:
 		target = 2 * eng.enemy_intent
 		tolerance = 0.0
 	var again := true
-	while again and not eng.over():
+	# guard: a zero-cost card that draws returns via the discard, so "play
+	# everything you can" is a closed loop and `over()` never comes. Cards are
+	# bounded so this cannot fire (tests/test_degenerate.gd), and it stays because
+	# the simulator is run by hand — a hang here costs a person, not CI.
+	var guard := 0
+	while again and not eng.over() and guard < PLAY_GUARD:
+		guard += 1
 		again = false
 		var incoming := eng.player.predicted_damage(eng.enemy.outgoing_damage(eng.enemy_intent))
 		if incoming <= tolerance and eng.player.block >= target:
@@ -788,7 +873,13 @@ func _block_incoming(eng: CombatEngine) -> void:
 ## worth more than a single hit (only when the enemy will survive the turn).
 func _spend_rest(eng: CombatEngine) -> void:
 	var again := true
-	while again and not eng.over():
+	# guard: a zero-cost card that draws returns via the discard, so "play
+	# everything you can" is a closed loop and `over()` never comes. Cards are
+	# bounded so this cannot fire (tests/test_degenerate.gd), and it stays because
+	# the simulator is run by hand — a hang here costs a person, not CI.
+	var guard := 0
+	while again and not eng.over() and guard < PLAY_GUARD:
+		guard += 1
 		again = false
 		for c in eng.hand.duplicate():
 			if eng.can_play(c) and c.eff_vulnerable() > 0 and eng.enemy.vulnerable == 0 \
@@ -815,7 +906,7 @@ func _best_by_value(eng: CombatEngine, want_damage: bool) -> CardData:
 		var amount: int = c.eff_damage() if want_damage else c.eff_block()
 		if amount <= 0:
 			continue
-		var val := float(amount) / maxf(1.0, float(c.cost))
+		var val := float(amount) / maxf(1.0, float(c.eff_cost()))
 		if val > best_val:
 			best_val = val
 			best = c

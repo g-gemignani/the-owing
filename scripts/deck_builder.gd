@@ -194,7 +194,7 @@ func _refresh() -> void:
 		pb.text = "%s%s Lv%d" % ["> " if on else "", pd.name, pd.level]
 		pb.disabled = on
 		UI.hoverable(pb, "%s\n%s\nCost %s, once per turn." % [
-			pd.name, pd.effect_text(), "free" if pd.cost == 0 else "%dE" % pd.cost])
+			pd.name, pd.effect_text(), "free" if pd.eff_cost() == 0 else "%dE" % pd.eff_cost()])
 		pb.pressed.connect(func():
 			MetaState.equip_power(pid)
 			_refresh())
@@ -227,14 +227,11 @@ func _refresh() -> void:
 		row.add_theme_constant_override("separation", UITheme.sep(8))
 		list_box.add_child(row)
 
-		# illustration first, then the symbol that actually states what it does
-		var art := TextureRect.new()
-		art.texture = PixelArt.card_art(card.id, Icons.card_family(card))
-		art.custom_minimum_size = Vector2(UITheme.px(28), UITheme.px(28))
-		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		art.modulate = Icons.rarity_colour(card.rarity)
-		row.add_child(art)
+		# The illustration is the way into the full card — see UI.inspect_thumb. This
+		# is the screen where it matters most: you are choosing between cards you own
+		# on the strength of one line of text each.
+		UI.inspect_thumb(row, card, UITheme.px(28),
+			"In this deck: %d copies." % int(selection.get(id, 0)))
 		var pic := TextureRect.new()
 		pic.texture = Icons.tex(Icons.for_card(card))
 		pic.custom_minimum_size = Vector2(UITheme.px(28), UITheme.px(28))

@@ -61,7 +61,7 @@ func _refresh() -> void:
 		var lbl := Label.new()
 		lbl.custom_minimum_size.x = UITheme.px(520)
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity))
-		var cost := "free" if p.cost == 0 else "%dE" % p.cost
+		var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
 		lbl.text = "%s  [%s]  %s   Lv%d/%d   (%s)" % [
 			p.name, cost, p.effect_text(), level, p.level_capped(),
 			"owned" if owned else "locked"]

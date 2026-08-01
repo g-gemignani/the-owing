@@ -75,7 +75,7 @@ static func card_family(c: CardData) -> String:
 		return "strength"
 	if c.gain_dexterity > 0:
 		return "dexterity"
-	if c.draw > 0:
+	if c.eff_draw() > 0:
 		return "draw"
 	if c.energy_gain > 0:
 		return "energy"
@@ -150,7 +150,7 @@ static func card_tooltip(c: CardData, live_damage: int = -1, live_block: int = -
 	var blk: int = live_block if live_block >= 0 else c.eff_block()
 	var live := live_damage >= 0 or live_block >= 0
 	var lines: Array[String] = []
-	lines.append("%s — %s, cost %d" % [c.name, CardData.Rarity.keys()[c.rarity].to_lower(), c.cost])
+	lines.append("%s — %s, cost %d" % [c.name, CardData.Rarity.keys()[c.rarity].to_lower(), c.eff_cost()])
 	if dmg > 0:
 		var d := "Deals %d damage" % dmg
 		if c.hits > 1:
@@ -187,8 +187,8 @@ static func card_tooltip(c: CardData, live_damage: int = -1, live_block: int = -
 		lines.append("Heals %d HP." % c.eff_heal())
 	if c.energy_gain > 0:
 		lines.append("Grants %d Energy this turn." % c.energy_gain)
-	if c.draw > 0:
-		lines.append("Draws %d card(s)." % c.draw)
+	if c.eff_draw() > 0:
+		lines.append("Draws %d card(s)." % c.eff_draw())
 	if c.eff_vulnerable() > 0:
 		lines.append("Vulnerable %d: target takes +50%% damage while it lasts." % c.eff_vulnerable())
 	if c.eff_weak() > 0:
@@ -203,8 +203,8 @@ static func card_tooltip(c: CardData, live_damage: int = -1, live_block: int = -
 		lines.append("Thorns +%d: attackers take damage back." % c.eff_thorns())
 	if c.retain_block:
 		lines.append("Your Block stops expiring for the rest of the fight.")
-	if c.hp_cost > 0:
-		lines.append("Costs %d HP to play (never lethal)." % c.hp_cost)
+	if c.eff_hp_cost() > 0:
+		lines.append("Costs %d HP to play (never lethal)." % c.eff_hp_cost())
 	if c.retain:
 		lines.append("Stays in your hand at end of turn.")
 	if c.exhaust:

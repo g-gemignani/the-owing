@@ -92,14 +92,16 @@ const SCENE_FOOT_ALPHA := 0.72
 const SCENE_FOOT_HOLD := 0.80   ## height fraction below which it is at full alpha
 const SCENE_FOOT_START := 0.62  ## height fraction at which it begins to come in
 
-## A painted card illustration, and the scrim that keeps the rules text on top of it
-## readable. The card face itself is nearly black, so the art is what the text has to
-## survive: clear across the top band (cost, symbol, name) and holding from the
-## midpoint down, where the description and the damage/Block numbers sit.
-const CARD_ART_ALPHA := 0.55
-const CARD_SCRIM_ALPHA := 0.72
-const CARD_SCRIM_START := 0.30   ## height fraction at which the scrim begins
-const CARD_SCRIM_HOLD := 0.52    ## height fraction below which it is at full alpha
+## The scrim along the bottom of a card's PICTURE band. There used to be an alpha
+## beside these — the illustration ran the whole face at 55% behind the rules text,
+## and the scrim held that text legible over it. The card is two parts now (D104):
+## nothing is written over the picture, so it runs at full strength, and the scrim's
+## remaining job is the join — stopping a bright patch of painting from meeting the
+## name strip on a hard line, and backing the two numerals in the lower corners.
+## Measured down the picture band, not the card.
+const CARD_SCRIM_ALPHA := 0.62
+const CARD_SCRIM_START := 0.58   ## height fraction at which the scrim begins
+const CARD_SCRIM_HOLD := 0.92    ## height fraction below which it is at full alpha
 
 static var _card_scrim_tex: GradientTexture2D = null
 
@@ -161,7 +163,7 @@ static func _painted_backdrop(root: Control, tex: Texture2D, foot: bool,
 ## The same `bg_zone_<id>.png` the zone screen uses full-bleed. It exists so a list
 ## of PLACES reads as places: five zones drawn as five identical full-width bars are
 ## a menu, and the world screen was the only navigation screen in the game with no
-## art on it at all (D96).
+## art on it at all (D97).
 ##
 ## No scrim and no contrast measurement, unlike every other use of this art — a
 ## thumbnail sits BESIDE its text, never under it, which is the one arrangement where
@@ -525,43 +527,98 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	frame.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	holder.add_child(frame)
 
-	# illustration: behind the text, faint, deaf to the mouse
+	# The card is TWO PARTS, and every rectangle below is measured off these three
+	# numbers: the picture on top, the name strip under it, and the rules text
+	# taking whatever is left. The art used to be full-bleed behind the words at 55%
+	# alpha, which is a different thing — a wash, not an illustration — and it meant
+	# the picture and the text were always fighting for the same pixels.
+	var pad := roundf(size.x * UITheme.CARD_PAD)
+	var inner := Vector2(size.x - pad * 2.0, size.y - pad * 2.0)
+	var art_h := roundf(size.y * UITheme.CARD_ART_BAND)
+	var name_h := roundf(size.y * UITheme.CARD_NAME_BAND)
+	var text_y := pad + art_h + name_h
+	var text_h := size.y - pad - text_y
+	# The cost badge and effect symbol get a share of the card's WIDTH, never its
+	# height: sizing them off a band drove the title's width negative on a squeezed
+	# hand, which made the fit pass give up and clip instead.
+	var badge_w := roundf(inner.x * 0.26)
+	var badge_h := roundf(size.y * 0.095)
+
+	# --- the picture band ----------------------------------------------------
 	# id first, then the card's effect family — see PixelArt.painted_card_art
 	var art := PixelArt.card_art(card.id, Icons.card_family(card))
 	if art != null:
-		# Two different pictures wearing one call. The CC0 fallback is a 16x16 atlas
-		# slice — an icon, not an illustration — so it is tinted by rarity and left
-		# at 22% as a hint of colour behind the text. A PAINTED family illustration
-		# is a real picture at 320x240 and has to be treated as one: full-bleed,
-		# untinted (a violet wash over a painting is just mud) and strong enough to
-		# be worth having drawn. Sending the painting through the icon treatment was
-		# the whole reason Tier 3 looked pointless in a mock-up.
+		# Two different pictures wearing one call. A PAINTED family illustration is a
+		# real picture at 320x240 (4:3) and fills the band edge to edge. The CC0
+		# fallback is a 16x16 atlas slice — an icon, not an illustration — so it is
+		# centred at its own aspect and tinted by rarity, on the band's dark backing.
+		# Blowing a 16px icon up to fill the band would be sixteen-fold mush.
 		var painted := PixelArt.painted_card_art(card.id, Icons.card_family(card)) != null
+		# A clipping window, because STRETCH_KEEP_ASPECT_COVERED deliberately
+		# overflows its box on the short axis and would otherwise paint over the
+		# name and the rules text below it.
+		var win := Control.new()
+		win.clip_contents = true
+		win.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		holder.add_child(win)
+		_place(win, pad, pad, inner.x, art_h)
+
+		var bed := ColorRect.new()
+		bed.color = Color(0.06, 0.05, 0.08)
+		bed.set_anchors_preset(Control.PRESET_FULL_RECT)
+		bed.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		win.add_child(bed)
+
 		var pic := TextureRect.new()
 		pic.texture = art
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED if painted \
-			else TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		if painted:
-			pic.modulate = Color(1, 1, 1, CARD_ART_ALPHA)
-		else:
-			pic.modulate = Icons.rarity_colour(card.rarity)
-			pic.modulate.a = 0.22
 		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		pic.set_anchors_preset(Control.PRESET_FULL_RECT)
-		holder.add_child(pic)
-		# and a scrim under the rules text, for the same reason every backdrop has
-		# one: the brief asks for a dark lower half, but a brief is not a guarantee
-		# and white text over a bright patch is unreadable rather than merely ugly
+		win.add_child(pic)
 		if painted:
-			var s3 := TextureRect.new()
-			s3.texture = _card_scrim()
-			s3.set_anchors_preset(Control.PRESET_FULL_RECT)
-			s3.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-			s3.stretch_mode = TextureRect.STRETCH_SCALE
-			s3.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-			s3.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			holder.add_child(s3)
+			pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+			pic.set_anchors_preset(Control.PRESET_FULL_RECT)
+		else:
+			# An EMBLEM in the band, not a picture filling it. KEEP_ASPECT_CENTERED
+			# scales to FIT the box it is given, so handing the fallback the whole band
+			# scaled a 16x16 sprite to 101px — a 6x blow-up of sixteen pixels, which the
+			# first render showed as exactly the mush this branch exists to avoid. Give
+			# it a smaller box and it stays legible; NEAREST keeps it pixel art rather
+			# than a smear, which is what it is.
+			var side := roundf(art_h * 0.62)
+			pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			pic.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+			pic.modulate = Icons.rarity_colour(card.rarity)
+			_place(pic, roundf((inner.x - side) * 0.5), roundf((art_h - side) * 0.5),
+				side, side)
+
+		# A scrim along the BOTTOM of the picture only. The old one covered the whole
+		# card because the text was over the whole card; now it exists to stop a
+		# bright patch of illustration meeting the name strip on a hard line, and to
+		# give the corner numerals something to sit on.
+		var s3 := TextureRect.new()
+		s3.texture = _card_scrim()
+		s3.set_anchors_preset(Control.PRESET_FULL_RECT)
+		s3.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		s3.stretch_mode = TextureRect.STRETCH_SCALE
+		s3.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		s3.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		win.add_child(s3)
+
+	# --- the text band -------------------------------------------------------
+	# Its own dark panel, not a gradient over a picture. The rules text is on the
+	# card at all times now, so its background has to be a guarantee rather than a
+	# hope about how dark the bottom of the illustration came out.
+	var bay := Panel.new()
+	var bay_sb := StyleBoxFlat.new()
+	bay_sb.bg_color = Color(0.07, 0.06, 0.09, 0.94)
+	bay_sb.set_corner_radius_all(0)
+	bay_sb.border_color = Icons.rarity_colour(card.rarity)
+	bay_sb.border_width_top = 1
+	bay_sb.border_color.a = 0.55
+	bay.add_theme_stylebox_override("panel", bay_sb)
+	bay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(bay)
+	_place(bay, pad, pad + art_h, inner.x, size.y - pad - (pad + art_h))
 
 	# The button carries no text. It used to render everything through `Button.text`
 	# with `clip_text`, which silently cut descriptions off mid-word — a Button draws
@@ -582,18 +639,9 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# title got squeezed to 8px, wrapped to 441px tall, and shoved the description
 	# clean off the bottom of a 211px card. Every region is placed by hand against
 	# the card's known size, so nothing can be pushed anywhere.
-	# Three stacked bands. The cost badge and effect symbol get a share of the card's
-	# WIDTH, never its height: sizing them off head_h drove the title's width
-	# negative on a squeezed hand, which made the fit pass give up and clip instead.
-	var pad := roundf(size.x * 0.06)
-	var inner := Vector2(size.x - pad * 2.0, size.y - pad * 2.0)
-	var badge_w := roundf(inner.x * 0.22)
-	var badge_h := roundf(inner.y * 0.18)
-	var title_h := roundf(inner.y * 0.26)
-
-	var cost := _card_label(holder, str(card.cost), Color(1.0, 0.86, 0.45))
+	var cost := _card_label(holder, str(card.eff_cost()), Color(1.0, 0.86, 0.45))
+	_badge_bed(holder, pad, pad, badge_w, badge_h)
 	_place(cost, pad, pad, badge_w, badge_h)
-	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 
 	var sym := Icons.tex(Icons.for_card(card))
 	if sym != null:
@@ -609,31 +657,33 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		Color(0.96, 0.96, 0.96))
 	var title_w := inner.x
 
-	var desc_y := pad + badge_h + title_h
-	var desc_h := size.y - pad - desc_y
 	# generated, not the authored line: a fused card must not misreport itself
 	var desc := _card_label(holder, card.effect_text(live_dmg, live_blk), Color(0.86, 0.84, 0.80))
-	_place(desc, pad, desc_y, inner.x, desc_h)
+	_place(desc, pad + roundf(pad * 0.5), text_y, inner.x - pad, text_h - roundf(pad * 0.5))
 
 	# Shrink to fit rather than clip. Card text is authored, so its length varies
 	# far more than the fixed card does; a card that cuts its own rules text off is
 	# unplayable in a way a slightly smaller font is not.
 	#
-	# Two layouts, because fitting a long description into a hand-sized card drove
-	# the font down to 12px on the wordiest card. At rest a card shows only its name
-	# and cost, which lets the name use the whole face at a comfortable size; hover
-	# enlarges the card and reveals the rules text.
+	# ONE layout, unlike the old card. The rules text used to appear only on hover
+	# because there was nowhere to put it: it shared the face with the name, and
+	# fitting both drove the wordiest card to 12px. It now has a band of its own, so
+	# it is on the card at rest and on hover and in every menu — which is the whole
+	# point of the shape, and what makes a hand readable without touching the mouse.
 	var body := UITheme.font()
 	fit_label(cost, Vector2(badge_w, badge_h), body, 7)
-	fit_label(desc, Vector2(inner.x, desc_h), int(body * 0.85), 7)
+	fit_label(desc, Vector2(inner.x - pad, text_h - roundf(pad * 0.5)), int(body * 0.92), 7)
 
-	# The headline number, always on the face — never only on hover.
+	# The headline number, in the PICTURE's bottom corners.
 	#
-	# At rest a card shows its name and its cost and nothing else, which is fine for
-	# reading a hand at a glance and useless for the thing that changes: with 4
-	# Strength every attack is worth more, and a player could not see that anywhere
-	# without hovering each card in turn. Damage in red, Block in blue, both if the
-	# card does both. In a fight these are the live numbers.
+	# Damage in red on the left, Block in blue on the right, both if the card does
+	# both, and in a fight these are the live numbers — with 4 Strength every attack
+	# is worth more, and that has to be visible without hovering each card in turn.
+	#
+	# They sit over the illustration rather than under the rules text because of
+	# where the card is when it matters: a card in hand hangs off the bottom of the
+	# screen (Combat.HAND_PEEK), so anything in the bottom corners is exactly what
+	# the player cannot see. The picture band is always above the edge.
 	var headline := ""
 	if live_dmg > 0 or (live_dmg < 0 and card.eff_damage() > 0):
 		headline = str(live_dmg if live_dmg >= 0 else card.eff_damage())
@@ -643,29 +693,29 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	if live_blk > 0 or (live_blk < 0 and card.eff_block() > 0):
 		shield = str(live_blk if live_blk >= 0 else card.eff_block())
 	var value_labels: Array[Label] = []
-	var value_h := 0.0
 	if headline != "" or shield != "":
-		value_h = badge_h
+		var vy := pad + art_h - badge_h
+		var vw := roundf(inner.x * 0.42)
 		if headline != "":
 			var v := _card_label(holder, headline, Color(1.0, 0.55, 0.45))
 			value_labels.append(v)
-			_place(v, pad, size.y - pad - value_h, inner.x * 0.5, value_h)
-			v.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-			fit_label(v, Vector2(inner.x * 0.5, value_h), body, 7)
+			_badge_bed(holder, pad, vy, vw, badge_h)
+			_place(v, pad, vy, vw, badge_h)
+			fit_label(v, Vector2(vw, badge_h), body, 7)
 		if shield != "":
 			var s2 := _card_label(holder, shield, Color(0.62, 0.80, 1.0))
 			value_labels.append(s2)
-			_place(s2, pad + inner.x * 0.5, size.y - pad - value_h, inner.x * 0.5, value_h)
-			s2.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-			fit_label(s2, Vector2(inner.x * 0.5, value_h), body, 7)
+			_badge_bed(holder, size.x - pad - vw, vy, vw, badge_h)
+			_place(s2, size.x - pad - vw, vy, vw, badge_h)
+			fit_label(s2, Vector2(vw, badge_h), body, 7)
 
-	var rest_y := pad + badge_h
-	var rest_h := size.y - pad - rest_y - value_h
+	var rest_y := pad + art_h
+	var rest_h := name_h
 	# The RESTING title takes a width that can shrink; the open one always gets the
 	# whole face. In a hand the neighbour to the right is drawn on top of this card
 	# and hides its right-hand edge — and the name is the only thing a resting card
 	# shows, so the name was precisely what was being covered: a captured five-card
-	# hand read "Smith's Fu / Prepare / Bludgeo / Bite / Shiv" (D96). The fan is the
+	# hand read "Smith's Fu / Prepare / Bludgeo / Bite / Shiv" (D97). The fan is the
 	# only thing that knows how much of a card survives, so it tells the card, through
 	# `fit_name` below. Everywhere else — rewards, the shop, the deck lists — nothing
 	# overlaps and the default stays the full face.
@@ -678,22 +728,19 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	var lay_rest := func() -> void:
 		var w: float = holder.get_meta("rest_w")
 		_place(title, pad, rest_y, w, rest_h)
-		fit_label(title, Vector2(w, rest_h), UITheme.title_font(), 7)
-	_place(title, pad, pad + badge_h, title_w, title_h)
-	fit_label(title, Vector2(title_w, title_h), body, 7)
+		fit_label(title, Vector2(w, rest_h), body, 7)
+	_place(title, pad, rest_y, title_w, rest_h)
+	fit_label(title, Vector2(title_w, rest_h), body, 7)
 	var open_px: int = title.get_theme_font_size("font_size")
 
+	# Opening a card no longer REVEALS anything — the picture, the name, the numbers
+	# and the rules text are all on the face at every size. What it still does is
+	# give the name back the width its right-hand neighbour is covering, which is
+	# the D97 defect and is unchanged by the new shape.
 	var show_all := func(open: bool) -> void:
 		holder.set_meta("open", open)
-		desc.visible = open
-		# The number strip exists because a resting card shows only a name. Once the
-		# card is open its rules text carries the same number, and leaving the strip
-		# up costs the description the room it needs — measured at 11px, which
-		# CardTextTest calls unreadable and is right to.
-		for vl in value_labels:
-			vl.visible = not open
 		if open:
-			_place(title, pad, pad + badge_h, title_w, title_h)
+			_place(title, pad, rest_y, title_w, rest_h)
 			title.add_theme_font_size_override("font_size", open_px)
 		else:
 			# re-fit rather than restore a remembered size: the resting width can have
@@ -778,6 +825,161 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 			b.pressed.connect(on_press)
 		b.mouse_entered.connect(func(): open_card.call(true))
 		b.mouse_exited.connect(func(): open_card.call(false))
+
+	# RIGHT-CLICK holds the card up at full size, anywhere a card is drawn: in hand
+	# mid-fight, in a reward pick, in a shop. Hover already enlarges it, but a hover
+	# ends the moment you look away from it — you cannot hover a card and read an
+	# enemy's intent at the same time, and comparing two cards means holding one in
+	# your head. This is the same gesture as the collection's, so there is one thing
+	# to learn: see `inspect_card`.
+	b.gui_input.connect(func(ev: InputEvent) -> void:
+		var mb := ev as InputEventMouseButton
+		if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_RIGHT:
+			return
+		b.accept_event()
+		inspect_card(b, card, live))
+	return b
+
+## Hold ONE card up at a size you can actually read, over whatever screen you are
+## on. The single answer to "what does this card do, exactly" — in a fight, in the
+## collection, in the deck builder, at a fuse price — because those were four
+## different answers before: hover in combat, a tooltip on a list row in the
+## collection, a tooltip on a different list row in the deck builder, and nothing
+## at all next to a fuse button that was about to change the card's numbers.
+##
+## `note` is the caller's one line of context — what a level buys, what a fuse
+## costs — so the screen that knows it does not have to build its own panel to say
+## it. `live` quotes the numbers this card would produce THIS turn, and is null
+## outside a fight.
+##
+## Right-click opens it on any card face; the collection and deck builder put it on
+## a left click too, because a list row has no card to right-click and an invisible
+## gesture is not a feature.
+static func inspect_card(anchor: Node, card: CardData, live: CombatEngine = null,
+		note: String = "") -> Control:
+	if card == null:
+		return null
+	# The OUTERMOST Control above this card, not `current_scene`. They are the same
+	# node in the game — the combat screen is a Control and it is the current scene —
+	# and they are not the same node in the screenshot harness, which parents a
+	# screen under a plain Node and would have got a null host and no overlay. Hanging
+	# it off the screen's own root also means it dies with the screen, so an
+	# inspector left open across a scene change cannot outlive what it was showing.
+	var host: Control = null
+	var walk := anchor
+	while walk != null:
+		if walk is Control:
+			host = walk as Control
+		walk = walk.get_parent()
+	if host == null or not is_instance_valid(host):
+		return null
+	# One at a time. Right-clicking a second card while the first is up replaces it
+	# rather than stacking two veils nobody can dismiss in the right order.
+	if _inspecting != null and is_instance_valid(_inspecting):
+		_inspecting.queue_free()
+
+	var veil := ColorRect.new()
+	veil.color = Color(0, 0, 0, 0.86)
+	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	veil.z_index = 200          # above card_picker's veil, which is 100
+	veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	host.add_child(veil)
+	_inspecting = veil
+	Audio.play("ui_select")
+
+	var close := func() -> void:
+		if is_instance_valid(veil):
+			veil.queue_free()
+		_inspecting = null
+	# Anywhere off the card closes it. A modal whose only exit is a small button is
+	# a modal players learn to dread, and this one is opened by accident often
+	# enough — a right-click is one slip away from a left-click.
+	veil.gui_input.connect(func(ev: InputEvent) -> void:
+		var mb := ev as InputEventMouseButton
+		if mb != null and mb.pressed:
+			Audio.play("ui_back")
+			close.call())
+
+	# Big enough to read the wordiest card without squinting, bounded so it cannot
+	# outgrow a short window: the layout is designed at 1280x720 and the inspector
+	# has to survive being opened on the smallest of them.
+	var vp := host.get_viewport_rect().size
+	var tall := minf(UITheme.px(360.0), vp.y * 0.74)
+	var big := Vector2(tall * (UITheme.BASE_CARD.x / UITheme.BASE_CARD.y), tall)
+	var face := card_button(veil, card, big, Callable(), "", live)
+	var holder := face.get_parent() as Control
+	holder.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	# The veil is a ColorRect, not a container, so nothing is going to size this for
+	# us — and the card's frame and hit area are both PRESET_FULL_RECT against the
+	# holder, so a holder left at zero would draw every label in the right place
+	# inside an invisible frame.
+	holder.size = big
+	holder.position = Vector2(roundf(vp.x * 0.5 - big.x * 0.5),
+		roundf(vp.y * 0.5 - big.y * 0.5) - UITheme.px(14))
+	# The inspector is not a hand: nothing overlaps it, so the name gets the whole
+	# face, and no hover may shrink or lift what the player deliberately opened.
+	(holder.get_meta("show_all") as Callable).call(true)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	face.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	# Everything the face cannot fit: rarity, cost, level, and the per-rule prose
+	# that the card's own text compresses into a phrase.
+	var side := _card_label(veil, Icons.card_tooltip(card,
+		live.card_damage(card) if live != null else -1,
+		live.card_block(card) if live != null else -1), Color(0.86, 0.84, 0.80))
+	side.clip_text = false
+	side.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	var side_w := minf(UITheme.px(320.0), vp.x * 0.30)
+	_place(side, holder.position.x + big.x + UITheme.px(20), holder.position.y,
+		side_w, big.y)
+	side.add_theme_font_size_override("font_size", UITheme.font())
+
+	if note != "":
+		var n := _card_label(veil, note, Color(0.72, 0.86, 0.68))
+		n.clip_text = false
+		n.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+		_place(n, holder.position.x - side_w - UITheme.px(20), holder.position.y,
+			side_w, big.y)
+		n.add_theme_font_size_override("font_size", UITheme.font())
+
+	var hint := _card_label(veil, "Click anywhere to close", Color(0.62, 0.60, 0.66))
+	_place(hint, 0.0, holder.position.y + big.y + UITheme.px(10), vp.x, UITheme.px(26))
+	hint.add_theme_font_size_override("font_size", UITheme.font())
+	return veil
+
+## The card currently held up by `inspect_card`, so a second one replaces it.
+static var _inspecting: Control = null
+
+## The collection, the deck builder and the fuse prices are LISTS — one text row
+## per card, because thirty rows of card faces is a screen you scroll forever. A
+## row has no card face to right-click, so the row's own thumbnail becomes the way
+## in: click the picture, get the card. Same size and same place as the plain
+## TextureRect it replaces, so no row got wider to gain the affordance.
+static func inspect_thumb(parent: Node, card: CardData, side: float,
+		note: String = "") -> Button:
+	var b := Button.new()
+	b.icon = PixelArt.card_art(card.id, Icons.card_family(card))
+	b.expand_icon = true
+	b.custom_minimum_size = Vector2(side, side)
+	b.self_modulate = Icons.rarity_colour(card.rarity)
+	b.tooltip_text = "%s — click to see the whole card" % card.name
+	# It has to LOOK pressable. The first version was `flat = true`, which is the
+	# plain TextureRect it replaced wearing a click handler — the affordance existed
+	# only in the tooltip, and a gesture you have to hover to discover is the thing
+	# this helper's own docstring says not to ship. Not `UITheme.style_button`,
+	# which forces a minimum height and would make every row in the list taller: a
+	# thin rarity-coloured edge that brightens under the cursor, at 28px.
+	var edge := Icons.rarity_colour(card.rarity)
+	for state in [["normal", 0.34, 0.10], ["hover", 0.95, 0.26], ["pressed", 0.95, 0.40]]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(edge.r, edge.g, edge.b, float(state[2]))
+		sb.border_color = Color(edge.r, edge.g, edge.b, float(state[1]))
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(2)
+		sb.set_content_margin_all(2)
+		b.add_theme_stylebox_override(String(state[0]), sb)
+	b.pressed.connect(func(): inspect_card(b, card, null, note))
+	parent.add_child(b)
 	return b
 
 ## True where there is a touchscreen and no mouse: phones and tablets.
@@ -807,6 +1009,20 @@ static func _card_label(holder: Control, text: String, colour: Color) -> Label:
 	l.add_theme_color_override("font_color", colour)
 	holder.add_child(l)
 	return l
+
+## A dark plate under a numeral that sits ON the illustration. Without it a cost
+## or a damage figure lands on whatever the painting happens to put in that corner,
+## and one bright patch makes the most important number on the card unreadable.
+static func _badge_bed(holder: Control, x: float, y: float, w: float, h: float) -> Panel:
+	var p := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.03, 0.06, 0.72)
+	sb.set_corner_radius_all(int(h * 0.5))
+	p.add_theme_stylebox_override("panel", sb)
+	p.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(p)
+	_place(p, x, y, w, h)
+	return p
 
 ## Pin a child to an exact rectangle inside a non-container parent.
 static func _place(c: Control, x: float, y: float, w: float, h: float) -> void:

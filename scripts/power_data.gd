@@ -26,10 +26,28 @@ extends CardData
 
 ## Powers level like cards, but with gold only — there are no duplicate copies of
 ## a power to spend. See Balance.power_upgrade_cost.
+##
+## An UPPER BOUND, not the track. It used to be the track, authored at 10 for every
+## power regardless of whether the power had ten improvements in it, and 44 of the
+## 63 power level-ups it sold changed nothing: Bulwark went 8, 8, 9, 9, 9, 10, 10,
+## 10, 11, and Foresight read "Draw 1" at all ten levels because nothing in the
+## scaling model touched `draw` at all.
 @export var max_level: int = 10
 
+## The shorter of what the player was promised and what the power can actually
+## deliver. `CardData.level_cap()` is the same rule cards use — inherited rather
+## than reimplemented, for the reason in this class's header.
+##
+## Overriding the CAP rather than only `level_capped()` matters: every `eff_*`
+## getter spreads its budget across `level_cap()` steps, so a power that stops at
+## 10 has to say 10 there too. Left to the card rule, Bulwark would have spread a
+## common's hundred-step budget over a track it can only walk a tenth of, and
+## arrived at its last level having collected a tenth of its growth.
+func level_cap() -> int:
+	return clampi(super(), 1, maxi(1, max_level))
+
 func level_capped() -> int:
-	return maxi(1, max_level)
+	return level_cap()
 
 func at_max() -> bool:
 	return level >= level_capped()
