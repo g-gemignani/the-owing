@@ -347,11 +347,23 @@ var gold: int = 0  # persistent currency; earned in combat, partly lost on death
 func _ready() -> void:
 	# Boot with slot 0 if it exists so a scene opened directly still has state;
 	# the menus set `slot` and call load_game()/new_save() explicitly.
+	#
+	# The fallback fills memory but does NOT write, because booting is not playing.
+	# Writing here put a starter save on disk before the player had chosen anything,
+	# and two things followed. `_latest_slot()` found slot 0 on a FRESH INSTALL, so
+	# the main menu offered "Continue — slot 1 (0 clears, 0 gold)" to somebody who
+	# had never played and its "no save found" branch could never be reached. And
+	# every headless run left a save behind — a test, or any tool in `tools/`, which
+	# is what `tests/run.sh`'s stray check kept reporting from suites that never
+	# mention MetaState at all. Both callers that mean it (main_menu `_play`,
+	# starter_kit) persist explicitly, which is what the line above always claimed.
 	if not load_game():
-		new_save()
+		new_save("blade", false)
 
-## `kit` picks the starting collection (see STARTER_KITS).
-func new_save(kit: String = "blade") -> void:
+## `kit` picks the starting collection (see STARTER_KITS). `persist` writes the result
+## to disk; pass false for a caller that only needs the state in memory and has not
+## established that the player is starting a game.
+func new_save(kit: String = "blade", persist: bool = true) -> void:
 	starter_kit = kit if STARTER_KITS.has(kit) else "blade"
 	collection = {}
 	var loadout := {}
@@ -373,7 +385,8 @@ func new_save(kit: String = "blade") -> void:
 	packs = []
 	highest_dungeon = 1
 	gold = 0
-	save_game()
+	if persist:
+		save_game()
 
 ## Spend gold. Returns false (and changes nothing) if the player cannot afford it.
 func spend_gold(n: int) -> bool:

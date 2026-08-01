@@ -21,6 +21,35 @@ func _init() -> void:
 	var fails := 0
 	var Meta = load("res://scripts/meta_state.gd")
 
+	# --- a fresh install must not pretend the player has already played ----------
+	#
+	# `MetaState._ready()` falls back to `new_save()` when there is nothing to load,
+	# so a scene opened directly still has state. It used to PERSIST that fallback,
+	# which wrote a starter save before the player had chosen anything: `_latest_slot()`
+	# then found slot 0 on a brand-new install and the main menu offered
+	# "Continue — slot 1 (0 clears, 0 gold)", while its "no save found" branch was
+	# unreachable. Every headless tool run left a save file behind for the same reason.
+	#
+	# The contract is that filling memory and committing to disk are separate acts.
+	# Asserted on the disk, because in-memory state is identical either way and is
+	# exactly what made this invisible.
+	var boot = Meta.new()
+	boot.slot = 0
+	boot.new_save("blade", false)
+	if bool(Meta.slot_summary(0).get("exists", false)):
+		fails += 1
+		print("FAIL booting wrote slot 0 to disk; a fresh install would offer Continue")
+	if boot.collection.is_empty() or boot.decks.is_empty():
+		fails += 1
+		print("FAIL booting without persisting left no usable state in memory")
+	# ...and the callers that DO mean it still write.
+	boot.new_save("blade")
+	if not bool(Meta.slot_summary(0).get("exists", false)):
+		fails += 1
+		print("FAIL new_save() did not persist; the menus rely on it")
+	_cleanup_sandbox()
+	Meta.writes_disabled = false
+
 	# --- the opening must be a real choice ---
 	var m = Meta.new(); m.new_save()
 	var open := 0
