@@ -16,8 +16,11 @@ before and after any art pass (§7). Nothing here was inferred from source code 
 
 ## 1. The diagnosis: four visual languages, fighting
 
-*Written against the 16-capture pass; the dungeon backdrops named as missing here
-have since all been installed (D73). Everything else in this section still stands.*
+*Written against the 16-capture pass. Three things named here have since been fixed and
+are marked in place: the dungeon backdrops were all installed (D73), the 41 Kenney enemy
+sprites were replaced by 35 generated plates (D89), and the frame kit became computed
+rather than painted (D83). The diagnosis is kept rather than deleted because the
+reasoning is what the rest of the file is built on.*
 
 The game is not short of art. It is short of art that **agrees**. Right now five
 screens' worth of assets speak four unrelated dialects:
@@ -25,7 +28,7 @@ screens' worth of assets speak four unrelated dialects:
 | language | assets | verdict |
 |---|---|---|
 | **Painted, inked illustration** | `main_menu.jpg` + all 12 dungeon backdrops | **This is the game.** Keep. |
-| **Kenney 16×16 pixel art** | 41 enemy sprites, 5 zone tiles, 1 card sheet | Off-style, and semantically arbitrary |
+| **Kenney 16×16 pixel art** | 41 enemy sprites, 5 zone tiles, 1 card sheet | Off-style, and semantically arbitrary — *the 41 enemy sprites are gone (D89); the zone tiles and the card sheet remain* |
 | **Hand-authored 16×16 mono glyphs** | 13 in `PixelArt.GLYPHS` | Off-style, too small to read as art |
 | **A stretched illustration pretending to be a frame** | `ui_button.png`, `ui_panel.png` | Actively damaging — see below |
 
@@ -60,10 +63,15 @@ the clear colour: `collection.gd`, `deck_builder.gd`, `encounter.gd`, `shop.gd`.
 (Three more did — `deck_run` `dice_run` `map` — and went with their traversal models
 in D94.) The shop and the event screen are flat near-black rectangles with text on
 them, and they are two of the screens the player sees most.
+*All four are fixed: `shop.gd` and `encounter.gd` call `UI.scene_backdrop()`, and
+`collection.gd` and `deck_builder.gd` were moved inside `UI.screen()` in D95 — which is
+where the backdrop is installed, and the reason they were the last two flat-black
+screens in the game.*
 
 **c) The things the game is *about* have no art.** No player character exists on
-screen anywhere. Enemies are 16×16 tiles handed to `Button.icon` and are not
-visibly rendered at all in the combat capture. All 30 relics render as text rows —
+screen anywhere. Enemies were 16×16 tiles handed to `Button.icon` and were not
+visibly rendered at all in the combat capture — *fixed in D89; 35 generated plates now
+stand on the floor line*. All 30 relics render as text rows —
 `relics_screen.gd` makes no icon call whatsoever. All 20 events are a title, two
 lines and three buttons over 400px of black. There is no custom font: the whole
 game runs on Godot's built-in default.
@@ -104,9 +112,11 @@ Taken from what already works, so it needs no leap of faith:
   gold `#F0B840` reserved for gold and energy; red for damage; green for poison.
   Codify these in `Icons`/`Balance` rather than restating them per screen — a
   duplicated constant has cost this project three bugs already.
-- **Scale.** Author every UI asset at **2×** and downsample. `UITheme.scale` runs
-  0.6–3.0 and `BUTTON_SLICE` is deliberately *not* scaled, so a 1×-authored frame
-  is visibly soft at scale 2.0 and mush at 3.0.
+- **Scale.** Author every UI asset at **2×** and downsample. There is no UI scale
+  setting — the interface is laid out at a fixed 1280×720 and `UITheme.UI_SCALE` is a
+  constant `1.0` (D65) — but the engine's `canvas_items` stretch scales the whole canvas
+  to the window, so on a 1440p display every asset draws at 2× and on 4K at 3×. Nothing
+  reflows; it is a clean scale-up, and it is why the source needs the headroom.
 
 ### Two rules that are non-negotiable
 
@@ -147,25 +157,31 @@ category:
 | tier | what | files |
 |---|---|---|
 | 0 | frame kit + control chrome | 24 |
-| 1 | combat readability (player, vitals, intents, symbols, VFX) | 47 |
-| 2 | enemies | 35 |
+| 1 | combat readability (player, vitals, intents, symbols, VFX) | 43 |
+| 2 | enemies | 35 — **done** |
 | 3 | card illustrations | 12 |
-| 4 | map and traversal | 26 |
-| 5 | backdrops (5 zone + 6 scene; all 12 dungeons **done**) | 23 |
+| 4 | map and traversal | 0 — deleted with the models (D94/D111) |
+| 5 | backdrops (5 zone + 6 scene; all 12 dungeons) | 23 — **done** |
 | 6 | relics and powers | 40 |
 | 7 | identity and shell | 6 |
 
+**No total here is authoritative** and none is restated deliberately (D34) — the tiers
+above are the *ordering*, and `ART_ASSETS.md` is generated and wins on any disagreement.
+Its header line carries the wanted/present/missing counts; read them there.
+
 Proposed layout — `assets/art/` grows subdirectories, `assets/pixel/` demotes to
-fallback:
+fallback. Partly built: `enemies/`, `iso/` and `ui/` exist; the backdrops are still
+flat in `assets/art/` (see the code note below) and the rest are unmade.
 
 ```
 assets/art/
-  bg/        1280x720 scene backdrops        (23 files)
-  enemies/   256/512 transparent             (35)
-  cards/     card illustrations              (30)
+  bg/        1280x720 scene backdrops        (23 files — still flat in art/)
+  enemies/   256/512 transparent             (35 — exists, full)
+  iso/       the crawl's tiles and markers   (33 — exists, full; not on the list, generated)
+  cards/     12 family illustrations         (12)
   relics/    128x128 objects                 (30)
   powers/    128x128 sigils                  (10)
-  ui/        nine-slice kit, bars, icons     (~60)
+  ui/        nine-slice kit, bars, icons     (~60 — exists, 16 in it)
   fx/        sprite sheets                   (6)
   fonts/     display + body                  (2)
 ```
@@ -178,10 +194,18 @@ assets/art/
 
 ---
 
-### Tier 0 — The frame kit  ·  23 files  ·  fixes every screen at once
+### Tier 0 — The frame kit  ·  24 files  ·  fixes every screen at once
 
-Highest leverage item in this document by a wide margin. One kit, and all 21 screens
-stop looking broken.
+Highest leverage item in this document by a wide margin. One kit, and every screen
+stops looking broken.
+
+> **Superseded in part by D83.** The kit is **computed** by `tools/gen_ui_kit.gd`, not
+> painted, and its real nine-slice margins live in `UITheme.KIT_SLICE` (12) and
+> `Icons.CARD_SLICE`. The sizes and slices in the table below are the original spec and
+> are kept for the reasoning; where they disagree with the code, the code is right —
+> slicing a 12px border at 48 eats the flat middle and stretches the carved edge, which
+> is the exact defect this tier exists to fix. `ART_ASSETS.md` has the live count of
+> what is installed; do not read it off this page.
 
 | file | size | 9-slice (l/r/t/b) | hook |
 |---|---|---|---|
@@ -195,15 +219,18 @@ stop looking broken.
 | `ui/frame_card.png` | 320×448 | 40/40/48/56 | replaces `Icons.card_style()` StyleBoxFlat |
 | `ui/frame_card_rarity_<0..4>.png` | 320×448 | same | 5 rarity treatments |
 | `ui/divider.png` | 128×16 | tileable X | section rules — *new* |
-| `ui/dropdown.png` + `_arrow.png` | 192×96, 32×32 | 32/32/28/28 | `OptionButton` — *unstyled today* |
-| `ui/slider_track.png` + `_grabber.png` | 128×24, 48×48 | tile X | `HSlider` — *unstyled today* |
-| `ui/scrollbar_track.png` + `_grabber.png` | 24×128, 24×48 | tile Y | `VScrollBar` — *unstyled today* |
-| `ui/checkbox_on.png` + `_off.png` | 64×64 | — | settings — *unstyled today* |
+| `ui/dropdown.png` + `_arrow.png` | 192×96, 32×32 | 32/32/28/28 | `OptionButton` — wired; arrow in, track wanted |
+| `ui/slider_track.png` + `_grabber.png` | 128×24, 48×48 | tile X | `HSlider` — wired; grabber in, track wanted |
+| `ui/scrollbar_track.png` + `_grabber.png` | 24×128, 24×48 | tile Y | `VScrollBar` — wired; thumb in, track wanted |
+| `ui/checkbox_on.png` + `_off.png` | 64×64 | — | settings — wired, both in (D107) |
 
-The theme styles **`Button` and `PanelContainer` only**. Every dropdown, slider,
+~~The theme styles **`Button` and `PanelContainer` only**. Every dropdown, slider,
 scrollbar and checkbox in the game is default Godot chrome sitting next to painted
-buttons — clearest in `Collection.png`, where the Sort/Rarity/Type dropdowns are flat
-grey rectangles between two framed buttons.
+buttons.~~ **Done (D105/D107).** `UITheme` now wires `OptionButton`, `HSlider`,
+`VScrollBar` and `CheckBox`, each one switching on the moment its file exists and
+falling back to Godot's chrome until then. The four still absent are the three tracks
+(`dropdown`, `slider_track`, `scrollbar_track`) and `frame_panel`/`frame_inset`/
+`frame_tooltip` — so what is left in this tier is the *housings*, not the wiring.
 
 Spec, restated because it is the thing that went wrong:
 
@@ -218,8 +245,9 @@ Spec, restated because it is the thing that went wrong:
   `38/19/49/57`, i.e. four different values, which is a painting, not a frame.
 - **Ship a small variant.** Square icon buttons (`+` / `−` in the deck builder) cannot
   wear a frame designed for a 1248px bar. `ui/frame_button_small.png` at 96×96 with a
-  12/12/12/12 slice, selected by `UITheme.style_button()` when the control is under
-  ~120px wide.
+  12/12/12/12 slice. **Done** — `UITheme.style_button()` takes the choice as an argument
+  rather than deriving it from `b.text.length()`, because almost every call site styles
+  a button before setting its text (D83).
 
 ---
 
@@ -312,11 +340,15 @@ the sound. The audio switch there is the exact shape the VFX switch wants.
 
 ---
 
-### Tier 2 — Enemies  ·  35 files  ·  biggest single credibility gap
+### Tier 2 — Enemies  ·  35 files  ·  **done (D89)**
 
-35 archetypes and 12 named bosses currently share 41 unlabelled 16×16 Kenney tiles,
+35 archetypes and 12 named bosses *used to* share 41 unlabelled 16×16 Kenney tiles,
 assigned **by sorted position** with a 12-entry override table to stop bosses
-inheriting trash-mob faces.
+inheriting trash-mob faces. All 35 now have a generated plate at
+`assets/art/enemies/<archetype_id>.png`, shaped from the archetype's own fight data;
+`PixelArt.OVERRIDES`, `PixelArt.enemy_sprite()` and the CC0 pool behind them are gone.
+The rest of this section is the brief they were generated against, and still governs
+any replacement — the plates are markers, and painted figures remain the upgrade path.
 
 | set | count | size | path |
 |---|---|---|---|
@@ -340,10 +372,10 @@ Two placement rules that are invisible in the file and obvious in the game:
 - **Weight the silhouette low and dark.** The floor is the brightest band in every
   painted backdrop, so a pale-footed enemy dissolves into the thing it is standing on.
 
-Naming on `archetype_id` deletes real complexity: `PixelArt.OVERRIDES` and the
+Naming on `archetype_id` deleted real complexity: `PixelArt.OVERRIDES` and the
 whole positional-assignment-that-skips-pinned-sprites dance in
-`PixelArt.enemy_sprite()` both go away, and adding a 36th enemy stops silently
-reshuffling every other enemy's face.
+`PixelArt.enemy_sprite()` both went, and adding a 36th enemy no longer silently
+reshuffles every other enemy's face — it gets its own plate on the next generator run.
 
 Boss list, for reference: `grave_sexton` `brood_mother` `marrow_abbot`
 `bellows_master` `warden` `cinder_knight` `mycelial_lord` `the_gardener`
@@ -364,7 +396,7 @@ Recommended: **not** 100 unique paintings up front.
 | step | count | size | note |
 |---|---|---|---|
 | Family illustrations | 12 | 320×240 | one per effect family, shared by every card in it |
-| Card back | 1 | 320×448 | in Tier 0. **Required** by the DECK traversal, which reveals cards |
+| Card back | 1 | 320×448 | in Tier 0. Nothing loads it since D94 took the deck traversal — leave it until something draws a face-down card |
 | Rarity frames | 5 | — | in Tier 0 |
 | Unique card art | later | 320×240 | `cards/<card_id>.png`, checked before the family file |
 
@@ -389,25 +421,31 @@ per `UI.card_button()`'s existing hand-placed band layout.
 **Nothing left to draw here.** This tier asked for 26 files across three traversal
 models — 11 for the graph map, 14 for the dice board, one reveal frame for the deck
 draw. All three models were deleted in D94 after D88 moved every dungeon onto the
-isometric crawl, and the crawl's art is Tier 6, not this one. The tier is kept as a
-heading rather than removed so the numbering below still matches the captures.
+isometric crawl. The crawl's own markers are generated by `tools/gen_iso_markers.gd`
+into `assets/art/iso/`, so they are not a shopping-list item and never were.
+
+`tools/art_manifest.gd` went on briefing all 26 for another eleven decisions, because
+deleting a feature does not touch the tool that advertises it — removed in D111, which
+is what took the manifest from 209 files wanted to 183. The tier is kept as a heading
+rather than removed so the numbering below still matches the captures.
 
 ---
 
-### Tier 5 — Backdrops  ·  11 to draw of 23 at 1280×720
-
-**All twelve dungeon backdrops are installed** (D73). What still shows the 16×16
-tinted tile — near-black with a faint dot grid — is every screen that is not a
-fight: `Overworld.png`, `Shop.png`, `Encounter.png`.
+### Tier 5 — Backdrops  ·  0 to draw of 23 at 1280×720  ·  **done**
 
 | set | count | missing |
 |---|---|---|
-| Dungeon battle backdrops | 12 | **0 — done** |
-| Zone backdrops (overworld / zone view) | 5 | 5 — all are 16×16 tiles today |
-| Scene backdrops | 6 | 6 — shop interior, rest camp, event shrine, treasure vault, victory, defeat |
+| Dungeon battle backdrops | 12 | **0 — done (D73)** |
+| Zone backdrops (overworld / zone view) | 5 | **0 — done (D83d)** |
+| Scene backdrops | 6 | **0 — done (D83b)** — shop, rest, event, treasure, victory, defeat |
 
-→ hooks: `PixelArt.battle_art()` for dungeons, `PixelArt.backdrop_texture()` for
-zones, and **new** `UI.screen(..., art)` calls on the four screens listed in §1(b).
+→ hooks: `PixelArt.battle_art()` for dungeons, `PixelArt.zone_art()` for zones,
+`PixelArt.scene_art()` via `UI.scene_backdrop()` for the rest.
+
+The one thing left in this tier is a *quality* complaint rather than a gap: the Chest,
+Victory and Defeat plates are visibly a flatter tier than the other twenty — heavy
+uniform ink, unrendered surfaces — and Victory is the screen at the end of every
+successful run (REVIEW.md §3).
 
 Author to the D39/`BATTLE_SCRIM` contract: 20–35% luminance, light source away from
 the top and bottom 34% bands, and the existing contrast tests must stay green.
@@ -451,10 +489,13 @@ and every screen in the game changes character.
 
 Assets that land on top of these problems will not look better. None of it is large.
 
-1. **Backdrops on the four bare screens** — `collection` `deck_builder` `encounter`
-   `shop`. They build a `MarginContainer` directly and never call `UI.screen()` or
-   `PixelArt.backdrop()`. (It was seven; three of them were the traversal views
-   deleted in D94.)
+1. ~~**Backdrops on the four bare screens** — `collection` `deck_builder` `encounter`
+   `shop`.~~ **Done.** `shop` and `encounter` call `UI.scene_backdrop()`; `collection`
+   and `deck_builder` were the last two hand-rolling their own `MarginContainer` + `VBox`
+   and were moved inside `UI.screen()` in D95. The lesson outlived the fix: a helper
+   whose whole value is uniformity needs a check that everyone is inside it, because the
+   boilerplate it replaces is by construction easy to write again by accident. (It was
+   seven; three were the traversal views deleted in D94.)
 2. **Give text somewhere to sit.** `UITheme._frame()` sets `content_margin` to `10`
    vertically against a `19/21` texture slice, and `min_button_height()` is only
    `t + b + 10`. The result is a 50px button with 40px of border and a 10px parchment
@@ -464,58 +505,64 @@ Assets that land on top of these problems will not look better. None of it is la
    `text`. The 16×16 sprite is not visibly rendered in `Combat.png` at all. Sprite,
    name, HP bar and intent icon each want their own placed region — the same
    hand-placed approach `UI.card_button()` already uses, and for the same reason.
-4. **Style every control, not just buttons.** The theme covers `Button` and
-   `PanelContainer` only — `OptionButton`, `HSlider`, `VScrollBar` and `CheckBox` are
-   untouched. (The three run views that built unstyled "Collection" buttons were
-   deleted in D94; the general rule outlived them, so audit new screens for it.)
+4. ~~**Style every control, not just buttons.**~~ **Done (D105/D107).** `UITheme` now
+   wires `OptionButton`, `HSlider`, `VScrollBar` and `CheckBox` alongside `Button` and
+   `PanelContainer`, each switching on when its file lands. What remains is art, not
+   code: the three track housings. (The three run views that built unstyled
+   "Collection" buttons were deleted in D94; the general rule outlived them, so audit
+   new screens for it.)
 5. ~~**The dice board collapses to zero height.**~~ **Done (D57).** One line —
    `vertical_scroll_mode = SCROLL_MODE_DISABLED`, since the track scrolls sideways and
    a `ScrollContainer` only contributes its content's minimum size on axes it cannot
    scroll. `PlayableTest` now asserts the general case: no scroll area may be squeezed
    to zero on an axis whose content needs pixels.
-7. **Flip the texture filter default.** `project.godot` sets NEAREST globally and
+6. **Flip the texture filter default.** `project.godot` sets NEAREST globally and
    painted art overrides per-node. Once painted art is the majority that is backwards
    — flip the default to LINEAR and mark the surviving pixel assets NEAREST.
-8. **An art-coverage test**, per the D42 rule that half-added content must fail
+7. **An art-coverage test**, per the D42 rule that half-added content must fail
    loudly: every archetype, card, relic, power and dungeon id has a file at its
    conventional path, or the suite goes red. Convention over an `@export var art`
    field — no `.tres` churn, and it keeps "add content = data file plus a catalogue
-   line" true.
+   line" true. **Partly done:** `tests/test_art.gd` fails on any archetype with no
+   plate, and since D89 it *discovers* its subjects by walking `assets/` rather than
+   checking a hand-written list of directories.
 
 ---
 
 ## 5. If you only do three things
 
-1. **Tier 0, the frame kit.** Twenty screens stop looking broken. One day of work.
+1. ~~**Tier 0, the frame kit.**~~ **Mostly done (D83/D105/D107)** — computed rather
+   than painted, 16 of 24 installed, every control wired. The three track housings and
+   the panel/inset/tooltip frames are what is left.
 2. ~~The nine missing dungeon backdrops.~~ **Done (D73), and all 23 backdrops with
-   them (D83b/D83d).** What is left of this item is code, not art: the seven screens
-   in §1(b) still never call `UI.screen()`, so four of them are flat black *next to*
-   a painted backdrop that exists.
-3. **A font, and the enemies.** The font changes every screen for two files. The
-   enemies are the biggest credibility gap and the biggest single job, and they are
-   the item that will not compress — 35 paintings, each of which has to stand on a
-   line the backdrop already draws.
+   them (D83b/D83d)**, and the screens that were bypassing `UI.screen()` were brought
+   inside it (D95). This item is closed.
+3. ~~**A font, and the enemies.**~~ **Half done.** The 35 enemy plates landed in D89.
+   **The font is now the single largest visible win left in this document**: two files
+   and a `Theme` change, and every screen in the game changes character. After it, the
+   twelve card family illustrations — the card is the object the player looks at for
+   most of the runtime and it is still a 16×16 tile magnified ten times.
 
 ---
 
 ## 6. The captures, screen by screen
 
 All rendered at 1280×720 — the size the interface is laid out at, and the only one
-there is (D65) — with a stocked save. What each one says:
+there is (D65) — with a stocked save. This was the 16-capture pass; `tools/screenshots.gd`
+now takes **19**, having added `Chest`, `Packs`, and the two extra states of the combat
+hand that D104 exists because nobody had photographed. What each one said:
 
 | capture | verdict |
 |---|---|
 | `MainMenu` | The one screen that works. Painted art, scrim, readable. Buttons are smeared. |
-| `Overworld` | Near-black tile. Status text wraps onto a second line and collides with the first button. |
-| `ZoneView` | Same. Three dungeon entries, each a smeared bar with text on its border. |
-| `DeckBuilder` | Worst frame damage in the game: `+`/`−` buttons are pure frame, labels invisible. Dropdowns and the name field are unstyled. |
-| `Map` | Flat black. No backdrop, no icons, **no lines between nodes**. `Icons.for_encounter()` exists and is never called. |
-| `DeckRun` | One 16px sword glyph and two unstyled grey buttons on black. |
-| `DiceRun` | Board was 0px tall — a layout bug, not an art gap, **fixed in D57**. Now 16 track cells of 16×16 glyphs, and the player token is the string `^you`. |
-| `Combat` | The screen the game is played on. Framed head-on: enemies stand on the floor line with name/HP/intent above them and a contact mark under them; the hand is a fan along the bottom edge; vitals, piles and log occupy the bottom-left; the power is a round sigil and End Turn a small corner button, bottom-right. Still text where art is wanted — no HP bar, no energy orb, intent as `hit 14` — and the enemies are placeholder footprints until `art/enemies/` exists. |
-| `Shop` | Flat black, no merchant, text rows, illegible small buttons. |
-| `Encounter` | Title, two lines, three smeared buttons, and 400px of black where the event illustration goes. |
-| `Collection` | The card-illustration problem in one image: a shopping cart on Battle Trance, a cactus on Berserker Rage, a dither pattern on Abyssal Gift. |
+| `Overworld` | Near-black tile. Status text wraps onto a second line and collides with the first button. *Painted since (D83d).* |
+| `ZoneView` | Same. Three dungeon entries, each a smeared bar with text on its border. *Painted since, with establishing thumbnails in the rows (D96).* |
+| `DeckBuilder` | Worst frame damage in the game: `+`/`−` buttons are pure frame, labels invisible. Dropdowns and the name field are unstyled. *Small frame variant and control styling landed in D83/D105.* |
+| ~~`Map`~~ ~~`DeckRun`~~ ~~`DiceRun`~~ | The three traversal views, deleted in D94. Their rows are dropped rather than kept: unlike the entries above, there is no screen left for a verdict to be about. |
+| `Combat` | The screen the game is played on. Framed head-on: enemies stand on the floor line with name/HP/intent above them and a contact mark under them; the hand is a fan along the bottom edge; vitals, piles and log occupy the bottom-left; the power is a round sigil and End Turn a small corner button, bottom-right. Still text where art is wanted — no HP bar, no energy orb, intent as `hit 14`. *The enemies were placeholder footprints; 35 plates landed in D89.* |
+| `Shop` | Flat black, no merchant, text rows, illegible small buttons. *Backdrop painted since (D83b).* |
+| `Encounter` | Title, two lines, three smeared buttons, and 400px of black where the event illustration goes. *Backdrop painted since (D83b).* |
+| `Collection` | The card-illustration problem in one image: a shopping cart on Battle Trance, a cactus on Berserker Rage, a dither pattern on Abyssal Gift. *Those three names went in D98; the illustration problem did not.* |
 | `Relics` | Empty state on a near-invisible tile. 30 relics have no icons to show. |
 | `Powers` | Ten powers sharing a handful of monochrome glyphs. |
 | `Glossary` | Text. Fine as text, but nothing teaches a symbol the player will later have to recognise. (It also read `+50%%` to the player — fixed in D57.) |
@@ -524,7 +571,7 @@ there is (D65) — with a stocked save. What each one says:
 
 ## 7. Looking at the game
 
-`tools/screenshots.gd` boots all 21 screens at the shipped 1280×720 with a stocked
+`tools/screenshots.gd` boots 19 captures at the shipped 1280×720 with a stocked
 save and writes a PNG each. It is a diagnostic, not shipped, and it needs a real GL
 context — art direction cannot be judged from a simulation:
 

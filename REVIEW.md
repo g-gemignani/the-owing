@@ -11,6 +11,12 @@ what about it is worth finishing.
 > `3c85d43` and began removing the three unused traversal models while this was being
 > written, which overtakes two items here — they are marked **[already in flight]**
 > where they appear.
+>
+> **This is a living list, not a frozen snapshot.** Items fixed since are struck
+> through and marked **DONE** where they appear, so the P0/P1/P2 lists stay usable as
+> a work queue. The *measurements* in the evidence table below are not re-run and are
+> stale by design — they date the review. Anything numeric here should be taken from
+> the tool that produces it, never from this file.
 
 It is blunt where blunt is useful. The project is well past the stage where
 encouragement helps more than a list.
@@ -23,9 +29,9 @@ Everything below was measured or looked at, not inferred from the docs:
 
 | what | how |
 |---|---|
-| 34/34 test suites | `tests/run.sh` — all green, zero sandbox strays |
-| 20 screens | `tools/Screenshots.tscn` rendered at the shipped 1280×720, every PNG inspected |
-| art coverage | `tools/art_manifest.gd` regenerated: **209 files wanted, 69 present, 140 missing** |
+| 34/34 test suites | `tests/run.sh` — all green, zero sandbox strays *(37 suites now)* |
+| 20 screens | `tools/Screenshots.tscn` rendered at the shipped 1280×720, every PNG inspected *(19 captures now)* |
+| art coverage | `tools/art_manifest.gd` regenerated: **209 files wanted, 69 present, 140 missing** *(183 / 74 / 109 now — the 26 map icons this review said to drop were dropped)* |
 | balance | `tools/sim_balance.gd` at 400 trials (see the appendix — the original "could not be run" note was wrong, and the table has since been superseded by an in-flight level-curve rework) |
 | content | all 100 cards, 30 relics, 10 powers, 20 events, 35 enemies, 12 dungeons read as data |
 | code | 13,969 lines in `scripts/`, 8,015 in `tests/`, 4,996 in `tools/`, 6,683 lines of docs |
@@ -143,11 +149,13 @@ Anvil Stance [UNCOMMON] Lv1/40  owned 1   (blk 8)     [-] x0 [+]
 ```
 
 Seven rows visible out of a hundred cards. Sixteen-pixel CC0 icons at the left. The
-right half of the screen is empty. Both screens draw on a flat black background — the
+right half of the screen is empty. ~~Both screens draw on a flat black background — the
 only two screens in the game with no backdrop at all, which makes them read as debug
 tools that shipped. That last part is not a style choice: both bypass `UI.screen()`
 and hand-roll their own container, and `UI.screen()` is what installs the backdrop
-(defect 9).
+(defect 9).~~ **The backdrop half is DONE (D95)** — both now go through `UI.screen()`.
+The spreadsheet half stands: a grid of card faces is still the right answer, and P1 #6
+is still open.
 
 A grid of actual card faces, at the size they appear in a hand, is the obvious answer
 and the assets for it are the same assets §3 already needs.
@@ -239,7 +247,7 @@ The regenerated manifest says **209 wanted, 69 present**. But the split is not r
 | Power icons | **0 / 10** | the equipped Power is a text button |
 | Combat impact FX | **0 / 6** | no hit sprite, no death, no card-play flourish |
 | Frame kit (panel/inset/tooltip/card back/dropdown/slider/scrollbar/checkbox) | **11 / 24** | every list, tooltip and control is unstyled |
-| Map icons | **0 / 26** | for the graph model, which no dungeon uses |
+| ~~Map icons~~ | ~~**0 / 26**~~ | ~~for the graph model, which no dungeon uses~~ — **dropped from the manifest (D111)**, as P2 #14 asked |
 
 **Everything painted so far is scenery. Nothing painted so far is something the player
 touches.** That is the whole finding, and it explains why screens with beautiful
@@ -438,11 +446,11 @@ well above the bar for a prototype, and it should not get more attention until �
 
 ## 8. Engineering health — **excellent, with one cost**
 
-Stated briefly because it is not the point of this review: 34/34 suites green,
+Stated briefly because it is not the point of this review: 34/34 suites green (37 now),
 sandboxed test state with a leak check, a single source of truth for tuning that the
 tests actively defend against private copies, a headless balance simulator, a
 screenshot harness, a `PlayableTest` that walks every screen, and a decision log
-(D1–D92) that records what was *tried and rejected*, with numbers. This is a better
+(D1–D92 then; D1–D111 now) that records what was *tried and rejected*, with numbers. This is a better
 engineering culture than most commercial projects have.
 
 Two costs worth naming:
@@ -450,7 +458,10 @@ Two costs worth naming:
 - **Documentation is 6,683 lines against 13,969 lines of game code.** `DESIGN.md`
   alone is 4,787 lines. That is defensible while the reasoning is still load-bearing,
   but the reader who most needs it — someone joining — will not read a 4,800-line file.
-  It wants an index, or a split by system.
+  It wants an index, or a split by system. *Worse since: it is now past 6,000 lines, and
+  the D111 audit found its §1–§4 architecture chapter describing the pre-D65, pre-D94
+  game in the present tense. A long file is a maintenance problem before it is a
+  reading problem — nobody re-reads chapter three when they land decision one hundred.*
 - **Three traversal models were maintained and used by zero dungeons.**
   `traversal_graph.gd`, `traversal_deck.gd`, `traversal_dice.gd`, `map.gd`,
   `deck_run.gd`, `dice_run.gd` — about 1,050 lines plus three scenes, plus their share
@@ -475,8 +486,8 @@ Two costs worth naming:
 | 6 | `scripts/zone_view.gd` | Every dungeon row is labelled "isometric floor" — an internal enum name, and true of all 12, so it carries no information. **[fixed in the working tree while this was written]** |
 | 7 | `scripts/iso_run.gd` (status line) | Header wraps mid-phrase: `AT RISK: 0` / `cards, 0 gold`. |
 | 8 | `assets/art/bg_chest.png`, `bg_victory.png`, `bg_defeat.png` | Visibly a flatter, unrendered art tier than the other 20 backdrops. Victory is the end-of-run screen. |
-| 9 | `scripts/deck_builder.gd:35`, `scripts/collection.gd:13` | The only two screens with no backdrop — flat black. **Root cause:** both build their own `MarginContainer` + `VBoxContainer` instead of calling `UI.screen()`, which is the function that installs the backdrop. `UI.screen()`'s own docstring says it exists "so one edit changes the look of all of them once there is art" — these two opted out of the boilerplate and so opted out of the art. A near-mechanical fix. |
-| 10 | `README.md` | Stale in three places: "3 pluggable models" (there are 4, and only the unlisted one is used), "decisions D1 through D38" (D92), and "Art and audio are CC0 placeholders… there is no animation yet" (23 painted backdrops, 35 enemy plates, and combat has tweened feedback). |
+| 9 | `scripts/deck_builder.gd:35`, `scripts/collection.gd:13` | ~~The only two screens with no backdrop — flat black. **Root cause:** both build their own `MarginContainer` + `VBoxContainer` instead of calling `UI.screen()`, which is the function that installs the backdrop.~~ **FIXED (D95).** The lesson generalised into a pillar: a helper whose whole value is uniformity needs a check that everyone is inside it. |
+| 10 | `README.md` | ~~Stale in three places: "3 pluggable models" (there are 4, and only the unlisted one is used), "decisions D1 through D38" (D92), and "Art and audio are CC0 placeholders… there is no animation yet".~~ **FIXED**, and found stale again twice since — suite counts, the decision range and the Kenney licence list were all wrong at the D111 audit. A README that restates a count will go stale again; the durable fix is to stop restating them. |
 | 11 | `project.godot` | No `[input]` map, and no `grab_focus` in `scripts/` — the keyboard does nothing until the mouse is used, no gamepad, no rebinding. |
 
 ---
@@ -498,6 +509,9 @@ Two costs worth naming:
    at 6/5 on the numbers, and three mechanic-only cards were left alone. Verified to
    move no cell more than 12 points against a pre-change baseline.
 4. **Fix defects 3, 4, 5, 7, 9, 10** — all small, all visible.
+   **9 and 10 are done** (D95, and the D111 doc audit). **3, 4, 5 and 7 are still
+   open**: the deck builder's bare `()`, the duplicate Keen Lens / Scholar's Lens, the
+   ragged Packs column, and the crawl header wrapping mid-phrase.
 
 ### P1 — the next tier
 
@@ -521,8 +535,10 @@ Two costs worth naming:
 12. Design the empty states: 30 locked relic silhouettes, a Collection that shows what
     you have not found.
 13. Keyboard/gamepad focus, and an `[input]` map so the crawl's keys can be rebound.
-14. ~~Consolidate or delete the three unused traversal models~~ **[in flight]** — but
-    drop their 26 map icons from the art manifest in the same pass.
+14. ~~Consolidate or delete the three unused traversal models~~ **DONE (D94)**, ~~but
+    drop their 26 map icons from the art manifest in the same pass~~ **DONE (D111)** —
+    though not in the same pass, which is the whole finding: the models went in D94 and
+    the manifest went on briefing their art for eleven more decisions.
 15. Give the mechanics on 1–3 cards either a family or a funeral.
 16. Split `DESIGN.md` by system, or give it an index.
 17. **Profile `sim_balance.gd` again.** It runs fine (~8 min at 120 trials, ~9 at 400)

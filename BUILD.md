@@ -123,6 +123,9 @@ button presses the UI needs. One interaction differs by input device:
 A finger sends no hover events at all, so without that split the only way to learn
 what a card does on a phone would be to play it. `UI.touch_ui()` picks the mode.
 
-Untested on real hardware: nobody has run this on a phone yet. Text size at
-phone DPI is the most likely thing to need work — `UITheme.UI_SCALE` is the single
-knob, and Settings exposes it.
+Untested on real hardware: nobody has run this on a phone yet. Text size at phone DPI
+is the most likely thing to need work, and there is **no runtime knob for it** — the
+interface is laid out at a fixed 1280×720 and the engine's `canvas_items` stretch
+scales the whole canvas to the window (D65). `UITheme.UI_SCALE` is a constant `1.0`
+that nothing varies and Settings does not expose. If phone text turns out to be too
+small, the fix is the layout or the font, not a scale slider.

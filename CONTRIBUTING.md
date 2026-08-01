@@ -37,7 +37,10 @@ the hard way and both test-enforced:
 2. Add its id to `Balance.ROSTER[Tier.BOSS]`.
 3. Set `boss = "<id>"` on exactly one dungeon, and make sure it is **not** in that
    dungeon's `enemy_roster`.
-4. Pin a sprite in `PixelArt.OVERRIDES` and make sure the tile file exists.
+4. Generate its combat plate — `godot --headless --script tools/gen_enemy_art.gd`
+   then `godot --headless --import`. The plate is keyed by archetype id and its shape
+   is derived from the fight (D89), so there is nothing to pin by hand; `test_art.gd`
+   fails if any archetype has no plate.
 
 The player is shown the boss and a warning generated from its rules before the
 run starts. That is deliberate: knowing what waits is what makes choosing a deck

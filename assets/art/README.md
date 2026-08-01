@@ -16,12 +16,14 @@ licence files under `assets/pixel/` and `assets/audio/`.
 | bg_victory.png           | scenes/Victory                 | generated (Leonardo)         |
 | bg_defeat.png            | scenes/Defeat                  | generated (Leonardo)         |
 | bg_zone_&lt;zone_id&gt;.png     | scenes/ZoneView (5)            | generated (Leonardo)         |
-| enemies/&lt;archetype_id&gt;.png | PixelArt.enemy_art() (35)    | to come — cutouts, see below |
+| enemies/&lt;archetype_id&gt;.png | PixelArt.enemy_art() (35)    | COMPUTED — gen_enemy_art.gd  |
+| iso/*.png                | scripts/iso_run.gd (33)        | COMPUTED — see iso/README.md |
 | relics/&lt;relic_id&gt;.png    | the relics screen (30)         | to come — cutouts            |
 | powers/&lt;power_id&gt;.png    | the power button (10)          | to come — cutouts            |
 | ui/frame_button*.png     | every button, via UITheme      | COMPUTED — see below         |
 | ui/frame_card*.png       | every card, via Icons          | COMPUTED — see below         |
-| cards/&lt;family&gt;.png       | 12 families, 100 cards         | generated (Leonardo)         |
+| ui/checkbox_*, dropdown_arrow, slider_grabber, scrollbar_grabber | the theme's loose controls (5) | generated — install_chrome.gd |
+| cards/&lt;family&gt;.png       | 12 families, 100 cards         | to come — cutouts            |
 | ui_button.png            | fallback if `ui/` is empty     | generated                    |
 | ui_panel.png             | PanelContainer fallback        | generated                    |
 
@@ -74,16 +76,17 @@ failed even if each is handsome. Asked for one at a time, each request is blind 
 other six. Asked for as one image, the model sees the whole set while drawing it:
 
     godot --headless --script tools/install_sheet.gd -- symbols <sheet.png>
-    godot --headless --script tools/install_sheet.gd -- intents|powers|nodes|tiles|dice <sheet.png>
+    godot --headless --script tools/install_sheet.gd -- intents|powers <sheet.png>
     godot --headless --import
 
 Cells are matted and trimmed individually, so an icon that is off-centre in its cell
 still lands centred in its file. A bounding box that touches its cell edge is reported
 loudly: it means the generator ignored the grid and that icon is a crop.
 
-**The mapping is positional, and that is the cost.** It is the same hazard as
-`PixelArt.enemy_sprite()`, which hands sprites to archetypes by sort order. The
-difference is that the order is not implicit — `ART_PROMPTS.md` prints it INTO the
+**The mapping is positional, and that is the cost.** It is the same hazard as the
+deleted `PixelArt.enemy_sprite()`, which handed CC0 sprites to archetypes by sort order
+until D89 killed it. The difference is that the order is not implicit — `ART_PROMPTS.md`
+prints it INTO the
 prompt from the same tables `install_sheet.gd` reads, and the mapping is printed on
 every run. Check it against the sheet before committing: a set installed one cell out
 is 21 correct icons on 21 wrong meanings.

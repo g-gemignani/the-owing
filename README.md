@@ -6,9 +6,9 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 
 > Status: playable prototype. The scenery is painted — 23 generated backdrops and 35
 > enemy plates — and combat moves: floating damage numbers, hit shake, a screen flash
-> scaled to the hit. What the player *touches* is still placeholder: no card art, no
-> vitals or status icons, and only the button and card frames out of the frame kit.
-> The systems are the point.
+> scaled to the hit. Every control now wears the generated frame kit, down to the
+> checkboxes and the scrollbar. What the player *touches* is still placeholder: no card
+> art, no vitals bars and no status or intent icons. The systems are the point.
 
 ---
 
@@ -24,7 +24,7 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 | Events         | 20                                                           |
 | Dungeons       | 12 across 5 zones, 8 difficulty tiers                        |
 | Traversal      | one model: an isometric crawl, walked by all 12 dungeons     |
-| Tests          | 34 suites, including a playability integration test          |
+| Tests          | 37 suites, including a playability integration test          |
 
 ## Running it
 
@@ -75,7 +75,7 @@ scripts/     game code — one file per screen or system
 resources/   all content as .tres data: cards, enemies, relics, powers, events,
              dungeons, zones, builds
 scenes/      thin .tscn wrappers; screens build their UI in code
-tests/       34 suites + tests/run.sh
+tests/       37 suites + tests/run.sh
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd
 DESIGN.md    the reasoning behind every decision, and every mistake
 ```
@@ -109,7 +109,7 @@ disagree — so a half-added card cannot silently not exist.
 ## Design notes
 
 [DESIGN.md](DESIGN.md) is long and is the actual documentation — decisions D1
-through D92, each with what was tried, what was measured, and what broke. If you
+through D111, each with what was tried, what was measured, and what broke. If you
 only read one section, read the ones on the difficulty ratchet (D36) and on
 enemies that react (D38); both are cases where the obvious design was wrong and
 the simulator said so.
@@ -123,8 +123,12 @@ enemy plates and the generated frame kit — is generated for this project and i
 **not** CC0; see `assets/art/README.md`. So are the five looping music tracks in
 `assets/audio/music/`; see their `PROVENANCE.txt`.
 
-The pixel art in `assets/pixel/` and the sound effects are **CC0** by
-[Kenney](https://kenney.nl) — Tiny Dungeon, 1-Bit Pack, UI Pack RPG Expansion,
-Pattern Pack Pixel, Interface Sounds, RPG Audio and Music Jingles. The original
-licence files ship alongside the assets under `assets/`. Kenney's work is public
-domain and requires no attribution; it is given here because it is deserved.
+What is left in `assets/pixel/`, and the sound effects, are **CC0** by
+[Kenney](https://kenney.nl) — 1-Bit Pack (the card sheet), Pattern Pack Pixel (the
+five zone tiles), Interface Sounds, RPG Audio and Music Jingles. Each pack's original
+licence file ships in the directory holding its assets. Kenney's work is public domain
+and requires no attribution; it is given here because it is deserved.
+
+Two packs that used to be here are gone rather than unattributed: Tiny Dungeon
+supplied the enemy sprites until generated plates replaced them (D89), and UI Pack
+RPG Expansion supplied the frames until `tools/gen_ui_kit.gd` computed them (D83).
