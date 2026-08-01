@@ -6911,3 +6911,351 @@ The cap's own test covers the half a careless implementation gets wrong: not jus
 draw is skipped, but that `draw_pile` is unchanged with the same card still on top, and that
 `discard_pile` did not grow. Proved non-vacuous three ways — discarding the refused card,
 `>` for `>=`, and dropping the notice — each watched red and restored.
+
+---
+
+### D121 — The card illustrations were installed, correct, resolved, and zero pixels wide
+
+Asked to check where the generated art had actually landed, because the screens looked
+wrong. Two separate failures, and neither was visible from the filesystem — which is
+the point worth keeping.
+
+#### The card art was drawn into a control with no size
+
+Twelve family illustrations installed at 320x240, correctly named, and
+`PixelArt.card_art()` returned the right texture for every card. The combat capture
+still showed a black picture band. Measured, the band read **0.0533 mean luminance
+against source art at 0.302** — and 0.0533 is exactly `Color(0.06, 0.05, 0.08)`, the
+`bed` ColorRect the picture is supposed to sit on top of.
+
+Dumping the built tree found it:
+
+```
+@ColorRect@15   (bed)      rect=S: (134.0, 101.0)
+@TextureRect@16 (picture)  rect=S: (0.0, 0.0)    tex=CompressedTexture2D (320, 240)
+@TextureRect@17 (scrim)    rect=S: (134.0, 101.0)
+```
+
+Right texture, visible, zero-sized. **`set_anchors_preset()` does not resize a
+control** — with `keep_offsets` false (the default) it rewrites the offsets so the
+control keeps the rect it currently has. Called on a control created two lines earlier,
+that rect is 0x0, and the anchors then hold it at zero against a parent of any size.
+The bed and the scrim either side of it escape only because they are preset BEFORE
+`add_child`, when there is no parent rect to preserve against. One call is
+`set_anchors_and_offsets_preset` and the band goes 0.0533 -> 0.400.
+
+This branch had never run. It was written in D104 for art that did not exist until
+today, so the first illustration to arrive was the first test the code path ever had —
+exactly D118's shape, two days apart: **a route with no traffic is not a working route,
+it is an untested one.** Both were found by looking at the game rather than at the
+files, which is D56 for the umpteenth time.
+
+#### The relic icons have no code to display them
+
+Six installed at 128x128, matted, verified at their display size — and nothing in
+`scripts/` reads `assets/art/relics/` at all. There is no `Icons.relic()`, no
+`PixelArt.relic_art()`, no reference. The Relics screen renders exactly as it did
+before they existed: five rarity headings and thirty text rows.
+
+**Fixed the same afternoon.** `PixelArt.relic_art()` mirrors `enemy_art` — keyed by id,
+null when unpainted — and the relics screen puts the icon in an HBox beside the name,
+which is the shape it was written for ("when the thirty paintings land they go in the
+cell beside the name and nothing else here has to move", D116). A relic with no art adds
+no icon and no gap, so a half-painted set is a list with pictures appearing in it rather
+than a list of holes.
+
+**And that immediately broke the property the screen is tuned around.** An HBox is as
+tall as its tallest child, so the icon sets the grid's pitch: at 34px the thirty slots
+no longer fit 720px and the Legendary group fell off the bottom behind a scrollbar — the
+one virtue the empty state has, and what `HEAD_LEADING` exists for. Rendered at three
+sizes and read the scrollbar column: 34 scrolls, 26 scrolls, **22 does not**. The first
+comment written for that constant asserted 34 was safe *because it sounded right*; the
+capture said otherwise, which is the D56 rule applying to a number rather than a picture.
+
+**The art-coverage question is not "is the file there".** `art_manifest.gd` counts a
+relic as *present* because it stats the path, and it is right to — that is what it
+measures. But "present" and "reaching the screen" are different claims, and the
+manifest's 135-present figure quietly asserts the first while reading like the second.
+ART.md §4 has asked for the render call since it was written; the icons are now waiting
+on it rather than the other way round.
+
+### D122 — The art that shipped as a placeholder and read as finished
+
+Fifty-one images were outstanding. Twenty-three landed this pass — the last relic, three
+dungeon backdrops, the seven intent telegraphs, two status symbols, ten power sigils,
+the targeting reticle, and four Tier 7 files. What that clearing exposed is the decision
+worth keeping: **the manifest's re-roll list could only see files that were missing, and
+the worst art in the game was not missing.**
+
+**`REDO` was built for exactly this and still nearly missed it.** Its own comment says
+"the moment something lands, correct or not, the sheet stops mentioning it". Tier 2
+printed *all 35 present* for thirty-five enemy combat plates that are procedural
+silhouettes out of `gen_enemy_art.gd` — measured luma 0.17–0.23, flat interior behind a
+one-sided rim light. They were the right call when they landed: they replaced 41
+unlabelled 16x16 tiles handed out by sort order, where a boss was whichever tile the
+index fell on. But a placeholder that reads as finished is worse than an empty slot,
+because an empty slot is on a list. Same story for the twenty-three files standing on
+the isometric floor, now Tier 8a/8b.
+
+The iso numbers are the ones that decide priority. Every figure reads 0.16–0.21 against
+floors of 0.43–0.49 — **2.5x darker than its own ground**, so the eye takes it for a
+hole in the floor rather than a person on it. `hero_s` and `mon_caster_s` overlap 81.9%
+by silhouette, which `gen_iso_markers.gd` admits in its own comment ("told apart by
+hue") and which at 0.20 on a 0.45 floor is not a distinction anybody can see. Worst:
+`combat`, `elite` and `boss` are **100% identical silhouettes**, separated by hue alone.
+The floor is where you choose what to walk into, and it cannot answer the question.
+
+Thirty-five identical `REDO` lines would be noise, not thirty-five findings, so
+`REDO_DIRS` carries a defect that belongs to a whole family. It is consulted *after*
+`REDO`, never instead of it — the three iso fight markers and the caster each carry
+their own worse fault on top of their family's, and would lose it to a flat rule.
+
+**Enemies were hovering, and it was not the enemies.** Reported as an art bug. Every
+sprite has its feet exactly on the canvas bottom — 0.0% empty below the lowest painted
+pixel, all thirty-five, measured. The fault was two decisions that never met: the Tier 5
+brief asks every backdrop for "foreground framing elements at the left and right
+thirds", and `_place_slots` spread enemies over the full width at `vp.x * (k+1)/(n+1)`,
+which puts two enemies at **exactly** x=1/3 and x=2/3. They stood on the pillars and the
+braziers, at the height of the *centre* floor, because `STAND_LINE` is one number for a
+frame whose floor is not one height. `STAGE_INSET = 0.20` keeps the cast in the middle
+60%. Only the flanks were ever wrong, which is why a year of single-enemy captures never
+showed it.
+
+**A harness is only as honest as its list.** Three of the four iso terrains had never
+been photographed — every capture enters `DUNGEONS[0]`, which is the Crypt, which is
+`stone` — so a fault in `earth`, `moss` and `sand` was invisible to the one tool whose
+job is seeing. `tests/test_art.gd` already said this out loud: "whether a specific enemy
+hovers is a question for `tools/screenshots.gd`, where you can see it". It was, and
+nobody had looked. Added `IsoEarth`/`IsoMoss`/`IsoSand` and a `CombatGroup` capture —
+`ember_hound` because `count_min` and `count_max` are both 2, so it frames the same
+fight every run instead of a coin flip.
+
+**Three tool contracts were wrong in the same shape: right once, for the batch they were
+written for.** `install_backdrops` walked its own table and printed MISS for every row
+the folder did not answer — correct for one delivery of nine, six failures and a
+non-zero exit for a re-roll of three; it now installs what the directory *has*.
+`strip_sparkle` demanded four frame-sharing images when a re-roll is three; the count
+was never what protected the art (the compactness bounds and the `--dry` mask preview
+are), so it is three. `install_sheet` passed `anchor_bottom: false` because every set it
+had ever seen was an icon, and an icon is centred — an isometric figure is placed by its
+bottom edge, so it would have hovered by whatever margin the trim left above its head.
+`install_cutouts` already knew this for the `enemies` family. The two tools disagreed
+only because no footed set had ever arrived on a sheet.
+
+**What failed.** The title-art re-roll did not fix its defect. The prompt led with the
+fault and named the ink outline six times; the result visibly carries contour lines and
+still measures **1.2%** on D114's own metric — identical to the file it replaced, below
+`bg_crypt`'s 3.2%. It is installed, the superseded `.jpg` is gone as D114 designed, and
+it stays on the re-roll list. Worth recording that the metric is suspect on very dark
+images — a 0.08 luminance delta is a large ask of a picture whose whole range is
+0.0–0.25, and `bg_warrens` now scores 2.1%, under the 2.8–12.2% band D114 quoted. The
+honest position is that neither the picture nor the measurement is cleared.
+
+**On capture.** Autocropping a screenshot against a black overlay is right for a cutout,
+whose subject sits on a field the generator never paints pure black. It silently eats a
+*scene*: the boot splash falls away into darkness at its own edges and came back 1.616
+against the 1.790 it was drawn at. The picture still installs — it is just cropped. So a
+scene is cropped by the rect read off the page (`getBoundingClientRect()` scaled by
+screenshot width over `innerWidth`), not by a luminance guess.
+
+### D123 — Twelve screens with no painting, and four places between them
+
+`UI.screen()` resolves a backdrop from an explicit path, then a scene id, then a zone
+id, and falls through to `PixelArt.backdrop()` — the procedural tiling pattern — when
+it is handed none of the three. Twelve screens handed it none: glossary, powers,
+builds, settings, deck builder, overworld, packs, pause, collection, starter kit,
+relics, save slots. Every navigation screen in the meta layer, which is most of the
+game outside a fight.
+
+#### Twelve screens are not twelve places
+
+The obvious shape is one painting per screen and it is wrong twice. It asks for twelve
+paintings where four do the work, and — the part that matters — it asserts twelve
+different PLACES when the fiction has four. The deck builder, the collection, the
+builds tracker, the packs screen and the starter kit are one action seen five ways:
+you are stood at a table with your cards out. Giving each its own room says they are
+five errands in five places, which is not what the meta loop is. Relics and Powers are
+the same claim — this is what you have earned and cannot lose — and they are already
+each other's sibling in code, two read-mostly lists off `MetaState`.
+
+So: `bg_table.png` for five screens, `bg_reliquary.png` for two, `bg_ledger.png` for
+the three that are the game's own machinery rather than the character's (how it works,
+which save, which settings), and `bg_world.png` for the hub. The full argument, and
+the cost of sharing, is in `META_BG` in `tools/art_manifest.gd` rather than restated
+here, because that table is what the prompt sheet is generated from.
+
+The cost is accepted rather than unnoticed: five screens look alike. They each carry
+their own title and their own list, so the backdrop is the thing they have in common
+and it is TRUE that they have it in common.
+
+#### The pause menu needed no painting at all
+
+Pause is only reachable inside a run, so there is always a zone, and all five zone
+establishing shots are already installed. It now passes that zone to `UI.screen()`.
+That is not a fifth grouping, it is D115's defect in a new place — art on disk that
+nothing read. D96 rejected a zone shot on the **Overworld** because the Overworld
+already draws the same picture as a thumbnail in the list under it; nothing on the
+pause screen draws a zone.
+
+#### The Overworld is the one reversal, and only half of one
+
+D96's `no full-bleed painting here` comment reads as a decision against backdrops on
+that screen. What it actually rejected was reusing a ZONE SHOT: whichever zone it
+picks already has a thumbnail below it, and at `ZONE_DIM` that shot's bright band ran
+under the sealed rows' prose. Both halves of the objection are about art composed for
+somewhere else. `bg_world.png` is painted for this screen — a gateway looking out,
+with **nothing beyond the arch that resolves into a place** — specifically so it
+cannot compete with the five establishing shots stood in front of it.
+
+#### The composition constraint is different from Tier 5c, and it was measured
+
+Tier 5c is composed for a shop or an event: prose in the top half, framed buttons
+below, so half the frame has nothing written on it. These twelve are lists, and that
+was checked rather than assumed. Rendering seven of them at the shipped 1280x720 and
+taking the topmost and bottommost row carrying a pixel over 110/255:
+
+```
+Overworld   rows  24..688      Relics     rows  24..684
+Collection  rows  24..684      Glossary   rows  24..684
+Packs       rows  24..684      DeckBuilder rows 24..688
+Powers      rows  24..684
+```
+
+**3% to 96% of the frame height, on all seven.** The threshold has a four-times margin
+under it: the brightest pixel in a 210x100 empty patch of the tiling backdrop measures
+26/255, so what this counts is UI ink and not the background it sits on.
+
+Meanwhile `UI.screen()` scrims the top of a scene backdrop nearly opaque and fades it
+out about two thirds down (`SCENE_HOLD`/`SCENE_END`), leaving a light flat dim below.
+So the picture only really SHOWS in the bottom third — and the bottom third is where
+the rows are. The subjects are written against that: light source and everything worth
+looking at in the upper third where the scrim holds it back, and the bottom half one
+continuous surface at one even value with no object, no edge and no highlight crossing
+it. **This is the one thing about the tier that a generator cannot infer and that a
+wrong answer makes unusable**, which is why it is in the recipe as a measurement and
+not as an adjective.
+
+What is deliberately NOT decided yet: whether `SCENE_DIM` is heavy enough under a full
+column of list rows, or whether these four want the zone screen's flat `ZONE_DIM`
+instead. That is a contrast question, contrast questions here are settled by measuring
+the worst pixel under a row on a render (D96, D116, D121), and there is nothing to
+render yet. Guessing a constant now and writing "measured" beside it is the habit D109
+is about.
+
+#### Wired before the art, on purpose
+
+All twelve now pass their id. `UI.screen()` already degrades to the procedural
+backdrop when the file is absent — confirmed by capturing seven of them after wiring,
+all unchanged and all still 1280x720 — so this costs nothing and closes the gap that
+D115 and D121 are both about: `assets/art/relics/` and `assets/art/powers/` were
+installed correct and completely unreachable because no code loaded them. Installing
+art and wiring art are two jobs, and the one that can be done first is the wiring.
+
+The ids are also in `PixelArt.SCENE_ART` and in `install_scene_backdrops.gd` — the
+first because that list is what `tests/test_art.gd` walks for the dungeon-id collision
+and the 1280x720 install size, so an id kept out of it is an id nothing checks; the
+second in its own `META_MAP` rather than in `MAP`, because a missing source in `MAP`
+fails the run. That is right for the six Tier 5c backdrops, which were commissioned
+and delivered as a set, and wrong for four that will land one at a time.
+
+### D124 — Two formulas were charging for draw and disagreeing by four times
+
+D120 left the draw relics knowingly mispriced and refused to fix it, because the
+simulator's policy could not play a draw build: `_play_draw` played every draw card it
+could afford, unconditionally, before anything else. Repricing a relic against a policy
+that cannot play it is how D109 happened. This fixes the instrument first, then prices.
+
+## The policy, and the first attempt that had no subject
+
+Shipped rule: **buy draw only when the HAND is the bottleneck, not the energy.**
+`end_turn()` discards the hand, so a card drawn and not played is thrown away rather than
+banked — a draw card is worth its cost only if what it fetches can still be played.
+
+The first attempt exempted any card with a body (damage, block, energy) and gated only
+"pure" draw. It sounded principled and **refused nothing**: instrumented over a draw-heavy
+profile it evaluated 1,498 draw plays and declined **zero**. Every card in the catalogue
+whose only effect is draw costs *zero* energy, every paid draw card has a body, and Clear
+Mind is not even pure draw — it grants Dexterity, so `_play_powers` takes it before
+`_play_draw` ever sees it. A full report with that gate moved the mean −0.1: a no-op
+wearing the shape of a fix. **It was caught by counting how often the new branch fired**,
+which is the cheapest check there is and the one that was missing.
+
+Bake-off over 10 cells and 5 draw-holding decks, 400 trials, identical code otherwise:
+greedy **68.6**, body-exempt **69.0**, uniform **72.8**.
+
+## Recalibration — the instrument moved, and the game was NOT re-tuned to match
+
+Kept deliberately apart from any balance number, because a better simulated player clears
+more and that must not be read as the game getting easier.
+
+Noise floor, identical code: ±0.2 to ±0.3 mean, one cell swinging 12. Greedy → gated:
+**mean +2.7 over 36 cells, range −17 to +53, five cells ≥10.**
+
+| profile / dungeon | before | after | Δ |
+|---|---|---|---|
+| Draw build / The Foundry | 44.0 | 97.0 | **+53.0** |
+| Endgame / The Abyssal Stair | 10.0 | 39.5 | **+29.5** |
+| Endgame / The Maw | 18.5 | 40.5 | **+22.0** |
+| Draw build / The Sunken Vault | 82.0 | 65.0 | **−17.0** |
+| Thorns / The Maw | 68.0 | 55.0 | −13.0 *(that cell's own noise is ±12–17)* |
+
+**The Endgame profile reading 10% and 18.5% was never difficulty — it was the greedy pass
+burning its turn on block-that-draws.** Two numbers this project has been reading as "the
+endgame is brutal" were an artifact of the driver. Nothing was re-tuned to claw any of it
+back; the numbers are the instrument telling the truth for the first time.
+
+`tests/test_balance.gd` is unchanged and green. It never invokes the simulator — it opens
+`sim_balance.gd` as *source text* and asserts the tool models the equipped Power, the boss,
+reward cards and the clears gate, none of which a driver change touches.
+
+## The pricing bug: one effect, two formulas, 4x apart
+
+With the instrument fixed, the lenses still cost the player 12.1 points of run completion
+across 8 cells while charging +9.4% enemy scaling. The cause was not a value that needed
+nudging, it was **two different formulas pricing the same effect**:
+
+- `extra_draw` (Keen Lens, every turn) went through `throughput_multiplier`, `1.0 + 0.08 × draw`
+- a triggered draw (Scholar's Lens, every third turn) went through the additive
+  `triggered_power`, at `2 × DRAW_VALUE × 4/3 = 4.0`
+
+Charging the same thing two ways is the D34 habit in arithmetic. `extra_draw` now prices
+additively at the rate the game already uses everywhere else — `1 × 1.5 × TARGET_NORMAL_TURNS
+= 6.0`, i.e. **+0.12 ratio** against Scholar's **+0.08** — which is derived from the
+existing constants rather than fitted to a target. `DRAW_VALUE` is named in `balance.gd`
+where tuning belongs.
+
+The argument for additive is a fact about this game's shape: **draw is not throughput here.**
+`HAND_SIZE` 5 against `MAX_ENERGY` 3 means the hand already holds more than the turn can pay
+for, so an extra card buys *selection* — a flat per-turn gain — not more actions.
+
+Price 6.60 → 7.22 (+9.4%) becomes 6.60 → 6.80 (+3.0%). Delivered went −12.1 → **−7.0**,
+confirmed at −6.75 on a clean re-run. The balance table for the reprice alone: mean +0.1,
+range −4.5 to +5.5, **zero cells ≥10**, with the single directed cell being Draw build /
+Sunken Vault 65.0 → 70.5 — the one profile holding Keen Lens, which is the containment
+check.
+
+## Why it stopped at −7 instead of driving the gap to zero
+
+A diagnostic run with the lenses priced at **zero** still measured **−5.75**. With enemy
+stats *identical*, the relics still cost completion, and fights get *longer* (Mid/Foundry
+3.5 → 3.8 turns). So the residual is not price at all: a bigger hand feeds
+`_block_incoming`, which over-blocks, which lengthens the fight and takes more escalation
+damage. Pricing draw below the derived figure to cancel that would be fitting a price to a
+driver artifact — D109's exact shape, one layer down.
+
+## Found on the way, reported, deliberately not fixed
+
+- **`_block_incoming`'s tolerance is 8% of max HP** — at the Sunken Vault it eats up to 9.6
+  damage a turn rather than spend a card. The greedy `_play_draw` was masking it; gating
+  draw exposed it, and it is the whole of the −17. Re-pitching it is its own policy change
+  with its own recalibration.
+- **`DRAW_VALUE = 1.5` is now stated three times** — the new named constant, plus literals
+  in `CardData.power_value` and `RelicData.triggered_power`. Two are outside this change's
+  scope; the constant is named and the duplication written down rather than left silent.
+- **`RelicData.power_value()` prices `extra_draw × 14.0`** for shop gold, against the 6.0
+  now used for scaling. Different currency, so not necessarily wrong — but the two should
+  be reconciled deliberately rather than by coincidence.
+- **A genuinely draw-dense deck is unplayable**: 11 draw/defence cards around 4 attackers
+  clears 0% at both dungeons with 13-turn normal fights, under *all three* policies. That
+  is a content fact, not a driver one, and it is why the new shipped profile keeps Mid's
+  attacking spine.

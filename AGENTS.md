@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D120 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D124 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -64,10 +64,18 @@ task, not a code task.
    that a profile in it actually holds the thing you changed.** Its twelve profiles
    contain no draw relic at all, so it reported "no measurable effect" for a hand cap
    that fires on 77% of a real draw build's fights; the delta was real and the
-   instrument could not see it. A tool that cannot play the build cannot price it —
-   which is also why the draw relics' known mispricing is still open rather than
-   "fixed" against a policy that plays draw cards greedily and gets nothing from card
-   selection.
+   instrument could not see it. A tool that cannot play the build cannot price it, so
+   the policy was fixed first and the relics priced afterwards (D124) — and fixing it
+   moved five cells by ten points or more, including two the project had been reading
+   as "the endgame is brutal" that were the driver burning its turn on a card it could
+   not use. **A number the simulator reports about difficulty may be a fact about its
+   policy.**
+
+   And when you add a rule to that policy, **count how often it fires.** The first
+   version of the draw gate looked principled and declined nothing at all — 1,498
+   opportunities, zero refusals — because every card it would have caught costs zero
+   energy. A full report agreed it changed nothing, which is exactly what a correct
+   no-op looks like too.
 
 ---
 
@@ -174,6 +182,18 @@ task, not a code task.
   contrast measurement at all**, which is the cheapest form of that whole class of bug.
   Its corollary: a row recedes by ink, never by `modulate` — translucent text reads
   against the backdrop, not against the colour you chose.
+
+- **A backdrop for a LIST is a different brief from a backdrop for a screen with
+  prose.** A shop or an event puts text in the top half and framed buttons below it, so
+  half the frame has nothing written on it and Tier 5c is composed for that. Every meta
+  screen is a list — title on the top edge, rows down the middle, a button on the bottom
+  — and measured at 1280x720 they carry ink from **3% to 96% of the frame height, all
+  seven of the ones captured** (D123). There is no quiet band to put a subject in, so
+  the picture has to be composed the other way round: everything worth looking at in the
+  upper third where `UI.screen()`'s scrim holds it back, and the bottom half one
+  continuous surface at one even value. Also: twelve screens are not twelve places —
+  four paintings cover them, and asking for twelve would have asserted a fiction the
+  game does not have.
 
 - **Match the generator to the medium — but test where the line is.** Seamless materials
   are a solved problem in code and came out better than the packs they replaced;
@@ -418,6 +438,26 @@ These are failure modes that have actually bitten this project. Treat each as a 
   off-style for thirteen decisions because Tier 7 listed the logo over it and the splash
   before it and not the painting itself (D114). A re-roll counts in the sheet's total —
   it is the same prompt sent again.
+- **A placeholder that reads as finished is worse than an empty slot**, because an empty
+  slot is on a list. Thirty-five enemy plates and twenty-three isometric figures are
+  procedural silhouettes — luma 0.16–0.23, flat interior behind a one-sided rim light —
+  and every one of them counted as *present*, so Tier 2 printed "all 35 present" and the
+  prompt sheet said nothing (D122). Both were the right call when they landed; neither
+  is art. When a whole family shares one defect it goes in `REDO_DIRS`, consulted after
+  `REDO` so a single file can still carry its own worse fault: `combat`, `elite` and
+  `boss` are 100% identical silhouettes and that is not the family's problem, it is
+  theirs.
+- **A harness is only as honest as its list, and an absent row looks like a passing
+  one.** Every screenshot entered `DUNGEONS[0]` — the Crypt, which is `stone` — so three
+  of the four isometric terrains had never been photographed at all, and Settings had no
+  row until somebody went looking for it (D122, D123). Before trusting "the captures look
+  fine", check what the capture list does not contain.
+- **Two decisions can each be right and still collide, and the seam is where nobody
+  looks.** The backdrop brief asks for framing elements at the left and right thirds;
+  combat spread enemies across the full width, which puts two of them at exactly the
+  thirds. Enemies stood on the scenery and it was reported as an art bug — the sprites
+  measured perfect, 0.0% empty below the feet, all thirty-five (D122). A single enemy
+  sits dead centre and is fine, which is why single-enemy captures never showed it.
 - **A prompt sheet is read by two audiences and only one of them paints.** The per-tier
   prose in ART_PROMPTS.md mixes art direction with notes to the operator — which files are
   computed, which installer takes the sheet, why a decision was made — and pasting it whole
@@ -491,6 +531,22 @@ These are failure modes that have actually bitten this project. Treat each as a 
   no equivalent for the second. When a tier lands, `grep` for one of its filenames before
   calling it done.
 
+- **`set_anchors_preset()` does not resize a control — it PRESERVES the rect it has.**
+  With `keep_offsets` false (the default) it rewrites the offsets so the control keeps
+  its current rect, so calling it on a node created two lines earlier anchors 0x0 to the
+  full parent and holds it there. Twelve card illustrations were installed, correctly
+  named, resolving to the right texture, visible — and drawn into a zero-sized rect, so
+  the picture band measured 0.0533 against source art at 0.302 (D121). Use
+  `set_anchors_and_offsets_preset`, or preset BEFORE `add_child` while there is no
+  parent rect to preserve against.
+
+- **"The file is present" and "the art reaches the screen" are different claims.**
+  `art_manifest.gd` counts a relic as present by stat-ing the path, which is what it
+  measures and all it can measure. Six relic icons are installed, matted and verified at
+  display size, and **nothing in `scripts/` reads `assets/art/relics/`** — no
+  `Icons.relic()`, no reference at all, so the screen renders exactly as it did before
+  they existed (D121). A present-count reads like a coverage figure and is not one.
+
 - **A brief that names what will be drawn ON TOP of the art gets it drawn INTO the art.**
   The card tier told the generator "a cost numeral top left and an effect symbol top
   right" — meaning the plates the game composites over the picture — and got a painted
@@ -556,7 +612,7 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              text-only model because the style reference is mandatory — D100.
              `--browser` prints the same prompts for pasting into a chat UI
              by hand, no key — it prints its own paste count — D102)
-DESIGN.md    the full reasoning, decision by decision (D1–D120)
+DESIGN.md    the full reasoning, decision by decision (D1–D124)
 ART.md       the art brief: the diagnosis, the style, the reasoning
 ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
              whether it exists yet. Never edit by hand; regenerate it.
