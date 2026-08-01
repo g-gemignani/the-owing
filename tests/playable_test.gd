@@ -409,7 +409,7 @@ func _the_fight_shows_its_state() -> void:
 	eng.player.strength = 4
 	inst._refresh()
 	await get_tree().process_frame
-	if not inst.buffs_label.visible or String(inst.buffs_label.text).find("Strength") == -1:
+	if not _buff_is_stated(inst, "Strength", 4):
 		_fails += 1
 		print("FAIL 4 Strength is not stated anywhere on the combat screen")
 	var buffed := false
@@ -593,6 +593,46 @@ func _all_text(n: Node) -> String:
 		out += String((n as Button).text) + "\n"
 	for c in n.get_children():
 		out += _all_text(c)
+	return out
+
+## Is a buff STATED on the built combat screen, and is what it does reachable from
+## there? Two shapes count, because the screen has two:
+##
+## * a **chip** — a hoverable Control whose tooltip names the buff and whose own
+##   subtree carries the number, which is the icon+number row D117 replaced the prose
+##   with;
+## * the **prose fallback** in `buffs_label`, which is what a missing `ui/sym_*.png`
+##   degrades to and is what ships from a checkout with no art.
+##
+## This used to read `buffs_label.text` for the word, which was the widget and not the
+## invariant — and would have gone on passing over a chip row that drew nothing at all,
+## because the label it was reading is deliberately empty whenever the chips worked.
+## The invariant is *the player can see the number and can find out what it means*, so
+## both halves are checked: a tooltip nobody can reach is not a readout (that is the
+## whole of TooltipTest), so `MOUSE_FILTER_IGNORE` does not count.
+##
+## Proved non-vacuous by hiding the chip row and watching this fail, and again by
+## clearing the chips' tooltips.
+func _buff_is_stated(inst: Node, word: String, n: int) -> bool:
+	if inst.buffs_label.visible and String(inst.buffs_label.text).find(word) != -1:
+		return true
+	for c in _controls(inst):
+		if not c.is_visible_in_tree() or String(c.tooltip_text).find(word) == -1:
+			continue
+		if c.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+			continue
+		for inner in _controls(c):
+			if inner is Label and inner.is_visible_in_tree() \
+					and String((inner as Label).text).strip_edges() == str(n):
+				return true
+	return false
+
+func _controls(n: Node) -> Array[Control]:
+	var out: Array[Control] = []
+	if n is Control:
+		out.append(n as Control)
+	for c in n.get_children():
+		out.append_array(_controls(c))
 	return out
 
 # --- helpers -----------------------------------------------------------------

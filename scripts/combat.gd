@@ -17,7 +17,13 @@ var tier: int = Balance.Tier.NORMAL
 ## when `ui/bar_frame.png` is not on disk. It is also the anchor the player's own
 ## floating numbers rise from, so it must stay visible and laid out.
 var status_label: Label
+## What has no PAINTING, and nothing else. The statuses themselves are chips now
+## (`buff_row`, D117); this label is what a missing `ui/sym_*.png` falls back into,
+## which is the same contract every other piece of the kit has.
 var buffs_label: Label
+## The player's statuses as icon+number chips. Built once with every chip it can ever
+## need; see `_build_chip_row`.
+var buff_row: HBoxContainer
 var piles_label: Label
 
 ## --- the painted vitals (D116) -----------------------------------------------
@@ -202,15 +208,24 @@ func _build_ui() -> void:
 	hud.anchor_top = 1.0
 	hud.anchor_bottom = 1.0
 	hud.offset_left = UITheme.px(16)
-	hud.offset_right = UITheme.px(16) + UITheme.px(348)
+	# 330, not 348, and the number is the CAP the two wrapped labels inside already
+	# carry rather than one picked with slack on top of it. Measured: with every status
+	# up and two digits on each of them, this box's combined minimum is exactly 330 —
+	# `status_label` and `log_label`, both of which clamp themselves there — so the 18px
+	# it used to hold was reserved for nothing. It is worth taking because it is not
+	# free width, it is the HAND's width: `_place_hand` measures the fan's left reserve
+	# off this rect's right edge, and the fan is down to a 41.6px step at eleven cards
+	# with names rendering at 7-9px (D116). 18px of room is +1.8px of step per card
+	# there, and it costs nothing but the slack.
+	hud.offset_right = UITheme.px(16) + UITheme.px(330)
 	# Tall enough for the painted vitals, and bottom-aligned so it does not matter
 	# whether it is. A VBox whose children out-measure its rect overflows past the
 	# BOTTOM edge, which here is 10px from the bottom of the frame — so the old
 	# top-aligned box was one extra line of log away from pushing the log off screen,
 	# and growing it for the bar would only have moved that cliff. ALIGNMENT_END makes
 	# the block grow UPWARDS into the empty middle of the frame instead, where there is
-	# nothing to hit. The width is untouched on purpose: the hand's left reserve is
-	# measured off this rect's right edge (`_place_hand`), so the fan does not move.
+	# nothing to hit. The width above is the one thing here the hand feels, which is why
+	# it is measured rather than chosen.
 	hud.alignment = BoxContainer.ALIGNMENT_END
 	hud.offset_top = -UITheme.px(228)
 	hud.offset_bottom = -UITheme.px(10)
@@ -232,11 +247,19 @@ func _build_ui() -> void:
 	# Energy as orbs, under the line it used to be a fragment of.
 	_build_orbs(hud)
 
-	# Buffs and debuffs spelled out, under the vitals they modify. They used to be a
-	# "[Blk 5 Str 3]" fragment inside a run-on line, which is not where anybody looks
-	# for the reason their damage changed.
+	# Buffs and debuffs under the vitals they modify — as a row of chips, because
+	# spelling them out was a paragraph (see `_refresh_buffs`). They were a
+	# "[Blk 5 Str 3]" fragment inside a run-on line before that, which is not where
+	# anybody looks for the reason their damage changed.
+	buff_row = _build_chip_row(hud, PLAYER_CHIP_SKIP)
 	buffs_label = Label.new()
-	buffs_label.add_theme_color_override("font_color", Color(0.98, 0.85, 0.45))
+	buffs_label.add_theme_color_override("font_color", CHIP_GOOD)
+	# Wrapped inside the same known width as the two lines above it. Without this the
+	# fallback prose sets its own width and drags `hud_box` out from under the hand,
+	# which is the bug `_refresh_buffs` documents — and a fallback is exactly the path
+	# nobody looks at, so it has to be laid out rather than trusted.
+	buffs_label.custom_minimum_size.x = UITheme.px(330)
+	buffs_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	hud.add_child(buffs_label)
 
 	# What is left to draw, and what has gone by. The reward screen quotes how often
@@ -507,6 +530,48 @@ func _refresh_vitals(p: Combatant) -> void:
 		block_fill.size = Vector2(block_w, band * BLOCK_BAND)
 	hp_number.text = "%d/%d" % [p.hp, p.max_hp]
 
+## How far a spent orb recedes, and why it has to at all.
+##
+## Neither file is wrong and the pair still came out backwards: `energy_orb_full.png` is a
+## soft violet globe with a small warm core, and the brief for `energy_orb_empty.png` asked
+## for "cold grey stone, the silhouette unchanged" — which the generator delivered as a
+## crisp pale rim around a dark face. Measured over each orb's own disc on a 1280x720
+## capture at energy 1/3 (`shots_d117*`, a scratch harness pose; the shipped one can only
+## photograph turn one, where every orb is lit):
+##
+##     undimmed      unspent  mean 0.426  p90 0.608  max 0.959
+##                   spent    mean 0.294  p90 0.438  max 0.520
+##
+## So the arithmetic said the spent orb was already the darker one, by 30%, and the eye
+## said otherwise — because the unspent orb spends its luminance on a 3px core inside a
+## soft gradient while the spent orb spends its on a hard-edged RING around the whole
+## disc, and there are two of them. Area times contrast, not peak. **This is the reverse
+## of the usual trap: the measurement was reassuring and the render was not.**
+##
+## And the render that raised it was reading something else again. The 3x crop that
+## reported the spent orbs as outright BRIGHTER (0.52-0.54 against 0.47) caught them
+## mid-`_flash_orb`: their mean colour there is (158,125,118) against (76,73,96) here,
+## while the unspent orb is (125,104,112) in both captures to the byte. That is the
+## bloom's additive amber, and it is worth writing down rather than dismissing, because
+## the bloom fires on the orbs that CHANGED — so for about a third of a second after you
+## spend energy, the orb you just spent really is the brightest object in the corner.
+##
+## Dimming to half takes the steady state to mean 0.150 / p90 0.220, a third of the lit
+## orb rather than seven-tenths, and the ring stops being the thing you see first.
+## Verified by looking, not by that number: at 6x the spent orb still has a rim and an
+## inner face, so it reads as cold stone and not as a hole punched in the HUD, which is
+## the mirror-image defect this could have shipped instead. Fixing it in presentation is
+## established practice here and not a new idea — `cutout_lib.gd`'s own summary of `Icons`
+## is that it "tints them by rarity and fades them for spent states".
+##
+## The value is `_refresh_power`'s: the same colour this screen already dims a spent power
+## ring with, so "spent" looks like one thing in one corner. Its ALPHA is deliberately not
+## reused — at 0.7 the orb goes translucent and reads against the painted corridor behind
+## it rather than as a stone in front of it. D96 states that rule for text (a row recedes
+## by ink, never by `modulate`); for art the equivalent is that it recedes by tint and
+## never by alpha.
+const SPENT_ORB := Color(0.5, 0.5, 0.55)
+
 ## One orb per point of energy the turn can hold, lit up to what is left.
 ##
 ## Built to fit rather than to a constant: a relic can add energy (`bonus_energy`), so
@@ -538,6 +603,7 @@ func _refresh_orbs() -> void:
 			continue
 		orb.visible = i < cap
 		orb.texture = orb_full_tex if i < eng.energy else orb_empty_tex
+		orb.modulate = Color(1, 1, 1) if i < eng.energy else SPENT_ORB
 	# Only the orbs that CHANGED bloom, and only after the first draw of the fight.
 	if shown_energy >= 0 and eng.energy != shown_energy:
 		for i in range(mini(eng.energy, shown_energy), maxi(eng.energy, shown_energy)):
@@ -586,6 +652,14 @@ func _flash_orb(i: int) -> void:
 	# supposed to be lighting, and a spent orb read as a white disc for a third of a
 	# second. Both were caught by holding the peak open in a capture and looking at it —
 	# a 66ms flash is not something you can judge from the numbers.
+	#
+	# The orb under it is dimmer since D117 (`SPENT_ORB`), so this peak now sits against a
+	# third of the luminance it was tuned against. Left alone deliberately: the tuning was
+	# a cap on the bloom's own brightness, not a ratio to the orb, and the flash is the
+	# TRANSITION — a light leaving reads better over a stone than over another light. Not
+	# photographed at peak against the new value, because a bloom whose whole life is
+	# 0.4s cannot be caught by a harness whose frames are seconds apart under software GL,
+	# and posing the node by hand would be a capture of a state no player produces.
 	tw.tween_property(g, "modulate:a", 0.4, FX_FLASH * 0.3)
 	tw.tween_property(g, "scale", Vector2.ONE, FX_FLASH * 1.4)
 	tw.tween_property(g, "modulate:a", 0.0, FX_RISE * 0.55).set_delay(FX_FLASH * 0.6)
@@ -708,10 +782,13 @@ func _refresh_enemies() -> void:
 			continue
 		slot.visible = true
 		var targeted := i == eng.target
-		var estat := e.status_text()
+		# Its statuses are the chip row's job now; what comes back is only what had no
+		# symbol to draw, and that goes back in the bracket it used to live in, so a
+		# plate with `ui/sym_*.png` missing reads exactly as it did before D117.
+		var estat := _fill_chips(slot.get_meta("chips") as HBoxContainer, e, true)
 		var vitals: Label = slot.get_meta("vitals")
 		vitals.text = "%s%s   %d/%d%s" % ["\u25b6 " if targeted else "", e.name,
-			e.hp, e.max_hp, ("   [%s]" % estat) if estat != "" else ""]
+			e.hp, e.max_hp, ("   [%s]" % " ".join(estat)) if not estat.is_empty() else ""]
 		vitals.add_theme_color_override("font_color",
 			Color(1.0, 0.92, 0.62) if targeted else Color(0.88, 0.86, 0.84))
 		var intent: Label = slot.get_meta("intent")
@@ -797,6 +874,14 @@ func _build_slot(i: int) -> Control:
 	vitals.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.add_child(vitals)
 
+	# What it is carrying, between who it is and what it is about to do. Chips rather
+	# than the `[Blk 5 Psn 3 Vuln 2 Weak 1 Str 2 Dex 1]` this used to append to the name
+	# line: those abbreviations existed because there was no icon to use (D117), and at
+	# six of them the string ran well past a 273px plate in both directions, because a
+	# Label draws outside its own rect rather than clipping.
+	var chips := _build_chip_row(slot, [])
+	chips.alignment = BoxContainer.ALIGNMENT_CENTER
+
 	var intent := Label.new()
 	intent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	intent.add_theme_color_override("font_color", Color(1.0, 0.72, 0.55))
@@ -812,6 +897,7 @@ func _build_slot(i: int) -> Control:
 	slot.set_meta("box", box)
 	slot.set_meta("stand_in", painted == null)
 	slot.set_meta("vitals", vitals)
+	slot.set_meta("chips", chips)
 	slot.set_meta("intent", intent)
 	slot.set_meta("mark", mark)
 	slot.set_meta("hit", hit)
@@ -829,9 +915,18 @@ func _place_slots(living: Array[int]) -> void:
 	var floor_y := vp.y * PixelArt.STAND_LINE
 	if hand_box != null and hand_box.size.y > 1.0:
 		floor_y = minf(floor_y, hand_box.global_position.y - UITheme.px(10))
-	# leave the top band and the two text lines their room, and never let the hand
-	# swallow the stage at large UI scales
-	var text_h := UITheme.px(46)
+	# leave the top band and the text lines their room, and never let the hand
+	# swallow the stage at large UI scales.
+	#
+	# THREE rows above the creature since D117, not two: who it is, what it is carrying,
+	# what it is about to do. The band is 20px taller for it, and that is not free — the
+	# clamp below is `floor_y - top_limit - text_h`, and a boss asks for 366.6px of a
+	# 720-tall frame, which was inside the old ceiling of 376.4 and is outside the new
+	# one of 356.4. So a boss now draws 2.8% shorter and nothing else moves (an elite
+	# wants 311.9 and an ordinary enemy 273.6, both well clear). Paid knowingly: the
+	# status row it buys is the thing that says why the boss is hitting for 50.
+	var text_h := UITheme.px(66)
+	var line_h := text_h / 3.0
 	var top_limit := UITheme.px(96)
 	# A boss should loom. Same corridor, same floor line, more of the frame — this is
 	# the cheapest way for a fight to announce what it is before the numbers do.
@@ -852,10 +947,13 @@ func _place_slots(living: Array[int]) -> void:
 
 		var vitals: Label = slot.get_meta("vitals")
 		vitals.position = Vector2(0, 0)
-		vitals.size = Vector2(w, text_h * 0.5)
+		vitals.size = Vector2(w, line_h)
+		var chips: HBoxContainer = slot.get_meta("chips")
+		chips.position = Vector2(0, line_h)
+		chips.size = Vector2(w, line_h)
 		var intent: Label = slot.get_meta("intent")
-		intent.position = Vector2(0, text_h * 0.5)
-		intent.size = Vector2(w, text_h * 0.5)
+		intent.position = Vector2(0, line_h * 2.0)
+		intent.size = Vector2(w, line_h)
 		var art: TextureRect = slot.get_meta("art")
 		var box: Panel = slot.get_meta("box")
 		box.position = Vector2(0, text_h)
@@ -962,7 +1060,15 @@ func _place_hand() -> void:
 	if hud_box != null:
 		var hr := hud_box.get_global_rect()
 		if hr.size.x > 1.0:
-			left = maxf(left, hr.end.x + UITheme.px(14))
+			# The measured edge REPLACES the constant rather than being max()'d with it.
+			# As a floor it silently outranked the measurement the moment the measurement
+			# got smaller, which is what D117 narrowing `hud_box` to 330 found: 18px of
+			# reserve came back and the fan only saw 6 of it, because 372 was still bigger
+			# than the 360 the rects were reporting. That is the same defect this block's
+			# own comment is about — a reserve taken off a screenshot rather than off the
+			# layout — wearing a `maxf`. The constant is the value for the ONE frame where
+			# no rect exists yet, and the guard above is what says so.
+			left = hr.end.x + UITheme.px(14)
 	if controls_box != null:
 		var cr := controls_box.get_global_rect()
 		if cr.size.x > 1.0:
@@ -1187,36 +1293,212 @@ func _deal_in(holder: Control, target_alpha: float) -> void:
 	var tw := create_tween()
 	tw.tween_property(holder, "modulate:a", target_alpha, 0.18)
 
-## Buffs and debuffs, written out, in the colour of what they are.
+# --- status chips (D117) -------------------------------------------------------
+#
+# Every status the game can put on a combatant, in ONE table, because there were two
+# hand-kept lists of the same seven and they did not say the same things: this screen's
+# prose ("Strength +2  (every attack hits harder)") and `Combatant.status_text()`'s
+# abbreviations ("Str 2"). Two descriptions of one set is the D34 shape, and the damage
+# was exactly where it always is — the prose taught what Dexterity does and the
+# abbreviations did not, on the plates where a player first meets Vulnerable.
+#
+# Columns, and why each is here:
+#   key      what to read off a Combatant; `_status_count` owns that, because the keys
+#            are SYMBOL names and the fields are not (`retain` against `retain_block`)
+#   symbol   the semantic name `Icons.tex()` resolves. Null means the painting is not
+#            installed and the row degrades into `text` below — the same "use it if it
+#            exists" contract the whole kit is built on (D116), stated once more here
+#            because a status with no picture still has to be readable.
+#   good     whose doing it is: yours, or the room's. This is what carries the tint.
+#   teach    the hover, and where the parentheticals went. "(every Block is bigger)"
+#            is the only thing in the game that ever said what Dexterity does, so it
+#            is not deleted, it is moved somewhere it costs no width. Its FIRST
+#            sentence is also the no-symbol fallback line — which is why the headline
+#            clause comes first and the decay rule second. One string, two lengths, no
+#            second copy to drift.
+#   abbrev   the plate's compact word, lifted off `Combatant.status_text()` unchanged,
+#            so an enemy plate with no symbols installed reads exactly as it did.
+#
+# A row carrying a literal `%` must also carry a `%d`: `teach` is only put through `%`
+# when it has a number in it, so "+50%%" in a numberless row would ship as two percent
+# signs. Both rows that need one have one.
+const STATUS_CHIPS := [
+	["block", "block", true,
+		"Block %d — soaked off incoming hits, then gone at the start of the next turn.", "Blk"],
+	["strength", "strength", true,
+		"Strength +%d — every attack hits that much harder. Lasts the whole fight.", "Str"],
+	["dexterity", "dexterity", true,
+		"Dexterity +%d — every Block gained is that much bigger. Lasts the whole fight.", "Dex"],
+	["thorns", "thorns", true,
+		"Thorns %d — anything that attacks takes that much straight back.", "Thorns"],
+	["retain", "retain", true,
+		"Block persists — Block stops expiring and piles up from turn to turn.", "Blk+"],
+	["vulnerable", "vulnerable", false,
+		"Vulnerable %d — +50%% damage taken from every hit. One stack expires each turn.", "Vuln"],
+	["weak", "weak", false,
+		"Weak %d — -25%% damage dealt. One stack expires each turn.", "Weak"],
+	["poison", "poison", false,
+		"Poison %d — that much damage at each turn's end, ignoring Block, then one stack falls off.", "Psn"],
+]
+
+## The player's Block is the band on the HP bar AND the first number in `status_label`,
+## so a Block chip beside them would be its third copy. Everything else shows on both
+## sides in the same order, so there is one reading rule rather than two.
+const PLAYER_CHIP_SKIP := ["block"]
+
+## Warm for "you did this", red for "the room did this to you". Not a new palette —
+## these are the exact two colours `_refresh_buffs` has always chosen between; the
+## amber is `energy_number`'s and the target ring's, the red is the family
+## `_float_number` uses for damage taken. What changed is that they are applied PER
+## CHIP instead of to the whole line. The old line picked one colour for all of it, so
+## a fight with Strength up and Weak on you painted your own Strength in the enemy's
+## colour — which is worse than the no distinction at all it was meant to be.
+const CHIP_GOOD := Color(0.98, 0.85, 0.45)
+const CHIP_BAD := Color(0.95, 0.62, 0.55)
+## The drawn side of a symbol, in layout pixels. ONE number for the HUD and the enemy
+## plates both, for D113's reason: two sizes of the same icon set read as one of them
+## being wrong, and there is no measurement that says a plate wants a smaller Poison
+## than the corner does.
+const CHIP_SIDE := 20.0
+
+## One row of icon+number chips, built once with every chip it will ever need and each
+## one hidden until its status is up.
 ##
-## `Combatant.status_text()` is the compact form used on the little enemy plates;
-## it was also the player's only readout, tucked inside the status line as
-## "[Blk 5 Str 3]". Strength changes every attack you make, so it belongs where it
-## can be read at a glance — and on the cards themselves, which is what
-## `CombatEngine.card_text()` now does.
+## Nothing is allocated inside a refresh, for `_refresh_orbs`' reason: this is redrawn
+## after every card played, and a row that frees and rebuilds its children cannot hold
+## a tooltip open under the mouse and could never be tweened. A chip whose symbol does
+## not resolve is never built at all — that is what lets `_fill_chips` tell "not up"
+## from "no art for this" and put the second one into prose instead of drawing nothing.
+func _build_chip_row(parent: Node, skip: Array) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UITheme.sep(7))
+	row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	# IGNORE on the row, STOP on each chip. The enemy plate's row spans the whole plate
+	# width, and a container that ate the mouse there would swallow the click that
+	# targets the creature; a chip is ~36px and is the only part that wants a pointer.
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var chips := {}
+	for spec in STATUS_CHIPS:
+		var key := String(spec[0])
+		if key in skip:
+			continue
+		var tex := Icons.tex(String(spec[1]))
+		if tex == null:
+			continue
+		var chip := HBoxContainer.new()
+		chip.add_theme_constant_override("separation", UITheme.sep(2))
+		chip.mouse_filter = Control.MOUSE_FILTER_STOP
+		chip.visible = false
+		row.add_child(chip)
+		var art := TextureRect.new()
+		art.texture = tex
+		art.custom_minimum_size = Vector2(UITheme.px(CHIP_SIDE), UITheme.px(CHIP_SIDE))
+		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		# The symbols are painted at 64x64 and drawn here at a fifth of that. Filtered
+		# for the same reason `_build_slot` filters a painted enemy: the project forces
+		# NEAREST, which turns a 3x downscale of a painted glyph into gravel.
+		art.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip.add_child(art)
+		var num := Label.new()
+		num.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		num.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		chip.add_child(num)
+		chips[key] = chip
+	row.set_meta("chips", chips)
+	row.set_meta("skip", skip)
+	parent.add_child(row)
+	return row
+
+## Show what this combatant is carrying, and hand back a line for anything the chips
+## could not say — a status whose painting is absent. `compact` picks which of the two
+## written forms that line takes: a plate is 273px wide and gets "Vuln 2", the HUD
+## column is 330 and gets the sentence that teaches.
+func _fill_chips(row: HBoxContainer, c: Combatant, compact: bool) -> Array[String]:
+	var missing: Array[String] = []
+	if row == null:
+		return missing
+	var chips: Dictionary = row.get_meta("chips", {})
+	var skip: Array = row.get_meta("skip", [])
+	var shown := 0
+	for spec in STATUS_CHIPS:
+		var key := String(spec[0])
+		if key in skip:
+			continue
+		var n := _status_count(c, key)
+		var chip: Control = chips.get(key)
+		if chip == null:
+			if n > 0:
+				missing.append(_chip_fallback(spec, n, compact))
+			continue
+		chip.visible = n > 0
+		if n <= 0:
+			continue
+		shown += 1
+		# A stack count, or nothing at all: `retain` is a switch and not a quantity, and
+		# "Block persists 1" is a number the player cannot do anything with.
+		var num := chip.get_child(1) as Label
+		num.text = str(n) if String(spec[3]).contains("%d") else ""
+		chip.modulate = CHIP_GOOD if bool(spec[2]) else CHIP_BAD
+		UI.hoverable(chip, _chip_teach(spec, n))
+	# An empty row still costs its container a separation gap, and on turn one — full
+	# HP, nothing up — that gap is every plate and the HUD both.
+	row.visible = shown > 0
+	return missing
+
+## What a Combatant is carrying, by chip key. A `match` rather than a Dictionary of
+## Callables (a const table cannot hold one) and rather than `get(key)` reflection,
+## because the keys are symbol names and deliberately do not match the field names.
+func _status_count(c: Combatant, key: String) -> int:
+	match key:
+		"block": return c.block
+		"strength": return c.strength
+		"dexterity": return c.dexterity
+		"thorns": return c.thorns
+		"retain": return 1 if c.retain_block else 0
+		"vulnerable": return c.vulnerable
+		"weak": return c.weak
+		"poison": return c.poison
+	return 0
+
+## The hover: the whole teaching sentence, with this stack count in it.
+func _chip_teach(spec: Array, n: int) -> String:
+	var s := String(spec[3])
+	return (s % n) if s.contains("%d") else s
+
+## What to write when this status has no symbol installed to draw.
+func _chip_fallback(spec: Array, n: int, compact: bool) -> String:
+	if compact:
+		var a := String(spec[4])
+		return ("%s %d" % [a, n]) if String(spec[3]).contains("%d") else a
+	# the headline clause of the hover, which is the reason that sentence is ordered
+	# the way it is rather than a second string saying the same thing shorter
+	return _chip_teach(spec, n).get_slice(". ", 0)
+
+## What you are carrying, as a row of tinted icon+number chips.
+##
+## It was run-on prose joined by `·`, and at six statuses that is a ~900px paragraph
+## laid out in a 330px column. Worse than ugly: a Label reports its TEXT as its minimum
+## width, so it did not wrap and it did not clip, it pushed `hud_box` WIDER — and
+## `_place_hand` takes the fan's left reserve off that box's right edge, so a fight with
+## Strength, Dexterity, Thorns, Vulnerable, Weak and Poison up was quietly squeezing a
+## hand that is already down to a 41px step at eleven cards (D116). That is D95's
+## "a custom_minimum_size is not a minimum if the content sets the size" one screen over.
+## Seven chips measure ~322px, inside the box the layout was built around, so nothing
+## moves.
+##
+## `buffs_label` survives as the fallback and only as that: it says whatever has no
+## painting installed and is invisible when the chips said everything. It also wraps
+## now, which the prose never did — the widening above was a defect in the fallback path
+## as much as in the main one, and the fallback is what ships from a bare checkout.
+## Its colour stays the amber it is built with rather than turning red when any debuff
+## is up, because that line-wide red is precisely what the per-chip tint replaces; in
+## the fallback the words name the status.
 func _refresh_buffs(p: Combatant) -> void:
-	var good: Array[String] = []
-	var bad: Array[String] = []
-	if p.strength > 0:
-		good.append("Strength +%d  (every attack hits harder)" % p.strength)
-	if p.dexterity > 0:
-		good.append("Dexterity +%d  (every Block is bigger)" % p.dexterity)
-	if p.thorns > 0:
-		good.append("Thorns %d" % p.thorns)
-	if p.retain_block:
-		good.append("Block persists")
-	if p.vulnerable > 0:
-		bad.append("Vulnerable %d  (you take +50%%)" % p.vulnerable)
-	if p.weak > 0:
-		bad.append("Weak %d  (you deal -25%%)" % p.weak)
-	if p.poison > 0:
-		bad.append("Poison %d  (ignores Block)" % p.poison)
-	var parts := good + bad
-	buffs_label.visible = not parts.is_empty()
-	buffs_label.text = "   ·   ".join(parts)
-	# warm for "this is helping you", cold for "this is happening to you"
-	buffs_label.add_theme_color_override("font_color",
-		Color(0.98, 0.85, 0.45) if bad.is_empty() else Color(0.95, 0.62, 0.55))
+	var said := _fill_chips(buff_row, p, false)
+	buffs_label.visible = not said.is_empty()
+	buffs_label.text = "   ·   ".join(said)
 
 ## Keep the last few lines. A turn where three enemies act used to report only the
 ## third, because this overwrote a single Label.
@@ -1421,6 +1703,11 @@ func _lose() -> void:
 	}
 	status_label.text = "DEFEAT."
 	buffs_label.visible = false
+	# ...and the chips with it. They are the readout the label used to be, so anything
+	# that clears one has to clear the other or the corner keeps saying what a dead
+	# player's Strength was next to the word DEFEAT.
+	if buff_row != null:
+		buff_row.visible = false
 	piles_label.visible = false
 	# an empty bar and a row of dark orbs say nothing the word does not
 	if hp_bar != null:

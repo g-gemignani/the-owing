@@ -83,23 +83,18 @@ func end_turn() -> int:
 	weak = max(0, weak - 1)
 	return dot
 
-func status_text() -> String:
-	var parts: Array[String] = []
-	if block > 0:
-		parts.append("Blk %d%s" % [block, "+" if retain_block else ""])
-	if poison > 0:
-		parts.append("Psn %d" % poison)
-	if thorns > 0:
-		parts.append("Thorns %d" % thorns)
-	if vulnerable > 0:
-		parts.append("Vuln %d" % vulnerable)
-	if weak > 0:
-		parts.append("Weak %d" % weak)
-	if strength > 0:
-		parts.append("Str %d" % strength)
-	if dexterity > 0:
-		parts.append("Dex %d" % dexterity)
-	return " ".join(parts)
+## `status_text()` used to live here — "Blk 5 Psn 3 Vuln 2 Weak 1 Str 2 Dex 1", built for
+## the little enemy plates and abbreviated because there was no icon to use. All seven
+## have a painted symbol now, so the plates draw chips (`Combat._fill_chips`), and it had
+## exactly ONE caller in the tree: the plate. Grepped `*.gd`, `*.tscn` and the docs before
+## touching it, because a string some callers render as art and others as text is worse
+## than either — there were no other callers, no test read it and nothing logged it.
+##
+## It is gone rather than kept as a fallback because keeping it would have left a second
+## hand-kept list of the same seven statuses that nothing reads, drifting from the one in
+## `Combat.STATUS_CHIPS` — the shape D111 is about. Its abbreviations moved into that
+## table's `abbrev` column, which is what the plates still print when a symbol is missing,
+## so nothing about the degraded reading changed.
 
 func save_state() -> Dictionary:
 	return {
