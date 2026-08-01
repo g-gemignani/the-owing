@@ -7066,6 +7066,36 @@ room. And `ui/boot_splash.png` lands at 1.3% / 4.7% with the narrowest span in t
 (0.410); it is a lantern in the dark and meant to be, but it is the next file this metric
 will flag, and it should be judged on a render before anybody re-rolls it.
 
+**After the quota reset, the tier was painted and every number moved.** Twenty-three
+Tier 8 files in three sheets, plus three of the four meta-screen backdrops D123 asked
+for. What they were listed for, measured before and after: figure luma **0.16–0.21 →
+0.25–0.49** against floors of 0.43–0.49, so a figure is on the ground rather than a hole
+in it; `combat`/`elite`/`boss` silhouette overlap **100% → 17.6% and 25.6%**, so the
+floor can finally say whether the room ahead is a trash fight or the thing that ends the
+run; hero-vs-caster **81.9% → 41.8%**, two characters instead of one tinted twice. All
+twenty-three measure 0.0% empty space below the feet, which is what the new
+foot-anchoring in `install_sheet.gd` is for.
+
+**Two sheet defects worth knowing, because both look like a bad drawing and are not.**
+A generator asked for evenly spaced subjects drifts — by up to a quarter of a cell — so
+a wide subject crosses its boundary, the neighbour bleeds into the next cell's border,
+and `Cut.cut` refuses it with "background is not flat". The border genuinely is not; the
+art is fine. `respace.gd` finds the real gaps (columns that are entirely field), cuts
+each subject at its own bbox and re-emits them evenly, so the equal-cell reader is
+correct again and the mapping stays positional. Separately, a sheet drawn as rows can
+come back with faint horizontal BANDS in the background, one per row, and a cell
+straddling a band edge fails the same check — `flatten_bg.gd` repaints every pixel
+within tolerance of its own row's background to one colour, which cannot reach the
+drawing because a subject pixel is nowhere near the field colour. That is the premise
+the matte already runs on.
+
+**The `_s`/`_n` pairing is the thing that cannot be generated one file at a time**, and
+one row proved it: asked for a scuttling creature and the same creature from behind, the
+right cell came back as an unrelated human in a tunic. The two facings have to be one
+drawing seen twice or they are two characters. Two sheets of eight beat one of sixteen —
+the failure is per-cell, and `--only` plus `--cells` installs the survivors without
+re-rolling the good ones.
+
 **On capture.** Autocropping a screenshot against a black overlay is right for a cutout,
 whose subject sits on a field the generator never paints pure black. It silently eats a
 *scene*: the boot splash falls away into darkness at its own edges and came back 1.616

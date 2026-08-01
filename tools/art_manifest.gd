@@ -63,15 +63,11 @@ enum Kind {
 ## on a field. It went out with them in D122, along with the three dungeon backdrops:
 ## the table is meant to shrink, and a shared constant with no rows left pointing at it
 ## is the shrinking not finishing.
-## Shared across all sixteen Tier 8a figures and all seven Tier 8b props, because they
-## have ONE defect between them and it is a lighting decision, not twenty-three
-## drawings that each went wrong. Measured off the installed files (D122):
-## every figure reads luma 0.16-0.21 while the floors they stand on read 0.43-0.49, so
-## a figure is 2.5x DARKER than its own ground and the eye takes it for a hole in the
-## floor rather than a person on it. Interiors are empty — a thin rim light down one
-## side and flat black behind it — so at the ~90px they draw at there is no face, no
-## cloth, no metal and nothing to recognise.
-const REDO_ISO := "flat near-black silhouette: luma 0.16-0.21 against a floor of 0.43-0.49, so it reads as a hole in the ground rather than a figure standing on it, and the interior is empty behind a one-sided rim light. Whole tier, one defect — re-roll the sheet, not the file (D122)"
+## A `REDO_ISO` constant sat here too, shared across all twenty-three Tier 8 files
+## because they had one defect between them: every one measured luma 0.16-0.21 against
+## floors of 0.43-0.49, so a figure was 2.5x darker than its own ground and read as a
+## hole in the floor. All twenty-three were repainted in D122 and it went out with them,
+## same as REDO_TILED did.
 
 ## The same defect, on the thirty-five combat plates. `tools/gen_enemy_art.gd` filled a
 ## directory that had been empty since the painted backdrops landed, and it was the
@@ -108,20 +104,18 @@ const REDO := {
 	# The three dungeon backdrops were here — no floor under the fight on the Abyssal
 	# Stair, figures in the Drowned Market, painted words in the Warrens. All three
 	# re-rolled and installed in D122, so all three lines came out.
-	# Tier 8 — everything standing on the isometric floor. The other twenty carry
-	# REDO_ISO through `REDO_DIRS` below; these three have a second, worse fault on
-	# top of it and say so.
-	"iso/mon_caster_s.png":
-		"%s AND it is the same drawing as the hero: 81.9%% silhouette overlap measured against `hero_s.png`, because `gen_iso_markers.gd` builds the hero on the caster's plan and tells them apart by HUE — which at luma 0.20 on a 0.45 floor is not a distinction anybody can see" % REDO_ISO,
-	# The three fight markers are the worst of it, and the reason this tier is worth
-	# doing before anything else on the list: the floor is where you decide what to
-	# walk into, and it currently cannot answer the question.
-	"iso/combat.png":
-		"%s AND `combat.png`, `elite.png` and `boss.png` are the SAME SILHOUETTE — 100%% overlap, measured, all three built on `gen_iso_markers.gd`'s brute plan and separated only by hue. So the floor cannot tell you whether the room ahead is a trash fight or the thing that ends the run, which is the one decision the map exists to support" % REDO_ISO,
-	"iso/elite.png":
-		"%s AND identical in silhouette to `combat.png` and `boss.png` — see the note on `combat.png`" % REDO_ISO,
-	"iso/boss.png":
-		"%s AND identical in silhouette to `combat.png` and `elite.png` — see the note on `combat.png`" % REDO_ISO,
+	# All twenty-three Tier 8 files were here and all twenty-three came out in D122,
+	# painted as three sheets. What they were listed for, and what it measures now:
+	#   - the whole tier read luma 0.16-0.21 against floors of 0.43-0.49, so a figure
+	#     was a hole in the ground. Now 0.25-0.49.
+	#   - `combat`, `elite` and `boss` were the SAME SILHOUETTE to the pixel, so the
+	#     floor could not say whether the room ahead was a trash fight or the thing
+	#     that ends the run. Overlap is now 17.6% and 25.6%.
+	#   - `mon_caster_s` was the same drawing as the hero at 81.9% overlap, told apart
+	#     by hue alone. Now 41.8%, and they are different characters rather than one
+	#     character tinted twice.
+	# All sixteen figures and all seven props measure 0.0% empty space below the feet,
+	# which is what `install_sheet.gd`'s new foot-anchoring is for.
 	"main_menu.png":
 		"still off-style after one re-roll, which is the point of this line. Not enough ink: the share of pixels that are a local luminance minimum by >0.08 against both neighbours 2px out reads 1.2% against 2.8-12.2% across the twelve dungeons. The D122 re-roll led with that fault, named the ink outline six times, came back visibly carrying contour lines — and measured 1.2% again, unchanged. Do NOT re-roll it for palette or value: mean luminance sits inside the 20-35% band and saturation matches the dungeons. Do NOT dismiss the number as an artefact of a dark picture either; that was tested. Normalising every image to its own 1st-99th percentile and re-running the same test puts it at 3.6% against 5.1-15.4% for the dungeons, still last, on a range only slightly narrower than theirs. The next attempt needs the ink to be HEAVIER and more continuous than the last one, not merely present (D114, D122)",
 }
@@ -135,12 +129,18 @@ const REDO := {
 ## editing one of them has to check all thirty-five for drift.
 ##
 ## Consulted AFTER `REDO`, never instead of it — so a single file can still carry its
-## own worse fault on top of its family's, which is what the three iso fight markers
-## and the caster do. Removing a family is removing one line here, the same way
-## removing a file is removing one line up there.
+## own worse fault on top of its family's, which is what the iso caster does. Removing
+## a family is removing one line here, the same way removing a file is removing one
+## line up there.
+##
+## **A prefix, not a directory, and the difference earned itself twice.** It started as
+## `"iso/"` because all twenty-three files under it shared one defect. Then Tier 8b's
+## seven props were painted and the sixteen figures were not, so it narrowed to the
+## three figure prefixes; then the figures were painted too and the whole family came
+## out. A key here is only ever as wide as the defect actually is, and the defect
+## shrinks — which is the same thing `REDO` itself is for, one level up.
 const REDO_DIRS := {
 	"enemies/": REDO_SILHOUETTE,
-	"iso/": REDO_ISO,
 }
 
 ## The defect recorded against a file, or "" if there is none. Every reader goes
