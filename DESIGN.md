@@ -4686,3 +4686,102 @@ the one table-walk that did not pass `_kind_of(e)`, so its per-row kinds were si
 replaced by the section default. The tags were right and the plumbing dropped them,
 which is the failure mode a per-row override always has: it is invisible unless the
 default happens to be wrong. Generable total 156 -> 151.
+
+### D92 — The matte could not reach the background the monster was standing around
+
+Six painted enemies arrived for install — four regular archetypes and two bosses
+(`mycelial_lord`, `grave_sexton`). `install_cutouts.gd` reported a clean sweep: six
+written, nothing unmatched, every enemy now has art. The contact sheet said otherwise.
+The skeleton had a **slab of flat magenta behind its ribs**, the grave-sexton had a
+lozenge of yellow in the eye of its own halberd hook, and the tomb guard wore a crimson
+halo around its shield. The tool was not lying — it had done exactly what it was written
+to do.
+
+**Why the fill cannot reach it.** `matte()` is a magic wand from the frame edge, not a
+chroma key, and that choice is right: the zone accents run cyan, orange, acid-green,
+deep-blue and magenta (ART.md §2), so every obvious key colour is somebody's light
+source. Connectivity is the safeguard — it is what stops a patch of stone inside the
+subject that happens to match the field from being punched into a hole. The **cost of
+that safeguard is the exact opposite defect**: field that the subject's own silhouette
+seals off from the border is unreachable, so it survives fully opaque and still
+background-coloured. A gap between a raised arm and a torso. The eye of a hook. The
+triangle between two legs.
+
+**`despeckle` structurally cannot catch it,** which is why nothing upstream noticed. A
+trapped pocket *touches* the subject, so it is part of the subject's own connected
+component — the largest one — and no island threshold will ever see it. And because the
+sources are per-enemy colour fields, the defect is a different colour on every enemy;
+there is no single artefact to grep for.
+
+**The discriminator, measured rather than guessed.** The naive fix — clear anything near
+the background colour — would have been a disaster, and the batch contained its own
+counter-example. The hexer is grey armour on a grey field: 10,166 of its pixels sit
+within the ordinary `TOL` of the background, in a scatter whose largest blob is 1,247px.
+Those are its pauldrons. Sweeping the tolerance separated the two populations cleanly,
+because **a trapped pocket is the literal untouched field and sits at distance ~0**,
+while armour that resembles the field merely comes close:
+
+```
+                tol=0.14 tol=0.08 tol=0.05 tol=0.03   <- largest enclosed blob, px
+bone-picker        10182     9422     8810     8034    trapped magenta
+tomb-guard          7282     6229     4887     1958    trapped crimson
+grave-sexton        2836     2646     2498     2297    trapped yellow
+mycelial-lord       1074      962      882      786    trapped blue
+hexer               1247      181       95        7    GREY ARMOUR — must survive
+plague-rat             7        1        0        0    already clean
+```
+
+At `HOLE_TOL = 0.05` the real pockets stay in the thousands and the false positives
+collapse under a hundred. A minimum area of 0.05% of frame sits in the order-of-magnitude
+gap between the smallest real pocket (0.084%) and the largest false one (0.009%), and
+exists because tolerance alone leaves a scatter of single pixels inside textured armour —
+punching those out is not a fix, it is speckle.
+
+**Two tolerances, doing two different jobs — and collapsing them was the first attempt's
+bug.** Filling only the tightly-matching core removed the slabs and left a **rim**: the
+field carries a faint vignette, so a pocket's middle is at distance ~0 while its outer
+ring drifts to 0.08–0.14, and a tight threshold stops short by exactly the width of the
+gradient. The probe showed it plainly — every survivor had `mean_dist` 0.03–0.09 with
+`max_dist` pinned at the loose bound. So `HOLE_TOL` is **not a claim about where the
+pocket ends, only about where it can safely be RECOGNISED.** Once enclosure and area have
+established that a pocket *is* field, it has earned the same trust the frame edge gets,
+and the ordinary `TOL` can finish the job. Seed tightly, grow normally. Growing an
+*unverified* seed at `TOL` is the thing that would gouge the hexer — so the tight test
+guards the seed, not the growth.
+
+```
+largest near-background blob remaining, px
+                  before   tight-only   seed-and-grow
+bone-picker        10182         199          62
+tomb-guard          7282        1921          29
+grave-sexton        2836          31           3
+hexer               1247        1247        1247   <- untouched, correctly
+plague-rat             7           7           7
+```
+
+`hexer` and `plague_rat` come out with **bit-identical opaque fractions** (26.8%, 30.1%)
+to before the change — the strongest available evidence that nothing was gouged where
+there was nothing to fix. All 34 suites pass.
+
+**A false alarm worth recording, because it will recur.** Opening `mycelial_lord.png`
+directly appeared to show the install had failed completely — full blue field, black
+frame, watermark plainly visible. The file was correct. `apply_alpha` sets alpha to zero
+and **deliberately leaves RGB untouched**, so a viewer that ignores alpha renders the
+matted background, the transparent pad, and the already-removed sparkle as if they were
+still there. The contact sheet uses `blend_rect` and respects alpha, which is why it
+showed the truth. The standing rule that art direction is judged by looking (D56) needs
+the corollary that **what you look THROUGH matters**: for a cutout, use the sheet or the
+opaque fraction, not a preview of unknown alpha handling.
+
+**Counters are per-file or they are lies.** `filled_pockets` is reset at the top of
+`cut()` and `cut_mono()`, not only inside `matte()` — an image arriving with usable alpha
+skips `matte()` entirely and would otherwise be reported carrying the previous image's
+number. Both counts are printed for the reason `dropped_islands` always was: from inside
+`cutout_lib.gd`, a filled pocket and a gouged subject look identical.
+
+**Not fixed here.** `bg_crypt.png` was also in the drop but is a backdrop, not an enemy;
+it is the style reference from D90 and already installed, so it was left out of the
+staging directory rather than fed to a cutout installer that would have refused it for a
+non-flat border. `install_sheet.gd` shares the `cut()` path and so inherits the fix, but
+reports neither counter — it reported neither before either, so that was left alone
+rather than half-changed.

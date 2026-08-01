@@ -41,7 +41,7 @@ Two-tier state makes this work:
 
 ## Content at a glance
 
-100 cards · 35 enemy archetypes (one generated plate each) · 12 bosses (one named per dungeon) · 30 relics ·
+100 cards · 35 enemy archetypes (6 painted, 29 on generated plates) · 12 bosses (one named per dungeon) · 30 relics ·
 10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model in use of 4 built · 34 test
 suites. All content is `.tres` data plus one catalogue line; adding more is a data
 task, not a code task.
@@ -277,6 +277,20 @@ These are failure modes that have actually bitten this project. Treat each as a 
   (D90). Which files may be generated at all is in `ART_PROMPTS.md`, and it is a real
   question: nine-slices are computed (D83) and animations are not stills.
 
+- **A safeguard's cost is usually the mirror-image defect.** The matte floods in from the
+  frame edge and stays connected so a field-coloured patch inside the subject is never
+  punched into a hole; the price is that field the silhouette SEALS OFF is unreachable and
+  ships as a slab of flat magenta behind a skeleton's ribs (D92). `despeckle` cannot catch
+  it — a trapped pocket touches the subject, so it belongs to the largest component. The
+  fix separates *recognising* background from *removing* it: identify a pocket at a tight
+  tolerance where the untouched field sits (distance ~0) and armour that merely resembles
+  it does not, then grow that verified seed at the ordinary tolerance. Seed tightly, grow
+  normally; a tolerance is a claim about confidence, not about extent.
+- **Judge a cutout through something that respects alpha.** `apply_alpha` zeroes alpha and
+  leaves RGB, so any viewer that ignores alpha shows the matted background, the pad and
+  the stripped watermark as though the install had done nothing (D92). Use the contact
+  sheet or the opaque fraction.
+
 - **An icon SET is one asset, and its requirement is mutual distinguishability.** Seven
   intent telegraphs that each read as "angry shape" have failed even if each is
   individually good, and a request for one is blind to the other six — so the icon tiers
@@ -299,7 +313,8 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              install_backdrops.gd, install_scene_backdrops.gd,
              install_cutouts.gd (mattes/trims/anchors enemies, relics, powers — D90),
              install_sheet.gd (slices an icon-set sheet into its files — D91),
-             cutout_lib.gd (the shared matte/trim/anchor; NOT a class_name),
+             cutout_lib.gd (the shared matte/trim/anchor, incl. trapped-pocket
+             fill — D92; NOT a class_name),
              gen_ui_kit.gd (COMPUTES the nine-slice button frames — D83),
              strip_sparkle.gd (removes the generator's corner watermark — D83c)
 DESIGN.md    the full reasoning, decision by decision (D1–D91)

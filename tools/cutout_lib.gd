@@ -26,6 +26,18 @@ const MIN_COVER := 0.02
 const MAX_COVER := 0.92
 ## Opaque components smaller than this fraction of the largest are dropped.
 const ISLAND_MIN := 0.08
+## Second-pass tolerance for background the border flood fill could not REACH — a pocket
+## sealed off by the subject's own silhouette (see `fill_trapped`). Much tighter than
+## `TOL` on purpose: a trapped pocket is the literal untouched field, so its distance to
+## the sampled background is ~0, while a grey pauldron on a grey field is merely close.
+## Measured on the boss batch (D90): at 0.05 the real pockets stay in the thousands of
+## pixels and the false positives collapse to under a hundred.
+const HOLE_TOL := 0.05
+## A trapped pocket has to be this fraction of the FRAME to be filled. The tolerance
+## alone leaves a scatter of single pixels inside textured armour, and punching those out
+## is not a fix, it is speckle. The gap between the smallest real pocket (0.08% of frame)
+## and the largest false one (0.009%) is an order of magnitude, so this sits between.
+const HOLE_MIN := 0.0005
 ## Alpha at or under this is transparent for trimming purposes.
 const ALPHA_CUT := 8
 ## Breathing room left at the top and sides, as a fraction of the canvas. NEVER at the
@@ -47,6 +59,9 @@ static func cut(img: Image, canvas: Vector2i, anchor_bottom: bool) -> String:
 	img.convert(Image.FORMAT_RGBA8)
 	var w := img.get_width()
 	var h := img.get_height()
+	# An image that arrives WITH alpha never reaches `matte`, so this would otherwise
+	# report the previous image's pockets — a per-file counter has to be cleared per file.
+	filled_pockets = 0
 	var a := alpha_of(img)
 	if opaque_fraction(a) > 0.995:
 		# No usable alpha: the generator handed back an opaque painting. Cut it.
@@ -78,6 +93,7 @@ static func cut_mono(img: Image, canvas: Vector2i) -> String:
 	img.convert(Image.FORMAT_RGBA8)
 	var w := img.get_width()
 	var h := img.get_height()
+	filled_pockets = 0   # `cut_mono` mattes by luminance and never traps a pocket
 	var a := mono_alpha(img)
 	if last_mono_range < MONO_MIN_RANGE:
 		return "flat — no glyph here (dynamic range %.3f)" % last_mono_range
@@ -94,6 +110,9 @@ static func cut_mono(img: Image, canvas: Vector2i) -> String:
 ## the callers rather than swallowed, because a silently-deleted limb and a
 ## silently-deleted watermark look identical from inside this file.
 static var dropped_islands := 0
+## How many trapped background pockets the last `cut()` filled. Reported for the same
+## reason: from inside here, a filled pocket and a gouged subject look identical.
+static var filled_pockets := 0
 ## Luminance spread of the last `mono_alpha()` — how much glyph there was to find.
 static var last_mono_range := 0.0
 ## Trim box of the last `place()`, in the SOURCE image's coordinates. `install_sheet.gd`
@@ -162,7 +181,117 @@ static func matte(img: Image, a: PackedByteArray) -> String:
 			if seen[j] == 0 and _near(img.get_pixel(nx, ny), bg):
 				seen[j] = 1
 				stack.append(j)
+
+	fill_trapped(img, a, bg, w, h)
 	return ""
+
+
+## Clear background the flood fill could not REACH.
+##
+## The fill above is seeded from the border and 4-connected, which is deliberate — it is
+## what stops a patch of stone inside the subject that happens to match the field from
+## being punched out into a hole. The cost of that choice is the opposite defect: field
+## that the subject's own silhouette seals off from the border SURVIVES, fully opaque and
+## still background-coloured. The gap between a raised arm and a torso, the eye of a
+## halberd's hook, the triangle between two legs.
+##
+## This is not a cosmetic flaw and `despeckle` cannot catch it. A trapped pocket touches
+## the subject, so it is part of the subject's own connected component — the largest one —
+## and no island threshold will ever see it. It ships as a slab of flat magenta behind a
+## skeleton's ribs, and because the sources are per-enemy colour fields, every enemy gets
+## a different colour of wrong.
+##
+## Two things separate a trapped pocket from a subject pixel that merely resembles the
+## field, and BOTH are required:
+##   - `HOLE_TOL`, far tighter than `TOL`: the pocket is the untouched field itself.
+##   - enclosure: a component touching the frame edge is not trapped, and clearing one
+##     would be the border fill overreaching at a tolerance it was never granted.
+## Returns how many pockets were filled; reported by the callers for the same reason
+## `dropped_islands` is — from in here, a filled pocket and a gouged subject look alike.
+static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int) -> int:
+	var min_area := int(w * h * HOLE_MIN)
+	var comp := PackedInt32Array()
+	comp.resize(w * h)
+	comp.fill(-1)
+	var sizes: Array[int] = []
+	var open: Array[bool] = []   # touches the frame edge, therefore not trapped
+	for start in w * h:
+		if comp[start] >= 0 or a[start] <= ALPHA_CUT or not _tight(img, start, w, bg):
+			continue
+		var id := sizes.size()
+		var n := 0
+		var edge := false
+		var stack: Array[int] = [start]
+		comp[start] = id
+		while not stack.is_empty():
+			var i: int = stack.pop_back()
+			n += 1
+			var x: int = i % w
+			var y: int = i / w
+			if x == 0 or y == 0 or x == w - 1 or y == h - 1:
+				edge = true
+			for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+				var nx: int = x + d[0]
+				var ny: int = y + d[1]
+				if nx < 0 or ny < 0 or nx >= w or ny >= h:
+					continue
+				var j: int = ny * w + nx
+				if comp[j] < 0 and a[j] > ALPHA_CUT and _tight(img, j, w, bg):
+					comp[j] = id
+					stack.append(j)
+		sizes.append(n)
+		open.append(edge)
+
+	var filled := 0
+	for id in sizes.size():
+		if not open[id] and sizes[id] >= min_area:
+			filled += 1
+	filled_pockets = filled
+	if filled == 0:
+		return 0
+
+	# Now GROW each qualifying pocket at the normal `TOL`, 4-connected, exactly as the
+	# border fill grows from the frame edge.
+	#
+	# The two tolerances are doing two different jobs, and collapsing them is what left a
+	# magenta rim around the tomb guard's shield on the first attempt. `HOLE_TOL` is not a
+	# claim about where the pocket ENDS, only about where it can be safely RECOGNISED: the
+	# field carries a faint vignette, so a pocket's middle sits at distance ~0 while its
+	# outer ring drifts to 0.08-0.14 and a tight threshold stops short, leaving a halo of
+	# background the exact width of the gradient. Once enclosure plus area have
+	# established that this pocket IS field, it has earned the same trust the frame edge
+	# gets, and the ordinary tolerance can finish the job. Growing an UNVERIFIED seed at
+	# `TOL` is the thing that would gouge grey armour on a grey field — so the seed is
+	# what the tight test guards, not the growth.
+	var seen := PackedByteArray()
+	seen.resize(w * h)
+	var stack2: Array[int] = []
+	for i in w * h:
+		var id := comp[i]
+		if id >= 0 and not open[id] and sizes[id] >= min_area:
+			seen[i] = 1
+			stack2.append(i)
+	while not stack2.is_empty():
+		var i: int = stack2.pop_back()
+		a[i] = 0
+		var x: int = i % w
+		var y: int = i / w
+		for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+			var nx: int = x + d[0]
+			var ny: int = y + d[1]
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var j: int = ny * w + nx
+			if seen[j] == 0 and a[j] > ALPHA_CUT and _near(img.get_pixel(nx, ny), bg):
+				seen[j] = 1
+				stack2.append(j)
+	return filled
+
+
+static func _tight(img: Image, i: int, w: int, bg: Vector3) -> bool:
+	var c := img.get_pixel(i % w, i / w)
+	return absf(c.r - bg.x) <= HOLE_TOL and absf(c.g - bg.y) <= HOLE_TOL \
+		and absf(c.b - bg.z) <= HOLE_TOL
 
 
 ## Alpha from luminance, stretched so the field lands at 0 and the glyph at 255.

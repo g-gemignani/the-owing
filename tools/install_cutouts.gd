@@ -119,9 +119,13 @@ func _init() -> void:
 			print("FAIL  writing %s" % to)
 			failed += 1
 			continue
+		var notes := ""
+		if Cut.dropped_islands > 0:
+			notes += "  (dropped %d stray island(s) — watermark or specks)" % Cut.dropped_islands
+		if Cut.filled_pockets > 0:
+			notes += "  (filled %d trapped background pocket(s))" % Cut.filled_pockets
 		print("  %-24s <- %-28s %dx%d%s" % [id + ".png", path.get_file(), canvas.x, canvas.y,
-			"  (dropped %d stray island(s) — watermark or specks)" % Cut.dropped_islands \
-				if Cut.dropped_islands > 0 else ""])
+			notes])
 		wrote += 1
 
 	# A source nobody could place is the failure mode this whole tool exists to make
