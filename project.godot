@@ -32,30 +32,54 @@ config/features=PackedStringArray("4.7")
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Deckcrawl"
 
-; The first frame of the game, and the only one Godot draws before any of this
-; project's code has run — which is why all four of these are settings and not
-; script (D125).
-boot_splash/image="res://assets/art/ui/boot_splash.png"
-; Godot's default is a 0.14 grey. The painting is a lantern in the dark averaging
-; 0.075 luminance, so the default would have framed it in something four times
-; brighter than the picture — the letterbox reading as the screen and the art as a
-; hole in it. This is the same colour UITheme hands RenderingServer as the clear
-; colour, so the splash, the bars around it and the game's own first frame are all
-; one colour and nothing flashes at the handover.
+; What Godot draws before any of this project's code has run — which is why it is
+; settings and not script (D125). Since D133 that is a flat colour and nothing else.
+;
+; D125 put a painting here: `ui/boot_splash.png`, a shut iron door at the foot of a
+; stair, Cover-cropped and filtered, with no minimum display time. It was reported as
+; "the screen before the main screen does not make sense, seems like a glitch", and
+; it was removed because that report is literally true and the numbers say why.
+;
+; **A boot splash exists to cover a load, and there is no load.** A boot splash is
+; drawn before the game starts, so nothing inside the game can photograph it; it was
+; measured off the X framebuffer instead (Xvfb `-fbdir` mmaps the screen to disk in
+; XWD, polled at ~400 Hz). The door was on screen for a mean of 287 ms — 262 to 309
+; over nine boots — and deleting the shader cache moved that by nothing, because the
+; menu is up 0.29 s after the window is mapped whether or not anything is cached.
+; That is under llvmpipe software GL, slower than anything a player will run it on.
+;
+; **And it is too dark to survive being looked at that briefly.** The painting's
+; MEDIAN pixel is 14/255, darker than the bg_color below at 16, with only 1.2% of the
+; frame above 100 — a black rectangle with a lamp in it. MainMenu, which replaces it
+; with no transition because Godot's boot splash cannot fade, means 50/255 with a
+; fifth of the frame above 100. So a launch was: half a second of no window, a third
+; of a second of a near-black frame with a bright speck, then a hard cut to a screen
+; two and a half times brighter. There is no reading of that which is not a dropped
+; frame.
+;
+; Two ways of saving it were tried on a copy and both are worse.
+; `minimum_display_time` works — 1500 asked, 1223 ms measured on screen, the balance
+; spent before the window is mapped — but it buys the picture time by charging every
+; launch a second and a quarter to hide nothing, and it makes the cut at the END
+; worse, because now a dark-adapted eye meets the brighter screen. Pointing the
+; splash at `main_menu.png`, so the two frames are the same place, steps 75 -> 51
+; instead: the menu dims and scrims that painting when it draws it and the raw file
+; is not dimmed, so the "seamless" version flashes brighter and then darkens.
+;
+; The cropping was the one suspect that came back innocent. Cover at 5:4 — the
+; harshest common desktop shape, 14.8% off each side — still frames the door, its
+; lantern and both stairs whole. D125 was right about the composition and wrong about
+; the brief.
+;
+; `ui/boot_splash.png` stays in the tree: it is still a wanted file in the manifest,
+; and this decision is about what the engine shows at boot, not about the art.
+boot_splash/show_image=false
+; The half of D125 that was correct, and the whole of the setting now. This is the
+; same colour UITheme hands RenderingServer as the clear colour, so the window opens
+; as one flat field of the game's own background, holds it for the ~0.29 s the engine
+; needs, and then draws the title screen. Nothing flashes at the handover because
+; there is no longer a screen before the main screen to hand over FROM.
 boot_splash/bg_color=Color(0.07, 0.06, 0.09, 1)
-; 4 = Cover. The default (1, Keep) fits the image inside the window and pads the
-; rest, and `display/window/size/mode=3` means this opens FULLSCREEN on whatever
-; the desktop happens to be — 16:10 here, which is exactly the aspect that hid a
-; live bug in D115. Cover crops instead of padding, for the reason UI.illustration
-; gives about the title screen: letterboxing reads as a bug rather than a choice.
-; Safe to crop because the composition is head-on and symmetrical — the door and
-; its lantern are dead centre and the frame's outer eighth is unlit stone.
-boot_splash/stretch_mode=4
-; Godot's default, written down because the [rendering] block below says the
-; opposite for everything else. That NEAREST is for the pixel art; this is a
-; painting being resized to an unknown window, and point-sampling it would put
-; jagged steps on the door's arch.
-boot_splash/use_filter=true
 
 [autoload]
 
