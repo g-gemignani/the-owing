@@ -682,10 +682,18 @@ func _buttons(n: Node) -> Array[Button]:
 		out.append_array(_buttons(c))
 	return out
 
+## Buttons the player could press to get somewhere, NOT counting the settings gear.
+##
+## The gear is on every screen `UI.screen()` builds (D133), so counting it would make
+## "this screen presents nothing to press" answerable by a control that is present by
+## construction — the assertion would pass on a screen that had lost every one of its
+## own buttons, which is the failure it exists to catch. It is skipped by the meta
+## `UI.gear()` stamps on it rather than by name: a name is a second place to keep in
+## step, and this one would go stale the first time the control is relabelled.
 func _enabled_buttons(n: Node) -> int:
 	var count := 0
 	for b in _buttons(n):
-		if not b.disabled:
+		if not b.disabled and not b.get_meta("ui_gear", false):
 			count += 1
 	return count
 

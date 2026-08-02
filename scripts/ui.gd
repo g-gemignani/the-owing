@@ -40,7 +40,158 @@ static func screen(root: Control, title: String, art: String = "",
 		t.text = title
 		UITheme.style_title(t)
 		col.add_child(t)
+		# The settings door goes in the band that Label just reserved. Gated on the
+		# title for a reason, not for tidiness — see `gear()`.
+		gear(root)
 	return col
+
+# --- the settings door -------------------------------------------------------
+#
+# Settings was a text button on three screens out of twenty-one — the title screen,
+# the pause menu, and the overworld's second nav row — so changing the volume mid-run
+# meant backing out to a hub. It is built HERE, in the one function every menu screen
+# already routes through, because a control that has to be added screen by screen is
+# a control the next screen somebody writes will not have. That is D95 read forwards
+# rather than backwards: a helper whose whole value is uniformity only reaches the
+# callers that call it, and the screens that hand-roll the scaffold were the ones that
+# quietly missed the last thing added to it.
+#
+# **It is not a gear, because there is no gear.** `assets/art/ui/` holds 21 painted
+# symbols and not one of them is a cog; the nearest by meaning are a die and a coin.
+# Dressing "settings" in an unrelated glyph is the positional-assignment hazard of D91
+# committed on purpose, so this asks for `ui/sym_gear.png` and, until somebody paints
+# one, says the word instead — the same "use it if it exists" contract `divider()` and
+# every backdrop follow, where a missing file degrades to the older, plainer thing
+# rather than to a hole where a control was.
+#
+# It deliberately does NOT go through `Icons.MAP`. A row in that table is a claim that
+# the painting is on disk — `tests/test_art.gd` walks it and fails on any name that
+# resolves to nothing — so adding `"settings"` today would break a suite in order to
+# document an absence. The row belongs in the commit that installs the file, which is
+# the same commit that stops this fallback being reachable (D115: installing art and
+# wiring art are two jobs, and nothing tells you the second one is outstanding).
+
+## Where the corner goes, and the one screen it is never built on.
+const SETTINGS_SCENE := "res://scenes/Settings.tscn"
+
+## As tall as the title band, and that is the whole of the placement argument.
+##
+## Top-right is the brief, and four things already lived there. Measured off the 24
+## captures at 1280x720 — the topmost bright row in the right-hand 70px — rather than
+## eyeballed:
+##
+## * **Combat's `Menu` button, y=18.** `combat.gd` scaffolds its own screen and never
+##   calls `screen()`, so it never sees this, and that is the right answer rather than
+##   a lucky one: `Menu` *is* combat's Escape, a fight is the one screen where a
+##   mis-click costs a turn, and combat withdraws its own exit between the killing
+##   blow and the reward pick. A second door in the same 40px would be a way out of
+##   precisely the state that must not be left.
+## * **`iso_run`'s AT RISK frame, y=16**, pinned `SHRINK_END` in its header. That
+##   screen passes no title — which is exactly why the gate above is on the title and
+##   not on a list of screen names. The corner this control uses is the band the title
+##   occupies, and `screen()` only reserves that band when it is given a title; a
+##   screen that passes none has reserved nothing, and the corner belongs to whatever
+##   it puts there. The crawl reaches Settings through the `Menu` in its foot.
+## * **A scroll grabber**, on every screen carrying a list. Glossary's begins at y=58,
+##   and 58 is where the title band ends. That clearance is not luck: the title is the
+##   first child of the column and nothing can be laid above it.
+## * **Nothing at all** on the other eighteen — the topmost right-hand ink is y=124 or
+##   lower on every one of them.
+##
+## So the height is the title's and not a button's, which rules out the carved frame:
+## its border is drawn 1:1 and needs `UITheme.min_button_height()` (50px) or it smears
+## (D83), and 50px reaches into the scroll. It wears `inspect_thumb`'s treatment
+## instead, for `inspect_thumb`'s stated reason — a thin edge that brightens under the
+## cursor, rather than a frame that forces every row it sits in to grow. The plate
+## under it is not decoration: on the title screen this corner is bare painting
+## OUTSIDE the scrim, which measured 3.7:1 against white before anything was laid
+## under it (see SCRIM_ALPHA).
+const GEAR_SIDE := 34.0
+
+## Escape is untouched by all of this. Nothing here calls `escape()`: a control that
+## is on every screen must never become what every screen's Escape does, and
+## `exit_button()` stays the one place a screen declares its way out.
+static func gear(root: Control) -> Button:
+	# The door does not open onto the room it is in. Without this, Settings' own corner
+	# would record Settings as the place to return to and Back would reload the screen
+	# the player is standing on.
+	if root.scene_file_path == SETTINGS_SCENE:
+		return null
+	# A full-rect holder rather than hand-computed offsets, so the control lands on the
+	# same right edge as the content column from the same one pad constant, and moves
+	# with it if that constant ever changes. It must be mouse-DEAF for the reason the
+	# backdrop is: it covers the whole screen, and a holder that answers the mouse eats
+	# every click meant for what is under it.
+	var holder := MarginContainer.new()
+	holder.set_anchors_preset(Control.PRESET_FULL_RECT)
+	UITheme.pad(holder)
+	holder.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(holder)
+
+	var b := Button.new()
+	b.name = "SettingsGear"
+	# So a test can tell this button from the screen's own. `PlayableTest` asks whether
+	# a screen presents anything the player can press, and an always-present control
+	# makes that question answer itself on every screen at once — the assertion needs
+	# to be able to skip this one or it has stopped being able to fail.
+	b.set_meta("ui_gear", true)
+	var glyph := PixelArt.symbol("gear")
+	var pad_x := 4.0 if glyph != null else 10.0
+	if glyph != null:
+		b.icon = glyph
+		b.expand_icon = true
+		b.custom_minimum_size = Vector2(UITheme.px(GEAR_SIDE), UITheme.px(GEAR_SIDE))
+	else:
+		b.text = "Settings"
+		b.custom_minimum_size = Vector2(0, UITheme.px(GEAR_SIDE))
+	# StyleBoxFlat and not the painted frame, deliberately — see GEAR_SIDE. It is also
+	# what keeps this out of `menu_art_test`'s nine-slice check, which measures every
+	# button wearing a StyleBoxTexture against the 50px its border needs.
+	for state in [["normal", 0.34, 0.72], ["hover", 0.95, 0.88], ["pressed", 0.95, 0.94]]:
+		var sb := StyleBoxFlat.new()
+		sb.bg_color = Color(0.06, 0.05, 0.09, float(state[2]))
+		sb.border_color = Color(0.74, 0.72, 0.80, float(state[1]))
+		sb.set_border_width_all(1)
+		sb.set_corner_radius_all(3)
+		sb.content_margin_left = UITheme.px(pad_x)
+		sb.content_margin_right = UITheme.px(pad_x)
+		sb.content_margin_top = UITheme.px(4)
+		sb.content_margin_bottom = UITheme.px(4)
+		b.add_theme_stylebox_override(String(state[0]), sb)
+	b.tooltip_text = "Settings — volume, combat effects, fullscreen. Back returns here."
+	b.size_flags_horizontal = Control.SIZE_SHRINK_END
+	b.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	b.pressed.connect(func():
+		Audio.play("ui_select")
+		_settings_from = root.scene_file_path
+		goto(root, SETTINGS_SCENE))
+	holder.add_child(b)
+	return b
+
+## Where a Settings opened from the corner has to come back to.
+##
+## Settings decides its own exit today — the title screen, or the pause menu if a run
+## is live — which was a complete answer while it was reachable from exactly those two
+## places. Opened from anywhere, "back" has to mean the screen that opened it.
+##
+## So the corner records that screen and `settings_menu.gd` CONSUMES the record: one
+## press, one return. Consuming is what stops the two routes interfering. The three
+## old text buttons record nothing, so a Settings reached through one of them reads an
+## empty string and falls back to the rule it has always used; and a path left over
+## from an earlier press cannot answer for a later visit that did not set one.
+##
+## A static, like `_escape_owner` above, because it has to survive the scene change it
+## exists to describe. It holds a `scene_file_path` and not a node, which is the same
+## caution that entry states in its own words: a static holding a screen outlives the
+## screen. A screen built in code with no `.tscn` records the empty string and gets
+## the fallback, which is the honest answer rather than a guess.
+static var _settings_from := ""
+
+## Take the recorded screen, and forget it.
+static func settings_return() -> String:
+	var from := _settings_from
+	_settings_from = ""
+	return from
 
 ## A full-bleed painted backdrop: the image, plus a scrim that keeps text legible.
 ## Returns the layers in draw order.

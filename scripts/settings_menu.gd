@@ -4,8 +4,28 @@ extends Control
 
 var back_to := "res://scenes/MainMenu.tscn"
 
+## Where Back goes, decided once and held for the life of the screen.
+##
+## `UI.gear()` put a settings door in the top-right corner of every screen (D133), so
+## "back" stopped being derivable from run state: the same live run can be paused, or
+## browsing Relics, or standing on the world map, and all three now open this screen.
+## The corner records where it was pressed and this consumes that record — see
+## `UI.settings_return()` for why consuming rather than reading is what keeps the two
+## routes from answering for each other.
+##
+## The old derivation stays underneath it, unchanged, and is not dead code: the three
+## text buttons that still open Settings record nothing, and neither would anything
+## else that navigates here directly. An absent record is the normal case, not an
+## error case.
+##
+## Read in `_ready` and not in `_build`, because `_build` runs again whenever a toggle
+## changes the shape of the screen, and re-reading a consumed record there would send
+## Back to the title the moment the player switched combat effects off.
 func _ready() -> void:
-	if GameState.dungeon_id != "" or GameState.in_run():
+	var opener := UI.settings_return()
+	if opener != "":
+		back_to = opener
+	elif GameState.dungeon_id != "" or GameState.in_run():
 		back_to = "res://scenes/PauseMenu.tscn"
 	_build()
 
@@ -27,7 +47,7 @@ func _build() -> void:
 		SettingsState.save_settings())
 	col.add_child(fs)
 
-	# "and intents" came off the label in D130. The setting had never touched the intent
+	# "and intents" came off the label in D133. The setting had never touched the intent
 	# — it had never touched anything — and an intent is what the player reads to decide
 	# whether to block, so hiding it would have been a difficulty option wearing a
 	# comfort option's clothes. A control now says exactly what it does.
