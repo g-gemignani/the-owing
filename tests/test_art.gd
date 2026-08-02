@@ -311,22 +311,41 @@ func _init() -> void:
 
 	# --- every card has its own illustration ---
 	#
-	# The sheet is unlabelled, so what a card's art *depicts* is arbitrary. What must
-	# hold is that each card has one, that no two share it (identical art reads as a
-	# bug), and that every slice lands inside the sheet.
+	# There are now TWO kinds and the difference is the point of Tier 3b. A card with a
+	# painted file of its own gets a real 320x240 illustration; a card without one still
+	# falls through to a slice of the unlabelled CC0 sheet. This block used to assume the
+	# second was the only possibility and cast every result to `AtlasTexture`, which held
+	# only because it calls `card_art(cid)` with no family and so never reached the family
+	# paintings either. The first sixteen per-card illustrations broke it (D136).
+	#
+	# What must hold in both cases: every card has something, no two cards share the same
+	# picture, and an atlas slice lands inside the sheet at one tile.
 	var sheet_ok := ResourceLoader.exists(PixelArt.CARD_SHEET)
 	if not sheet_ok:
 		fails += 1; print("FAIL card art sheet missing")
 	else:
 		var sheet := load(PixelArt.CARD_SHEET) as Texture2D
 		var regions := {}
+		var painted_paths := {}
+		var painted_n := 0
 		for cid in m.CATALOG:
 			var a := PixelArt.card_art(cid)
 			if a == null:
 				fails += 1; print("FAIL no illustration for card %s" % cid); continue
 			var at := a as AtlasTexture
 			if at == null:
-				fails += 1; print("FAIL card %s art is not a sheet slice" % cid); continue
+				# a painted per-card illustration
+				painted_n += 1
+				if a.get_width() != 320 or a.get_height() != 240:
+					fails += 1; print("FAIL card %s illustration is %dx%d, not 320x240" % [
+						cid, a.get_width(), a.get_height()])
+				var rp: String = a.resource_path
+				if rp != "":
+					if painted_paths.has(rp):
+						fails += 1; print("FAIL cards %s and %s share illustration %s" % [
+							cid, painted_paths[rp], rp])
+					painted_paths[rp] = cid
+				continue
 			var r := at.region
 			if r.position.x < 0 or r.position.y < 0 \
 					or r.end.x > float(sheet.get_width()) or r.end.y > float(sheet.get_height()):
@@ -340,11 +359,14 @@ func _init() -> void:
 				dupes += 1
 		if dupes > 0:
 			fails += 1; print("FAIL %d illustration(s) shared between cards" % dupes)
-		if PixelArt.CARD_TILES.size() < m.CATALOG.size():
-			fails += 1; print("FAIL only %d tiles for %d cards" % [
-				PixelArt.CARD_TILES.size(), m.CATALOG.size()])
-		print("  (info: %d cards, %d distinct illustrations, %d tile pool)" % [
-			m.CATALOG.size(), regions.size(), PixelArt.CARD_TILES.size()])
+		# the tile pool only has to cover the cards STILL on it; as Tier 3b lands, that
+		# number falls, and a pool sized for a hundred is not a failure at ninety-nine
+		var on_sheet: int = m.CATALOG.size() - painted_n
+		if PixelArt.CARD_TILES.size() < on_sheet:
+			fails += 1; print("FAIL only %d tiles for the %d cards still on the sheet" % [
+				PixelArt.CARD_TILES.size(), on_sheet])
+		print("  (info: %d cards, %d painted per-card, %d on the sheet across %d distinct tiles)" % [
+			m.CATALOG.size(), painted_n, on_sheet, regions.size()])
 
 	# --- the card's meaningful symbol must still be distinct from its art ---
 	# (illustration is decoration; the symbol states the effect and must be present)
