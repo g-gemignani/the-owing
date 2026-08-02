@@ -56,6 +56,16 @@ const LIT := 0.02
 ## ...and part of the stamp where it is lit in EVERY frame-sharing image.
 ## Grown by this much afterwards, because the star has a soft halo that is under the
 ## threshold and would be left behind as a faint square.
+## ...grown by this much afterwards, and `--grow=N` overrides it.
+##
+## The default is right for a batch that shares one look. It is NOT right when the
+## batch does not, because the mask is an INTERSECTION: a halo pixel counts only if
+## it is lit in every image, so the least-contrasty frame in the set decides how far
+## out the mask reaches. Stripping `boot_splash.png` — a near-black painting keyed
+## against bright square generator output — found the stamp's core at 53x45 and left
+## its halo behind as a pale smudge, which on the first image anyone sees is worse
+## than the crisp star it replaced (D125). The lever is the grow, not the tolerance:
+## `LIT` decides what IS the stamp and was right both times.
 const GROW := 8
 ## Sanity bounds on what may be called a watermark, so a bug cannot quietly erase a
 ## brazier: it has to be a small compact blob, not a region.
@@ -81,14 +91,18 @@ const SWEEPS := 600
 const MIN_FRAMES := 3
 
 var _dry := false
+var _grow_px := GROW
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	_dry = args.has("--dry")
 	var src := ""
 	for a in args:
-		if not String(a).begins_with("--"):
-			src = String(a)
+		var s := String(a)
+		if s.begins_with("--grow="):
+			_grow_px = maxi(0, int(s.trim_prefix("--grow=")))
+		elif not s.begins_with("--"):
+			src = s
 	var paths := _source_dir(src) if src != "" else _dungeon_backdrops()
 	if paths.size() < MIN_FRAMES:
 		print("need at least %d images sharing one frame to isolate the stamp; found %d" % [
@@ -232,7 +246,7 @@ func _stamp_mask(imgs: Array[Image]) -> Array[bool]:
 				lit[y * WIN_W + x] = false
 	# One stamp, so one blob. Anything else that survived twelve images is a
 	# coincidence between two rooms, not the thing being removed.
-	return _grow(_largest_blob(lit), GROW)
+	return _grow(_largest_blob(lit), _grow_px)
 
 ## The biggest 4-connected component, everything else dropped.
 func _largest_blob(mask: Array[bool]) -> Array[bool]:
