@@ -78,7 +78,7 @@ static func _rest_choice(view: Node, node: Dictionary, on_resolved: Callable) ->
 
 	var t := Label.new()
 	t.text = "A place to stop"
-	t.add_theme_font_size_override("font_size", UITheme.title_font())
+	UITheme.style_title(t)
 	col.add_child(t)
 	UI.label(col, "HP %d/%d · deck %d cards, one card seen every %.1f turns" % [
 		GameState.hp, GameState.max_hp, GameState.run_deck.size(),

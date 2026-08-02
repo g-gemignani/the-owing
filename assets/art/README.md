@@ -5,6 +5,10 @@ Full-bleed illustrations, as opposed to the CC0 pixel tilesets in `assets/pixel/
 These are **generated images, not Kenney CC0 assets**, and are not covered by the
 licence files under `assets/pixel/` and `assets/audio/`.
 
+The one exception is `fonts/`, which is the only thing under here that was
+downloaded rather than made: two SIL Open Font License faces, each shipping the
+upstream `OFL.txt` verbatim beside it. See `fonts/PROVENANCE.txt`.
+
 | file                     | used by                        | origin                       |
 |--------------------------|--------------------------------|------------------------------|
 | main_menu.jpg            | scenes/MainMenu                | generated (Gemini 2.5 Flash) — RE-ROLL, off-style (D114) |
@@ -26,6 +30,8 @@ licence files under `assets/pixel/` and `assets/audio/`.
 | cards/&lt;family&gt;.png       | 12 families, 100 cards         | to come — cutouts            |
 | ui_button.png            | fallback if `ui/` is empty     | generated                    |
 | ui_panel.png             | PanelContainer fallback        | generated                    |
+| fonts/body.ttf           | the Theme default, via UITheme | DOWNLOADED — OFL, see fonts/PROVENANCE.txt |
+| fonts/display.ttf        | headings and card names        | ″                            |
 
 **Two generators is two dialects.** The backdrops above came from Gemini and Leonardo
 and it is visible in a contact sheet. Everything from here on goes through ONE tool,

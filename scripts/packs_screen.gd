@@ -143,7 +143,7 @@ func _show(gold: int, cards: Array, what: String) -> void:
 	for c in result_box.get_children():
 		c.queue_free()
 	var head := UI.label(result_box, "%s: %d gold, and —" % [what, gold])
-	head.add_theme_font_size_override("font_size", UITheme.title_font())
+	UITheme.style_title(head)
 
 	var size := UITheme.reward_card_size()
 	var row := UI.row(result_box, 10)

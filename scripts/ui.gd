@@ -38,7 +38,7 @@ static func screen(root: Control, title: String, art: String = "",
 	if title != "":
 		var t := Label.new()
 		t.text = title
-		t.add_theme_font_size_override("font_size", UITheme.title_font())
+		UITheme.style_title(t)
 		col.add_child(t)
 	return col
 
@@ -558,7 +558,7 @@ static func card_picker(host: Control, deck: Array, title: String,
 
 	var t := Label.new()
 	t.text = title
-	t.add_theme_font_size_override("font_size", UITheme.title_font())
+	UITheme.style_title(t)
 	col.add_child(t)
 
 	var scroll := ScrollContainer.new()
@@ -810,6 +810,13 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 
 	var title := _card_label(holder, label if label != "" else card.name,
 		Color(0.96, 0.96, 0.96))
+	# The one piece of text on a card that is NOT in the body face. The name is the
+	# card's identity, and in a fanned hand it is the only thing a resting card shows
+	# (D97) — so it is the one place on the face where telling two cards apart at a
+	# glance matters more than reading a sentence.
+	var name_face := UITheme.display_face()
+	if name_face != null:
+		title.add_theme_font_override("font", name_face)
 	var title_w := inner.x
 
 	# generated, not the authored line: a fused card must not misreport itself

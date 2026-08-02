@@ -1,0 +1,41 @@
+Fonts: downloaded, not generated. Both are SIL Open Font License 1.1.
+
+display.ttf  Cinzel Bold, version 2.000
+             Natanael Gama (www.ndiscovered.com)
+             https://github.com/NDISCOVER/Cinzel  ->  fonts/ttf/Cinzel-Bold.ttf
+             sha256 0c23ec565db45c5508ee95889c60ad87debd167ca07167a43a5d68572b4e2eac
+             Licence: LICENSE-cinzel-ofl.txt (the upstream OFL.txt, verbatim)
+
+body.ttf     Fira Sans Regular, version 4.203
+             Carrois Corporate GbR & Edenspiekermann AG, for The Mozilla Foundation
+             https://github.com/google/fonts  ->  ofl/firasans/FiraSans-Regular.ttf
+             sha256 c29556a2719bf613ef3d5e070e40d903a8965d9c081beca1375dc1e6e0f93c23
+             Licence: LICENSE-fira-sans-ofl.txt (the upstream OFL.txt, verbatim)
+
+Taken from the STATIC builds. Google Fonts ships Cinzel only as a variable
+`Cinzel[wght].ttf`; the static Bold comes from the upstream repository the Google
+Fonts METADATA names as canonical, at the same 2.000 the variable is cut from.
+
+Why these two.
+
+Cinzel is Roman inscriptional — Trajan's lettering, which is what the frame kit is
+already pretending to be: carved stone with a parchment inlay. It is the one display
+face on the shortlist that agrees with the art direction instead of merely not
+fighting it. BOLD rather than Regular because the display face is not only a title
+face here: it is the card NAME, and `UI.fit_label` will take a name down to 7px in a
+crowded fan. Cinzel Regular's hairline serifs are gone by then; Bold survives, and at
+22px it reads as an inscription rather than as a shout.
+
+Fira Sans was drawn for small text on screens, and it measured that way. Rendered at
+12px against the shortlist (Alegreya Sans Regular and Medium, Spectral, and Godot's
+own default) it has visibly the largest x-height and the most open counters of the
+four, which is the whole requirement: card rules text shrinks to fit and 12px is a
+normal outcome, not an edge case, so the body face has to be chosen at the size it
+will actually be read at rather than at the size it looks handsome at.
+
+Replacing either is a file swap: keep the names, drop a .ttf in this directory, run
+`godot --headless --import`. `UITheme.display_face()` and `UITheme.body_face()` are
+"use it if it exists", so deleting one falls back to the engine default rather than
+to a blank screen — and the layout assertions in `tests/test_layout.gd` and
+`tests/tooltip_test.gd` measure real wrapped line counts, so a face with much wider
+metrics will say so.

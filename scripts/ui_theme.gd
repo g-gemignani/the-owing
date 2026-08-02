@@ -158,6 +158,51 @@ static func ink_for(tex: Texture2D) -> Color:
 	_ink_cache[key] = ink
 	return ink
 
+## The two faces the game is set in. Everything drawn is one of them.
+##
+## The BODY face is the Theme's default font, so a control that asks for nothing
+## gets it — which is every label, button, tooltip and dropdown in the game. The
+## DISPLAY face is put on by hand, in the two places that are identity rather than
+## information: a screen's heading (`style_title`) and a card's name strip
+## (`UI.card_button`). Numbers are deliberately not among them; a vitals row or a
+## gold total in an inscriptional serif reads as decoration, not as a readout.
+##
+## "Use it if it exists", the same contract as the frame kit below, and for the same
+## reason: a checkout with no fonts installed falls back to Godot's default rather
+## than to a blank screen. What they are, where they came from and why those two —
+## `assets/art/fonts/PROVENANCE.txt`.
+const DISPLAY_FONT := "res://assets/art/fonts/display.ttf"
+const BODY_FONT := "res://assets/art/fonts/body.ttf"
+
+static var _font_cache: Dictionary = {}
+static func _face(path: String) -> Font:
+	if _font_cache.has(path):
+		return _font_cache[path]
+	var f: Font = null
+	if ResourceLoader.exists(path):
+		f = load(path) as Font
+	_font_cache[path] = f
+	return f
+
+func body_face() -> Font:
+	return _face(BODY_FONT)
+
+func display_face() -> Font:
+	return _face(DISPLAY_FONT)
+
+## Dress a Label as a HEADING: the display face, at the title size.
+##
+## The two travel together deliberately. Every screen used to write the size
+## override by hand, so installing a face would have meant a second line beside each
+## of a dozen of them — and the one somebody forgets is a heading in the body face
+## at title size, which reads as a bug rather than as a style. Same shape as
+## `style_button`: the screen says what a thing IS and this decides how it looks.
+func style_title(l: Label) -> void:
+	l.add_theme_font_size_override("font_size", title_font())
+	var face := display_face()
+	if face != null:
+		l.add_theme_font_override("font", face)
+
 ## The painted frame kit ART.md specifies, wired so dropping a file in turns it on.
 ##
 ## Only `ui_button.png` and `ui_panel.png` had code behind them; the other 22 files
@@ -303,6 +348,13 @@ func button_height(base: float) -> float:
 func _rebuild_theme() -> void:
 	theme = Theme.new()
 	theme.default_font_size = font()
+	# The DEFAULT font, not a font on "Label". A theme entry per type reaches only the
+	# types somebody remembered to list, and the ones nobody lists — TooltipLabel,
+	# OptionButton's popup, LineEdit — stay on the engine's face, which is four faces
+	# on one screen. The default is the one entry every control falls through to.
+	var body := body_face()
+	if body != null:
+		theme.default_font = body
 
 	# text has to clear the carved border, which is drawn at a fixed size
 	var pad_x: float = float(BUTTON_SLICE["l"]) + 4.0

@@ -1,4 +1,4 @@
-# Deckcrawl
+# The Owing
 
 A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 (GDScript). Slay-the-Spire-shaped combat, but what you carry between runs is a
@@ -122,6 +122,14 @@ Everything under `assets/art/` — the title illustration, the 23 backdrops, the
 enemy plates and the generated frame kit — is generated for this project and is
 **not** CC0; see `assets/art/README.md`. So are the five looping music tracks in
 `assets/audio/music/`; see their `PROVENANCE.txt`.
+
+The two typefaces are the exception: they were downloaded, and both are under the
+**SIL Open Font License 1.1** — [Cinzel](https://github.com/NDISCOVER/Cinzel) by
+Natanael Gama for headings and card names, and
+[Fira Sans](https://github.com/mozilla/Fira) by Carrois Corporate &
+Edenspiekermann for everything else. Each ships its upstream `OFL.txt` in
+`assets/art/fonts/`, with the versions and hashes in that directory's
+`PROVENANCE.txt`.
 
 What is left in `assets/pixel/`, and the sound effects, are **CC0** by
 [Kenney](https://kenney.nl) — 1-Bit Pack (the card sheet), Pattern Pack Pixel (the

@@ -50,7 +50,7 @@ func _ready() -> void:
 func _section(parent: Node, title: String) -> void:
 	var l := Label.new()
 	l.text = title
-	l.add_theme_font_size_override("font_size", UITheme.title_font())
+	UITheme.style_title(l)
 	parent.add_child(l)
 
 func _entry(parent: Node, term: String, text: String) -> void:

@@ -39,7 +39,7 @@ func _build_ui() -> void:
 	margin.add_child(root)
 
 	title_label = Label.new()
-	title_label.add_theme_font_size_override("font_size", UITheme.title_font())
+	UITheme.style_title(title_label)
 	title_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(title_label)
 

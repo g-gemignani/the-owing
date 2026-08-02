@@ -1,4 +1,4 @@
-# ART.md — the art brief for Deckcrawl
+# ART.md — the art brief for The Owing
 
 What the game looks like now, what it should look like, and the **list of assets
 that gets it there**. Companion to [AGENTS.md](AGENTS.md) (the concept) and
@@ -79,7 +79,8 @@ visibly rendered at all in the combat capture — *fixed in D89; 35 generated pl
 stand on the floor line*. All 30 relics render as text rows —
 `relics_screen.gd` makes no icon call whatsoever. All 20 events are a title, two
 lines and three buttons over 400px of black. There is no custom font: the whole
-game runs on Godot's built-in default.
+game runs on Godot's built-in default. *Fixed: Fira Sans is the Theme default and
+Cinzel sets the headings and the card names — see `assets/art/fonts/PROVENANCE.txt`.*
 
 ### What is already right, and must not be thrown away
 
@@ -478,15 +479,19 @@ Painted objects on transparent, lit from upper-left, ink-outlined, readable at
 
 | file | size | note |
 |---|---|---|
-| `fonts/display.ttf` | — | **no custom font exists**; titles use Godot's default |
-| `fonts/body.ttf` | — | ″ — needs an OFL/SIL licence, recorded like the Kenney ones |
-| `ui/logo.png` | 1600×480 | the title is a plain `Label` reading `"DECKCRAWL"` |
+| `fonts/display.ttf` | — | **done** — Cinzel Bold (OFL); `UITheme.style_title` and card names |
+| `fonts/body.ttf` | — | **done** — Fira Sans Regular (OFL); the `Theme` default |
+| `ui/logo.png` | 1600×480 | the title is a plain `Label` reading `"THE OWING"`, set into the painted cartouche |
 | `icon.svg` + `icon.png` | 256×256 | **no window or export icon configured** in `export_presets.cfg` |
 | `ui/boot_splash.png` | 1280×720 | none configured |
 | `ui/cursor.png`, `ui/cursor_press.png` | 64×64 | optional |
 
-The font is the cheapest large win on this list: two files and a `Theme` change,
-and every screen in the game changes character.
+The font was the cheapest large win on this list and it is spent: two files and a
+`Theme` change, and every screen in the game changed character. Body face chosen at
+12px rather than at 22px, because that is where card rules text actually lands once
+`UI.fit_label` has shrunk it; display face chosen in BOLD for the same reason, since
+a card name in a crowded fan goes down to 7px and a hairline serif does not survive
+it. Three headings in `combat.gd` still carry the body face and want `style_title`.
 
 ---
 
@@ -542,10 +547,10 @@ Assets that land on top of these problems will not look better. None of it is la
 2. ~~The nine missing dungeon backdrops.~~ **Done (D73), and all 23 backdrops with
    them (D83b/D83d)**, and the screens that were bypassing `UI.screen()` were brought
    inside it (D95). This item is closed.
-3. ~~**A font, and the enemies.**~~ **Half done.** The 35 enemy plates landed in D89.
-   **The font is now the single largest visible win left in this document**: two files
-   and a `Theme` change, and every screen in the game changes character. After it, the
-   twelve card family illustrations — the card is the object the player looks at for
+3. ~~**A font, and the enemies.**~~ **Done.** The 35 enemy plates landed in D89 and the
+   two faces are installed: Fira Sans as the `Theme` default, Cinzel Bold on headings
+   and card names. This item is closed. What is now the largest visible win left is the
+   **twelve card family illustrations** — the card is the object the player looks at for
    most of the runtime and it is still a 16×16 tile magnified ten times.
 
 ---

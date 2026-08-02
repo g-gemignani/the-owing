@@ -62,7 +62,7 @@ func _build_ui() -> void:
 
 	var title := Label.new()
 	title.text = "Merchant"
-	title.add_theme_font_size_override("font_size", UITheme.title_font())
+	UITheme.style_title(title)
 	root.add_child(title)
 
 	status_label = Label.new()

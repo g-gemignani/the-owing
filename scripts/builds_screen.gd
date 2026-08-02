@@ -25,7 +25,7 @@ func _ready() -> void:
 				missing.append(cid)
 
 		var title := Label.new()
-		title.add_theme_font_size_override("font_size", UITheme.title_font())
+		UITheme.style_title(title)
 		var done := missing.is_empty()
 		title.add_theme_color_override("font_color",
 			Icons.rarity_colour(4) if done else Color(0.9, 0.9, 0.9))

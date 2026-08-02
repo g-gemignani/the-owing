@@ -42,7 +42,7 @@ func _open() -> void:
 
 	var title := Label.new()
 	title.text = "%s Chest" % Balance.PACK_TIER_NAME.get(tier, "Worn")
-	title.add_theme_font_size_override("font_size", UITheme.title_font())
+	UITheme.style_title(title)
 	title.add_theme_color_override("font_color", _tier_colour(tier))
 	body.add_child(title)
 
