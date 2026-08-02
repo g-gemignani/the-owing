@@ -238,6 +238,27 @@ func _init() -> void:
 					fails += 1
 					print("FAIL README does not say '%s' — there are %d suites now" % [
 						claim, suites])
+			# The licence badge is a STATIC string too, and for a better reason than the
+			# suite count: the dynamic one read the licence off the GitHub API, and when
+			# that answered "repo not found" for one minute during a rename, GitHub's
+			# image proxy cached the red picture and would not give it up — camo no
+			# longer honours PURGE, so a transient upstream failure reds a badge until
+			# its URL changes. A fact that never changes should not be fetched (D148).
+			# It is pinned to the actual LICENSE file instead.
+			var lic := FileAccess.open("res://LICENSE", FileAccess.READ)
+			if lic == null:
+				fails += 1; print("FAIL LICENSE is missing")
+			else:
+				var ltext := lic.get_as_text()
+				lic.close()
+				var is_apache2 := ltext.find("Apache License") != -1 \
+					and ltext.find("Version 2.0") != -1
+				if not is_apache2:
+					fails += 1
+					print("FAIL LICENSE is no longer Apache 2.0 — the README badge says it is")
+				elif text.find("licence-Apache_2.0-brightgreen") == -1:
+					fails += 1
+					print("FAIL README licence badge does not match LICENSE (Apache 2.0)")
 
 	if fails == 0:
 		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness, README counts)")

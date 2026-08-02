@@ -8902,3 +8902,53 @@ own. The genuinely broken one was `downloads`, permanently: it pointed at
 prereleases**. The rolling build is a prerelease by design, so the endpoint had nothing to
 count and shields rendered "no releases or repo not found". `downloads-pre` is the variant
 that can see one.
+
+### D148 — A badge went red for one minute and stayed red, because GitHub caches the picture
+
+The licence badge read **`license: repo not found`** on the rendered README while
+`img.shields.io` returned `license: Apache-2.0`, green, on six consecutive fetches. Both
+were true at the same time, which is the whole of the problem.
+
+GitHub does not hotlink README images. It proxies them through
+`camo.githubusercontent.com`, keyed on the image URL, and caches the *result*. The badge
+was genuinely broken for the few minutes between pushing a README that said `the-owing`
+and the repository actually being renamed — shields asked the API for a repository that
+did not exist yet, got nothing, and rendered a red "repo not found". Camo cached that
+picture. When the rename landed and shields started answering correctly, camo went on
+serving the copy it already had, because the URL had not changed and nothing had told it
+to look again.
+
+**`curl -X PURGE` on the camo URL returns 200 and does nothing.** That endpoint used to
+work and no longer does; the 200 is not a confirmation of anything. Verified rather than
+assumed — purged, waited, refetched, same red picture. So the only lever left is the URL:
+change any part of it and a new camo entry is minted.
+
+The five other badges had all silently fixed themselves for exactly that reason. Their
+URLs had changed in the meantime — `downloads` moved to `downloads-pre`, `platforms`
+dropped iOS — so each one minted a fresh camo entry and picked up the working image. The
+licence badge was the only one whose URL had not been touched since before the rename,
+which is why it was the only one still red. That also explains why the earlier report of
+"release and license are red" resolved by itself for one of the two and not the other:
+nothing healed, one URL changed and one did not.
+
+## The fix is to stop fetching a fact that never changes
+
+The badge is now the static `licence-Apache_2.0-brightgreen`. This is not a workaround for
+the cache — the new URL busts that as a side effect — it is the right shape. Reading the
+licence off the GitHub API every page load buys nothing: the licence has not changed since
+the repository was created and will not change without a deliberate act, and in exchange
+it inherits every failure mode of an API round-trip, including shields' own rate limit,
+and every one of those failures is *sticky* once camo has seen it.
+
+A static badge invites the objection that killed `ART_ASSETS.md` in D141: a hand-typed
+fact goes stale and nobody notices. So it gets the same answer the suite count got in
+D145 — `tests/test_content.gd` reads `LICENSE`, confirms it is Apache 2.0, and asserts the
+README badge says so. Relicense the project and the build fails until the badge is
+corrected. Verified by breaking it: `licence-MIT`, red; restored, green.
+
+**The general rule, which applies to every dynamic badge still on the page:** a shields
+badge that queries an API can be poisoned by one transient upstream failure, and the
+poison outlives the failure by an unbounded amount. `latest build` and `downloads` are
+kept dynamic because a fixed date and a fixed download count would be worse than useless
+— but if either shows an error string, the remedy is not to wait. It is to change the URL,
+by any means: a different endpoint variant, or a `&v=2` nobody reads.

@@ -6,7 +6,7 @@
 [![downloads](https://img.shields.io/github/downloads-pre/g-gemignani/the-owing/latest/total?color=brightgreen&label=downloads)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
 [![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-brightgreen)](#play-it)
 [![Godot](https://img.shields.io/badge/Godot-4.7-478cbf)](https://godotengine.org)
-[![licence](https://img.shields.io/github/license/g-gemignani/the-owing?color=brightgreen)](LICENSE)
+[![licence](https://img.shields.io/badge/licence-Apache_2.0-brightgreen)](LICENSE)
 
 A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 (GDScript). Slay-the-Spire-shaped combat — but what you carry between runs is a
