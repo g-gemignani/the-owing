@@ -8786,3 +8786,45 @@ percentage would be a number somebody typed, on a page whose whole claim is that
 numbers are generated or asserted. A green badge measuring nothing is worse than no
 badge: it is an invitation to stop asking. The README says this in place of the badge,
 which is the honest version of the same information.
+
+### D146 — Android worked first try, iOS did not, and a swallowed exit code told a true lie
+
+The five-platform pipeline's first run: `test`, `export-ready`, `build-desktop` and
+`build-android` green; `build-ios` red at `xcodebuild`; `release` red at publish. Two
+different faults, and only one of them was about mobile.
+
+## The release failure was the repository rename, reported as something else
+
+D145's rename landed *while that run was in flight*. GitHub answers API calls for a
+renamed repository with a 301, and `gh` follows that on a GET but not on a DELETE — so
+`gh release delete latest` failed. It was written `|| true`, on the reasoning that a
+missing release is not an error. That reasoning is right and the code was still wrong:
+`|| true` cannot tell "there was nothing to delete" from "the delete was refused", so the
+failure surfaced three lines later as *"a release with that tag already exists"* — a
+message that is true, specific, and about the wrong cause. Ten minutes went into the
+publish step before the actual answer showed up in the release page's own metadata, which
+still recorded the previous commit.
+
+Now it asks first and deletes without a guard: `gh release view` decides whether there is
+anything to remove, and the delete itself is allowed to fail the job. **`|| true` on a
+command whose failure you have not enumerated is a way of choosing which error message
+you get, not a way of avoiding one.**
+
+## `-scheme` on a generated Xcode project is a coin flip
+
+Godot's project-only iOS export writes an Xcode project with no *shared* scheme. Schemes
+that are not shared live in a per-user directory that a fresh CI checkout does not have,
+so `xcodebuild -scheme <name>` has nothing to resolve — and the name being guessed from
+the `.xcodeproj` filename made it worse by hiding which of the two was wrong.
+
+Targets always exist. The job now reads the target list out of the project
+(`xcodebuild -list -json`) and builds `-target`, prints `xcodebuild -list` first either
+way, and fails with the project path if the list is empty. This is the third thing in
+this job that is discovered rather than assumed, alongside the `.xcodeproj` path and the
+built `.app` — which is the correct posture for the one job in the tree that cannot be
+dry-run before it ships.
+
+Worth recording plainly: **Android needed no iteration at all.** The stubbed-SDK
+experiment in D144 answered the only question that mattered before the first run, and
+`apksigner verify` confirmed the output on the machine that produced it. The target that
+was measured in advance worked; the target that could not be worked by inspection.

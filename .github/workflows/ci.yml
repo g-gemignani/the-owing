@@ -263,11 +263,21 @@ jobs:
           set -euo pipefail
           proj=$(find build/ios -maxdepth 3 -name '*.xcodeproj' | head -1)
           [ -n "$proj" ] || { echo "::error::no .xcodeproj under build/ios"; exit 1; }
-          echo "building $proj"
-          xcodebuild -project "$proj" -scheme "$(basename "$proj" .xcodeproj)" \
+          echo "--- what this project actually offers ---"
+          xcodebuild -list -project "$proj" || true
+          # A TARGET, not a scheme. Godot's generated project has no *shared* scheme, so
+          # `-scheme <name>` is a coin flip on whether xcodebuild can see one; every
+          # project has targets. The name is read out of the project rather than guessed
+          # from the filename, which is what the first attempt did.
+          target=$(xcodebuild -list -json -project "$proj" \
+            | python3 -c 'import sys,json; print((json.load(sys.stdin)["project"].get("targets") or [""])[0])')
+          [ -n "$target" ] || { echo "::error::no target in $proj"; exit 1; }
+          echo "building target '$target' from $proj"
+          xcodebuild -project "$proj" -target "$target" \
             -sdk iphoneos -configuration Release \
             -derivedDataPath "$RUNNER_TEMP/dd" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            ENABLE_BITCODE=NO \
             build
           app=$(find "$RUNNER_TEMP/dd" -maxdepth 4 -name '*.app' -type d | head -1)
           [ -n "$app" ] || { echo "::error::xcodebuild produced no .app"; exit 1; }
@@ -382,7 +392,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release delete latest --yes --cleanup-tag || true
+          # Checked, then deleted WITHOUT `|| true`. The first version swallowed the
+          # delete's exit code, so when a repository rename made the API 301 the delete
+          # away, the failure surfaced three lines later as "a release with that tag
+          # already exists" — a true message about the wrong cause (D146).
+          if gh release view latest >/dev/null 2>&1; then
+            gh release delete latest --yes --cleanup-tag
+          fi
           gh release create latest staged/* \
             --target "$GITHUB_SHA" \
             --prerelease \
