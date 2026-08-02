@@ -8043,3 +8043,65 @@ This batch was briefed as D130 and the concurrent session took D130, D131 and D1
 ran, so every reference was renumbered to D133 — except `combat.gd`'s, which is genuinely
 theirs. Two sessions cannot pick decision numbers up front; the number has to be claimed
 when the entry is written, not when the work starts.
+
+### D134 — The title screen was 41.5% green against a style bible that is 0.0%
+
+"The green is not convincing me." Measured, hue bucketed over the whole frame:
+
+| file | green | cyan | blue | violet | mean sat |
+|---|---|---|---|---|---|
+| `main_menu.png` | **41.5%** | 7.5% | 22.4% | 24.3% | 0.61 |
+| `bg_crypt.png` — the style bible | **0.0%** | 2.7% | 85.0% | 12.2% | 0.58 |
+| `bg_world.png` | 0.1% | 10.0% | 12.4% | 0.0% | 0.15 |
+
+So the largest hue mass in the game's front door was a hue that appears **nowhere** in
+the reference image attached to every single generation request. Not a matter of taste:
+the green forest and the green cloak were a second saturated mass competing with the cyan
+flame, in a style whose rule is *one* saturated light source and everything else in deep
+shadow.
+
+## The palette line was not the problem — the noun was
+
+The style block has said `PALETTE: cool desaturated violet-grey stone base. ONE saturated
+light source` on every request since D100. The subject line said **"a valley of firs"**,
+and firs are green. A concrete noun beats an adjective, which is D101's finding ("the
+prompt sheet was describing the wiring, not the picture") and D108's ("the card brief
+described a card that had already changed twice") arriving a third time in a third place.
+The generator did exactly what it was told.
+
+The brief now names the colour where the noun is, rather than trusting the palette line to
+win an argument it has already lost twice: *"NO GREEN ANYWHERE IN THE FRAME: the firs are
+black and violet-grey silhouettes at night, not foliage, and the traveller's cloak is the
+same cold stone colour as the rock — a forest and a cloak are the two things a painter
+reaches for green for, and this palette does not have it."*
+
+## Graded rather than re-rolled, and why
+
+The composition took three attempts to land — the traveller and the flame right of centre,
+the left third quiet under the text column, the fortress far off across the valley. Only
+the hue was wrong, and a hue is arithmetic. Re-rolling would have spent a composition that
+works to fix something an operation fixes exactly.
+
+`tools/regrade.gd` moves one hue band into another in place. Two choices in it are not
+obvious:
+
+- **The remap runs descending.** 70° (yellow-green) lands at 275° (violet) and 160°
+  (teal-green) at 235° (blue), so the *tealest* greens stay nearest the cyan flame they
+  sit beside. Ascending would have swapped them and put the forest's warm edge next to the
+  one saturated light source in the frame.
+- **Moved pixels lose 55% of their saturation.** A saturated blue forest is the same defect
+  in a new hue; the rule is a desaturated base, so the forest becomes cool stone and the
+  flame keeps its saturation because the cyan band is never touched.
+
+Result: green **41.5% → 0.0%**, blue 22.4% → 57.6%, cyan **unchanged at 7.5%** (the flame
+survived, which is the whole point), mean saturation 0.61 → 0.47.
+
+**It refuses to run twice.** A grade is not idempotent — applied to its own output it walks
+the hue further every pass — so the tool measures the band first and exits with "already
+inside the palette, nothing to do" when it is empty. Verified: the second run does nothing.
+That is what makes it safe to leave for whoever re-rolls this file next, and it is the
+difference between a tool and a one-shot somebody re-runs by accident.
+
+**A grade is a patch on the installed file and the brief is the durable fix**, which is why
+both landed together. If the title art is re-rolled, the new file should come back inside
+the palette on its own; if it does not, the tool is there and will say so.
