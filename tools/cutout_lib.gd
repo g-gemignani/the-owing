@@ -40,35 +40,63 @@ const HOLE_TOL := 0.05
 const HOLE_MIN := 0.0005
 ## Alpha at or under this is transparent for trimming purposes.
 const ALPHA_CUT := 8
-## How steep a local gradient stops the background fill, as Sobel magnitude on luma
-## normalised to 0-1. This is the guard that keeps the fill OUT of the subject, and it is
-## the fix for the defect that cost five iso figures (D152): tolerance alone cannot
-## separate a grey mummy from a grey field, because the mummy's own bandages sit inside
-## `TOL` of the field colour. The fill then walks in through one shaded pixel, spreads
-## through the whole body, and `despeckle` keeps whichever scraps survive — a painting
-## shredded into confetti with no error printed anywhere.
+## How much local DETAIL a pixel may carry and still be called background: the standard
+## deviation of luma in a 5x5 window, in 0-255 levels.
 ##
-## A painted subject has an inked outline and a field does not have anything, so the edge
-## between them is the one reliable difference when the colours agree. Measured across the
-## 23 iso figures: at 0.05 every subject is recovered whole and no field survives; at 0.10
-## the mummies and the hounds are still torn, because a soft edge on a low-contrast flank
-## does not clear it. Seeds on the frame border are exempt — the border IS field by the
-## `BORDER_AGREE` check above, so gating the seeds would leave the fill nowhere to start.
-const EDGE_STOP := 0.05
-## How much DETAIL a trapped pocket may contain before it is judged to be paint rather than
-## field, as a fraction of the pocket's own pixels over `EDGE_STOP`.
+## This is the guard that keeps the fill OUT of the subject, and it is what tolerance alone
+## cannot do (D153). A grey mummy on a slate field, brown fur on slate, a pale stone's
+## shaded face on slate — all sit inside `TOL` of the field colour somewhere along their
+## silhouette, and one such pixel is a doorway: the fill goes through it, spreads over the
+## whole body from the inside, and `despeckle` keeps whichever scraps are still connected.
+## A painting shredded into confetti, with no error printed anywhere.
 ##
-## `fill_trapped` and the edge gate above pull in opposite directions and both are needed.
-## The gate keeps the border fill out of a subject whose colour agrees with the field; the
-## pocket pass then reaches the same pixels from the inside, because a body sealed off by its
-## own outline is exactly what "enclosed, and close to the field colour" describes. On the
-## first attempt at D152 the two cancelled out and the mummies were shredded by the second
-## pass instead of the first.
+## What separates them is not colour, it is that **a field has nothing in it.** The
+## installers verify the border is flat before cutting (`BORDER_AGREE`), so background is
+## smooth by contract, while bandages, fur, wood grain and a carved rune face are not.
+## Measured over the 23 iso figures: field-coloured pixels sit at a median 0.0-2.3 levels of
+## local deviation, and pixels far from the field at 7-20. 4.0 is the gap.
 ##
-## What separates them is not colour or shape, it is that a field has NOTHING in it. Real
-## field, even sealed between two legs, is flat; a mummy's bandages, a hound's fur and a
-## rune stone's carved face are detail. So the same edge map settles both questions.
-const POCKET_DETAIL_MAX := 0.03
+## A single-pixel Sobel gradient was tried first (D152) and is strictly worse: it stops at
+## the OUTLINE, so it leaves a two-pixel rim of field colour all the way around every
+## subject — the shop, the fire and the ogre all shipped wearing one — and it says nothing
+## about a low-contrast flank where the outline has faded.
+const STD_FLAT := 4.0
+## Radius of the window that deviation is measured in. 2 (a 5x5 box) is the smallest window
+## that still separates a smooth field from painted detail; at radius 1 a soft airbrushed
+## flank measures as flat as the field does.
+const STD_R := 2
+## How far from the background an opaque pixel may be and still have its alpha GRADED by how
+## close its colour is to the field, in pixels.
+##
+## The band exists because the flatness gate necessarily stops short: a window centred two
+## pixels outside the subject already touches it, so the last two pixels of field read as
+## detail and survive the fill. Eroding them off is what the pipeline used to do and it cuts
+## real edges too. Grading them by colour is exact — a rim that IS the field goes fully
+## transparent, an inked outline stays fully opaque, and a genuinely soft edge lands in
+## between, which is what it already was.
+const EDGE_BAND := 3
+## How much brighter than the field a pixel has to be to be called the subject's own light
+## rather than the subject (`clear_bloom`), in 0-1 luma. Small on purpose: the condition that
+## does the work is reachability, and this only has to exclude the field's own noise.
+const BLOOM_LIFT := 0.008
+## Mean local deviation a trapped pocket may carry and still be cleared as field, in 0-255
+## levels — tighter than `STD_FLAT`, and it is a SEPARATE question from the one the border
+## fill asks (D153).
+##
+## Clearing a pocket punches a hole in a subject if the judgement is wrong, so the evidence
+## has to be stronger than "flat enough to fill through". Untouched field sealed between two
+## legs is genuinely featureless; a shadowed patch inside an arm is flat-ish, tight-coloured,
+## enclosed, and is not. Measured over the 23 iso figures, that is the whole difference:
+##
+##   real, cleared   shop 497px/1.45, 218px/1.88 · caster 616px/1.04, 313px/2.29
+##                   swarm 149px/2.11 · hound 110px/1.53 · ogre 60px/1.82, 32px/2.21
+##   false, kept     mummy 41px/3.50, 21px/3.38 · boss 42px/3.43 · elite 31px/2.96
+##                   rune stone 15px/3.01 · swarm 44px/2.83
+##
+## The false ones are what put a transparent notch in a mummy's arm, and area alone does not
+## separate them — the ogre's real armpit gap is smaller than the mummy's false one.
+const POCKET_STD := 2.4
+
 ## Breathing room left at the top and sides, as a fraction of the canvas. NEVER at the
 ## bottom on a bottom-anchored family — see `place()`.
 const PAD := 0.02
@@ -92,15 +120,27 @@ static func cut(img: Image, canvas: Vector2i, anchor_bottom: bool) -> String:
 	# report the previous image's pockets — a per-file counter has to be cleared per file.
 	filled_pockets = 0
 	var a := alpha_of(img)
+	var matted := false
 	if opaque_fraction(a) > 0.995:
 		# No usable alpha: the generator handed back an opaque painting. Cut it.
 		var reason := matte(img, a)
 		if reason != "":
 			return reason
+		matted = true
 	var check := _survives(a, w, h)
 	if check != "":
 		return check
-	erode_and_soften(a, w, h)
+	if matted:
+		# Grade the rim by colour rather than eroding it off. `erode_and_soften` is still the
+		# answer for an image that arrived WITH alpha, where there is no field colour to
+		# measure against and a 1px erode plus a blur is the best guess available.
+		feather_edge(img, a, last_field, w, h)
+		# And despeckle AGAIN: grading a rim to zero can cut a one-pixel filament that was
+		# holding a speck onto the body, and the speck is then an island that the first pass
+		# never saw. Eight of them survived on the first mummy, at 1-6 px each.
+		despeckle(a, w, h)
+	else:
+		erode_and_soften(a, w, h)
 	apply_alpha(img, a)
 	return place(img, a, canvas, anchor_bottom)
 
@@ -174,6 +214,8 @@ static var dropped_islands := 0
 static var filled_pockets := 0
 ## Luminance spread of the last `mono_alpha()` — how much glyph there was to find.
 static var last_mono_range := 0.0
+## The field colour the last `matte()` sampled, for the feather pass that follows it.
+static var last_field := Vector3.ZERO
 ## Trim box of the last `place()`, in the SOURCE image's coordinates. `install_sheet.gd`
 ## checks it against the cell it came from: a subject touching its own cell edge means
 ## the grid is misaligned and that glyph is clipped.
@@ -216,12 +258,13 @@ static func matte(img: Image, a: PackedByteArray) -> String:
 		return "background is not flat (%.0f%% of the border agrees, need %.0f%%) — this looks like a painting of a room, not a subject on a field" % [
 			frac * 100.0, BORDER_AGREE * 100.0]
 
-	# 4-connected flood from every border pixel that IS the background, and it may not
-	# cross an EDGE. Connectivity alone is what stops a patch of stone inside the subject
+	# 4-connected flood from every border pixel that IS the background, and it may only
+	# enter FLAT pixels. Connectivity alone is what stops a patch of stone inside the subject
 	# that happens to match the field from being punched out into a hole; connectivity plus
-	# the edge gate is what stops the fill walking INTO a subject whose own colour agrees
-	# with the field through one shaded pixel on its flank (D152).
-	var edge := _edges(img, w, h)
+	# the flatness gate is what stops the fill walking INTO a subject whose own colour agrees
+	# with the field through one shaded pixel on its flank (D152, D153).
+	var detail := _local_std(img, w, h)
+	last_field = bg
 	var seen := PackedByteArray()
 	seen.resize(w * h)
 	var stack: Array[int] = []
@@ -240,42 +283,136 @@ static func matte(img: Image, a: PackedByteArray) -> String:
 			if nx < 0 or ny < 0 or nx >= w or ny >= h:
 				continue
 			var j: int = ny * w + nx
-			if seen[j] == 0 and edge[j] < EDGE_STOP and _near(img.get_pixel(nx, ny), bg):
+			if seen[j] == 0 and detail[j] < STD_FLAT and _near(img.get_pixel(nx, ny), bg):
 				seen[j] = 1
 				stack.append(j)
 
-	fill_trapped(img, a, bg, w, h, edge)
+	fill_trapped(img, a, bg, w, h, detail)
+	clear_bloom(img, a, bg, w, h, detail)
 	return ""
 
 
-## Is a candidate pocket flat enough to be the untouched field? With no edge map supplied
-## (a direct `fill_trapped` call) this is the pre-D152 behaviour: colour and enclosure only.
-static func _is_field(size: int, detail: int) -> bool:
-	if size <= 0:
-		return false
-	return float(detail) / float(size) <= POCKET_DETAIL_MAX
+## Is pocket `id` the untouched field: enclosed, big enough to matter, and featureless.
+static func _is_field(id: int, sizes: Array[int], open: Array[bool], rough: Array[float],
+		min_area: int) -> bool:
+	return not open[id] and sizes[id] >= min_area and rough[id] < POCKET_STD
 
 
-## Sobel magnitude on luma, per pixel, normalised to roughly 0-1. The frame's own border
-## reads 0 rather than an edge against nothing.
-static func _edges(img: Image, w: int, h: int) -> PackedFloat32Array:
-	var lum := PackedFloat32Array()
-	lum.resize(w * h)
+## Clear the subject's own LIGHT off the field.
+##
+## The campfire is painted with a glow that spills onto the background for a dozen pixels,
+## and that spill is lit field rather than fire: keep it and the marker wears a grey disc on
+## the dungeon floor, because what shows through is the source's slate showing through its
+## own bloom. No colour rule reaches it — the spill is far from the field colour by
+## construction, since being lit is what changed it — and no flatness rule reaches it either,
+## because the tolerance test comes first.
+##
+## What a bloom is, precisely: **flat, brighter than the field, and reachable from outside
+## without crossing anything dark or detailed.** Light spills; ink does not. That is what
+## separates it from a pale subject on a slate field, which is the case this must not touch:
+## a mummy's bandages are also flat and also brighter than the field, but reaching them from
+## the frame means crossing the dark line drawn around the mummy.
+##
+## Measured over the 23 iso figures, this clears 1952 px on the campfire, 10 px on the rune
+## stone, 2 px on one caster and nothing at all on the other twenty. A pass that removes a
+## defect on one file and cannot find anything to do on the rest is the right shape for a
+## rule about light. Dropping the brightness condition instead — flat and reachable, any
+## colour — clears the fire and destroys both mummies, because a soft flank is a doorway
+## again.
+static func clear_bloom(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int,
+		detail: PackedFloat32Array) -> int:
+	var field_lum: float = 0.299 * bg.x + 0.587 * bg.y + 0.114 * bg.z
+	var stack: Array[int] = []
+	for i in w * h:
+		if a[i] <= ALPHA_CUT:
+			stack.append(i)
+	var cleared := 0
+	while not stack.is_empty():
+		var i: int = stack.pop_back()
+		var x: int = i % w
+		var y: int = i / w
+		for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+			var nx: int = x + d[0]
+			var ny: int = y + d[1]
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var j: int = ny * w + nx
+			if a[j] <= ALPHA_CUT or (j < detail.size() and detail[j] >= STD_FLAT):
+				continue
+			var c := img.get_pixel(nx, ny)
+			if 0.299 * c.r + 0.587 * c.g + 0.114 * c.b <= field_lum + BLOOM_LIFT:
+				continue
+			a[j] = 0
+			cleared += 1
+			stack.append(j)
+	return cleared
+
+
+## Local standard deviation of luma, in 0-255 levels, over a (2 * STD_R + 1) box.
+##
+## Computed from summed-area tables rather than a window per pixel: this runs over every
+## pixel of every source a sheet installer opens, and the naive form is 25 reads per pixel
+## for the same answer.
+static func _local_std(img: Image, w: int, h: int) -> PackedFloat32Array:
+	var s1 := PackedFloat64Array()
+	var s2 := PackedFloat64Array()
+	var sw := w + 1
+	s1.resize(sw * (h + 1))
+	s2.resize(sw * (h + 1))
 	for y in h:
 		for x in w:
 			var c := img.get_pixel(x, y)
-			lum[y * w + x] = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+			var v: float = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) * 255.0
+			var i := (y + 1) * sw + (x + 1)
+			s1[i] = s1[i - sw] + s1[i - 1] - s1[i - sw - 1] + v
+			s2[i] = s2[i - sw] + s2[i - 1] - s2[i - sw - 1] + v * v
 	var out := PackedFloat32Array()
 	out.resize(w * h)
-	for y in range(1, h - 1):
-		for x in range(1, w - 1):
-			var i := y * w + x
-			var gx: float = (lum[i - w + 1] + 2.0 * lum[i + 1] + lum[i + w + 1]) \
-				- (lum[i - w - 1] + 2.0 * lum[i - 1] + lum[i + w - 1])
-			var gy: float = (lum[i + w - 1] + 2.0 * lum[i + w] + lum[i + w + 1]) \
-				- (lum[i - w - 1] + 2.0 * lum[i - w] + lum[i - w + 1])
-			out[i] = sqrt(gx * gx + gy * gy) / 4.0
+	for y in h:
+		var y0: int = maxi(0, y - STD_R)
+		var y1: int = mini(h - 1, y + STD_R)
+		for x in w:
+			var x0: int = maxi(0, x - STD_R)
+			var x1: int = mini(w - 1, x + STD_R)
+			var n: float = float((y1 - y0 + 1) * (x1 - x0 + 1))
+			var a1: float = s1[(y1 + 1) * sw + x1 + 1] - s1[y0 * sw + x1 + 1] \
+				- s1[(y1 + 1) * sw + x0] + s1[y0 * sw + x0]
+			var a2: float = s2[(y1 + 1) * sw + x1 + 1] - s2[y0 * sw + x1 + 1] \
+				- s2[(y1 + 1) * sw + x0] + s2[y0 * sw + x0]
+			var mean: float = a1 / n
+			out[y * w + x] = sqrt(maxf(0.0, a2 / n - mean * mean))
 	return out
+
+
+## Grade the alpha of the pixels just inside the background by how close their colour is to
+## the field: field colour goes transparent, an inked outline stays opaque, a soft edge lands
+## where it already was. Replaces the erode-and-blur pass for anything that was matted, and
+## it is what removes the rim the flatness gate has to leave behind (D153).
+static func feather_edge(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int) -> void:
+	var band := PackedByteArray()
+	band.resize(w * h)
+	for y in h:
+		for x in w:
+			if a[y * w + x] > ALPHA_CUT:
+				continue
+			for dy in range(-EDGE_BAND, EDGE_BAND + 1):
+				var ny := y + dy
+				if ny < 0 or ny >= h:
+					continue
+				for dx in range(-EDGE_BAND, EDGE_BAND + 1):
+					var nx := x + dx
+					if nx < 0 or nx >= w:
+						continue
+					var j := ny * w + nx
+					if a[j] > ALPHA_CUT:
+						band[j] = 1
+	for i in w * h:
+		if band[i] == 0:
+			continue
+		var c := img.get_pixel(i % w, i / w)
+		var d: float = maxf(maxf(absf(c.r - bg.x), absf(c.g - bg.y)), absf(c.b - bg.z))
+		var t: float = clampf((d - HOLE_TOL) / (TOL - HOLE_TOL), 0.0, 1.0)
+		a[i] = int(round(float(a[i]) * t))
 
 
 ## Clear background the flood fill could not REACH.
@@ -301,28 +438,36 @@ static func _edges(img: Image, w: int, h: int) -> PackedFloat32Array:
 ## Returns how many pockets were filled; reported by the callers for the same reason
 ## `dropped_islands` is — from in here, a filled pocket and a gouged subject look alike.
 static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int,
-		edges: PackedFloat32Array = PackedFloat32Array()) -> int:
+		detail: PackedFloat32Array = PackedFloat32Array()) -> int:
 	var min_area := int(w * h * HOLE_MIN)
 	var comp := PackedInt32Array()
 	comp.resize(w * h)
 	comp.fill(-1)
 	var sizes: Array[int] = []
 	var open: Array[bool] = []   # touches the frame edge, therefore not trapped
-	var textured: Array[int] = []   # how much of it is DETAIL rather than flat field
+	var rough: Array[float] = []   # mean local deviation: how featureless it really is
+	# A pocket is field, and field is FLAT (D153). Requiring that of every pixel the
+	# component grows over is what stops this pass undoing the border fill's own guard:
+	# with the fill correctly kept out of a subject whose colour agrees with the field, a
+	# body sealed inside its own outline is exactly what "enclosed and field-coloured"
+	# describes, and the first version of this reached the mummies from the inside and
+	# shredded them all over again.
 	for start in w * h:
 		if comp[start] >= 0 or a[start] <= ALPHA_CUT or not _tight(img, start, w, bg):
 			continue
+		if start < detail.size() and detail[start] >= STD_FLAT:
+			continue
 		var id := sizes.size()
 		var n := 0
-		var detail := 0
+		var detail_sum := 0.0
 		var edge := false
 		var stack: Array[int] = [start]
 		comp[start] = id
 		while not stack.is_empty():
 			var i: int = stack.pop_back()
 			n += 1
-			if i < edges.size() and edges[i] >= EDGE_STOP:
-				detail += 1
+			if i < detail.size():
+				detail_sum += detail[i]
 			var x: int = i % w
 			var y: int = i / w
 			if x == 0 or y == 0 or x == w - 1 or y == h - 1:
@@ -333,16 +478,17 @@ static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 				if nx < 0 or ny < 0 or nx >= w or ny >= h:
 					continue
 				var j: int = ny * w + nx
-				if comp[j] < 0 and a[j] > ALPHA_CUT and _tight(img, j, w, bg):
+				if comp[j] < 0 and a[j] > ALPHA_CUT and _tight(img, j, w, bg) \
+						and (j >= detail.size() or detail[j] < STD_FLAT):
 					comp[j] = id
 					stack.append(j)
 		sizes.append(n)
 		open.append(edge)
-		textured.append(detail)
+		rough.append(detail_sum / float(maxi(1, n)))
 
 	var filled := 0
 	for id in sizes.size():
-		if not open[id] and sizes[id] >= min_area and _is_field(sizes[id], textured[id]):
+		if _is_field(id, sizes, open, rough, min_area):
 			filled += 1
 	filled_pockets = filled
 	if filled == 0:
@@ -366,7 +512,7 @@ static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 	var stack2: Array[int] = []
 	for i in w * h:
 		var id := comp[i]
-		if id >= 0 and not open[id] and sizes[id] >= min_area and _is_field(sizes[id], textured[id]):
+		if id >= 0 and _is_field(id, sizes, open, rough, min_area):
 			seen[i] = 1
 			stack2.append(i)
 	while not stack2.is_empty():
@@ -380,7 +526,9 @@ static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 			if nx < 0 or ny < 0 or nx >= w or ny >= h:
 				continue
 			var j: int = ny * w + nx
-			if seen[j] == 0 and a[j] > ALPHA_CUT and _near(img.get_pixel(nx, ny), bg):
+			# and the growth is gated the same way the border fill is, for the same reason
+			if seen[j] == 0 and a[j] > ALPHA_CUT and (j >= detail.size() or detail[j] < STD_FLAT) \
+					and _near(img.get_pixel(nx, ny), bg):
 				seen[j] = 1
 				stack2.append(j)
 	return filled

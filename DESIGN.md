@@ -9138,6 +9138,12 @@ for a name" is not a corrected record, it is a false one.
 
 ### D152 — Five iso figures had been shredded by their own matte, and the paint was still in the files
 
+## **The diagnosis and the repair path here are right; the FIX was replaced the same day.**
+## The Sobel edge gate below shipped a two-pixel rim of field colour around every subject
+## and still lost the low-contrast parts, which is what D153 measures and replaces. Read on
+## for why the paint survives a destroyed mask — that part is load-bearing — then read D153
+## for the matte that actually holds.
+
 Reported as "the sprite of the rock is broken, too much was removed", and the rock — the
 rune stone that marks an event — was the polite version. Measured across the 23 iso
 figures, `event.png` was missing a third of its stone, and `wander_0_s` was **a scatter of
@@ -9221,3 +9227,85 @@ to be 30% of its box — so no coverage threshold separates them, and that is wh
 past the D125 rule. The honest guard is the one this entry adds to the fill, plus the fact
 that `rematte_iso.gd` now exists: any figure that comes back wrong can be re-cut in place
 and the gain is printed.
+
+### D153 — The matte's real discriminator is not colour and not an edge: a field has nothing in it
+
+D152's fix was reported wrong within the hour, and the report was a good list: the treasure
+still had the generator's watermark, the shop and the ogre still had background, the fire had
+background, and the mummy had lost parts. All four are one defect and its shadow — the edge
+gate was the wrong cue.
+
+**Why an edge gate fails in both directions at once.** A Sobel gradient fires at the subject's
+*outline*, so the fill stops one window short of the real boundary and leaves a rim of field
+colour two pixels wide, all the way round, on every figure. That is the shop's background, the
+ogre's, and the fire's. And where the outline has faded into a low-contrast flank, the gate
+does not fire at all, so the fill still walks in and the mummy still loses its legs. One knob,
+two failure modes, no setting that avoids both.
+
+## What actually separates them
+
+The installers already verify that the border is flat before cutting (`BORDER_AGREE`), which
+means **background is smooth by contract**, while bandages, fur, wood grain and a carved rune
+face are not. So the cue is local deviation — the standard deviation of luma in a 5x5 box —
+and it is not close:
+
+    field-coloured pixels      median local deviation 0.0 - 2.3 levels
+    pixels far from the field  median local deviation 7   - 20  levels
+
+`STD_FLAT` is 4.0, in the gap, and the fill may only enter a pixel that is both within `TOL`
+of the field colour and flatter than that. Colour alone cannot do this job at any threshold:
+**68% of the mummy's opaque pixels are within `TOL` of the field colour**, at every depth from
+its edge, so any rule that removes near-field pixels removes the mummy.
+
+Three passes follow from the same idea, and each one exists because leaving it out shows:
+
+* **The rim gets GRADED, not eroded** (`feather_edge`). The flatness gate has to stop short —
+  a window centred two pixels outside the subject already touches it — so the last two pixels
+  of field survive the fill by construction. Eroding them off cuts real edges too, and it is
+  what the pipeline used to do. Grading them by colour is exact: a rim that IS the field goes
+  fully transparent, an inked outline stays fully opaque, a genuinely soft edge lands in
+  between, which is where it already was. This is also what takes the watermark off the chest:
+  a translucent stamp on the field is field-coloured, so it grades to nothing.
+* **A trapped pocket has to be FEATURELESS, not merely flat** (`POCKET_STD`, 2.4). Clearing a
+  pocket punches a hole in a subject when the judgement is wrong, so it needs stronger
+  evidence than the fill does. Measured, that is the entire difference between the shop's
+  sealed interior (497 px, mean deviation 1.45) and the notch this put in a mummy's arm
+  (41 px, 3.50). Area cannot separate them — the ogre's real armpit gap is 32 px and the
+  mummy's false one is 41.
+* **A bloom is the subject's own light, and it is still background** (`clear_bloom`). The
+  campfire is painted with a glow that spills a dozen pixels onto the field; kept, the marker
+  wears a grey disc on the dungeon floor, because what shows through the bloom is the source's
+  own slate. No colour rule reaches it — being lit is what moved it away from the field colour
+  — so the rule is what a bloom *is*: flat, brighter than the field, and reachable from
+  outside without crossing anything dark or detailed. **Light spills; ink does not.** That is
+  what keeps it off the mummies, which are also pale and also flat in patches, but are drawn
+  with a dark line around them. Dropping the brightness condition clears the fire and destroys
+  both mummies. Across 23 files this pass clears 1952 px on the campfire, 10 on the rune
+  stone, 2 on one caster, and nothing at all on the other twenty — which is the right shape
+  for a rule about light.
+* **Despeckle runs twice.** Grading a rim to zero can cut the one-pixel filament that was
+  holding a speck onto the body, and the speck is then an island the first pass never saw.
+  Eight of them survived on the first mummy at 1-6 px each; every file is now a single island.
+
+## The rewrite rule was wrong too, in an instructive way
+
+`rematte_iso.gd` only rewrote a file when the subject GREW, which is how the campfire kept its
+halo through the first repair: the correct mask for the fire is **4.8 points smaller** than the
+broken one, because what the broken one had kept was background. A repair tool cannot assume
+its own direction. It now rewrites on *disagreement* — the share of the region the two masks
+resolve differently — and prints the signed change beside it.
+
+Recovered from the paint under the masks, as opaque coverage of the paint region:
+
+    wander_0_s  23.0% → 79.9%     wander_2_n  35.0% → 77.9%     event   52.0% → 74.8%
+    wander_0_n  17.0% → 70.4%     mon_swarm_n 39.4% → 72.9%     rest    73.8% → 57.7%
+    boss        35.8% → 50.0%     elite       29.2% → 47.1%     shop    63.5% → 72.6%
+
+23 of 23 rewritten, every one a single island, verified in the game with
+`tools/IsoArtCheck.tscn`. No new art was ordered: this is the same five paintings that were
+always in the files.
+
+**What is left, and it is paint rather than mask.** The chest keeps a soft grey cast shadow at
+its base and the mummies keep a few faint marks on their wrappings, because those are in the
+painting and a matte is not entitled to an opinion about them. If they should go, the fix is a
+repaint, not a threshold.

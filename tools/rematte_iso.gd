@@ -6,7 +6,7 @@
 ## alone, so a pixel the flood fill "removed" is still there in full colour underneath —
 ## and 85% of the transparent pixels in `event.png` carried paint. What was destroyed was
 ## the mask, not the painting. So the repair is to throw the mask away and cut it again with
-## the fill that now knows to stop at an edge (`cutout_lib.EDGE_STOP`).
+## the fill that now knows to stop where the paint starts (`cutout_lib.STD_FLAT`).
 ##
 ##   godot --headless --script tools/rematte_iso.gd [-- --dry]
 ##   godot --headless --import
@@ -21,10 +21,14 @@ const Cut := preload("res://tools/cutout_lib.gd")
 ## Iso figures and furniture are 128x192, footed — the same numbers `install_sheet.gd`
 ## installs them at, because this rewrites what that tool wrote.
 const CANVAS := Vector2i(128, 192)
-## Below this much extra subject, in percent of the canvas, the old mask was fine and the
-## file is left byte-identical. A repair that rewrites 23 files to move four edges is a
-## repair nobody can review.
-const MIN_GAIN := 3.0
+## How much of the region the two masks have to DISAGREE about before the file is rewritten,
+## in percent. Below it the old mask was already right and the file is left byte-identical.
+##
+## Disagreement rather than a coverage gain, and that is not a refinement: the fire's old mask
+## was 4.8 points LARGER than the correct one, because what it had kept was a rim of
+## background. A one-sided "did the subject grow" test reads that as a regression and leaves
+## the defect in place, which is exactly what it did on the first run of this tool.
+const MIN_CHANGE := 2.0
 ## A pixel counts as painted for the crop below if its alpha survives OR it still carries
 ## colour under a cleared alpha. 12 rather than 0 because the padding `place` composites
 ## onto is exactly transparent black and JPEG-ish ringing around it is not.
@@ -38,7 +42,8 @@ func _init() -> void:
 		quit(1)
 		return
 	print("=== rematte iso figures (%d) ===%s" % [names.size(), "  [dry run]" if dry else ""])
-	print("%-16s %8s %8s %7s  %s" % ["file", "before", "after", "gain", "verdict"])
+	print("%-16s %8s %8s %7s %8s  %s" % [
+		"file", "before", "after", "gain", "changed", "verdict"])
 
 	var fixed := 0
 	var skipped := 0
@@ -82,16 +87,19 @@ func _init() -> void:
 		Cut.despeckle(a, crop.get_width(), crop.get_height())
 		var after := _cover_of(a)
 		var gain := after - before
-		if gain < MIN_GAIN:
-			print("%-16s %8.1f%% %8.1f%% %+7.1f  left alone" % [name, before, after, gain])
+		var changed := _disagreement(img, box, a)
+		if changed < MIN_CHANGE:
+			print("%-16s %8.1f%% %8.1f%% %+7.1f %7.1f%%  left alone" % [
+				name, before, after, gain, changed])
 			skipped += 1
 			continue
 		if dry:
-			print("%-16s %8.1f%% %8.1f%% %+7.1f  would rewrite (%d islands dropped, %d pockets filled)" % [
-				name, before, after, gain, Cut.dropped_islands, Cut.filled_pockets])
+			print("%-16s %8.1f%% %8.1f%% %+7.1f %7.1f%%  would rewrite (%d pockets filled)" % [
+				name, before, after, gain, changed, Cut.filled_pockets])
 			fixed += 1
 			continue
-		Cut.erode_and_soften(a, crop.get_width(), crop.get_height())
+		Cut.feather_edge(crop, a, Cut.last_field, crop.get_width(), crop.get_height())
+		Cut.despeckle(a, crop.get_width(), crop.get_height())
 		Cut.apply_alpha(crop, a)
 		var placed := Cut.place(crop, a, CANVAS, true)
 		if placed != "":
@@ -102,8 +110,8 @@ func _init() -> void:
 			print("%-16s %8.1f%% %8.1f%% %+7.1f  FAILED to write" % [name, before, after, gain])
 			refused += 1
 			continue
-		print("%-16s %8.1f%% %8.1f%% %+7.1f  REPAIRED (%d islands dropped, %d pockets filled)" % [
-			name, before, after, gain, Cut.dropped_islands, Cut.filled_pockets])
+		print("%-16s %8.1f%% %8.1f%% %+7.1f %7.1f%%  REPAIRED (%d pockets filled)" % [
+			name, before, after, gain, changed, Cut.filled_pockets])
 		fixed += 1
 
 	print("\n%d repaired, %d already fine, %d refused" % [fixed, skipped, refused])
@@ -138,6 +146,21 @@ func _cover_region(img: Image, box: Rect2i) -> float:
 			if img.get_pixel(x, y).a * 255.0 > float(Cut.ALPHA_CUT):
 				n += 1
 	return float(n) / float(box.size.x * box.size.y) * 100.0
+
+## How much the old and new masks disagree about, as a percentage of the region. Opacity is
+## read as in-or-out on both sides: a feathered edge moving by a few levels is not a repair.
+func _disagreement(img: Image, box: Rect2i, a: PackedByteArray) -> float:
+	if box.size.x <= 0 or box.size.y <= 0 or a.size() != box.size.x * box.size.y:
+		return 100.0
+	var differ := 0
+	for y in box.size.y:
+		for x in box.size.x:
+			var was: bool = img.get_pixel(box.position.x + x, box.position.y + y).a * 255.0 \
+				> float(Cut.ALPHA_CUT)
+			var now: bool = a[y * box.size.x + x] > Cut.ALPHA_CUT
+			if was != now:
+				differ += 1
+	return float(differ) / float(box.size.x * box.size.y) * 100.0
 
 ## The same, for a bare alpha buffer covering exactly that region.
 func _cover_of(a: PackedByteArray) -> float:
