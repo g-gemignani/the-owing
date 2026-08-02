@@ -80,6 +80,15 @@ func _refresh() -> void:
 		# column of its own.
 		var fx := PixelArt.level_overlay("power", level, p.level_capped()) if painted != null else null
 		if fx != null:
+			var shade := PixelArt.level_overlay_halo("power", level, p.level_capped())
+			if shade != null:
+				var dim := TextureRect.new()
+				dim.texture = shade
+				dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+				dim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				dim.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				art.add_child(dim)
 			var glow := TextureRect.new()
 			glow.texture = fx
 			glow.set_anchors_preset(Control.PRESET_FULL_RECT)

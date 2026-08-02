@@ -55,6 +55,21 @@ const NOISE_PERCENTILE := 0.90
 const CORNER_HARD := 0.16
 const CORNER_FEATHER := 0.09
 
+## How far the dark halo spreads past the light, and how opaque it gets. Measured against
+## the card art rather than chosen: the maxed corona CLIPS on 18-37% of its own lit area
+## across the hundred illustrations — additive light plus already-bright paint saturates,
+## and a saturated pixel is pure white, so exactly where the effect is loudest it loses
+## both the rarity tint and the shape that separates a ring from a corona. Headroom was
+## never the problem (0.53 to 0.83, nothing near zero); clipping was.
+##
+## The halo buys the headroom back locally: it is BLACK with an alpha taken from a spread
+## copy of the light, drawn underneath in normal blending, so it darkens the paint just
+## where the light is about to land and is invisible everywhere else — on already-dark art
+## it changes nothing, because black over near-black is near-black.
+const HALO_SPREAD := 7      # pixels at the installed size
+const HALO_STRENGTH := 0.95
+const HALO_MAX := 0.88
+
 ## `--gain` scales the whole overlay down after the floor and before the corner clear.
 ## It exists because the one thing the generator cannot be asked for is a RELATION: each
 ## image is drawn in its own conversation with no sight of the others, so "a third dimmer
@@ -258,7 +273,66 @@ func _init() -> void:
 		quit(1)
 		return
 	print("      wrote %s" % path)
+
+	var halo := _halo(out)
+	var hpath := OUT_DIR + out_name + "_halo.png"
+	var herr := halo.save_png(ProjectSettings.globalize_path(hpath))
+	if herr != OK:
+		push_error("cannot write %s (%d)" % [hpath, herr])
+		quit(1)
+		return
+	print("      wrote %s" % hpath)
 	quit(0)
+
+
+## A black scrim whose alpha is the light, spread and softened. Dilate first so the dark
+## reaches slightly PAST the glow — a halo exactly the size of the light would be covered
+## by it and do nothing — then blur so the edge does not read as a second outline.
+func _halo(light: Image) -> Image:
+	var w := light.get_width()
+	var h := light.get_height()
+	var src := PackedFloat32Array()
+	src.resize(w * h)
+	for y in h:
+		for x in w:
+			src[y * w + x] = light.get_pixel(x, y).r
+
+	# dilate, separably: max over a horizontal run, then over a vertical one
+	var tmp := PackedFloat32Array()
+	tmp.resize(w * h)
+	for y in h:
+		for x in w:
+			var m := 0.0
+			for k in range(-HALO_SPREAD, HALO_SPREAD + 1):
+				var xx := clampi(x + k, 0, w - 1)
+				m = maxf(m, src[y * w + xx])
+			tmp[y * w + x] = m
+	var dil := PackedFloat32Array()
+	dil.resize(w * h)
+	for y in h:
+		for x in w:
+			var m2 := 0.0
+			for k2 in range(-HALO_SPREAD, HALO_SPREAD + 1):
+				var yy := clampi(y + k2, 0, h - 1)
+				m2 = maxf(m2, tmp[yy * w + x])
+			dil[y * w + x] = m2
+
+	# box blur, same shape, so the scrim has no hard edge of its own
+	for y in h:
+		for x in w:
+			var a := 0.0
+			for k3 in range(-HALO_SPREAD, HALO_SPREAD + 1):
+				a += dil[y * w + clampi(x + k3, 0, w - 1)]
+			tmp[y * w + x] = a / float(HALO_SPREAD * 2 + 1)
+	var out := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
+	for y in h:
+		for x in w:
+			var b := 0.0
+			for k4 in range(-HALO_SPREAD, HALO_SPREAD + 1):
+				b += tmp[clampi(y + k4, 0, h - 1) * w + x]
+			b /= float(HALO_SPREAD * 2 + 1)
+			out.set_pixel(x, y, Color(0.0, 0.0, 0.0, clampf(b * HALO_STRENGTH, 0.0, HALO_MAX)))
+	return out
 
 
 ## 1.0 everywhere the frame is free, falling to 0.0 inside the corner boxes. Distance is

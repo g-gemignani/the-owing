@@ -46,11 +46,11 @@ Two-tier state makes this work:
 suites. All content is `.tres` data plus one catalogue line; adding more is a data
 task, not a code task.
 
-**Art: 312 files wanted, 223 present, 89 to provide.** It was 205/205/0 at D129 and the
-jump is one decision: D131 opened Tier 3b, one illustration per card, so the hundred
-cards that shared twelve family paintings each want their own. Those hundred are being
-worked FOUR AT A TIME: four 4:3 cells tile exactly into one 4:3 picture, so a 2x2 grid
-turns a hundred browser requests into twenty-five (D136). The shopping list is
+**Art: 310 files wanted, 310 present, 0 to provide — the list is closed.** It was
+205/205/0 at D129, then D131 opened Tier 3b (one illustration per card) and took it to
+205/305; the hundred were painted four to a picture, a 2x2 grid of 4:3 cells tiling one
+4:3 image, which turned a hundred browser requests into twenty-five (D136). The shopping
+list is
 generated — `godot --headless --script tools/art_manifest.gd > ART_ASSETS.md` — so it
 cannot fall out of step with the catalogues. Two things in it are not paintings and
 never will be: the frame kit is computed by `tools/gen_ui_kit.gd`, and the six combat

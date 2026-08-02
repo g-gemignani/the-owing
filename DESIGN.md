@@ -8336,3 +8336,53 @@ is no third state, and a row that offers one invites the tree back into it.
 
 Verified by rendering every screen: nothing referenced the autoload, no screen changed,
 38 suites green.
+
+
+### D138 — The level overlay does not always work, and the reason is saturation not visibility
+
+Asked whether the level masks would read over a hundred freshly painted card
+illustrations. Doubt was correct; the failure was not the one expected.
+
+**Visibility was never the problem.** HEADROOM — the mean of `1 - base` over the pixels
+the overlay lights, weighted by how hard it lights them — runs **0.51 to 0.86** across all
+112 illustrations, mean 0.68, nothing below 0.45. There is no card the effect disappears on.
+
+**Clipping was.** Additive light plus already-bright paint runs past white, and a saturated
+pixel has lost two things at once: the rarity tint (everything above 1.0 is white, whatever
+colour it was) and the shape that separates a thin ring from a full corona. Measured over
+the maxed overlay:
+
+    mean clipped area of the effect      30.7%
+    worst cards (bloodlust, pressure,    48.4%, 47.5%, 45.6%
+      forge_strike)
+
+So on the brightest third of the art the maxed state read as a white smear rather than a
+gold corona, and the mid band's ring vanished into bright paint on one side.
+
+## The fix is a dark halo, and it costs no generations
+
+A black scrim under the light, in normal blending, with its alpha taken from a **spread
+copy of the light itself** — dilate by 7px so the dark reaches slightly past the glow (a
+halo exactly the size of the light would be covered by it), then blur so it has no edge of
+its own. `install_overlay.gd` derives it from the finished overlay and writes
+`lvl_<shape>_<band>_halo.png` beside it; six more files, all computed.
+
+It is self-cancelling in the right direction: on dark art it changes nothing, because black
+over near-black is near-black, and on bright art it buys back exactly the headroom the light
+is about to need. Result:
+
+    mean clipping    30.7%  ->  8.5%
+    worst card       48.4%  ->  13.1%
+
+The residual 8.5% is the corona's own white-hot core, which is supposed to be white. That is
+where this stops — pushing `HALO_MAX` past 0.88 would start showing the scrim as a dark ring
+on the dark cards to buy back a defect that is not one.
+
+Drawn under the light at all three sites (`UI.card_button`, the combat orb, the powers
+screen). `PixelArt.level_overlay_halo` returns null when the file is absent, so a
+half-installed set still draws the light rather than nothing.
+
+**Why the additive contract survives.** The alternative was to stop adding and start
+blending, which reads the art underneath and replaces it — that fixes clipping by deleting
+the illustration, which is the thing Tier 3b just spent a hundred generations making. Adding
+light and darkening underneath keeps both.

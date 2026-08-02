@@ -901,6 +901,18 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		# scrim's job — keeping the corner numerals readable — has to outrank it.
 		var fx := PixelArt.level_overlay("card", card.level, card.level_cap())
 		if fx != null:
+			# the dark halo first, in normal blending: additive light on bright paint
+			# saturates to white and loses the rarity tint exactly where it is loudest,
+			# so the paint is darkened just where the light is about to land (D138)
+			var shade := PixelArt.level_overlay_halo("card", card.level, card.level_cap())
+			if shade != null:
+				var dim := TextureRect.new()
+				dim.texture = shade
+				dim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+				dim.stretch_mode = TextureRect.STRETCH_SCALE
+				dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+				win.add_child(dim)
+				dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 			var glow := TextureRect.new()
 			glow.texture = fx
 			glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
