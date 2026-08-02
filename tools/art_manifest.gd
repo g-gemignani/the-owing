@@ -111,8 +111,17 @@ const REDO := {
 	#     character tinted twice.
 	# All sixteen figures and all seven props measure 0.0% empty space below the feet,
 	# which is what `install_sheet.gd`'s new foot-anchoring is for.
-	"main_menu.png":
-		"still off-style after TWO re-rolls, and the next person should read this before spending a third. Not enough ink: the share of pixels that are a local luminance minimum by >0.08 against both neighbours 2px out reads 1.2% against 2.8-12.2% across the twelve dungeons. Both D122 attempts led with that fault and named the ink outline six times; the second came back with visible pen hatching on the rocks and measured 1.0%, marginally WORSE than the file it would have replaced, so it was not installed. TWO WRONG EXPLANATIONS, BOTH TESTED AND BOTH DEAD. (1) 'the metric is just reporting darkness': normalising each image to its own 1st-99th percentile and re-running puts it at 3.6% against 5.1-15.4% for the dungeons, still last, on a range only slightly narrower. (2) 'the threshold is absolute and this scene is dark': re-measured with the threshold set to 0.75 local sigma instead of a fixed 0.08, it reads 4.7-4.9% against 8.8-12.8% for the dungeons — still about half, on two independent measures. THE LIVE HYPOTHESIS is that the SUBJECT cannot reach the target: the dungeons are near-field architecture where every form is close enough to outline, and this is a night exterior whose firs and spire recede into haze and cannot carry heavy contour lines without looking wrong. If that is right the answer is a different subject or a lower target for this one file, not a third re-roll of the same picture — and that is an art-direction call, not a generation one (D114, D122)",
+	# `main_menu.png` was here, and it was the last line in the table. It went in D114
+	# for carrying no ink outline and survived TWO re-rolls of the same picture, each
+	# measuring ~1.2% against 2.8-12.2% for the dungeons. Two explanations were tested
+	# and killed — normalising for darkness, and a local-contrast threshold instead of
+	# an absolute one — which left the subject itself as the suspect: the dungeons are
+	# near-field architecture where every form can be outlined, and this was a night
+	# exterior receding into haze. Re-composed CLOSE-UP in D122, everything within a few
+	# paces, and the same scene now measures 10.5% ink against bg_foundry's 7.8%, mean
+	# luminance 0.307 inside the 20-35% band, and 0.029% of pixels over 0.90 — cleaner
+	# than bg_crypt. The hypothesis was right and it took a subject change, not a
+	# fourth attempt at the same one.
 }
 
 ## A defect that belongs to a whole DIRECTORY rather than to one file.
@@ -304,7 +313,7 @@ const SHELL := [
 	## logo that sits on top of it, the boot splash before it and the cursor over it, and
 	## not the picture itself. That is why it stayed off the re-roll list while being the
 	## most-seen image in the game (D114).
-	["main_menu.jpg", "1280x720", "The title screen backdrop. `main_menu.gd` passes it to `UI.screen()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre.", Kind.SCENE,
+	["main_menu.png", "1280x720", "The title screen backdrop. `main_menu.gd` resolves it through `PixelArt.title_art_path()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. It was `.jpg` until D114 renamed it on the re-roll; this row is one of the references that had to move with it, and it did not until D122 noticed the tier still reporting one file missing.", Kind.SCENE,
 		"A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. One cold cyan flame in a stone bowl beside them is the only light source. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white."],
 	["ui/logo.png", "1600x480", "The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
 		"An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind."],

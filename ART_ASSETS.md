@@ -8,7 +8,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**211 files wanted · 202 already present · 9 to provide.**
+**211 files wanted · 203 already present · 8 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -292,13 +292,13 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 7 — identity and shell
 
-*7 files, 3 still to provide.* Two of these are downloads, not drawings.
+*7 files, 2 still to provide.* Two of these are downloads, not drawings.
 
 | ? | file | size | what it is |
 |---|---|---|---|
 |   | `fonts/display.ttf` | - | Display face for titles and card names. Needs an OFL/SIL licence, recorded like the Kenney ones. THE GAME HAS NO CUSTOM FONT — everything is Godot's default. |
 |   | `fonts/body.ttf` | - | Body face for rules text. Must stay legible at 12px, since card text shrinks to fit. |
-|   | `main_menu.jpg` | 1280x720 | The title screen backdrop. `main_menu.gd` passes it to `UI.screen()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. |
+| x | `main_menu.png` | 1280x720 | The title screen backdrop. `main_menu.gd` resolves it through `PixelArt.title_art_path()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. It was `.jpg` until D114 renamed it on the re-roll; this row is one of the references that had to move with it, and it did not until D122 noticed the tier still reporting one file missing. |
 | x | `ui/logo.png` | 1600x480 | The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself. |
 | x | `ui/boot_splash.png` | 1280x720 | Boot splash. None configured. |
 | x | `ui/cursor.png` | 64x64 | Optional pointer. |

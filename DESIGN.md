@@ -7106,6 +7106,36 @@ be drawn. The rule goes in the prompt; the reason goes in `ART_ASSETS.md`, which
 split D101 already established and which this violated by hand rather than through the
 manifest. Tier 2's recipe now carries the no-ground clause as a bare instruction.
 
+**The title art was fixed by changing the SUBJECT, and the measurements are what found
+that.** It had been on the re-roll list since D114 for carrying no ink outline, and two
+re-rolls of the same picture each came back at ~1.2% against 2.8-12.2% for the dungeons
+— the second visibly hatched and still measuring worse than the file it would have
+replaced. Two explanations were tested and both died: normalising each image to its own
+1st-99th percentile (3.6% against 5.1-15.4%), and setting the threshold to 0.75 local
+sigma instead of a fixed 0.08 (4.7% against 8.8-12.8%). That left the subject. The
+dungeons are near-field architecture where every form is close enough to outline; the
+title was a night exterior receding into haze, and haze cannot carry a contour line.
+
+Re-composed CLOSE-UP — same traveller, same cyan flame, but everything within a few
+paces and the tower seen between near trunks instead of across a valley — it measured
+**13.8%** on the first try, above the entire dungeon band. Three more rolls to hold the
+other two constraints at the same time, because fixing one broke another each time: the
+bright gap behind the tower blew to pure white (1.06% of pixels over 0.90 against
+bg_crypt's 0.20%), and killing that overshot into a 0.107 mean when the band is
+0.20-0.35. The installed file reads **10.5% ink, 0.307 mean, 0.029% over 0.90** — inside
+every one of D114's three criteria and cleaner on white than the style bible.
+
+Worth stating plainly because it is the cheaper lesson: **four attempts at the same
+picture would never have worked, and the numbers said so after the second.** When a
+re-roll fails twice on the same measurement, the thing to change is the brief, not the
+seed.
+
+**And the trap caught me one more time.** The first close-up prompt said the left third
+must stay quiet "because a column of menu text goes over it" — and the picture came back
+with MENU, START, CONTINUE, LOAD GAME, OPTIONS, QUIT painted into it. That is the same
+rule as the enemy plinths, one hour later: every noun in a justification is a thing that
+can be drawn.
+
 **On capture.** Autocropping a screenshot against a black overlay is right for a cutout,
 whose subject sits on a field the generator never paints pure black. It silently eats a
 *scene*: the boot splash falls away into darkness at its own edges and came back 1.616

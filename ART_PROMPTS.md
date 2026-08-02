@@ -9,7 +9,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**1 files can be generated.** The rest of the list cannot, and the sections below
+**0 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -28,7 +28,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 1 times.
+   improve it between images. Its job is to be identical 0 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -118,13 +118,7 @@ Nothing to generate here — all 10 present.
 
 *2 of these 7 files are NOT for a generator: a licensed download* — `display.ttf`, `body.ttf`
 
-The fonts are licensed downloads (OFL/SIL), recorded like the Kenney ones. The logo is the one asset in the game that must carry text and the one place a generator is reliably wrong — generate the ornament and set the wordmark yourself.
-
-**1 to generate, 4 already present.** Style block above, then one of these as the last line:
-
-| save as | size | subject |
-|---|---|---|
-| `main_menu.jpg` | 1280x720 | A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. One cold cyan flame in a stone bowl beside them is the only light source. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white. |
+Nothing to generate here — all 5 present.
 
 ## Tier 8a — isometric figures
 
