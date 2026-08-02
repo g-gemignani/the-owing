@@ -390,6 +390,12 @@ jobs:
       - name: Publish the rolling build
         env:
           GH_TOKEN: ${{ github.token }}
+          # `gh` resolves the repository from the git remote, and this job has no
+          # checkout — it only downloads artifacts. `GITHUB_REPOSITORY` is not what it
+          # reads; `GH_REPO` is. Without it every `gh release` call fails to resolve a
+          # repository, `view` reports no release, the delete is skipped, and `create`
+          # ends on "a release with that tag already exists" (D146).
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           # Checked, then deleted WITHOUT `|| true`. The first version swallowed the

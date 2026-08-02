@@ -8787,28 +8787,40 @@ numbers are generated or asserted. A green badge measuring nothing is worse than
 badge: it is an invitation to stop asking. The README says this in place of the badge,
 which is the honest version of the same information.
 
-### D146 — Android worked first try, iOS did not, and a swallowed exit code told a true lie
+### D146 — Android worked first try, iOS did not, and the release job had no repository
 
 The five-platform pipeline's first run: `test`, `export-ready`, `build-desktop` and
 `build-android` green; `build-ios` red at `xcodebuild`; `release` red at publish. Two
 different faults, and only one of them was about mobile.
 
-## The release failure was the repository rename, reported as something else
+## The release failure was a missing checkout, and it took two wrong answers to see it
 
-D145's rename landed *while that run was in flight*. GitHub answers API calls for a
-renamed repository with a 301, and `gh` follows that on a GET but not on a DELETE — so
-`gh release delete latest` failed. It was written `|| true`, on the reasoning that a
-missing release is not an error. That reasoning is right and the code was still wrong:
-`|| true` cannot tell "there was nothing to delete" from "the delete was refused", so the
-failure surfaced three lines later as *"a release with that tag already exists"* — a
-message that is true, specific, and about the wrong cause. Ten minutes went into the
-publish step before the actual answer showed up in the release page's own metadata, which
-still recorded the previous commit.
+The publish step ended on *"a release with that tag already exists"*. The rename had
+landed while that run was in flight, so the first explanation — GitHub 301s a renamed
+repository, `gh` follows that on GET but not DELETE — fit the evidence, and was wrong. It
+predicted the next run would pass. The next run failed identically, on a repository that
+had not been renamed for twenty minutes, and the release page still recorded the previous
+commit both times.
 
-Now it asks first and deletes without a guard: `gh release view` decides whether there is
-anything to remove, and the delete itself is allowed to fail the job. **`|| true` on a
-command whose failure you have not enumerated is a way of choosing which error message
-you get, not a way of avoiding one.**
+The actual cause: **`gh` resolves the repository from the git remote, and this job has no
+checkout.** D144 split the pipeline so that `release` only downloads artifacts — nothing
+else needs the source — and that removed the `actions/checkout` step every earlier
+version had. `GITHUB_REPOSITORY` is set in the environment and `gh` does not read it;
+`GH_REPO` is what it reads. So every `gh release` call in the job was failing to resolve
+a repository at all: `view` reported no release, the `if` skipped the delete, and `create`
+hit the release that was still sitting there.
+
+Two lessons, and the second is the one that cost the time:
+
+* **`|| true` chooses which error message you get; it does not avoid one.** The delete was
+  written `|| true` because a missing release is not an error — right reasoning, wrong
+  code, because it cannot tell "nothing to delete" from "the call did not work". It asks
+  with `gh release view` first now and lets the delete fail the job.
+* **A fault that appears at the same time as an unrelated change will be blamed on it.**
+  The rename was a *coincidence*, and a good enough story to survive one round of
+  evidence. What broke the tie was the second run: same failure, no rename. When a
+  hypothesis predicts a fix, the fix passing is the only thing that confirms it — and
+  this one predicted a pass and got a repeat.
 
 ## `-scheme` on a generated Xcode project is a coin flip
 

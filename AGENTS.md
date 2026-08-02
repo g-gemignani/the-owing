@@ -380,10 +380,17 @@ These are failure modes that have actually bitten this project. Treat each as a 
   with no map still reports the same counts and offers the same moves.
 - **`|| true` chooses which error message you get; it does not avoid one.** `gh release
   delete latest --yes || true` was written because a missing release is not an error —
-  correct reasoning, wrong code: it cannot tell "nothing to delete" from "the delete was
-  refused", so when a repository rename made the API 301 the call away, the failure
-  surfaced three lines later as "a release with that tag already exists". True, specific,
-  and about the wrong cause (D146). **Ask first, then let the command fail.**
+  correct reasoning, wrong code: it cannot tell "nothing to delete" from "the call did not
+  work", so the real fault surfaced three lines later as "a release with that tag already
+  exists". True, specific, and about the wrong cause (D146). **Ask first, then let the
+  command fail.**
+- **A fault that appears alongside an unrelated change will be blamed on it.** That same
+  publish failure landed in the run where the repository was renamed, and "GitHub 301s a
+  renamed repo and `gh` does not follow that on DELETE" fit every fact available. It was
+  wrong; the job simply had no `actions/checkout`, and `gh` reads `GH_REPO` — not
+  `GITHUB_REPOSITORY` — to find the repository. A coincidence makes a good enough story to
+  survive one round of evidence. **A hypothesis that predicts a fix is only confirmed by
+  the fix passing** (D146).
 - **Anything visual has to be LOOKED at, and the suite cannot do it for you.** The six
   combat effects passed review and passed 37 suites while every particle was invisible
   — 4px motes at the value of the floor, on a painted corridor. Rendering them under
