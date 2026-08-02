@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://4m50q3f5dlhm"
+path="res://.godot/imported/spore_burst.png-77838cf3350558e203abbbe9c22a3c61.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/spore_burst.png"
+dest_files=["res://.godot/imported/spore_burst.png-77838cf3350558e203abbbe9c22a3c61.ctex"]
 
 [params]
 

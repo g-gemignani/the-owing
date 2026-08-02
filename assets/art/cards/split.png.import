@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://bwnrkugjs2mye"
+path="res://.godot/imported/split.png-d53e0c0875a12d9ce7329ecc93126638.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/split.png"
+dest_files=["res://.godot/imported/split.png-d53e0c0875a12d9ce7329ecc93126638.ctex"]
 
 [params]
 

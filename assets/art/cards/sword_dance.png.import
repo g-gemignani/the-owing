@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://k1v1nc3tsdvr"
+path="res://.godot/imported/sword_dance.png-db166a92c11662fce3cad3f6f2c7d3db.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/sword_dance.png"
+dest_files=["res://.godot/imported/sword_dance.png-db166a92c11662fce3cad3f6f2c7d3db.ctex"]
 
 [params]
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://bkisujucylm4g"
+path="res://.godot/imported/whetted_edge.png-4a8d893ed09bd4eccd085995116d8614.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/whetted_edge.png"
+dest_files=["res://.godot/imported/whetted_edge.png-4a8d893ed09bd4eccd085995116d8614.ctex"]
 
 [params]
 

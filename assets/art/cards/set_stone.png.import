@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://csgjbm7eiu7xj"
+path="res://.godot/imported/set_stone.png-00aa8e7202148d03dad62a5d18a6b2e0.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/set_stone.png"
+dest_files=["res://.godot/imported/set_stone.png-00aa8e7202148d03dad62a5d18a6b2e0.ctex"]
 
 [params]
 

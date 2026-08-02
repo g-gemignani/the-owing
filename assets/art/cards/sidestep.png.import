@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://dduvkq2xp28qc"
+path="res://.godot/imported/sidestep.png-fdbe9ab0a526db2f3d29936aac3601bf.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/sidestep.png"
+dest_files=["res://.godot/imported/sidestep.png-fdbe9ab0a526db2f3d29936aac3601bf.ctex"]
 
 [params]
 

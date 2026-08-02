@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://cpelvkstpkrv8"
+path="res://.godot/imported/virulence.png-e9d5ee0fbccdde52684a66c37ee87946.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/virulence.png"
+dest_files=["res://.godot/imported/virulence.png-e9d5ee0fbccdde52684a66c37ee87946.ctex"]
 
 [params]
 

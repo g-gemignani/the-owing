@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://b8aci03ihc0nj"
+path="res://.godot/imported/work_up.png-204efe0bd8e7685ab3c711fe622b958f.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/work_up.png"
+dest_files=["res://.godot/imported/work_up.png-204efe0bd8e7685ab3c711fe622b958f.ctex"]
 
 [params]
 

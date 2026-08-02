@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://ckuopcx8j0oxq"
-path="res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"
+uid="uid://c8jg87m2k2r8b"
+path="res://.godot/imported/shield_wall.png-6c052aaff6b7a54017c109fda7770a5c.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/art/cards/jab.png"
-dest_files=["res://.godot/imported/jab.png-f97804f3e2f7fd71301199b9fb260c31.ctex"]
+source_file="res://assets/art/cards/shield_wall.png"
+dest_files=["res://.godot/imported/shield_wall.png-6c052aaff6b7a54017c109fda7770a5c.ctex"]
 
 [params]
 
