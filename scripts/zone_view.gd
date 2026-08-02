@@ -63,7 +63,6 @@ func _exclusives(d: DungeonData) -> String:
 
 func _enter(id: String) -> void:
 	GameState.select_dungeon(id)
-	GameState.manage_only = false
 	UI.goto(self, "res://scenes/DeckBuilder.tscn")
 
 func _back() -> void:

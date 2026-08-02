@@ -23,8 +23,11 @@ var hp: int = 60
 var dungeon: int = 1        # difficulty; drives enemy scaling + loot rarity
 var dungeon_id: String = ""   # which named dungeon (D6); "" before one is chosen
 var current_zone: String = ""  # zone being explored on the overworld
-## True when the deck builder was opened to edit loadouts, not to start a run.
-var manage_only: bool = false
+## `manage_only` lived here — true when the deck builder had been opened to edit a
+## loadout rather than to start a run. It is gone with the second screen it existed to
+## distinguish: the cards screen now derives its state from whether a run is live and
+## whether a dungeon is chosen, which are facts it can read rather than a flag a caller
+## had to remember to set (D133).
 
 # --- traversal state ---
 ## The active traversal for this run (the iso crawl). Null outside a run.
@@ -419,7 +422,6 @@ func reset_run_progress() -> void:
 	dungeon = 1
 	dungeon_id = ""
 	current_zone = ""
-	manage_only = false
 	traversal = null
 	shop_stock = []
 	escrow_cards = []

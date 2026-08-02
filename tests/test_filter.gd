@@ -118,8 +118,15 @@ func _init() -> void:
 	if safe.has("ghost_card"):
 		fails += 1; print("FAIL a card with no resource was listed")
 
-	# --- both screens must read the SAME function ---
-	for f in ["res://scripts/collection.gd", "res://scripts/deck_builder.gd"]:
+	# --- every screen that lists cards must read the SAME function ---
+	#
+	# There were two, and the assertion existed because they were two: the collection
+	# and the deck builder each listed the whole catalogue and either could have grown
+	# a private filter. D133 fused them into one script — the player could not tell the
+	# screens apart, and neither could this list, which is why it named the same
+	# behaviour twice. `deck_builder.gd` is gone; the loop stays a loop because the
+	# next screen that lists cards has to join it rather than be forgotten.
+	for f in ["res://scripts/collection.gd"]:
 		var src := FileAccess.open(f, FileAccess.READ)
 		if src == null:
 			fails += 1; print("FAIL cannot read %s" % f); continue
