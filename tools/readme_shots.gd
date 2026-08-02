@@ -40,8 +40,13 @@ const QUALITY := 0.95
 ## part of the loop, which is why neither combat pose appears twice and why the three
 ## extra iso terrains are absent — they differ by texture, and the reader cannot tell
 ## that is the subject.
+##
+## The lead image is the BOSS fight, not the group fight it started as: a named finale
+## looming over the frame under a header that says BOSS is the one frame that carries
+## the whole pitch — a dungeon you chose, with an end you were told about (D143). Two
+## ember hounds are a nicer picture of the *layout* and a worse picture of the game.
 const WANTED := [
-	["CombatGroup", HERO_W],
+	["CombatBoss", HERO_W],
 	["ZoneView", GRID_W],
 	["IsoRunExplored", GRID_W],
 	["CombatHover", GRID_W],

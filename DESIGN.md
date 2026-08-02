@@ -8647,3 +8647,31 @@ first-run incantation for each. All three are unsigned and will stay that way �
 needs a paid identity per platform — so Windows names SmartScreen and macOS gives the
 `xattr` line, because "it doesn't open" is the most likely outcome otherwise and the fix
 is one command the player will not guess.
+
+### D143 — The lead image was a nice picture of the layout and a poor picture of the game
+
+The README opened on two ember hounds. That capture exists to prove something specific
+about `_place_slots` — a GROUP fight shrinks the flanks and spreads them across the full
+width, and the flanks are the only enemies that ever stand over the left and right thirds
+of the backdrop (D122). It is a layout test that happens to be pretty, and as the first
+thing a stranger sees it says "there are some fights in this."
+
+The boss fight says the actual pitch in one frame. **The Slag Pits — BOSS**, a named
+finale looming over the middle of the screen with 137 HP and a telegraphed *hit 20 (2
+pierces Block)*. That is difficulty-as-a-choice (D6), the intent system (D38), and
+piercing damage keeping block honest (D45), all legible without a caption.
+
+It also closed a hole in the harness. A boss is a third layout again — `_place_slots`
+gives it more of the frame than anything else gets, the header grows a `— BOSS` suffix,
+and it is the only tier that draws a signature — and none of that was exercised by the
+two combat rows already in the list. The widest enemy the layout can produce had never
+been photographed, which is the same absent-row blind spot as D122 and D123.
+
+The Cinder Knight rather than the Abyss Horror, which is the obvious pick at difficulty 8:
+the Horror is a mouth, and a mouth at 1280x720 reads as an abstract shape. A tall humanoid
+in cracked armour against a backdrop lit from below has a silhouette, and a silhouette is
+what survives being the small image at the top of a page.
+
+`combat_boss` in the harness deliberately sets no `enemy` key, unlike `combat_group`. A
+boss is read off the DUNGEON (`dd.boss`), because every dungeon has exactly one named
+finale — forcing an archetype here would photograph a fight the game cannot deal.

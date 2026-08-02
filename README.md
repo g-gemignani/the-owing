@@ -7,7 +7,10 @@ A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 (GDScript). Slay-the-Spire-shaped combat — but what you carry between runs is a
 *collection* you grow, fuse and spend, and a run you lose costs you most of it.
 
-![A fight in the Crypt](docs/screenshots/CombatGroup.webp)
+![The Cinder Knight, the boss of the Slag Pits](docs/screenshots/CombatBoss.webp)
+
+<sub>**The Cinder Knight**, the named finale of the Slag Pits — and you were told his
+name, and what he does, on the screen where you picked the dungeon.</sub>
 
 ## Play it
 

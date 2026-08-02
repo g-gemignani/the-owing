@@ -66,6 +66,14 @@ const SHOTS := [
 	# is the one archetype whose spawn count cannot roll: `count_min` and `count_max`
 	# are both 2, so this frames the same fight every run instead of a coin flip.
 	["CombatGroup", "res://scenes/Combat.tscn", "combat_group"],
+	# And a BOSS, which is a third thing again: `_place_slots` gives it more of the
+	# frame than any other fight gets (a boss should loom — D104), the header grows a
+	# "— BOSS" suffix, and it is the only tier that draws a signature. None of that is
+	# exercised by the two rows above, so the widest enemy the layout can produce had
+	# never been photographed. The Slag Pits because the Cinder Knight is a tall
+	# humanoid against a backdrop lit from below — the boss whose silhouette says most
+	# about the game at a glance, which is what the README's lead image is for (D143).
+	["CombatBoss", "res://scenes/Combat.tscn", "combat_boss", "", "slag_pits"],
 	["Shop", "res://scenes/Shop.tscn", "shop"],
 	["Encounter", "res://scenes/Encounter.tscn", "event"],
 	["Chest", "res://scenes/Chest.tscn", "chest"],
@@ -224,6 +232,14 @@ func _setup(need: String, dungeon: String = "") -> void:
 		"combat_group":
 			GameState.pending = {"type": GameState.NodeType.COMBAT, "row": 1, "col": 0,
 				"cleared": false, "enemy": "ember_hound"}
+			GameState.combat_state = {}
+		# No `enemy` key: a boss is not forced from here, it is read off the DUNGEON
+		# (`dd.boss`), which is the whole point of D6 — every dungeon has one named
+		# finale and it is announced before you commit. Naming the archetype here would
+		# photograph a fight the game cannot deal.
+		"combat_boss":
+			GameState.pending = {"type": GameState.NodeType.BOSS, "row": 1, "col": 0,
+				"cleared": false}
 			GameState.combat_state = {}
 		"shop":
 			GameState.pending = {"type": GameState.NodeType.SHOP, "row": 1, "col": 0, "cleared": false}
