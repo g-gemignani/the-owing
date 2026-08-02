@@ -78,8 +78,11 @@ func _build() -> void:
 		UI.exit_button(col, "Resume", func(): UI.goto(self, GameState.resume_scene()))
 	else:
 		UI.exit_button(col, "Back to the world", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
-	UI.button(col, "Collection", func(): UI.goto(self, "res://scenes/Collection.tscn"))
-	UI.button(col, "Settings", func(): UI.goto(self, "res://scenes/Settings.tscn"))
+	# "Cards", matching the hub: one screen, one name. It was "Collection" when there
+	# were two of them (D133).
+	UI.button(col, "Cards", func(): UI.goto(self, "res://scenes/Collection.tscn"))
+	# No Settings button here either: the gear in every screen's top-right corner
+	# reaches it, and this menu is already the longest column in the game (D133).
 
 	if GameState.in_run():
 		if ropes > 0:

@@ -45,7 +45,16 @@ func _ready() -> void:
 
 	UI.button(col, "New Game", func(): UI.goto(self, "res://scenes/SaveSlots.tscn"))
 	UI.button(col, "Load Game", func(): UI.goto(self, "res://scenes/SaveSlots.tscn"))
-	UI.button(col, "Settings", func(): UI.goto(self, "res://scenes/Settings.tscn"))
+	# How This Works is reachable before you have a save. It explains an escrow, a
+	# collection that survives death and a floor that walks — none of which a player
+	# can guess, and all of which they previously had to start a run to be told
+	# (D133). No Settings button: `UI.screen()` puts one in every top-right corner.
+	UI.button(col, "How this works", func():
+		# The glossary's Back went to the Overworld unconditionally, which is a screen
+		# a player arriving from here has never seen. It is a static rather than a
+		# parameter because `UI.goto` takes a path, not arguments.
+		load("res://scripts/glossary.gd").return_to = "res://scenes/MainMenu.tscn"
+		UI.goto(self, "res://scenes/Glossary.tscn"))
 	UI.spacer(col)
 	UI.button(col, "Quit", func(): get_tree().quit())
 

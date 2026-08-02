@@ -67,23 +67,24 @@ func _ready() -> void:
 	# put one on Packs applies to every button here that leads to a collection with a
 	# ceiling. It also replaces the summary line that used to restate all four
 	# numbers in a row below these buttons.
-	UI.button(nav, "Collection (%d/%d)" % [
+	# ONE button, because there was never more than one screen. "Loadouts" opened the
+	# deck builder with `manage_only = true` and "Collection" opened the fusing list —
+	# the same catalogue, listed twice, with the filter bar and the row layout shared
+	# and a "Collection (fuse)" button crossing between them mid-task. A player could
+	# not tell them apart because there was nothing to tell apart (D133).
+	UI.button(nav, "Cards (%d/%d)" % [
 		MetaState.collection.size(), MetaState.CATALOG.size()],
 		func(): UI.goto(self, "res://scenes/Collection.tscn"), 38.0)
-	UI.button(nav, "Loadouts", func():
-		GameState.manage_only = true
-		UI.goto(self, "res://scenes/DeckBuilder.tscn"), 38.0)
 	UI.button(nav, "Relics (%d/%d)" % [
 		MetaState.relics.size(), MetaState.RELIC_CATALOG.size()],
 		func(): UI.goto(self, "res://scenes/Relics.tscn"), 38.0)
 	var sealed: int = MetaState.packs.size()
 	UI.button(nav, "Packs (%d)" % sealed if sealed > 0 else "Packs",
 		func(): UI.goto(self, "res://scenes/Packs.tscn"), 38.0)
-	UI.button(nav, "Builds (%d/%d)" % [_builds_done(), Balance.BUILDS.size()],
-		func(): UI.goto(self, "res://scenes/Builds.tscn"), 38.0)
 
 	var nav2 := UI.row(col, 8)
-	UI.button(nav2, "Settings", func(): UI.goto(self, "res://scenes/Settings.tscn"), 38.0)
+	# No Settings button: `UI.screen()` puts a settings control in every screen's
+	# top-right corner now, so a second door on the hub is the same door twice (D133).
 	UI.button(nav2, "How this works", func(): UI.goto(self, "res://scenes/Glossary.tscn"), 38.0)
 	# Pushed to the far end and sized to its own text. It was a full-width bar across
 	# the bottom, which made quitting the loudest thing on the hub. It stays a button

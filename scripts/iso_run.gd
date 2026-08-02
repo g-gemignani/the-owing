@@ -350,7 +350,7 @@ func _build_ui() -> void:
 
 	var coll := Button.new()
 	UITheme.style_button(coll)
-	coll.text = "Collection"
+	coll.text = "Cards"   # one screen, one name (D133)
 	coll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	coll.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
 	foot.add_child(coll)
