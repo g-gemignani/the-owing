@@ -80,26 +80,18 @@ func _refresh() -> void:
 		# column of its own.
 		var fx := PixelArt.level_overlay("power", level, p.level_capped()) if painted != null else null
 		if fx != null:
-			var shade := PixelArt.level_overlay_halo("power", level, p.level_capped())
-			if shade != null:
-				var dim := TextureRect.new()
-				dim.texture = shade
-				dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-				dim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-				dim.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-				dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				art.add_child(dim)
 			var glow := TextureRect.new()
 			glow.texture = fx
 			glow.set_anchors_preset(Control.PRESET_FULL_RECT)
 			glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			glow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 			glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var add := CanvasItemMaterial.new()
-			add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-			glow.material = add
+			var blend := CanvasItemMaterial.new()
+			blend.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
+			glow.material = blend
 			glow.modulate = Icons.rarity_colour(p.rarity)
 			art.add_child(glow)
+			UI.animate_level_glow(glow, PixelArt.level_band(level, p.level_capped()))
 
 		var lbl := Label.new()
 		lbl.custom_minimum_size.x = UITheme.px(520)

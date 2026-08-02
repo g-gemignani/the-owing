@@ -31,6 +31,14 @@
 ##
 ## `--dry` measures and prints without writing, which is the only honest way to pick a
 ## floor — the numbers below decide whether a capture is usable, not the eye.
+##
+## **After installing, `process/fix_alpha_border` must be FALSE on the .import.** Godot
+## turns it on by default and it bleeds neighbouring colour into fully transparent pixels
+## — harmless for an alpha-tested sprite, where nothing ever samples the colour of a
+## transparent texel, and wrong here. These are drawn premultiplied, so the RGB is added
+## whatever the alpha says: with the default on, 8145 pixels of the maxed overlay came back
+## carrying r=0.588 under a=0.004 and would have emitted light across the empty part of the
+## frame. `tests/GlowTest.tscn` fails if it is ever switched back on (D139).
 extends SceneTree
 
 const OUT_DIR := "res://assets/art/fx/"
@@ -55,20 +63,13 @@ const NOISE_PERCENTILE := 0.90
 const CORNER_HARD := 0.16
 const CORNER_FEATHER := 0.09
 
-## How far the dark halo spreads past the light, and how opaque it gets. Measured against
-## the card art rather than chosen: the maxed corona CLIPS on 18-37% of its own lit area
-## across the hundred illustrations — additive light plus already-bright paint saturates,
-## and a saturated pixel is pure white, so exactly where the effect is loudest it loses
-## both the rarity tint and the shape that separates a ring from a corona. Headroom was
-## never the problem (0.53 to 0.83, nothing near zero); clipping was.
-##
-## The halo buys the headroom back locally: it is BLACK with an alpha taken from a spread
-## copy of the light, drawn underneath in normal blending, so it darkens the paint just
-## where the light is about to land and is invisible everywhere else — on already-dark art
-## it changes nothing, because black over near-black is near-black.
-const HALO_SPREAD := 7      # pixels at the installed size
-const HALO_STRENGTH := 0.95
-const HALO_MAX := 0.88
+## A dark halo used to be generated here — a black scrim under the light, to buy back the
+## headroom an additive blend needs on bright paint. It worked on the number it was aimed
+## at and was the wrong fix: measured across the illustrations it cut clipping 30.7% to
+## 8.5% but dropped how much of the PAINTING still showed through from 0.61 to 0.29. It
+## bought a readable effect by deleting the art underneath it, which is the one thing the
+## art was for. Screening the light instead (see the alpha channel below) beats it on every
+## axis at once — clipping 10.9%, art 0.55 — and needs no second file (D139).
 
 ## `--gain` scales the whole overlay down after the floor and before the corner clear.
 ## It exists because the one thing the generator cannot be asked for is a RELATION: each
@@ -239,7 +240,12 @@ func _init() -> void:
 		for x3 in w:
 			var v3: float = (lum[y3 * w + x3] - flr) / span
 			v3 = clampf(v3, 0.0, 1.0) * gain * _corner_gain(x3, y3, w, h, hard, feather)
-			out.set_pixel(x3, y3, Color(v3, v3, v3, 1.0))
+			# the light goes in the ALPHA as well as the colour, which is what turns a
+			# plain add into a screen. Drawn with BLEND_MODE_PREMULT_ALPHA the game
+			# computes `light*tint + art*(1 - light)`: the art is scaled down exactly
+			# where the light is strong, so the sum cannot run past white, and it is left
+			# untouched everywhere the light is not (D139).
+			out.set_pixel(x3, y3, Color(v3, v3, v3, v3))
 
 	out.resize(size.x, size.y, Image.INTERPOLATE_LANCZOS)
 
@@ -254,7 +260,7 @@ func _init() -> void:
 			if g < 1.0:
 				var c4 := out.get_pixel(x4, y4)
 				var v4 := c4.r * g
-				out.set_pixel(x4, y4, Color(v4, v4, v4, 1.0))
+				out.set_pixel(x4, y4, Color(v4, v4, v4, v4))
 				if g <= 0.0:
 					worst_corner = maxf(worst_corner, v4)
 
@@ -273,66 +279,7 @@ func _init() -> void:
 		quit(1)
 		return
 	print("      wrote %s" % path)
-
-	var halo := _halo(out)
-	var hpath := OUT_DIR + out_name + "_halo.png"
-	var herr := halo.save_png(ProjectSettings.globalize_path(hpath))
-	if herr != OK:
-		push_error("cannot write %s (%d)" % [hpath, herr])
-		quit(1)
-		return
-	print("      wrote %s" % hpath)
 	quit(0)
-
-
-## A black scrim whose alpha is the light, spread and softened. Dilate first so the dark
-## reaches slightly PAST the glow — a halo exactly the size of the light would be covered
-## by it and do nothing — then blur so the edge does not read as a second outline.
-func _halo(light: Image) -> Image:
-	var w := light.get_width()
-	var h := light.get_height()
-	var src := PackedFloat32Array()
-	src.resize(w * h)
-	for y in h:
-		for x in w:
-			src[y * w + x] = light.get_pixel(x, y).r
-
-	# dilate, separably: max over a horizontal run, then over a vertical one
-	var tmp := PackedFloat32Array()
-	tmp.resize(w * h)
-	for y in h:
-		for x in w:
-			var m := 0.0
-			for k in range(-HALO_SPREAD, HALO_SPREAD + 1):
-				var xx := clampi(x + k, 0, w - 1)
-				m = maxf(m, src[y * w + xx])
-			tmp[y * w + x] = m
-	var dil := PackedFloat32Array()
-	dil.resize(w * h)
-	for y in h:
-		for x in w:
-			var m2 := 0.0
-			for k2 in range(-HALO_SPREAD, HALO_SPREAD + 1):
-				var yy := clampi(y + k2, 0, h - 1)
-				m2 = maxf(m2, tmp[yy * w + x])
-			dil[y * w + x] = m2
-
-	# box blur, same shape, so the scrim has no hard edge of its own
-	for y in h:
-		for x in w:
-			var a := 0.0
-			for k3 in range(-HALO_SPREAD, HALO_SPREAD + 1):
-				a += dil[y * w + clampi(x + k3, 0, w - 1)]
-			tmp[y * w + x] = a / float(HALO_SPREAD * 2 + 1)
-	var out := Image.create_empty(w, h, false, Image.FORMAT_RGBA8)
-	for y in h:
-		for x in w:
-			var b := 0.0
-			for k4 in range(-HALO_SPREAD, HALO_SPREAD + 1):
-				b += tmp[clampi(y + k4, 0, h - 1) * w + x]
-			b /= float(HALO_SPREAD * 2 + 1)
-			out.set_pixel(x, y, Color(0.0, 0.0, 0.0, clampf(b * HALO_STRENGTH, 0.0, HALO_MAX)))
-	return out
 
 
 ## 1.0 everywhere the frame is free, falling to 0.0 inside the corner boxes. Distance is

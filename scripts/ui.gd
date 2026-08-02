@@ -800,6 +800,40 @@ const CARD_NAME_MIN_W := 37.0
 ## null everywhere else. With it, the face and the hover both quote the damage and
 ## Block the card would actually produce this turn — Strength and Dexterity are
 ## otherwise invisible on the only surface the player reads before spending energy.
+## Make a level glow breathe, and spin it once it is maxed.
+##
+## A static decal in the same place on all hundred cards reads as a sticker; the same
+## light moving reads as a state. The pulse rides `self_modulate` and NOT `modulate`,
+## because `modulate` already carries two things — the rarity tint and, in combat, the
+## dimming of a power that cannot be fired — and a tween on it would fight both.
+##
+## Rotation only for the maxed band. It is the one state a player is working toward, it
+## already differs in kind rather than degree (D132), and the corona is the only band
+## radial enough for turning to read as motion rather than wobble.
+static func animate_level_glow(node: CanvasItem, band: String) -> void:
+	var lo := 0.70
+	var period := 2.6
+	if band == "2":
+		lo = 0.80
+		period = 1.9
+	elif band == "max":
+		lo = 0.86
+		period = 1.2
+	var t := node.create_tween().set_loops()
+	t.tween_property(node, "self_modulate:a", 1.0, period * 0.5) \
+		.from(lo).set_trans(Tween.TRANS_SINE)
+	t.tween_property(node, "self_modulate:a", lo, period * 0.5).set_trans(Tween.TRANS_SINE)
+	if band != "max" or not (node is Control):
+		return
+	var c := node as Control
+	c.pivot_offset = c.size * 0.5
+	# the rect is 0x0 until the first layout pass, so the pivot has to be re-taken or the
+	# corona turns around its top-left corner
+	c.resized.connect(func() -> void: c.pivot_offset = c.size * 0.5)
+	var r := node.create_tween().set_loops()
+	r.tween_property(node, "rotation", TAU, 52.0).from(0.0)
+
+
 static func card_button(parent: Node, card: CardData, size: Vector2,
 		on_press: Callable, label: String = "", live: CombatEngine = null) -> Button:
 	# A plain Control, NOT a Container. PanelContainer overrides its children's
@@ -901,29 +935,23 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		# scrim's job — keeping the corner numerals readable — has to outrank it.
 		var fx := PixelArt.level_overlay("card", card.level, card.level_cap())
 		if fx != null:
-			# the dark halo first, in normal blending: additive light on bright paint
-			# saturates to white and loses the rarity tint exactly where it is loudest,
-			# so the paint is darkened just where the light is about to land (D138)
-			var shade := PixelArt.level_overlay_halo("card", card.level, card.level_cap())
-			if shade != null:
-				var dim := TextureRect.new()
-				dim.texture = shade
-				dim.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-				dim.stretch_mode = TextureRect.STRETCH_SCALE
-				dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-				win.add_child(dim)
-				dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 			var glow := TextureRect.new()
 			glow.texture = fx
 			glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 			glow.stretch_mode = TextureRect.STRETCH_SCALE
 			glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			var add := CanvasItemMaterial.new()
-			add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-			glow.material = add
+			# PREMULTIPLIED, not additive. The overlay carries the light in its alpha as
+			# well as its colour, so this computes `light*tint + art*(1 - light)` — the
+			# art is scaled down exactly where the light is strong, which is why the sum
+			# cannot blow out to white on a bright illustration the way a plain add did
+			# on 45.6% of the maxed corona (D139).
+			var blend := CanvasItemMaterial.new()
+			blend.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
+			glow.material = blend
 			glow.modulate = Icons.rarity_colour(card.rarity)
 			win.add_child(glow)
 			glow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			animate_level_glow(glow, PixelArt.level_band(card.level, card.level_cap()))
 
 		# A scrim along the BOTTOM of the picture only. The old one covered the whole
 		# card because the text was over the whole card; now it exists to stop a

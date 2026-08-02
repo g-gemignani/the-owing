@@ -82,7 +82,6 @@ var place_label: Label
 var power_ring: Panel
 var power_art: TextureRect
 var power_fx: TextureRect
-var power_shade: TextureRect
 var power_cost: Label
 ## The two bottom corners the hand has to stay out of. Kept as members so the fan
 ## can measure them instead of guessing: a hardcoded reserve was wrong the moment a
@@ -355,19 +354,6 @@ func _build_ui() -> void:
 	# The level-progress glow, on the same rect as the sigil and added rather than blended
 	# so its black is invisible (D132). Its own node instead of a modulate on the sigil,
 	# because the two dim independently: a spent power fades, its progress does not change.
-	# the dark halo under the sigil's glow, for the reason D138 records: additive light on
-	# bright paint saturates and the effect stops reading as a ring
-	power_shade = TextureRect.new()
-	power_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	power_shade.offset_left = inset
-	power_shade.offset_top = inset
-	power_shade.offset_right = -inset
-	power_shade.offset_bottom = -inset
-	power_shade.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	power_shade.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	power_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	orb.add_child(power_shade)
-
 	power_fx = TextureRect.new()
 	power_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	power_fx.offset_left = inset
@@ -377,9 +363,9 @@ func _build_ui() -> void:
 	power_fx.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	power_fx.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	power_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var power_add := CanvasItemMaterial.new()
-	power_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-	power_fx.material = power_add
+	var power_blend := CanvasItemMaterial.new()
+	power_blend.blend_mode = CanvasItemMaterial.BLEND_MODE_PREMULT_ALPHA
+	power_fx.material = power_blend
 	orb.add_child(power_fx)
 
 	power_btn = Button.new()
@@ -1560,7 +1546,6 @@ func _refresh_power() -> void:
 		power_ring.visible = false
 		power_art.visible = false
 		power_fx.visible = false
-		power_shade.visible = false
 		return
 	power_btn.visible = true
 	power_ring.visible = true
@@ -1574,9 +1559,11 @@ func _refresh_power() -> void:
 	var fx := PixelArt.level_overlay("power", p.level, p.level_capped()) if sigil != null else null
 	power_fx.texture = fx
 	power_fx.visible = fx != null
-	var shade := PixelArt.level_overlay_halo("power", p.level, p.level_capped()) if sigil != null else null
-	power_shade.texture = shade
-	power_shade.visible = shade != null
+	if fx != null and not power_fx.has_meta("pulsing"):
+		# once per orb, not once per refresh — `_refresh_power` runs every time the energy
+		# changes and a fresh looping tween each time would stack into a flicker
+		power_fx.set_meta("pulsing", true)
+		UI.animate_level_glow(power_fx, PixelArt.level_band(p.level, p.level_capped()))
 	var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
 	# With a sigil the Button carries no text at all — the picture is the button, the
 	# numeral is the Label below, and the name is on hover.
@@ -1593,7 +1580,6 @@ func _refresh_power() -> void:
 	# goes dim with the sigil it sits on, or it would glow brightest on a power that
 	# cannot be fired
 	power_fx.modulate = Color(1, 1, 1) if not power_btn.disabled else Color(0.55, 0.55, 0.6, 0.65)
-	power_shade.modulate = power_fx.modulate
 	# spent or unaffordable reads on the ring, not only in the tooltip: the orb is
 	# small, so its STATE has to be visible from the shape rather than the words
 	power_ring.modulate = Color(1, 1, 1) if not power_btn.disabled else Color(0.5, 0.5, 0.55, 0.7)

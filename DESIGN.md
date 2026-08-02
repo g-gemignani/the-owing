@@ -8360,6 +8360,11 @@ So on the brightest third of the art the maxed state read as a white smear rathe
 gold corona, and the mid band's ring vanished into bright paint on one side.
 
 ## The fix is a dark halo, and it costs no generations
+##
+## **Superseded by D139 the same day.** The halo fixed the number it was aimed at and was
+## the wrong fix: it bought a readable effect by darkening the illustration underneath it.
+## Read on, then read D139 — what follows is the reasoning that led to the better answer,
+## and the measurement that convicted it is in D139.
 
 A black scrim under the light, in normal blending, with its alpha taken from a **spread
 copy of the light itself** — dilate by 7px so the dark reaches slightly past the glow (a
@@ -8386,3 +8391,60 @@ half-installed set still draws the light rather than nothing.
 blending, which reads the art underneath and replaces it — that fixes clipping by deleting
 the illustration, which is the thing Tier 3b just spent a hundred generations making. Adding
 light and darkening underneath keeps both.
+
+
+### D139 — Screen the glow instead of adding it, and the halo goes away
+
+D138 asked whether the level overlays read over the hundred new illustrations, found that
+the additive blend clipped on 30-48% of the maxed effect, and fixed it with a black scrim
+underneath. Asked next how to make the effect actually look GOOD rather than merely legible,
+which is a different question, and the honest answer was that D138's own fix was the thing
+standing in the way.
+
+## The halo was buying readability with the art
+
+The metric D138 used — how much of the effect runs past white — only ever looks at the
+effect. Adding a second one, how much of the ILLUSTRATION still shows through underneath
+(correlation between the base and the result, inside the lit area), changes the verdict:
+
+    mode                 clip%   punch    art still showing
+    add                   45.6   +0.374        0.61
+    add + dark halo       16.4   +0.177        0.29
+    screen                10.9   +0.286        0.57
+
+The halo more than halved how much of the painting survived. It was fixing a white blob by
+making a dark one, and the first version of the "does the art survive" measurement did not
+catch it either — local contrast scored every mode above 1.0, because the overlay brings
+its own edges and inflates the number. Correlation was the metric that worked.
+
+## Screen wins on all three axes and needs no shader
+
+`screen = light + art*(1 - light)` cannot exceed white by construction, and it leaves the
+art alone wherever the light is weak. Godot's `CanvasItemMaterial` has no screen mode, but
+`BLEND_MODE_PREMULT_ALPHA` computes `src.rgb + dst*(1 - src.a)` — which IS screen, provided
+the overlay carries the light in its **alpha** as well as its colour. So `install_overlay`
+now writes `Color(v, v, v, v)` instead of `Color(v, v, v, 1)` and the draw sites ask for
+premultiplied. Measured at 10.9% clip / 0.55 art, within noise of true screen, and the six
+halo files are deleted.
+
+**One trap, and it would have shipped.** Godot defaults `process/fix_alpha_border=true`,
+which bleeds neighbouring colour into fully transparent pixels. That is correct for an
+alpha-tested sprite, where nothing samples the colour of a transparent texel, and wrong
+here: premultiplied blending adds the RGB whatever the alpha says. Measured on the maxed
+overlay, **8145 pixels came back with r=0.588 under a=0.004** — light scattered across the
+part of the frame that is supposed to be empty. Set false on all six.
+
+## What makes it look cool is that it moves
+
+A static decal in the same place on all hundred cards reads as a sticker. The glow now
+breathes — `self_modulate.a` between 0.70 and 1.0, faster and shallower as the band climbs
+— and the maxed corona turns, one revolution per 52 seconds. Only the maxed band turns: it
+is the state a player is working toward, it already differs in kind rather than degree
+(D132), and a corona is the only band radial enough for rotation to read as motion rather
+than wobble. The pulse rides `self_modulate` and not `modulate`, because `modulate` already
+carries the rarity tint and, in combat, the dimming of a power that cannot be fired.
+
+`tests/GlowTest.tscn` is new and guards all four things, because every one of them is
+silently breakable and nothing else was watching: the blend mode, the light living in the
+alpha, the arithmetic being unable to exceed white against pure white art, and the tween
+actually running and turning about the centre.

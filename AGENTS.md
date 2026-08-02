@@ -42,7 +42,7 @@ Two-tier state makes this work:
 ## Content at a glance
 
 100 cards · 35 enemy archetypes (all painted) · 12 bosses (one named per dungeon) · 30 relics ·
-10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 38 test
+10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 39 test
 suites. All content is `.tres` data plus one catalogue line; adding more is a data
 task, not a code task.
 

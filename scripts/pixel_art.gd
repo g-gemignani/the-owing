@@ -585,27 +585,10 @@ static func level_band(level: int, cap: int) -> String:
 ## that is the only reason there is more than one set (D132).
 const LEVEL_FX_DIR := "res://assets/art/fx/"
 
-## The dark halo that goes UNDER the light, in normal blending, black with an alpha taken
-## from a spread copy of the overlay itself.
-##
-## Without it the additive light saturates against bright paint and the effect turns into a
-## white blob: measured over the hundred card illustrations, the maxed corona ran past white
-## on 30.7% of its own lit area, up to 48.4% on the brightest cards, and a saturated pixel
-## has lost both the rarity tint and the difference between a ring and a corona. With the
-## halo that falls to 8.5% mean, and what is left is the corona's own white-hot core, which
-## is supposed to be white (D138).
-##
-## Null when there is no halo file, so a half-installed set still draws the light.
-static func level_overlay_halo(shape: String, level: int, cap: int) -> Texture2D:
-	var band := level_band(level, cap)
-	if band == "":
-		return null
-	var p := LEVEL_FX_DIR + "lvl_%s_%s_halo.png" % [shape, band]
-	if ResourceLoader.exists(p):
-		return load(p) as Texture2D
-	return null
-
-
+## A `level_overlay_halo` lived here — a black scrim drawn under the light so an ADDITIVE
+## blend had headroom on bright paint. It went out with the additive blend: screening the
+## light does the same job without a second file and without darkening the illustration,
+## which is what the halo was really doing (D139).
 static func level_overlay(shape: String, level: int, cap: int) -> Texture2D:
 	var band := level_band(level, cap)
 	if band == "":
