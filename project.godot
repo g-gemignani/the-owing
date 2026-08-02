@@ -5,9 +5,32 @@ config_version=5
 
 [application]
 
-config/name="Deckcrawl"
+config/name="The Owing"
 run/main_scene="res://scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.7")
+
+; The save directory is DECOUPLED from the game's name, which is the whole point of
+; these two lines (D127). Godot derives `user://` from `config/name`, so renaming the
+; game moves `app_userdata/Deckcrawl/` to `app_userdata/The Owing/` and orphans every
+; existing save — with no error and no missing file, because the new directory is
+; simply empty and `MetaState` reads empty as a new player. A rename is a display
+; change and must never be a data migration, so the data path is nailed down here and
+; the name above is free to change again.
+;
+; Two things about the shape of this, both learned by getting them wrong:
+;
+; * These keys are written WITHOUT the `application/` prefix — the section header
+;   already supplies it. The fully-qualified spelling is accepted into the file,
+;   ignored by the engine, and reported by nothing. Spelled that way, `user://` still
+;   resolved to `app_userdata/The Owing/`: the exact silent orphaning these lines
+;   exist to prevent, one layer down.
+; * `use_custom_user_dir` does not rename the last segment, it drops the
+;   `godot/app_userdata/` layer entirely — the directory becomes
+;   `~/.local/share/Deckcrawl/`. So this pin is a MOVE, not a no-op, and the existing
+;   save was copied across by hand once. `tests/run.sh` hardcodes the same path to
+;   sweep its sandboxes and had to be updated with it.
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Deckcrawl"
 
 ; The first frame of the game, and the only one Godot draws before any of this
 ; project's code has run — which is why all four of these are settings and not

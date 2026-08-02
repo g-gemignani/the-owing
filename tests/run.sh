@@ -45,7 +45,13 @@ command -v "$GODOT" >/dev/null 2>&1 || {
 # a genuine infinite loop, so it no longer has to be generous.
 TIMEOUT="${TIMEOUT:-120}"
 
-USERDATA=~/.local/share/godot/app_userdata/Deckcrawl
+# The player's data directory. PINNED in project.godot by config/custom_user_dir_name,
+# which is why this can be a literal: without the pin Godot derives it from
+# config/name, and renaming the game moves it. This path being wrong does not fail
+# loudly — the stray-sandbox check below would find nothing and pass, so a test writing
+# over a real save would stop being caught (D127). Note the shape: use_custom_user_dir
+# drops the `godot/app_userdata/` layer rather than just replacing the last segment.
+USERDATA=~/.local/share/Deckcrawl
 
 run_one() {  # run_one <label> <script|scene> <target>   (results land in $RESULTS)
 	local label="$1" kind="$2" target="$3" dir="$RESULTS"
