@@ -8105,3 +8105,234 @@ difference between a tool and a one-shot somebody re-runs by accident.
 **A grade is a patch on the installed file and the brief is the durable fix**, which is why
 both landed together. If the title art is re-rolled, the new file should come back inside
 the palette on its own; if it does not, the tool is there and will say so.
+
+### D135 — Tier 3b asked a hundred times for a rule and expected a picture
+
+The decision to give every card its own illustration is taken. The prompts that were
+supposed to buy it could not have.
+
+**What Tier 3b was emitting.** D131 built the tier so the subject is DERIVED from the
+`.tres` — name, description, family — explicitly to avoid a second list that drifts out
+of step with `resources/cards/`. What came out was:
+
+```
+**Bandage.** Heal 6. Exhaust. A heal card.
+**Abyssal Gift.** Pay 8 HP. Gain 1 Energy. Draw 2. Exhaust. A draw card.
+```
+
+That is a rule, and D101 already wrote down where a rule ends up: *"A generator can only
+draw an object: 'Block.' and 'A choice with consequences' are rules, and a rule prompts a
+diagram."* The tier reintroduced the exact defect thirty decisions after it was fixed,
+and it was invisible because the row count looked right — a hundred well-formed rows,
+every one of them unpaintable.
+
+**And each prompt contradicted itself.** The style block's FORBIDDEN line opens with
+`text, letters, numerals`. The derived subject is nothing but numerals: *Heal 6*,
+*Deal 28 damage*, *Pay 8 HP*. Every one of the hundred prompts told the generator to paint
+no numerals and then handed it four. That is the same class as D102 and D112 — operator
+text reaching the model as art direction — one layer further in, where the conflicting
+half is generated rather than pasted.
+
+**The fix is to split the subject rather than to derive or to hand-write all of it.**
+D131 was right that mechanics should not be written down twice and wrong that a subject
+can be derived at all: arithmetic cannot be painted, and a picture is not a function of a
+damage number. So `CARD_SUBJECT` now carries one hand-written line per card — the
+picture, the only part that had to be authored — and the effect text stays derived and
+follows as *context*. A retuned card still corrects its own prompt for free; only the
+painting is fixed. Same output shape as Tier 3's `CARD_ART`, which has worked since it
+landed:
+
+```
+**Bandage.** A strip of stained linen wound tight around a forearm and knotted off.
+A heal card: Heal 6. Exhaust.
+```
+
+**The drift D131 feared is answered by a guard, not by derivation.** A card with no
+`CARD_SUBJECT` line is a FATAL error in the tool — it refuses to emit, exactly as an
+undescribed family already does. Verified by removing `bandage` and watching the run
+abort naming it. So the second list cannot go quietly stale; it can only stop the
+manifest until somebody writes the missing sentence.
+
+**House rules for a line, written down because a hundred of them is where consistency
+goes to die:** one concrete thing, no numerals, no keyword nouns (Block, Vulnerable,
+Exhaust mean nothing to a painter), and distinct from both the family's picture and the
+card's siblings — twenty attack cards that all read "a sword" would put the tier back
+where it started.
+
+**Not generated yet, and the reason is access rather than art direction.** Both routes
+are shut, and each needs a decision that is not the tool's to make:
+
+| route | state |
+|---|---|
+| Gemini API | Image models report a free-tier quota of **0** on this key. Confirmed with one real call; the skill is explicit that this is not transient and that cycling models does not help. Needs billing — about **$4** for all hundred, unattended, one model throughout. |
+| Gemini web app | The Chrome extension is installed, but no `mcp__claude-in-chrome__*` tools exist in this session: Claude Code was not started with `claude --chrome`, which is a **launch flag** and cannot be set mid-session. Beyond that the free tier caps at roughly **20-25 images per day**, making a hundred cards a four-to-five day job, and automating the consumer product is against Google's ToS in a way the paid API is not. |
+
+The prompt sheet is regenerated and correct, so whichever route opens, the batch is one
+command away rather than an evening of authoring.
+
+**Found in passing:** the Gemini MCP server's defaults are unexpanded shell variables —
+`list_models` reports `image=${GEMINI_IMAGE_MODEL}, text=${GEMINI_TEXT_MODEL}` literally,
+and a `generate_image` call with no explicit `model` fails with *"unexpected model name
+format"* rather than with anything naming the cause. Passing `model` explicitly works
+around it.
+
+
+### D136 — Four cards to a picture, and the colour fixed after the fact rather than asked for
+
+Tier 3b is a hundred illustrations and the generator is a browser window with a daily cap
+(the standing constraint: paying for the API is not an option). One card per request is a
+hundred requests. **Four 4:3 cells tile exactly into one 4:3 picture**, so a 2x2 grid costs
+nothing in shape and turns a hundred requests into twenty-five. `install_card_sheet.gd`
+cuts them; it is a separate tool from `install_sheet.gd` because that one mattes, trims and
+anchors CUTOUTS on a flat field and every one of those steps is wrong for a full-bleed
+painting whose edges are meant to run to the frame.
+
+**The grid works. The colour was the hard part, and asking for it did not fix it.** Three
+rolls of the same four subjects:
+
+    style block as written, plus "2x2 grid"     greyscale comic page
+    + "FULL COLOUR, richly coloured, vivid"     every cell flooded with orange or teal
+    + "one small light, most stays cool grey"   back to nearly grey, one literal floating flame
+
+The generator has no dial between "no colour" and "all colour", and it cannot be given one,
+because each request is a fresh conversation with no sight of what the last one produced.
+
+So the colour is **set after the fact**. Ask for the flooded version — which gets the REACH
+of colour right, light touching the whole subject the way the family art does — and scale
+saturation down to a measured target at install (`--sat=0.33`). That is exact, repeatable,
+and costs no generations. The rescue only works in that direction: scaling a grey page up
+just amplifies its JPEG chroma noise, so the greyscale failure is still a refusal.
+
+**The first metric ranked the cells backwards.** `(max-min)/max` is unstable in the dark — a
+pixel of (10,9,8) is grey to any eye and scores 0.20 — and these paintings are deliberately
+mostly shadow, so the average was mostly noise. It passed a cell at 23.5% colourful and
+refused one at 37.8%. Measuring only pixels above a luminance floor separates them:
+
+    family attack / block / heal    sat 0.34 / 0.34 / 0.24   colourful 100 / 100 / 68%
+    bg_crypt.png (the style bible)  sat 0.535                colourful  99.9%
+    greyscale comic-page sheet      sat 0.171                colourful  24.5%
+    flooded sheet                   sat 0.46-0.67            colourful  85-100%
+    flooded sheet at --sat=0.33     sat 0.33-0.35            colourful  76-99%
+
+The band in the installer is those numbers, and both ends refuse. A number inside it is not
+proof a painting is good; a number outside it is proof one is wrong, which is worth a
+refusal when the alternative is finding out a hundred cards later.
+
+**Two things this does not solve.** Image-conditioning on `bg_crypt.png` — rule 2 of
+ART_PROMPTS.md, and the strongest style constraint available — is unreachable from here: the
+page has no file input until its Upload button opens a native picker, and a native dialog
+blocks the browser extension outright. Text-only plus the measured saturation band is the
+substitute. And the generator's corner watermark still lands in the bottom-right cell of
+every sheet; `strip_sparkle.gd` needs several frames sharing a position to find it, which
+the sheets will supply once enough exist. The family art already installed carries the same
+watermark, so this is not a new defect, but it is an open one.
+
+
+### D137 — The reference image cannot be attached from here, and saying only what a picture is NOT drains it
+
+Two findings that arrived together, both about the same thing: a prompt that constrains
+without describing.
+
+## The style bible cannot ride on the request, and the tool that claims otherwise lies quietly
+
+Rule 2 of ART_PROMPTS.md is "attach `bg_crypt.png` to every single request" — image
+conditioning is a stronger constraint on palette and line weight than any adjective. From
+this harness it is unreachable, and it took a measurement to establish that rather than an
+assumption:
+
+- `file_upload` needs an `input[type=file]`. Gemini creates none until its Upload button
+  opens a **native** picker, and a native dialog blocks the extension outright.
+- `upload_image` — screenshot the reference in another tab, drag it onto the composer —
+  is the route the browser skill recorded as tested and working. It reports
+  `Successfully dropped image (120KB)` and **nothing attaches**. Instrumenting `window`
+  with a capture-phase listener says why:
+
+      [{"t":"dragenter","trusted":false,"files":1},
+       {"t":"dragover", "trusted":false,"files":1},
+       {"t":"drop",     "trusted":false,"files":1}]
+
+  The events carry the file and arrive **untrusted**, and Gemini discards them exactly as
+  Quill discards untrusted paste events. The skill has been corrected. The lesson worth
+  keeping is not about drag and drop: **a tool reporting success is not evidence the page
+  did anything**, and the only proof is the attachment chip in the composer.
+
+The remaining route is the user attaching it by hand once per chat, which is what the skill
+now recommends without alternatives.
+
+## "No green" produced a black-and-white picture
+
+D134 corrected the title brief by naming the colour at the noun: *"NO GREEN ANYWHERE IN THE
+FRAME: the firs are black and violet-grey silhouettes."* It predicted that a re-roll against
+that brief would come back inside the palette on its own. Measured on the first re-roll, it
+was right — and it was not enough:
+
+    green   0.0%   (was 41.5% before D134, 0.2% after the grade)   <- fixed, natively
+    sat-in-light   0.211   against bg_crypt 0.535, graded file 0.456
+    colour reach   45.4%   against bg_crypt 99.9%, graded file 92.7%
+
+Green was gone and so was every other colour: a neutral grey night with one cyan flame in
+it. The brief said what the picture must NOT be and left what it must BE to the word
+*desaturated* in the palette line, so the generator desaturated all of it. That is D134's
+own finding — a concrete noun beats an adjective — arriving from the other side: a
+prohibition is not a description, and removing the wrong colour does not supply the right
+one.
+
+The brief now names violet positively where the nouns are: *"THE PICTURE IS STILL IN COLOUR
+AND THE COLOUR IS VIOLET: the rock, the cliffs, the distant mountains and the cloak are all
+a deep blue-violet stone, plainly violet against a violet-blue night sky, never neutral grey
+and never black-and-white."* The REDO line now carries both tests, because passing one of
+them alone is how this file has failed twice: **green under 1% AND saturation near 0.45.**
+
+`main_menu.png` is on the re-roll list either way. What is installed is a hue grade — a
+patch that moved 41.5% green to 0.0% in place — and D134 said itself that the brief, not the
+grade, is the durable fix. The grade stays because it works; the row stays because a graded
+file is not the picture a generator would paint in that palette.
+
+### D138 — The pointer is the player's, and the game had taken it
+
+Reported flatly, as a preference: *"I do not like games that change the pointer, use the
+system default."*
+
+The game had a whole pointer. A `Pointer` autoload replaced the system arrow with a
+painted iron spike and swapped in a driven-in variant while the mouse button was down.
+Two 64x64 plates, two hotspots measured off the ink to the pixel — (2, 2) and (8, 8) —
+an `_input` listener chosen over `_unhandled_input` specifically so a Button eating the
+click could not eat the press, and a focus-out guard so alt-tabbing mid-click could not
+leave the spike driven in for the rest of the session. It had been repaired twice: D125
+recovered its alpha after it shipped 9.4% opaque, and D133 re-keyed it after the first
+repair left it dragging a grey box across every screen.
+
+**It is all gone, and the reasoning is worth keeping even though the code is not.** A
+cursor is not part of a game's art direction in the way a backdrop is. It is the one
+piece of the interface the player already configured, that every other window on their
+machine agrees about, and that they may have configured for a reason — size, contrast,
+a system theme. Replacing it is a preference imposed rather than offered, and nothing
+about the spike was worth that.
+
+**Removed rather than made optional.** A setting was the obvious alternative and is the
+wrong shape here: D130 added two settings for the combat effects because those effects
+have a real reason to exist and a real reason to be turned down. A cursor the author does
+not want has no such tension — a toggle would have been a way of not deciding, and it
+would have kept two plates, an autoload, two installer entries and two hotspot constants
+alive to serve an option nobody asked for.
+
+Deleted: `scripts/pointer.gd`, the `Pointer` autoload line, `assets/art/ui/cursor.png`
+and `cursor_press.png`, both `install_chrome` tier entries, the `ART.md` row and the two
+manifest rows. **Git holds the plates if this is ever reversed.**
+
+**What deliberately stayed.** The `lumakey` constants in `install_chrome.gd`
+(`LUMA_BAND`, `LUMA_FRAME_FAR`, `LUMA_MAX_PEEL` and the knee) were all measured off these
+two cursors — they were the worst case that key ever met — and `ui/logo.png` still depends
+on every one of them. The comments now say the files are gone rather than pointing a
+reader at a path that no longer exists, which is the failure mode D101 named: a note that
+briefs something absent is worse than no note.
+
+**Why "optional" was never a safe word for these two rows.** The manifest called them
+optional and it read as harmless. It was not: with the code removed they would have become
+two installed files that nothing loads, which REVIEW.md already records as a fixed bug from
+D125 — *"logo, target ring, all seven intent telegraphs, card glow, boot splash, cursors,
+divider: installed and read by nothing."* An asset is either wired or it is absent. There
+is no third state, and a row that offers one invites the tree back into it.
+
+Verified by rendering every screen: nothing referenced the autoload, no screen changed,
+38 suites green.

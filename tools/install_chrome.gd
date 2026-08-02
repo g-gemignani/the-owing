@@ -60,16 +60,18 @@
 ## subject sits inside its own background's tolerance, so the fill walks straight
 ## through it and hands back a plausible, mostly-transparent file (D125). These key on
 ## DISTANCE FROM THE FIELD instead, and unlike `glow` they keep their geometry, because
-## `pointer.gd` pins a hotspot to the cursor's tip in image coordinates. `_lumakey` has
-## the measurements; the short version is that "distance", "field" and "zero" each had
-## to be defined more carefully than the first attempt defined them (D133).
+## the tuning was measured against a subject whose GEOMETRY could not be allowed to
+## move. `_lumakey` has the measurements; the short version is that "distance", "field"
+## and "zero" each had to be defined more carefully than the first attempt defined them
+## (D133).
 extends SceneTree
 
 const Cut := preload("res://tools/cutout_lib.gd")
 const OUT := "res://assets/art/ui/"
 
-## --- `lumakey` tuning. All four were measured off the two cursors in D133; see
-## `_lumakey` for what each one is holding back.
+## --- `lumakey` tuning. All four were measured off the two cursor plates in D133 —
+## the worst case the key ever met, and gone from the tree since D138 — and the logo
+## still needs every one of them. See `_lumakey` for what each is holding back.
 ##
 ## How wide a band around the frame edge is sampled to find the field level. Six pixels
 ## of a 64px cursor, which is enough to out-vote the corner the spike's tip sits in.
@@ -236,36 +238,11 @@ var KIT := {
 		"matte": false,
 		"stretch": false,
 	},
-	"cursor": {
-		# Same as the logo and worse: an iron spike on near-black keyed to 9.4%
-		# opaque against 93.9% non-black RGB, so what shipped was the highlight
-		# hairline and nothing else — a pointer that disappeared over the title art.
-		# `lumakey` also leaves the geometry alone, which matters here: `pointer.gd`
-		# pins its hotspot to the tip in image coordinates (D125).
-		#
-		# Then it went wrong the other way. Unlike the logo these two are painted on a
-		# GREY field (62, 66, 69) inside a black frame line, and the first `lumakey`
-		# keyed them against the frame instead of the field: 93.85% opaque, the field
-		# itself sitting at alpha 147, a pointer dragging a grey box across every
-		# screen. Re-keyed in D133 to 13.09%; the field is now 3,509 pixels of literal
-		# zero and the outermost ring is transparent. See `_lumakey`.
-		"canvas": Vector2i(64, 64),
-		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
-		"matte": false,
-		"stretch": false,
-		"lumakey": true,
-	},
-	"cursor_press": {
-		# Everything the entry above says, twice — same field, same frame line, same
-		# 93.85%, same repair, 18.36% opaque afterwards. The one thing that differs is
-		# the hotspot, which is (8, 8) here against (2, 2) there because the flare puts
-		# the point somewhere else, and `pointer.gd` says why they must not be shared.
-		"canvas": Vector2i(64, 64),
-		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
-		"matte": false,
-		"stretch": false,
-		"lumakey": true,
-	},
+	# `cursor` and `cursor_press` used to sit here. The game no longer replaces the
+	# system pointer (D138), so there is nothing to install and the two plates are
+	# gone from the tree. The `lumakey` constants below are still theirs — they were
+	# measured off these two files, which were the worst case the key ever met — and
+	# the logo still depends on every one of them.
 }
 
 var _dry := false
@@ -432,10 +409,10 @@ func _shape(img: Image, spec: Dictionary) -> String:
 ## behind it. Both looked correct in a file browser, which is why nobody caught it.
 ##
 ## Unlike `glow` this does NOT trim or resize. The three files that needed rescuing
-## already sat at their canvas with their framing correct, and a cursor's framing is
-## load-bearing: `pointer.gd` pins a hotspot to the spike's tip in image
-## coordinates, so trimming to the ink and re-fitting would move the point the
-## player aims with. Recovering alpha is the whole job here; moving anything else
+## already sat at their canvas with their framing correct, and for two of them the
+## framing was load-bearing — a hotspot was pinned to the spike's tip in image
+## coordinates, so trimming to the ink and re-fitting would have moved the point the
+## player aimed with. Recovering alpha is the whole job here; moving anything else
 ## would be a second change hiding inside a repair.
 ##
 ## **The first version of this called `Cut.mono_alpha()` and shipped a pointer that

@@ -126,6 +126,44 @@ const REDO := {
 	# luminance 0.307 inside the 20-35% band, and 0.029% of pixels over 0.90 — cleaner
 	# than bg_crypt. The hypothesis was right and it took a subject change, not a
 	# fourth attempt at the same one.
+	#
+	# `main_menu.png` is back, and for a different defect than last time. D134 measured
+	# 41.5% of the frame in a green hue band against 0.0% in `bg_crypt.png`, the reference
+	# attached to every request — the largest hue mass in the game's front door was a
+	# colour that appears NOWHERE in the style bible. The cause was the noun, not the
+	# palette line: the subject said "a valley of firs" and firs are green.
+	#
+	# What is on disk now is a GRADE, not a painting: `tools/regrade.gd` moved the green
+	# band into violet-blue in place, which took green to 0.0% and left the cyan flame
+	# untouched at 7.5%. That was the right call — the composition had taken three
+	# attempts and only the hue was wrong — but a remapped hue is not the same picture a
+	# generator would have painted in that palette, and D134 says so itself: "the brief is
+	# the durable fix ... if the title art is re-rolled, the new file should come back
+	# inside the palette on its own".
+	#
+	# So this line is here to have that re-roll done against the corrected brief, which
+	# now names the colour at the noun ("NO GREEN ANYWHERE IN THE FRAME: the firs are black
+	# and violet-grey silhouettes at night, not foliage"). The test is the same measurement:
+	# green under a percent or so without any grade applied afterwards. Until then the front
+	# door of the game is a patched file rather than a painted one.
+	# `main_menu.png` was here a second time and came out the same day. D134 fixed the
+	# brief and GRADED the installed file — a hue remap, not a painting — and predicted a
+	# re-roll would come back inside the palette on its own. It did, but only after a
+	# second correction, and the first attempt is the part worth keeping:
+	#
+	#   attempt 1, brief as D134 left it   green 0.0%  BUT sat-in-light 0.211, colour on
+	#                                      45% of lit pixels — a neutral grey night with
+	#                                      one cyan flame, against the bible's 0.535/99.9%
+	#   attempt 2, violet named at the noun green 0.0%, sat-in-light 0.422, colour 98.1%,
+	#                                      blue 86.2% against the bible's 86.4%, mean
+	#                                      luminance 0.238 inside the 20-35% band
+	#
+	# The brief had said what the picture must NOT be and left what it must BE to the word
+	# "desaturated", so the generator desaturated all of it — D134's own "a concrete noun
+	# beats an adjective", arriving from the other side (D137). Naming violet positively
+	# where the nouns are fixed it in one attempt. `tools/regrade.gd` now reports "already
+	# inside the palette — nothing to do" on the installed file, which is the check that
+	# says this is a painting rather than another patch.
 }
 
 ## A defect that belongs to a whole DIRECTORY rather than to one file.
@@ -326,19 +364,20 @@ const SHELL := [
 	["fonts/body.ttf", "-", "Body face for rules text. Must stay legible at 12px, since card text shrinks to fit — Fira Sans Regular 4.203, OFL 1.1, picked by rendering the shortlist at 12/14/16px rather than by taste: largest x-height and most open counters of the set. Theme `default_font`, so nothing falls back to the engine face.", Kind.LICENCE],
 	## The title art was the one painting in the tree that no row named, so the sheet
 	## could not report it either way — the tier that owns the title screen listed the
-	## logo that sits on top of it, the boot splash before it and the cursor over it, and
-	## not the picture itself. That is why it stayed off the re-roll list while being the
-	## most-seen image in the game (D114).
+	## logo that sits on top of it, the boot splash before it and (then) the cursor over
+	## it, and not the picture itself. That is why it stayed off the re-roll list while
+	## being the most-seen image in the game (D114).
 	["main_menu.png", "1280x720", "The title screen backdrop. `main_menu.gd` resolves it through `PixelArt.title_art_path()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. It was `.jpg` until D114 renamed it on the re-roll; this row is one of the references that had to move with it, and it did not until D122 noticed the tier still reporting one file missing.", Kind.SCENE,
-		"A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. NO GREEN ANYWHERE IN THE FRAME: the firs are black and violet-grey silhouettes at night, not foliage, and the traveller's cloak is the same cold stone colour as the rock — a forest and a cloak are the two things a painter reaches for green for, and this palette does not have it. One cold cyan flame in a stone bowl beside them is the only light source and the only saturated colour in the image. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white."],
+		"A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. NO GREEN ANYWHERE IN THE FRAME: the firs are black and violet-grey silhouettes at night, not foliage, and the traveller's cloak is the same cold stone colour as the rock — a forest and a cloak are the two things a painter reaches for green for, and this palette does not have it. THE PICTURE IS STILL IN COLOUR AND THE COLOUR IS VIOLET: the rock, the cliffs, the distant mountains and the cloak are all a deep blue-violet stone, plainly violet against a violet-blue night sky, never neutral grey and never black-and-white. One cold cyan flame in a stone bowl beside them is the only light source and the only saturated colour in the image. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white."],
 	["ui/logo.png", "1600x480", "The wordmark. The title screen sets a plain Label reading 'THE OWING' into this plate's empty middle. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
 		"An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind."],
 	["ui/boot_splash.png", "1280x720", "Boot splash. None configured.", Kind.SCENE,
 		"A shut iron door at the foot of a stair, one lantern burning above it, seen head-on. Nobody in frame."],
-	["ui/cursor.png", "64x64", "Optional pointer.", Kind.PAINT,
-		"A slim iron spike pointing up and to the left. One solid shape."],
-	["ui/cursor_press.png", "64x64", "Optional pressed pointer.", Kind.PAINT,
-		"The same iron spike, shorter and driven in, its tip flared."],
+	## `ui/cursor.png` and `ui/cursor_press.png` used to close this table: a painted iron
+	## spike and a driven-in variant, installed and hotspot-measured across D125 and
+	## D133. Both are gone (D138). The game does not replace the system pointer, so
+	## these are not "optional" any more — they are two files nothing would load, which
+	## is the state this manifest exists to make impossible.
 ]
 
 ## Scene backdrops that are not one dungeon or one zone.
@@ -435,7 +474,7 @@ const ACTION_WORD := ["attacks", "makes you vulnerable", "weakens you", "defends
 ## defect and a silent one: a 13th family would ship 99 good prompts and one bad
 ## (D34's habit, in a new place).
 ## Tier 3b's subject, one line per card. Hand-written, and that is the correction this
-## table exists to make (D134).
+## table exists to make (D138).
 ##
 ## D131 built Tier 3b to DERIVE its subject from the `.tres` — name, description and
 ## family — so there would be no second list to drift out of step with
@@ -775,28 +814,48 @@ func _cards() -> void:
 ## and the powers run on, and it is why this can be worked through a few cards at a time
 ## rather than as a hundred-file blocking batch (D131).
 ##
-## The subject is DERIVED from the card, never written down twice: its name, what it
-## actually does, and which family it belongs to all come off the `.tres`. A card whose
-## effect is retuned tomorrow gets a corrected prompt for free, and there is no second
-## list to drift out of step with `resources/cards/`.
+## The subject is SPLIT, and D138 is why. The picture comes from `CARD_SUBJECT` above,
+## hand-written once per card; the mechanics stay derived off the `.tres` and follow it
+## as context. D131 derived the whole thing and produced `**Bandage.** Heal 6. Exhaust.`
+## — a rule, not a picture, with a numeral in it that the style block's FORBIDDEN line
+## bans. Arithmetic cannot be painted; the effect it belongs to can. Splitting keeps what
+## D131 was right about (a retuned card corrects its own prompt) and drops what it was
+## wrong about (that a subject is derivable at all).
 func _cards_unique() -> void:
 	_section("Tier 3b — one illustration per card",
 		"The family paintings in Tier 3 are shared by up to twenty cards each; these replace them one at a time. Nothing breaks while it is half done — the per-card file is checked first and the family file is the fallback.",
 		Kind.SCENE,
 		"A filled 4:3 rectangle, not a cutout — the picture band across the top of a card, filling it edge to edge. One clear subject, centred, read at 320x240 and shown about 3cm wide. LEAVE THE FOUR CORNERS QUIET AND EMPTY: top-left and top-right about a quarter of the width and a fifth of the height, bottom-left and bottom-right the same height and nearly half the width. Quiet means plain background — no object, no plate, no badge, and above all NO NUMERAL AND NO SYMBOL, because the game draws the real cost and damage over those corners and a painted one sits under it as a lie. The bottom two fifths sit under a shadow that deepens almost to black at the bottom edge, so weight the subject into the upper middle and let the lower edge fall away. Paint THIS CARD, not its family: the whole point of this tier is that the twenty cards sharing one picture stop sharing it.")
+	# Same shape as the family guard above, for the same reason: a card with no picture
+	# written for it must be a loud failure here, not a quiet fallback to its rule text.
+	# This is the whole answer to the drift D131 was avoiding — the second list cannot go
+	# stale unnoticed, because the tool refuses to emit while it is.
+	var unpainted: Array[String] = []
+	for cid in PixelArt.card_ids():
+		if not CARD_SUBJECT.has(cid):
+			unpainted.append(String(cid))
+	if not unpainted.is_empty():
+		_fatal = ("no CARD_SUBJECT line for %d card%s (%s) — add one to tools/art_manifest.gd. "
+			+ "The card's effect text is NOT an acceptable fallback subject: it is a rule, "
+			+ "and a rule prompts a diagram (D101, D138).") % [
+			unpainted.size(), "" if unpainted.size() == 1 else "s", ", ".join(unpainted)]
+		return
+
 	for cid in PixelArt.card_ids():
 		var c := load("res://resources/cards/%s.tres" % cid) as CardData
 		if c == null:
 			continue
 		var fam := Icons.card_family(c)
-		var bits: Array[String] = ["**%s.**" % c.name]
-		if c.description != "":
-			bits.append(String(c.description))
+		# The picture first and on its own sentence, because it is the instruction. The
+		# rest is context and reads as context: what the card does, and which family it
+		# sits in, so a painter can keep it distinct from its twenty neighbours.
+		var bits: Array[String] = ["**%s.**" % c.name, String(CARD_SUBJECT[cid])]
 		# "A attack card" reads as a typo in a hundred prompts, and these are read by a
 		# person as often as by a generator.
 		var fam_words := fam.replace("_", " ")
 		var article := "An" if fam_words.substr(0, 1) in ["a", "e", "i", "o", "u"] else "A"
-		bits.append("%s %s card." % [article, fam_words])
+		bits.append("%s %s card%s" % [article, fam_words,
+			(": %s" % c.description) if c.description != "" else "."])
 		_add("cards/%s.png" % cid, "320x240", " ".join(bits))
 
 ## Tier 3c — the level-progress overlays, and the reason there are six of them.

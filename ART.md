@@ -484,7 +484,6 @@ Painted objects on transparent, lit from upper-left, ink-outlined, readable at
 | `ui/logo.png` | 1600×480 | the title is a plain `Label` reading `"THE OWING"`, set into the painted cartouche |
 | `icon.svg` + `icon.png` | 256×256 | **no window or export icon configured** in `export_presets.cfg` |
 | `ui/boot_splash.png` | 1280×720 | none configured |
-| `ui/cursor.png`, `ui/cursor_press.png` | 64×64 | optional |
 
 The font was the cheapest large win on this list and it is spent: two files and a
 `Theme` change, and every screen in the game changed character. Body face chosen at

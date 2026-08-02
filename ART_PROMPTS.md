@@ -8,7 +8,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**105 files can be generated.** The rest of the list cannot, and the sections below
+**61 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -27,7 +27,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 105 times.
+   improve it between images. Its job is to be identical 61 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -95,123 +95,74 @@ Nothing to generate here — all 12 present.
 
 A filled 4:3 rectangle, not a cutout — the picture band across the top of a card, filling it edge to edge. One clear subject, centred, read at 320x240 and shown about 3cm wide. LEAVE THE FOUR CORNERS QUIET AND EMPTY: top-left and top-right about a quarter of the width and a fifth of the height, bottom-left and bottom-right the same height and nearly half the width. Quiet means plain background — no object, no plate, no badge, and above all NO NUMERAL AND NO SYMBOL, because the game draws the real cost and damage over those corners and a painted one sits under it as a lie. The bottom two fifths sit under a shadow that deepens almost to black at the bottom edge, so weight the subject into the upper middle and let the lower edge fall away. Paint THIS CARD, not its family: the whole point of this tier is that the twenty cards sharing one picture stop sharing it.
 
-**100 to generate.** Style block above, then one of these as the last line:
+**60 to generate, 40 already present.** Style block above, then one of these as the last line:
 
 | save as | size | subject |
 |---|---|---|
-| `cards/abyssal_gift.png` | 320x240 | **Abyssal Gift.** Pay 8 HP. Gain 1 Energy. Draw 2. Exhaust. A draw card. |
-| `cards/all_you_have.png` | 320x240 | **All You Have.** Deal 28 damage. Exhaust. An attack card. |
-| `cards/anvil_stance.png` | 320x240 | **Anvil Stance.** Gain 8 Block. Gain 1 Dexterity. A block card. |
-| `cards/bandage.png` | 320x240 | **Bandage.** Heal 6. Exhaust. A heal card. |
-| `cards/bite.png` | 320x240 | **Bite.** Deal 6 damage. Heal 2. An attack card. |
-| `cards/black_tide.png` | 320x240 | **Black Tide.** Deal 9 damage to ALL enemies. An attack aoe card. |
-| `cards/blight_bloom.png` | 320x240 | **Blight Bloom.** Apply 4 Poison to ALL enemies. A poison card. |
-| `cards/bloodlust.png` | 320x240 | **Bloodlust.** Gain 2 Strength. Heal 8. A heal card. |
-| `cards/brace.png` | 320x240 | **Brace.** Gain 12 Block. A block card. |
-| `cards/bramble_armour.png` | 320x240 | **Bramble Armour.** Gain 10 Block and 3 Thorns. A thorns card. |
-| `cards/bristle.png` | 320x240 | **Bristle.** Gain 9 Thorns. A thorns card. |
-| `cards/bulwark.png` | 320x240 | **Bulwark.** Gain 22 Block. Retain. A block card. |
-| `cards/cheap_shot.png` | 320x240 | **Cheap Shot.** Deal 3 damage, +4 if the target is already Vulnerable or Weak. Apply 1 Vulnerable. An attack card. |
-| `cards/clear_mind.png` | 320x240 | **Clear Mind.** Draw 2. Gain 1 Dexterity. A dexterity card. |
-| `cards/clear_the_room.png` | 320x240 | **Clear the Room.** Deal 5 damage twice to ALL enemies. An attack aoe card. |
-| `cards/cold_read.png` | 320x240 | **Cold Read.** Apply 1 Weak. A weak card. |
-| `cards/counterblow.png` | 320x240 | **Counterblow.** Deal 8 damage. Gain 4 Block. An attack card. |
-| `cards/cover.png` | 320x240 | **Cover.** Gain 5 block. A block card. |
-| `cards/creeping_death.png` | 320x240 | **Creeping Death.** Deal 5 damage. Apply 4 Poison. Permanently +2 this combat. A poison card. |
-| `cards/cull.png` | 320x240 | **Cull.** Deal 4 damage 3 times. If it kills, gain 1 Energy. An attack multi card. |
-| `cards/dead_weight.png` | 320x240 | **Dead Weight.** Deal 14 damage. An attack card. |
-| `cards/decapitate.png` | 320x240 | **Decapitate.** Deal 26 damage. Exhaust. An attack card. |
-| `cards/deep_breath.png` | 320x240 | **Deep Breath.** Heal 8. Draw 1. A heal card. |
-| `cards/double_down.png` | 320x240 | **Double Down.** Double your Block. A block card. |
-| `cards/drilled.png` | 320x240 | **Drilled.** Deal 8 damage. Permanently +3 this combat. An attack card. |
-| `cards/execute.png` | 320x240 | **Execute.** Deal 12 damage. +1 Energy on kill. An attack card. |
-| `cards/exsanguinate.png` | 320x240 | **Exsanguinate.** Pay 10 HP. Deal 18 damage. Heal for the damage dealt. An attack card. |
-| `cards/feint.png` | 320x240 | **Feint.** Gain 8 Block. Apply 1 Weak. A block card. |
-| `cards/focus.png` | 320x240 | **Focus.** Gain 1 Strength. Exhaust. A strength card. |
-| `cards/forge_strike.png` | 320x240 | **Forge Strike.** Deal 6 damage. Gain 1 Strength. An attack card. |
-| `cards/gash.png` | 320x240 | **Gash.** Deal 9 damage. An attack card. |
-| `cards/give_ground.png` | 320x240 | **Give Ground.** Gain 6 Block. Retain. A block card. |
-| `cards/grinding_down.png` | 320x240 | **Grinding Down.** Deal 10 damage. Permanently +4 this combat. An attack card. |
-| `cards/guard.png` | 320x240 | **Guard.** Gain 4 Block, +1 per other card in your hand. A block card. |
-| `cards/hack.png` | 320x240 | **Hack.** Deal 6 damage. An attack card. |
-| `cards/heavy_swing.png` | 320x240 | **Heavy Swing.** Deal 8 damage plus 3 per Strength. An attack card. |
-| `cards/hex.png` | 320x240 | **Hex.** Apply 2 Vulnerable to ALL enemies. A vulnerable card. |
-| `cards/in_and_out.png` | 320x240 | **In and Out.** Deal 4 damage, gain 3 Block. From your second card, +4 to both. An attack card. |
-| `cards/iron_lung.png` | 320x240 | **Iron Lung.** Heal 15. Gain 8 Block. A block card. |
-| `cards/iron_will.png` | 320x240 | **Iron Will.** Gain 5 Block and 2 Thorns. Retain. A thorns card. |
-| `cards/jab.png` | 320x240 | **Jab.** Deal 4 damage. +3 if the target is debuffed. An attack card. |
-| `cards/keep_hitting.png` | 320x240 | **Keep Hitting.** Deal 3 damage twice. Grows +1 per play. An attack multi card. |
-| `cards/kelp_snare.png` | 320x240 | **Kelp Snare.** Apply 2 Weak. Gain 4 Block. A block card. |
-| `cards/kick.png` | 320x240 | **Kick.** Gain 1 Energy. Draw 1. Exhaust. A draw card. |
-| `cards/last_stand.png` | 320x240 | **Last Stand.** Double your Block. Gain 2 Dexterity. A block card. |
-| `cards/last_word.png` | 320x240 | **Last Word.** Deal 20 damage. Exhaust. An attack card. |
-| `cards/leech.png` | 320x240 | **Leech.** Deal 6 damage. Heal for the damage dealt. An attack card. |
-| `cards/lifedrain.png` | 320x240 | **Lifedrain.** Deal 8 damage. Heal 5. An attack card. |
-| `cards/light_on_it.png` | 320x240 | **Light on It.** Gain 3 Dexterity (permanent). A dexterity card. |
-| `cards/massacre.png` | 320x240 | **Massacre.** Deal 14 damage to ALL enemies. Exhaust. An attack aoe card. |
-| `cards/molten_core.png` | 320x240 | **Molten Core.** Deal 2 damage per Thorns you have. Gain 3 Thorns. A thorns card. |
-| `cards/nick.png` | 320x240 | **Nick.** Deal 4 damage. From your third card this turn, +5. An attack card. |
-| `cards/noxious_cloud.png` | 320x240 | **Noxious Cloud.** Apply 3 Poison and 1 Weak to ALL enemies. A poison card. |
-| `cards/old_debt.png` | 320x240 | **Old Debt.** Pay 5 HP. Deal 16 damage. An attack card. |
-| `cards/pandemic.png` | 320x240 | **Pandemic.** Apply 8 Poison to ALL enemies. Exhaust. A poison card. |
-| `cards/plague_bearer.png` | 320x240 | **Plague Bearer.** Apply 4 Poison to ALL enemies. Exhaust. A poison card. |
-| `cards/plague_heart.png` | 320x240 | **Plague Heart.** Apply 8 Poison to ALL enemies. Gain 4 Strength. Exhaust. A poison card. |
-| `cards/pressure.png` | 320x240 | **Pressure.** Deal 6 damage 3 times. An attack multi card. |
-| `cards/put_the_fear.png` | 320x240 | **Put the Fear.** Apply 3 Weak. A weak card. |
-| `cards/rally.png` | 320x240 | **Rally.** Gain 6 Block. Draw 2. A block card. |
-| `cards/ram.png` | 320x240 | **Ram.** Deal damage equal to your Block. An attack card. |
-| `cards/read_ahead.png` | 320x240 | **Read Ahead.** Draw 2. Exhaust. A draw card. |
-| `cards/reap.png` | 320x240 | **Reap.** Deal 7 damage to ALL enemies. An attack aoe card. |
-| `cards/red_mind.png` | 320x240 | **Red Mind.** Gain 5 Strength. A strength card. |
-| `cards/riposte.png` | 320x240 | **Riposte.** Deal 4 damage, +1 per Thorns. Gain 3 Thorns. A thorns card. |
-| `cards/riptide.png` | 320x240 | **Riptide.** Deal 4 damage twice to ALL enemies. If it kills, gain 1 Energy. An attack aoe card. |
-| `cards/rot_touch.png` | 320x240 | **Rot Touch.** Deal 5 damage. Apply 2 Poison. A poison card. |
-| `cards/salt_the_wound.png` | 320x240 | **Salt the Wound.** Deal 7 damage. Apply 2 Vulnerable. An attack card. |
-| `cards/sanguine_feast.png` | 320x240 | **Sanguine Feast.** Deal 10 damage. Heal for the damage dealt. An attack card. |
-| `cards/scrape.png` | 320x240 | **Scrape.** Deal 2 damage, +1 per Poison on the target. Apply 1 Poison. A poison card. |
-| `cards/second_heart.png` | 320x240 | **Second Heart.** Heal 30. Gain 1 Energy. Exhaust. A heal card. |
-| `cards/see_it_coming.png` | 320x240 | **See It Coming.** Draw 3. Exhaust. A draw card. |
-| `cards/set_stone.png` | 320x240 | **Set Stone.** Block no longer expires at end of turn. A block card. |
-| `cards/sharp_ground.png` | 320x240 | **Sharp Ground.** Gain 4 Thorns. A thorns card. |
-| `cards/shield_wall.png` | 320x240 | **Shield Wall.** Gain 8 Block, +2 per other card in your hand. A block card. |
-| `cards/shoulder.png` | 320x240 | **Shoulder.** Deal 5 damage, gain 5 Block. +4 damage if the target is Vulnerable or Weak. An attack card. |
-| `cards/shut_out.png` | 320x240 | **Shut Out.** Gain 26 Block. Exhaust. A block card. |
-| `cards/sidestep.png` | 320x240 | **Sidestep.** Gain 5 Block. A block card. |
-| `cards/smiths_fury.png` | 320x240 | **Smith's Fury.** Gain 2 Strength. Draw 1. A strength card. |
-| `cards/smoke_bomb.png` | 320x240 | **Smoke Bomb.** Apply 2 Weak to ALL enemies. A weak card. |
-| `cards/something_worse.png` | 320x240 | **Something Worse.** Gain 7 Strength. Exhaust. A strength card. |
-| `cards/spiked_guard.png` | 320x240 | **Spiked Guard.** Gain 7 Block and 2 Thorns. A thorns card. |
-| `cards/split.png` | 320x240 | **Split.** Deal 4 damage, +1 per Poison on the target. Apply 3 Poison. A poison card. |
-| `cards/spore_burst.png` | 320x240 | **Spore Burst.** Apply 2 Poison to ALL enemies. A poison card. |
-| `cards/stave_in.png` | 320x240 | **Stave In.** Deal 10 damage. Apply 2 Vulnerable. An attack card. |
-| `cards/stitch.png` | 320x240 | **Stitch.** Heal 12. A heal card. |
-| `cards/stone_skin.png` | 320x240 | **Stone Skin.** Gain 5 Dexterity. A dexterity card. |
-| `cards/stumble.png` | 320x240 | **Stumble.** Apply 1 Vulnerable. A vulnerable card. |
-| `cards/survival_instinct.png` | 320x240 | **Survival Instinct.** Gain 10 Block. A block card. |
-| `cards/sword_dance.png` | 320x240 | **Sword Dance.** Deal 3 damage 3 times. If it kills, gain 1 Energy. An attack multi card. |
-| `cards/take_it.png` | 320x240 | **Take It.** Gain 7 Block. Draw 1. A block card. |
-| `cards/thorn_crown.png` | 320x240 | **Thorn Crown.** Gain 14 Thorns. Exhaust. A thorns card. |
-| `cards/thrown_iron.png` | 320x240 | **Thrown Iron.** Deal 4 damage, draw 1. From your third card this turn, +6. An attack card. |
-| `cards/two_quick.png` | 320x240 | **Two Quick.** Deal 6 damage twice. An attack multi card. |
-| `cards/undying.png` | 320x240 | **Undying.** Gain 4 Strength, 4 Dexterity. Exhaust. A strength card. |
-| `cards/venom_fang.png` | 320x240 | **Venom Fang.** Apply 5 Poison. A poison card. |
-| `cards/virulence.png` | 320x240 | **Virulence.** Apply 7 Poison. A poison card. |
-| `cards/whetted_edge.png` | 320x240 | **Whetted Edge.** Deal 7 damage. Permanently +2 this combat. An attack card. |
-| `cards/wither.png` | 320x240 | **Wither.** Apply 2 Weak and 2 Vulnerable. A vulnerable card. |
-| `cards/work_up.png` | 320x240 | **Work Up.** Gain 3 Strength (permanent). A strength card. |
+| `cards/jab.png` | 320x240 | **Jab.** A short straight punch of a blade, thrown without stepping in. An attack card: Deal 4 damage. +3 if the target is debuffed. |
+| `cards/keep_hitting.png` | 320x240 | **Keep Hitting.** The same fist landing over and over on the same spot, the dent deepening. An attack multi card: Deal 3 damage twice. Grows +1 per play. |
+| `cards/kelp_snare.png` | 320x240 | **Kelp Snare.** Wet black kelp wound around an ankle and pulling tight. A block card: Apply 2 Weak. Gain 4 Block. |
+| `cards/kick.png` | 320x240 | **Kick.** A boot driving a jammed door open, light coming through the gap. A draw card: Gain 1 Energy. Draw 1. Exhaust. |
+| `cards/last_stand.png` | 320x240 | **Last Stand.** One shield-bearer alone with the shield still up, everything else in the frame broken. A block card: Double your Block. Gain 2 Dexterity. |
+| `cards/last_word.png` | 320x240 | **Last Word.** A duelling blade thrust clean through, hilt-deep, the arm behind it locked straight. An attack card: Deal 20 damage. Exhaust. |
+| `cards/leech.png` | 320x240 | **Leech.** A dark blade drinking, one thin line of red climbing the steel against gravity. An attack card: Deal 6 damage. Heal for the damage dealt. |
+| `cards/lifedrain.png` | 320x240 | **Lifedrain.** A gauntleted hand closed on a ribcage with light draining out between the fingers. An attack card: Deal 8 damage. Heal 5. |
+| `cards/light_on_it.png` | 320x240 | **Light on It.** A boot resting on a stretched rope, the rope barely dipping. A dexterity card: Gain 3 Dexterity (permanent). |
+| `cards/massacre.png` | 320x240 | **Massacre.** A wide killing arc that has already finished, the shapes on both sides falling away. An attack aoe card: Deal 14 damage to ALL enemies. Exhaust. |
+| `cards/molten_core.png` | 320x240 | **Molten Core.** A hollow chest cavity glowing furnace-orange behind a cage of iron ribs. A thorns card: Deal 2 damage per Thorns you have. Gain 3 Thorns. |
+| `cards/nick.png` | 320x240 | **Nick.** The smallest possible cut, opening on a knuckle, a single bead standing on it. An attack card: Deal 4 damage. From your third card this turn, +5. |
+| `cards/noxious_cloud.png` | 320x240 | **Noxious Cloud.** A low yellow-green fog rolling across flagstones at knee height. A poison card: Apply 3 Poison and 1 Weak to ALL enemies. |
+| `cards/old_debt.png` | 320x240 | **Old Debt.** A tally stick snapped in two, its notched half driven into a table like a blade. An attack card: Pay 5 HP. Deal 16 damage. |
+| `cards/pandemic.png` | 320x240 | **Pandemic.** A dead field of stalks all bent the same way, every one of them blackened. A poison card: Apply 8 Poison to ALL enemies. Exhaust. |
+| `cards/plague_bearer.png` | 320x240 | **Plague Bearer.** A hooded figure walking away, leaving a trail of dying ground behind it. A poison card: Apply 4 Poison to ALL enemies. Exhaust. |
+| `cards/plague_heart.png` | 320x240 | **Plague Heart.** A swollen black heart in a nest of veins, pulsing and feeding the veins. A poison card: Apply 8 Poison to ALL enemies. Gain 4 Strength. Exhaust. |
+| `cards/pressure.png` | 320x240 | **Pressure.** A blade held against a breastplate and leaned on, the metal beginning to give. An attack multi card: Deal 6 damage 3 times. |
+| `cards/put_the_fear.png` | 320x240 | **Put the Fear.** A helm turned slowly toward the viewer and a figure backing out of frame. A weak card: Apply 3 Weak. |
+| `cards/rally.png` | 320x240 | **Rally.** A hand pulling another fighter back onto their feet by the wrist. A block card: Gain 6 Block. Draw 2. |
+| `cards/ram.png` | 320x240 | **Ram.** A shield turned edge-on and driven forward as the weapon itself. An attack card: Deal damage equal to your Block. |
+| `cards/read_ahead.png` | 320x240 | **Read Ahead.** A finger held on a line partway down a page already turning. A draw card: Draw 2. Exhaust. |
+| `cards/reap.png` | 320x240 | **Reap.** A long scythe drawn level through a standing crop of dark shapes. An attack aoe card: Deal 7 damage to ALL enemies. |
+| `cards/red_mind.png` | 320x240 | **Red Mind.** A helm with red light behind both eye slits and nothing human in it. A strength card: Gain 5 Strength. |
+| `cards/riposte.png` | 320x240 | **Riposte.** A blade turned aside onto a spiked bracer, the attacker's hand torn on it. A thorns card: Deal 4 damage, +1 per Thorns. Gain 3 Thorns. |
+| `cards/riptide.png` | 320x240 | **Riptide.** A backwash of dark water dragging several figures off their feet at once. An attack aoe card: Deal 4 damage twice to ALL enemies. If it kills, gain 1 Energy. |
+| `cards/rot_touch.png` | 320x240 | **Rot Touch.** A bare fingertip pressed to skin, the grey spreading out from the contact. A poison card: Deal 5 damage. Apply 2 Poison. |
+| `cards/salt_the_wound.png` | 320x240 | **Salt the Wound.** A fistful of coarse grey salt scattered across an open cut. An attack card: Deal 7 damage. Apply 2 Vulnerable. |
+| `cards/sanguine_feast.png` | 320x240 | **Sanguine Feast.** A goblet of cut stone brimming and running over, held in an armoured fist. An attack card: Deal 10 damage. Heal for the damage dealt. |
+| `cards/scrape.png` | 320x240 | **Scrape.** A rusted nail drawn across a forearm, the scratch already going dark at its edges. A poison card: Deal 2 damage, +1 per Poison on the target. Apply 1 Poison. |
+| `cards/second_heart.png` | 320x240 | **Second Heart.** A second heart beating in an opened ribcage, lit from within. A heal card: Heal 30. Gain 1 Energy. Exhaust. |
+| `cards/see_it_coming.png` | 320x240 | **See It Coming.** A blow seen an instant early, the eye wide and the head already moving. A draw card: Draw 3. Exhaust. |
+| `cards/set_stone.png` | 320x240 | **Set Stone.** A slab of dressed stone lowered into a wall and settling, mortar squeezing out. A block card: Block no longer expires at end of turn. |
+| `cards/sharp_ground.png` | 320x240 | **Sharp Ground.** Broken caltrops and bone shards scattered across a floor. A thorns card: Gain 4 Thorns. |
+| `cards/shield_wall.png` | 320x240 | **Shield Wall.** Shields locked edge to edge in a line running out of frame both ways. A block card: Gain 8 Block, +2 per other card in your hand. |
+| `cards/shoulder.png` | 320x240 | **Shoulder.** An armoured shoulder driven into a shield, both figures going off balance. An attack card: Deal 5 damage, gain 5 Block. +4 damage if the target is Vulnerable or Weak. |
+| `cards/shut_out.png` | 320x240 | **Shut Out.** A studded door slammed and barred from the inside, the bar dropping into its brackets. A block card: Gain 26 Block. Exhaust. |
+| `cards/sidestep.png` | 320x240 | **Sidestep.** A blow passing through the space a figure has just left. A block card: Gain 5 Block. |
+| `cards/smiths_fury.png` | 320x240 | **Smith's Fury.** A smith bringing the hammer down twice as hard as the work needs. A strength card: Gain 2 Strength. Draw 1. |
+| `cards/smoke_bomb.png` | 320x240 | **Smoke Bomb.** A clay ball burst on flagstones, grey smoke going up in a column. A weak card: Apply 2 Weak to ALL enemies. |
+| `cards/something_worse.png` | 320x240 | **Something Worse.** A shape in a doorway that is bigger than the doorway was a moment ago. A strength card: Gain 7 Strength. Exhaust. |
+| `cards/spiked_guard.png` | 320x240 | **Spiked Guard.** A shield with a ring of spikes worked through its face, one already bloodied. A thorns card: Gain 7 Block and 2 Thorns. |
+| `cards/split.png` | 320x240 | **Split.** A blistered pod bursting and throwing wet spores out both sides. A poison card: Deal 4 damage, +1 per Poison on the target. Apply 3 Poison. |
+| `cards/spore_burst.png` | 320x240 | **Spore Burst.** A puffball crushed underfoot, its cloud going up around the boot. A poison card: Apply 2 Poison to ALL enemies. |
+| `cards/stave_in.png` | 320x240 | **Stave In.** A war pick punching a hole clean through a breastplate and staying there. An attack card: Deal 10 damage. Apply 2 Vulnerable. |
+| `cards/stitch.png` | 320x240 | **Stitch.** A curved needle drawing catgut through the lips of a cut. A heal card: Heal 12. |
+| `cards/stone_skin.png` | 320x240 | **Stone Skin.** A forearm turning to dressed grey stone, the joins showing at the knuckles. A dexterity card: Gain 5 Dexterity. |
+| `cards/stumble.png` | 320x240 | **Stumble.** A foot catching on a raised flagstone, the body already past its balance. A vulnerable card: Apply 1 Vulnerable. |
+| `cards/survival_instinct.png` | 320x240 | **Survival Instinct.** A forearm thrown up over the face before the mind has caught up. A block card: Gain 10 Block. |
+| `cards/sword_dance.png` | 320x240 | **Sword Dance.** One figure mid-turn with three blade arcs closing around it like a shell. An attack multi card: Deal 3 damage 3 times. If it kills, gain 1 Energy. |
+| `cards/take_it.png` | 320x240 | **Take It.** A blow landing square on a braced shoulder, the bearer not moving. A block card: Gain 7 Block. Draw 1. |
+| `cards/thorn_crown.png` | 320x240 | **Thorn Crown.** A circlet of black iron thorns, the points turned in toward the wearer. A thorns card: Gain 14 Thorns. Exhaust. |
+| `cards/thrown_iron.png` | 320x240 | **Thrown Iron.** A throwing knife caught mid-flight, still turning, its handler's hand open behind it. An attack card: Deal 4 damage, draw 1. From your third card this turn, +6. |
+| `cards/two_quick.png` | 320x240 | **Two Quick.** Two short thrusts thrown so fast their arcs overlap into one shape. An attack multi card: Deal 6 damage twice. |
+| `cards/undying.png` | 320x240 | **Undying.** A skeletal hand closing on a sword grip and pulling itself upright. A strength card: Gain 4 Strength, 4 Dexterity. Exhaust. |
+| `cards/venom_fang.png` | 320x240 | **Venom Fang.** One hollow fang, a single drop hanging off the point of it. A poison card: Apply 5 Poison. |
+| `cards/virulence.png` | 320x240 | **Virulence.** Black veins running visibly outward under skin, faster than they should. A poison card: Apply 7 Poison. |
+| `cards/whetted_edge.png` | 320x240 | **Whetted Edge.** An edge held up to the light, one bright hairline running its whole length. An attack card: Deal 7 damage. Permanently +2 this combat. |
+| `cards/wither.png` | 320x240 | **Wither.** A hand shrivelling around its own grip, the weapon loosening in it. A vulnerable card: Apply 2 Weak and 2 Vulnerable. |
+| `cards/work_up.png` | 320x240 | **Work Up.** A back and shoulders swelling under a leather harness, the straps going tight. A strength card: Gain 3 Strength (permanent). |
 
 ## Tier 3c — level-progress overlays
 
-A LAYER, not a picture: this is drawn ON TOP of a finished illustration, so most of the image must be EMPTY BLACK — pure #000000, which the game adds rather than blends, so black is invisible and only the light shows. Paint ONLY the effect and leave everything else black. It must be MONOCHROME, a single warm-white light, because the game tints it to the card's rarity colour; any colour painted in fights that tint. Keep the effect to the EDGES of the frame and the area behind where a subject would stand — the middle must stay clear enough to read the illustration through, and the FOUR CORNERS must stay completely black because the game draws the cost and the damage over them. No text, no numerals, no symbols, no runes, no object: this is light, not a thing. The three steps must read as ESCALATION at a glance and at thumbnail size, which means each one is bigger and brighter than the last rather than merely different.
-
-**4 to generate, 2 already present.** Style block above, then one of these as the last line:
-
-| save as | size | subject |
-|---|---|---|
-| `fx/lvl_card_max.png` | 320x240 | MAXED on the illustration band of a card — the end of the track and the one state a player is working toward, so it must be unmistakable and different in KIND, not just brighter. A full radiant corona breaking outward past the ring, thick rays reaching to the frame edges, the whole border alight. The middle is still readable but everything around it is burning. |
-| `fx/lvl_power_1.png` | 128x128 | First milestone on a power sigil — a third of the way up its track. The FAINTEST of the three: a thin arc of light along the lower edge and a breath of glow creeping in from the two lower corners. Barely there; it should read as 'this one has been touched' and nothing louder. |
-| `fx/lvl_power_2.png` | 128x128 | Second milestone on a power sigil — two thirds up. The arc has closed into a full thin ring of light around the whole subject area, brighter than the first, with a few small sparks lifting off it. Still clear in the middle. |
-| `fx/lvl_power_max.png` | 128x128 | MAXED on a power sigil — the end of the track and the one state a player is working toward, so it must be unmistakable and different in KIND, not just brighter. A full radiant corona breaking outward past the ring, thick rays reaching to the frame edges, the whole border alight. The middle is still readable but everything around it is burning. |
+Nothing to generate here — all 6 present.
 
 ## Tier 5 — dungeon battle backdrops
 
@@ -239,9 +190,9 @@ Nothing to generate here — all 10 present.
 
 ## Tier 7 — identity and shell
 
-*2 of these 7 files are NOT for a generator: a licensed download* — `display.ttf`, `body.ttf`
+*2 of these 5 files are NOT for a generator: a licensed download* — `display.ttf`, `body.ttf`
 
-Nothing to generate here — all 5 present.
+Nothing to generate here — all 3 present.
 
 ## Tier 8a — isometric figures
 

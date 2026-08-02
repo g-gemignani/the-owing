@@ -86,10 +86,11 @@ boot_splash/bg_color=Color(0.07, 0.06, 0.09, 1)
 UITheme="*res://scripts/ui_theme.gd"
 SettingsState="*res://scripts/settings_state.gd"
 Audio="*res://scripts/audio.gd"
-; Grouped with the three above rather than with the two state singletons below:
-; like them it owns one piece of how the game presents itself, set once and left
-; alone. It depends on none of them, so it could sit anywhere in this list.
-Pointer="*res://scripts/pointer.gd"
+; A `Pointer` autoload used to sit here, replacing the system arrow with a painted
+; iron spike and a pressed variant (D125, D133). REMOVED in D138: the game does not
+; get to decide what the player's pointer looks like. The system cursor is the one
+; the player configured, it is the one every other window on their machine uses, and
+; a game-drawn substitute is a preference imposed rather than offered.
 MetaState="*res://scripts/meta_state.gd"
 GameState="*res://scripts/game_state.gd"
 
