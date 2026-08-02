@@ -330,7 +330,7 @@ const SHELL := [
 	## not the picture itself. That is why it stayed off the re-roll list while being the
 	## most-seen image in the game (D114).
 	["main_menu.png", "1280x720", "The title screen backdrop. `main_menu.gd` resolves it through `PixelArt.title_art_path()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. It was `.jpg` until D114 renamed it on the re-roll; this row is one of the references that had to move with it, and it did not until D122 noticed the tier still reporting one file missing.", Kind.SCENE,
-		"A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. One cold cyan flame in a stone bowl beside them is the only light source. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white."],
+		"A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. NO GREEN ANYWHERE IN THE FRAME: the firs are black and violet-grey silhouettes at night, not foliage, and the traveller's cloak is the same cold stone colour as the rock — a forest and a cloak are the two things a painter reaches for green for, and this palette does not have it. One cold cyan flame in a stone bowl beside them is the only light source and the only saturated colour in the image. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white."],
 	["ui/logo.png", "1600x480", "The wordmark. The title screen sets a plain Label reading 'THE OWING' into this plate's empty middle. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
 		"An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind."],
 	["ui/boot_splash.png", "1280x720", "Boot splash. None configured.", Kind.SCENE,
@@ -434,6 +434,144 @@ const ACTION_WORD := ["attacks", "makes you vulnerable", "weakens you", "defends
 ## than falling back to the membership list, because the fallback is exactly the
 ## defect and a silent one: a 13th family would ship 99 good prompts and one bad
 ## (D34's habit, in a new place).
+## Tier 3b's subject, one line per card. Hand-written, and that is the correction this
+## table exists to make (D134).
+##
+## D131 built Tier 3b to DERIVE its subject from the `.tres` — name, description and
+## family — so there would be no second list to drift out of step with
+## `resources/cards/`. The reasoning is right about drift and wrong about what a
+## generator can read: what it derived was `**Bandage.** Heal 6. Exhaust. A heal card.`,
+## which is a RULE, and D101 already recorded where that ends — *"a generator can only
+## draw an object; 'Block.' and 'A choice with consequences' are rules, and a rule
+## prompts a diagram."* Worse, the derived line carries NUMERALS into a style block whose
+## FORBIDDEN list opens with them, so every prompt argued with itself.
+##
+## A picture cannot be derived from arithmetic. So the picture is written down and the
+## mechanics stay derived: the effect line still comes off the `.tres` and is appended as
+## CONTEXT after the subject, which means a retuned card still gets a corrected prompt
+## for free and only the painting has to be authored once. The guard below makes the
+## drift D131 feared LOUD rather than silent — a new card with no line here is a fatal
+## error in this tool, exactly as an undescribed family already is.
+##
+## House rules for a line: one concrete thing, no numerals, no keyword nouns (Block,
+## Vulnerable, Exhaust mean nothing to a painter), and distinct from both its family's
+## picture and its siblings' — twenty attack cards that all read "a sword" would put the
+## tier back where it started.
+const CARD_SUBJECT := {
+	# --- attack ---
+	"all_you_have": "A greatsword swung with both hands and nothing held back, the swordsman's guard wide open behind it.",
+	"bite": "Teeth closing on an armoured forearm, the bite deep enough to draw the arm down.",
+	"cheap_shot": "A short knife going in low under a raised guard, from behind.",
+	"counterblow": "A blade caught on a bracer and a second blade already coming back the other way.",
+	"dead_weight": "A blunt iron weight at the end of a slack chain, swung on its own momentum.",
+	"decapitate": "An axe at the top of its arc above a bowed neck, the stroke not yet begun.",
+	"drilled": "The same thrust worn into the air three times over, each ghost of it straighter than the last.",
+	"execute": "A sword point resting in the gap of a fallen figure's gorget.",
+	"exsanguinate": "A hollow blade drawing a dark thread of blood out along its fuller.",
+	"forge_strike": "A hammer coming down on a blade laid across the anvil, sparks going up.",
+	"gash": "One long clean opening cut across dark leather armour, the edges parting.",
+	"grinding_down": "A whetstone worked along an edge that has been worked too many times already.",
+	"hack": "A heavy chopping blade buried in a shield rim and being wrenched free.",
+	"heavy_swing": "A maul at the far end of a full-body swing, the wielder's heels off the ground.",
+	"in_and_out": "A short blade going in and the same figure already turning away from the wound.",
+	"jab": "A short straight punch of a blade, thrown without stepping in.",
+	"last_word": "A duelling blade thrust clean through, hilt-deep, the arm behind it locked straight.",
+	"leech": "A dark blade drinking, one thin line of red climbing the steel against gravity.",
+	"lifedrain": "A gauntleted hand closed on a ribcage with light draining out between the fingers.",
+	"nick": "The smallest possible cut, opening on a knuckle, a single bead standing on it.",
+	"old_debt": "A tally stick snapped in two, its notched half driven into a table like a blade.",
+	"ram": "A shield turned edge-on and driven forward as the weapon itself.",
+	"salt_the_wound": "A fistful of coarse grey salt scattered across an open cut.",
+	"sanguine_feast": "A goblet of cut stone brimming and running over, held in an armoured fist.",
+	"shoulder": "An armoured shoulder driven into a shield, both figures going off balance.",
+	"stave_in": "A war pick punching a hole clean through a breastplate and staying there.",
+	"thrown_iron": "A throwing knife caught mid-flight, still turning, its handler's hand open behind it.",
+	"whetted_edge": "An edge held up to the light, one bright hairline running its whole length.",
+	# --- attack_aoe ---
+	"black_tide": "A black wave rearing across the frame with shapes drowning inside it.",
+	"clear_the_room": "One blade sweeping a full circle, cutting through several standing shapes at once.",
+	"massacre": "A wide killing arc that has already finished, the shapes on both sides falling away.",
+	"reap": "A long scythe drawn level through a standing crop of dark shapes.",
+	"riptide": "A backwash of dark water dragging several figures off their feet at once.",
+	# --- attack_multi ---
+	"cull": "Three quick cuts laid across a line of shapes, one shape dropping out of the line.",
+	"keep_hitting": "The same fist landing over and over on the same spot, the dent deepening.",
+	"pressure": "A blade held against a breastplate and leaned on, the metal beginning to give.",
+	"sword_dance": "One figure mid-turn with three blade arcs closing around it like a shell.",
+	"two_quick": "Two short thrusts thrown so fast their arcs overlap into one shape.",
+	# --- block ---
+	"anvil_stance": "A shield planted on an anvil's flat, braced and immovable.",
+	"brace": "Both feet set wide behind a shield jammed against the ground.",
+	"bulwark": "A wall of overlapping shield-iron filling the frame, no gap in it anywhere.",
+	"cover": "A figure ducked behind a broken slab of masonry, only the helm showing.",
+	"double_down": "A second shield brought up behind the first, the two rims locking.",
+	"feint": "A shield swung wide to draw an eye, the real hand empty and low.",
+	"give_ground": "A shield-bearer stepping back one pace with the shield never dropping.",
+	"guard": "A high guard held with the shield up under the eyes, nothing showing above it.",
+	"iron_lung": "A deep breath drawn behind a closed visor, the chestplate expanding against its straps.",
+	"kelp_snare": "Wet black kelp wound around an ankle and pulling tight.",
+	"last_stand": "One shield-bearer alone with the shield still up, everything else in the frame broken.",
+	"rally": "A hand pulling another fighter back onto their feet by the wrist.",
+	"set_stone": "A slab of dressed stone lowered into a wall and settling, mortar squeezing out.",
+	"shield_wall": "Shields locked edge to edge in a line running out of frame both ways.",
+	"shut_out": "A studded door slammed and barred from the inside, the bar dropping into its brackets.",
+	"sidestep": "A blow passing through the space a figure has just left.",
+	"survival_instinct": "A forearm thrown up over the face before the mind has caught up.",
+	"take_it": "A blow landing square on a braced shoulder, the bearer not moving.",
+	# --- heal ---
+	"bandage": "A strip of stained linen wound tight around a forearm and knotted off.",
+	"bloodlust": "A wound closing over as the fist above it clenches harder.",
+	"deep_breath": "A helm lifted off and a long breath taken in cold air.",
+	"second_heart": "A second heart beating in an opened ribcage, lit from within.",
+	"stitch": "A curved needle drawing catgut through the lips of a cut.",
+	# --- draw ---
+	"abyssal_gift": "A hand reaching up out of black water holding something out, palm open.",
+	"kick": "A boot driving a jammed door open, light coming through the gap.",
+	"read_ahead": "A finger held on a line partway down a page already turning.",
+	"see_it_coming": "A blow seen an instant early, the eye wide and the head already moving.",
+	# --- poison ---
+	"blight_bloom": "A pale flower opening on a corpse-grey stalk, spores lifting off it.",
+	"creeping_death": "A grey rot spreading along a limb, further at the wrist than at the elbow.",
+	"noxious_cloud": "A low yellow-green fog rolling across flagstones at knee height.",
+	"pandemic": "A dead field of stalks all bent the same way, every one of them blackened.",
+	"plague_bearer": "A hooded figure walking away, leaving a trail of dying ground behind it.",
+	"plague_heart": "A swollen black heart in a nest of veins, pulsing and feeding the veins.",
+	"rot_touch": "A bare fingertip pressed to skin, the grey spreading out from the contact.",
+	"scrape": "A rusted nail drawn across a forearm, the scratch already going dark at its edges.",
+	"split": "A blistered pod bursting and throwing wet spores out both sides.",
+	"spore_burst": "A puffball crushed underfoot, its cloud going up around the boot.",
+	"venom_fang": "One hollow fang, a single drop hanging off the point of it.",
+	"virulence": "Black veins running visibly outward under skin, faster than they should.",
+	# --- strength ---
+	"focus": "A single eye narrowing, everything around it falling out of focus into dark.",
+	"red_mind": "A helm with red light behind both eye slits and nothing human in it.",
+	"smiths_fury": "A smith bringing the hammer down twice as hard as the work needs.",
+	"something_worse": "A shape in a doorway that is bigger than the doorway was a moment ago.",
+	"undying": "A skeletal hand closing on a sword grip and pulling itself upright.",
+	"work_up": "A back and shoulders swelling under a leather harness, the straps going tight.",
+	# --- dexterity ---
+	"clear_mind": "Fog pulling back off still water to leave one clear reflection.",
+	"light_on_it": "A boot resting on a stretched rope, the rope barely dipping.",
+	"stone_skin": "A forearm turning to dressed grey stone, the joins showing at the knuckles.",
+	# --- thorns ---
+	"bramble_armour": "A breastplate overgrown with woody bramble, every thorn turned out.",
+	"bristle": "A hide standing its spines straight up along the spine ridge.",
+	"iron_will": "An iron collar with the spikes pointing inward and the wearer unmoved.",
+	"molten_core": "A hollow chest cavity glowing furnace-orange behind a cage of iron ribs.",
+	"riposte": "A blade turned aside onto a spiked bracer, the attacker's hand torn on it.",
+	"sharp_ground": "Broken caltrops and bone shards scattered across a floor.",
+	"spiked_guard": "A shield with a ring of spikes worked through its face, one already bloodied.",
+	"thorn_crown": "A circlet of black iron thorns, the points turned in toward the wearer.",
+	# --- weak ---
+	"cold_read": "A stare that has found the flaw, the read figure's guard beginning to sag.",
+	"put_the_fear": "A helm turned slowly toward the viewer and a figure backing out of frame.",
+	"smoke_bomb": "A clay ball burst on flagstones, grey smoke going up in a column.",
+	# --- vulnerable ---
+	"hex": "A hooked sign cut into the air above a group of dark shapes, glowing faintly.",
+	"stumble": "A foot catching on a raised flagstone, the body already past its balance.",
+	"wither": "A hand shrivelling around its own grip, the weapon loosening in it.",
+}
+
 const CARD_ART := {
 	"attack": "One heavy blade coming down through the frame, caught at the moment it lands. The stroke is the subject; no wielder needs to be in shot.",
 	"attack_aoe": "A single stroke opening one wide arc clean across the frame, catching several shapes at once in the dark to either side.",

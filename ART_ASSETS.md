@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**312 files wanted · 205 already present · 107 to provide.**
+**312 files wanted · 207 already present · 105 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -277,12 +277,12 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 3c — level-progress overlays
 
-*6 files, 6 still to provide.* Six files that serve every card and every power at every rarity. Composited over the art, not painted into it.
+*6 files, 4 still to provide.* Six files that serve every card and every power at every rarity. Composited over the art, not painted into it.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-|   | `fx/lvl_card_1.png` | 320x240 | First milestone on the illustration band of a card — a third of the way up its track. The FAINTEST of the three: a thin arc of light along the lower edge and a breath of glow creeping in from the two lower corners. Barely there; it should read as 'this one has been touched' and nothing louder. |
-|   | `fx/lvl_card_2.png` | 320x240 | Second milestone on the illustration band of a card — two thirds up. The arc has closed into a full thin ring of light around the whole subject area, brighter than the first, with a few small sparks lifting off it. Still clear in the middle. |
+| x | `fx/lvl_card_1.png` | 320x240 | First milestone on the illustration band of a card — a third of the way up its track. The FAINTEST of the three: a thin arc of light along the lower edge and a breath of glow creeping in from the two lower corners. Barely there; it should read as 'this one has been touched' and nothing louder. |
+| x | `fx/lvl_card_2.png` | 320x240 | Second milestone on the illustration band of a card — two thirds up. The arc has closed into a full thin ring of light around the whole subject area, brighter than the first, with a few small sparks lifting off it. Still clear in the middle. |
 |   | `fx/lvl_card_max.png` | 320x240 | MAXED on the illustration band of a card — the end of the track and the one state a player is working toward, so it must be unmistakable and different in KIND, not just brighter. A full radiant corona breaking outward past the ring, thick rays reaching to the frame edges, the whole border alight. The middle is still readable but everything around it is burning. |
 |   | `fx/lvl_power_1.png` | 128x128 | First milestone on a power sigil — a third of the way up its track. The FAINTEST of the three: a thin arc of light along the lower edge and a breath of glow creeping in from the two lower corners. Barely there; it should read as 'this one has been touched' and nothing louder. |
 |   | `fx/lvl_power_2.png` | 128x128 | Second milestone on a power sigil — two thirds up. The arc has closed into a full thin ring of light around the whole subject area, brighter than the first, with a few small sparks lifting off it. Still clear in the middle. |

@@ -8,7 +8,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**107 files can be generated.** The rest of the list cannot, and the sections below
+**105 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -27,7 +27,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 107 times.
+   improve it between images. Its job is to be identical 105 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -204,12 +204,10 @@ A filled 4:3 rectangle, not a cutout — the picture band across the top of a ca
 
 A LAYER, not a picture: this is drawn ON TOP of a finished illustration, so most of the image must be EMPTY BLACK — pure #000000, which the game adds rather than blends, so black is invisible and only the light shows. Paint ONLY the effect and leave everything else black. It must be MONOCHROME, a single warm-white light, because the game tints it to the card's rarity colour; any colour painted in fights that tint. Keep the effect to the EDGES of the frame and the area behind where a subject would stand — the middle must stay clear enough to read the illustration through, and the FOUR CORNERS must stay completely black because the game draws the cost and the damage over them. No text, no numerals, no symbols, no runes, no object: this is light, not a thing. The three steps must read as ESCALATION at a glance and at thumbnail size, which means each one is bigger and brighter than the last rather than merely different.
 
-**6 to generate.** Style block above, then one of these as the last line:
+**4 to generate, 2 already present.** Style block above, then one of these as the last line:
 
 | save as | size | subject |
 |---|---|---|
-| `fx/lvl_card_1.png` | 320x240 | First milestone on the illustration band of a card — a third of the way up its track. The FAINTEST of the three: a thin arc of light along the lower edge and a breath of glow creeping in from the two lower corners. Barely there; it should read as 'this one has been touched' and nothing louder. |
-| `fx/lvl_card_2.png` | 320x240 | Second milestone on the illustration band of a card — two thirds up. The arc has closed into a full thin ring of light around the whole subject area, brighter than the first, with a few small sparks lifting off it. Still clear in the middle. |
 | `fx/lvl_card_max.png` | 320x240 | MAXED on the illustration band of a card — the end of the track and the one state a player is working toward, so it must be unmistakable and different in KIND, not just brighter. A full radiant corona breaking outward past the ring, thick rays reaching to the frame edges, the whole border alight. The middle is still readable but everything around it is burning. |
 | `fx/lvl_power_1.png` | 128x128 | First milestone on a power sigil — a third of the way up its track. The FAINTEST of the three: a thin arc of light along the lower edge and a breath of glow creeping in from the two lower corners. Barely there; it should read as 'this one has been touched' and nothing louder. |
 | `fx/lvl_power_2.png` | 128x128 | Second milestone on a power sigil — two thirds up. The arc has closed into a full thin ring of light around the whole subject area, brighter than the first, with a few small sparks lifting off it. Still clear in the middle. |
