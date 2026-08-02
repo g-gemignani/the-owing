@@ -7917,3 +7917,129 @@ maxed, which is all two levels can mean.
 every power's own `level_capped()` — and asserts level 1 is bare, the cap and only the cap
 reads maxed, bands never go backwards, and any track of five or more actually shows both
 middle bands. A retuned cap is checked by that test rather than by eye.
+
+### D133 — Six reported annoyances, and four of them were something else underneath
+
+Six points, one agent each. Four came back having found a different problem than the one
+reported, which is the useful half of this entry.
+
+## The screen before the main screen was a black rectangle with a lamp in it
+
+Reported as looking like a glitch. It was the boot splash D125 had just wired, and the
+measurements say it could not have looked like anything else. Sampled off the framebuffer
+(`Xvfb -fbdir`, polled at ~400 Hz, nine boots): the splash holds for **287 ms mean**, and
+its **median pixel is 12/255 against the flat `bg_color`'s 16** — so the painting was
+*darker* than the empty colour it replaced, with 1.2% of the frame lit. Then a hard cut to
+a MainMenu at 2.5x the brightness, because Godot's boot splash cannot fade.
+
+**There was no load to cover** — deleting the shader cache changed the timing not at all.
+Two fixes were tried on a copy and rejected with numbers: `minimum_display_time=1500`
+charges every launch 1.2 s to hide nothing *and makes the cut worse*, because a
+dark-adapted eye then meets the brighter screen; pointing the splash at the menu art
+steps 75 → 51 instead, since the menu dims and scrims that painting and the raw file is
+not dimmed. Cover cropping was cleared at 5:4, and there is no unlayouted first frame.
+
+So the image is gone and the flat colour stays — the one `ui_theme.gd` already hands
+`RenderingServer.set_default_clear_color`, so the window opens as one field of the right
+colour and the title screen replaces it. That was the half of D125 that was right; the
+image was the only thing flashing.
+
+## The cursor's "dirty background" was a solid grey box, and the cause was a drawn frame
+
+I diagnosed a faint wash from field pixels above the border average. Measured, **the field
+was 58% opaque at alpha 147/255** — 3,210 of 4,096 pixels in one bucket.
+
+Both cursors carry a **1px pure-black frame line drawn around the whole 64x64 image**, and
+`Cut.mono_alpha()` takes its field reference from the border *mean*. So D125's `lumakey`
+keyed everything against that frame line: the frame got the only alpha-0 pixels in the
+file and the actual grey field landed at 147. Three faults, not one — the level now comes
+from the *median* of a 6px band with complete rings peeled first; the key is `|luminance −
+field|`, because these spikes have a dark outline at 0.06 *and* a lit shaft at 0.60
+straddling a field at 0.256, so a one-sided key even off the correct level returns the
+D125 hairline; and there is a knee at alpha 15, taken from a histogram whose field sits in
+three dither lumps at 0-1, 4-5 and 9-10 holding 79-84% of the frame with a clear gap above.
+Coverage 93.85% → **13.09%**.
+
+**And `_lumakey` had no `MIN_COVER`/`MAX_COVER` guard.** Every other path in `cutout_lib`
+has one; the mode I added in D125 did not. 93.85% is over `MAX_COVER`'s 0.92, so **the
+guard would have refused my own broken install**. Added.
+
+## Loadouts and Collection were never two screens
+
+"Loadouts" was `deck_builder.gd` re-entered with `manage_only = true`. Same catalogue,
+same filter bar, same row layout, and a "Collection (fuse)" button crossing between them
+mid-task. The player could not tell them apart because there was nothing to tell apart —
+and neither could `test_filter.gd`, whose "both screens must read the same function" loop
+named one behaviour twice.
+
+One **Cards** screen now, with three states *derived* from GameState rather than flagged
+(`in_run` → ledger, `dungeon_id != ""` → outfit, else manage) — a flag a caller must
+remember to set is the reported bug in a new hat. `manage_only` is deleted.
+
+**Fusing mid-run is refused, and the reason is not tidiness.** `MetaState.fuse()` spends
+`MetaState.gold` directly, never `GameState.spend_gold`. So it buys nothing for the run you
+are in — `build_deck()` snapshots levels at the door — and it prices against a purse the
+player is not shown. Re-plumbing it onto `available_gold()` would be worse: that converts
+at-risk earnings into a permanent card level at the last rest before the boss, laundering
+escrow past D20. The gate is `escrow_gold == 0`, not "no dungeon", because a dungeon's door
+has an empty escrow and is the best moment in the game to spend a haul.
+
+Width forced the layout: the old collection row alone asked ~1410px in a 1234px frame and
+was already clipping. The "stats" and "next level" columns merged, because
+`level_up_text` prints `dmg 28→238` — the pair cost 250px to say one thing twice.
+
+## The builds do not cluster, measured
+
+`Icons.for_card` over all 69 cards gives buckets of **1, 1, 1 and 4**, and the four in the
+lump are the four builds *least* alike — AoE, lifesteal, a compounding engine, cheap cards.
+The separating axes are `aoe`, `lifesteal`, `cost` and `draw`, none of which either
+classifier can see. So the screen does not group them, and no build header carries an icon,
+because four of seven would carry the same one.
+
+The wall of text had a specific cause: **every build takes exactly 3 dungeon-exclusive
+cards and spreads the rest across all 5 zone pools**, so "where is the rest of this build"
+had an identical answer for all seven — 56 lines of the same sentence.
+
+It belongs under How This Works, but not because it is "info": the glossary states rules
+true for every save and every line here is about *this* one. It belongs because it is **the
+only meta screen with nothing to press**. A hub button leads somewhere you do something.
+
+## The gear does not exist, and the row that says so had to be careful
+
+There is no cog in the 21 painted symbols and none in `PixelArt.GLYPHS`. The control asks
+`PixelArt.symbol("gear")` and renders the word "Settings" until `ui/sym_gear.png` lands.
+A `"settings"` row was deliberately **not** added to `Icons.MAP`, because `test_art.gd`
+walks that table and fails on any name resolving to nothing — the row would break a suite
+to document an absence. The manifest row is where the absence belongs, and adding it
+exposed that the D117 partial-sheet line called a first draft a "RE-ROLL"; it now says
+which.
+
+**One screen must not get a gear, and it is an exploit rather than a style call.**
+`chest_screen._open()` re-rolls the tier and lock on every `_ready`, so a settings door
+there is a free re-roll: leave, come back, new chest. Combat and Encounter are excluded
+too — combat clears Escape between the killing blow and the reward pick, and a mis-click
+in that corner costs a turn.
+
+The gear also **weakened an assertion**: `playable_test`'s "presents nothing to press — a
+dead end" is answered on every screen at once by a control that is there by construction.
+It is skipped by the meta `UI.gear()` stamps, not by name, and without that the check could
+pass on a screen that had lost every button of its own.
+
+## Two hazards that are not about any of the six
+
+**A non-headless render writes the player's real save.** `MetaState.path_prefix` only
+redirects to a sandbox when `DisplayServer.get_name() == "headless"`, so anything driven
+under Xvfb that is not `tools/screenshots.gd` (which sets its own prefix) writes
+`save.json`. With six agents rendering at once it happened — the file is stamped mid-batch.
+Any harness driven on an X display needs `DECKCRAWL_SANDBOX`.
+
+**And Godot silently falls back to Wayland at 1280x800** if `DISPLAY` points at a dead
+Xvfb — the D115 trap wearing a new hat. `--display-driver x11` with `WAYLAND_DISPLAY`
+unset is required, or a capture claiming to be the shipped size is not.
+
+## Numbering
+
+This batch was briefed as D130 and the concurrent session took D130, D131 and D132 while it
+ran, so every reference was renumbered to D133 — except `combat.gd`'s, which is genuinely
+theirs. Two sessions cannot pick decision numbers up front; the number has to be claimed
+when the entry is written, not when the work starts.
