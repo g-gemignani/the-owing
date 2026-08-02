@@ -8,7 +8,7 @@
 ##
 ## Run: godot --headless --script tools/install_card_sheet.gd -- <src.jpg> \
 ##          --rect=X,Y,W,H --ids=a,b,c,d [--cols=2] [--rows=2] [--inset=6] \
-##          [--sat=N] [--dry]
+##          [--sat=N] [--luma=N] [--dry]
 ##
 ## `--ids` is in reading order and every id is checked against `PixelArt.card_ids()`
 ## before anything is written. The filename IS the wiring (D73): `cards/<card_id>.png` is
@@ -54,6 +54,17 @@ const COLOURFUL_MIN := 0.55    # heal.png, the least colourful thing already shi
 const LUMA_MIN := 0.10
 const LUMA_MAX := 0.45
 
+## `--luma` is the same idea as `--sat`, for the axis that drifts second. Over a run in one
+## chat the generator slides toward bright, flat compositions — two sheets in a row came
+## back as objects laid against a lit stone wall at 0.394 and 0.401 against a family band
+## of 0.149 to 0.308 — and, like saturation, it has no dial between "too dark" and "too
+## bright" that a prompt can reach reliably.
+##
+## It only ever DARKENS. Scaling an over-bright painting down is exposure; scaling a dark
+## one up lifts JPEG noise out of the shadows, which is the same asymmetry `--sat` has and
+## for the same reason. A cell that came back too dark is a re-roll, not a correction.
+const LUMA_TARGET_MAX := 1.0
+
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -70,6 +81,7 @@ func _init() -> void:
 	var rows := 2
 	var inset := 6
 	var sat_target := -1.0
+	var luma_target := -1.0
 	var dry := false
 
 	for a in args.slice(1):
@@ -91,6 +103,8 @@ func _init() -> void:
 			inset = int(a.trim_prefix("--inset="))
 		elif a.begins_with("--sat="):
 			sat_target = float(a.trim_prefix("--sat="))
+		elif a.begins_with("--luma="):
+			luma_target = float(a.trim_prefix("--luma="))
 		elif a == "--dry":
 			dry = true
 
@@ -147,6 +161,8 @@ func _init() -> void:
 
 			if sat_target > 0.0:
 				_scale_saturation(cut, sat_target)
+			if luma_target > 0.0:
+				_darken_to(cut, luma_target)
 
 			var m := _measure(cut)
 			var why := ""
@@ -233,6 +249,23 @@ func _scale_saturation(im: Image, target: float) -> void:
 				clampf(mx + (c.r - mx) * k, 0.0, 1.0),
 				clampf(mx + (c.g - mx) * k, 0.0, 1.0),
 				clampf(mx + (c.b - mx) * k, 0.0, 1.0), 1.0))
+
+
+## Pull an over-bright cell down to a target mean luminance. Never up: see LUMA_TARGET_MAX.
+func _darken_to(im: Image, target: float) -> void:
+	var m := _measure(im)
+	if m.luma <= 0.001:
+		return
+	var k := minf(target / m.luma, LUMA_TARGET_MAX)
+	if k >= 0.999:
+		return
+	for y in im.get_height():
+		for x in im.get_width():
+			var c := im.get_pixel(x, y)
+			im.set_pixel(x, y, Color(
+				clampf(c.r * k, 0.0, 1.0),
+				clampf(c.g * k, 0.0, 1.0),
+				clampf(c.b * k, 0.0, 1.0), 1.0))
 
 
 ## Saturation and colour reach measured only among pixels bright enough for colour to be
