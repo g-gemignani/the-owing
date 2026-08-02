@@ -16,9 +16,19 @@ extends Control
 ## button rows have to fit the shipped 720p frame WITHOUT scrolling on a fresh save.
 ## At 168x95 with a 10px gap the fifth row was cut in half — five pixels over, and the
 ## first thing a new player saw was a picture sliced by the bottom of the list.
+##
+## That target is a nice-to-have and it is NOT what keeps the picture whole, which is
+## the thing this comment used to imply and D125 caught it not doing: at 160x82 the
+## fresh-save list is 497px of content in 462px of frame and the fifth thumbnail was
+## sliced again. Nor can any thumbnail size fix it for good — a row grows two lines of
+## pool text the moment its zone unlocks, so a fully-cleared save wants 719px and no
+## arithmetic here makes five of those fit. Scrolling is the honest answer and the
+## defect was never the scrolling; it was the cut landing mid-row. `_snap_list_to_rows`
+## is what actually holds the invariant now, at any size and any number of zones.
 const THUMB := Vector2(160, 82)
 const ROW_GAP := 6.0
 
+var list_bay: MarginContainer
 var list: VBoxContainer
 var news: Label
 var stats: Label
@@ -39,7 +49,18 @@ func _ready() -> void:
 	news = UI.label(col, "")
 	news.add_theme_color_override("font_color", Color(0.95, 0.78, 0.45))
 	stats = UI.label(col, "")
-	list = UI.scroll(col)
+	# Zone rows are clipped to WHOLE rows — see `_snap_list_to_rows`. The constant
+	# above sizes the list so five zones fit a fresh save without scrolling, and that
+	# only ever holds for a fresh save: every zone the player unlocks grows its row by
+	# two lines of pool text, so the list outgrows the frame and the fifth picture was
+	# being sliced by the button rows below it. Being able to scroll is right; being
+	# cut through the middle of a painting is not.
+	list_bay = MarginContainer.new()
+	list_bay.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_bay.resized.connect(_snap_list_to_rows)
+	col.add_child(list_bay)
+	list = UI.scroll(list_bay)
+	list.sort_children.connect(func(): _snap_list_to_rows.call_deferred())
 
 	var nav := UI.row(col, 8)
 	# A count on a menu entry is the entry's reason to be pressed — the argument that
@@ -74,6 +95,53 @@ func _ready() -> void:
 		MetaState.save_game()
 		UI.goto(self, "res://scenes/MainMenu.tscn"), 38.0)
 	_refresh()
+
+## Trim the frame around the list so its bottom edge falls in the gap BETWEEN two
+## rows instead of through the middle of one.
+##
+## A `ScrollContainer` is given whatever height the column has left over, and a
+## leftover is not a multiple of anything — so the fifth zone showed as a sliced
+## thumbnail above the nav bars, which reads as a rendering fault rather than as
+## "there is more below this". The slack comes out of the frame instead of a row.
+##
+## Measured off the BUILT TREE and not off a row-pitch constant, because this list
+## has no single pitch: a sealed row is a thumbnail and one line, an unlocked one is
+## a thumbnail and three, and the mix changes every time a zone opens. The deck
+## builder's list is uniform and gets the same function anyway, because a stated
+## pitch is the thing that goes stale the first time a row grows a control.
+##
+## Two things it does not claim. It fixes the RESTING frame — the one every capture
+## and every first glance shows — and scrolling can still stop mid-row, because
+## Godot has no row-snapped scroll to ask for. And it is duplicated with
+## `deck_builder.gd`: the right home is `UI.scroll()`, so both screens get it from
+## one place, and that file belongs to another agent this batch (D125).
+func _snap_list_to_rows() -> void:
+	var scroll := list.get_parent() as ScrollContainer
+	if scroll == null:
+		return
+	# The FRAME's height, never the scroll's. Measuring the scroll makes the margin a
+	# function of itself: trim 30px off, ask again, the last row now ends exactly at
+	# the bottom, so the answer is "trim 0" and the fix undoes itself on the next
+	# layout pass. It did, silently, and the capture looked like the code had not run.
+	var avail := list_bay.size.y
+	# in the scroll's own coordinates, so a rebuild while the list is scrolled down
+	# does not measure content that is above the top edge
+	var top := float(scroll.scroll_vertical)
+	var fits := 0.0
+	for c in list.get_children():
+		var ctl := c as Control
+		if ctl == null or not ctl.visible:
+			continue
+		var bottom := ctl.position.y + ctl.size.y - top
+		if bottom > avail:
+			break
+		fits = bottom
+	# nothing fits whole — a window shorter than one row. Leave the frame alone
+	# rather than blanking the list, which is the worse of the two failures.
+	var slack: int = 0 if fits <= 0.0 else int(avail - fits)
+	if list_bay.get_theme_constant("margin_bottom") == slack:
+		return
+	list_bay.add_theme_constant_override("margin_bottom", slack)
 
 func _builds_done() -> int:
 	var done := 0

@@ -30,7 +30,8 @@ func _fill(z: ZoneData) -> void:
 		var unlocked: bool = MetaState.dungeon_unlocked(d)
 		var tag := "  [cleared]" if MetaState.has_cleared(d.id) else ""
 		if not unlocked:
-			tag = "  [locked — clear %d dungeons]" % Balance.effective_gate(d.id)
+			tag = "  [locked — clear %s]" % Wording.count(
+				Balance.effective_gate(d.id), "dungeon")
 		# No traversal name on the button any more. It read "isometric floor" on all
 		# twelve — a label that never varies is not information, it is furniture, and
 		# it was spending the widest line on the screen saying nothing.

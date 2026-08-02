@@ -63,6 +63,8 @@ var log_lines: Array[String] = []
 ## Persistent widgets, built once and mutated. See `_refresh_enemies`.
 var enemy_plates: Array = []
 var card_widgets: Dictionary = {}
+## Kit textures already resampled to a size they are DRAWN at. See `_kit_at`.
+var kit_scaled: Dictionary = {}
 ## Where floating numbers and flashes are drawn: on top of everything, deaf to the
 ## mouse, and never a parent of anything the game logic reads.
 var fx_layer: Control
@@ -511,6 +513,26 @@ func _bar_fill(name: String) -> TextureRect:
 	hp_bar.add_child(t)
 	return t
 
+## A kit texture resampled to the size it will actually be DRAWN at, remembered by
+## that size.
+##
+## The project forces NEAREST filtering, so every one of these files is a downscale
+## waiting to turn into gravel — the 256px target ring lands in a ~70px box and the
+## 448px card halo in a 214px one. `UITheme.kit_icon` does the resample with Lanczos,
+## which is the right answer and an expensive one to repeat: the ring is asked for
+## once per enemy per layout and the halo once per card in hand. Both ask for the
+## same handful of sizes, so the cache is the whole cost.
+##
+## Null in, null out. A missing file still means "no art" to every caller, which is
+## the contract that has let this kit arrive one file at a time (D116).
+func _kit_at(name: String, side: float) -> Texture2D:
+	var key := "%s@%d" % [name, int(round(maxf(1.0, side)))]
+	if kit_scaled.has(key):
+		return kit_scaled[key]
+	var tex := UITheme.kit_icon(name, maxf(1.0, side))
+	kit_scaled[key] = tex
+	return tex
+
 ## Energy as one orb per point, spent orbs dark. The row is always built, because the
 ## numeral inside it is text and text needs no art: with the orbs missing it simply
 ## reads "Energy 3/3" where the old status line said it.
@@ -774,7 +796,14 @@ func _refresh() -> void:
 	var said: Array[String] = []
 	if hp_bar == null:
 		said.append("HP %d/%d" % [p.hp, p.max_hp])
-	said.append("Block %d" % p.block)
+	# Only when there IS Block. "Block 0" was printed on every turn that began with a
+	# clean slate, which is most of them, and it sat first in the line the player reads
+	# more than any other on this screen — a term whose whole job is to be compared
+	# against "incoming", saying nothing, in front of the number it modifies (D125).
+	# The bar says the same thing by having no blue band, and the tooltip still
+	# explains Block whether or not the word is on screen.
+	if p.block > 0:
+		said.append("Block %d" % p.block)
 	# Both halves of the sum, because the bar draws the SECOND one and a line that only
 	# said the first would disagree with the picture next to it. The tooltip claimed
 	# "incoming" was already net of Block and it never was — 13 was the raw swing — so
@@ -834,6 +863,10 @@ func _refresh_enemies() -> void:
 			Color(1.0, 0.92, 0.62) if targeted else Color(0.88, 0.86, 0.84))
 		var intent: Label = slot.get_meta("intent")
 		intent.text = eng.intent_text(i)
+		# The picture and the number, not one instead of the other. See `_intent_icon`.
+		var glyph: TextureRect = slot.get_meta("intent_icon")
+		glyph.texture = _kit_at(_intent_icon(i), glyph.custom_minimum_size.y)
+		glyph.visible = glyph.texture != null
 		var mark: Panel = slot.get_meta("mark")
 		# A RING when targeted, never a filled disc. The mark is centred on the
 		# standing line, so its upper half lies across the feet — which is what a
@@ -841,9 +874,24 @@ func _refresh_enemies() -> void:
 		# painted the enemy's ankles out and left it sitting on a bright solid
 		# lozenge. The report was "the monsters are floating"; the backdrops were
 		# mostly innocent (D109).
+		#
+		# D125 hands the targeted state to `ui/target_ring.png` and gives the SHADOW
+		# back to both states. The painted ring is four arcs of worn iron with an open
+		# middle, so it can lie across the feet without painting anything out — which
+		# is what the stylebox outline was standing in for and never managed, because a
+		# 999-radius rounded rectangle 27px tall is a capsule, not a ring on a floor.
+		# The shadow stays underneath it because being targeted is a fact about the UI
+		# and standing on the ground is a fact about the enemy: swapping one for the
+		# other used to un-ground whichever creature you were pointing at.
+		var reticle: TextureRect = slot.get_meta("reticle")
+		var painted_ring: bool = reticle.texture != null
+		reticle.visible = targeted and painted_ring
+		# With no file on disk the plate falls all the way back to the D109 pair, so
+		# an uninstalled ring costs the outline, not the targeting.
+		var lit := targeted and not painted_ring
 		mark.add_theme_stylebox_override("panel",
-			slot.get_meta("mark_ring" if targeted else "mark_shadow"))
-		mark.modulate = Color(1.0, 0.82, 0.40, 0.9) if targeted else Color(0, 0, 0, 0.72)
+			slot.get_meta("mark_ring" if lit else "mark_shadow"))
+		mark.modulate = Color(1.0, 0.82, 0.40, 0.9) if lit else Color(0, 0, 0, 0.72)
 		var hit: Button = slot.get_meta("hit")
 		hit.tooltip_text = "%s\nIntent: %s\nClick to target." % [e.name, eng.intent_text(i)]
 
@@ -880,6 +928,27 @@ func _build_slot(i: int) -> Control:
 	mark.modulate = Color(0, 0, 0, 0.72)
 	mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	slot.add_child(mark)
+
+	# The painted reticle, over the shadow and UNDER the creature — which is the whole
+	# reason it can be a ring rather than a halo. The mark is centred on the standing
+	# line and the enemy's sprite has its feet on that same line, so the ring's near
+	# half falls below the sprite's bottom edge where there is nothing to hide it, and
+	# its far half is occluded by the body exactly as a ring drawn on the floor behind
+	# an enemy should be. Added here, before the art, is what buys that for free.
+	#
+	# Sized and given its texture in `_place_slots`, because the size it is drawn at is
+	# not known until the slot has one and this file is not allowed to guess at a size
+	# (D125). Textureless until then, and textureless forever if the file is absent.
+	var reticle := TextureRect.new()
+	reticle.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	reticle.stretch_mode = TextureRect.STRETCH_SCALE
+	# Filtered for the same reason the painted enemy above it is: NEAREST is forced
+	# project-wide, and this quad is a square texture pulled out into a floor ellipse.
+	reticle.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	reticle.modulate = Color(1.0, 0.84, 0.46, 0.92)
+	reticle.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	reticle.visible = false
+	slot.add_child(reticle)
 
 	# The footprint a painted enemy is meant to fill: shown ONLY while it is
 	# missing, so the frame can be composed before anything is drawn. A 16x16
@@ -923,11 +992,39 @@ func _build_slot(i: int) -> Control:
 	var chips := _build_chip_row(slot, [])
 	chips.alignment = BoxContainer.ALIGNMENT_CENTER
 
+	# What it is about to do: the painted telegraph AND the number, side by side and
+	# centred as a pair.
+	#
+	# The icon does not replace the text and must not. "hit 6" is two facts — a kind
+	# and a quantity — and `ui/intent_attack.png` carries only the first; a plate that
+	# showed the blade alone would have thrown away the number the whole telegraph
+	# exists to deliver. The row is an HBox so that dropping the icon (no file, or an
+	# action with no symbol for it) leaves the label centred on its own, which is
+	# exactly the line this screen printed before D125.
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UITheme.sep(5))
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	# IGNORE for the reason the chip row is: this spans the plate and must not swallow
+	# the click that targets the creature.
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	slot.add_child(row)
+
+	var glyph := TextureRect.new()
+	var glyph_side := UITheme.px(SLOT_TEXT_BAND) / 3.0
+	glyph.custom_minimum_size = Vector2(glyph_side, glyph_side)
+	glyph.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glyph.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	glyph.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	glyph.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glyph.visible = false
+	row.add_child(glyph)
+
 	var intent := Label.new()
 	intent.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	intent.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	intent.add_theme_color_override("font_color", Color(1.0, 0.72, 0.55))
 	intent.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	slot.add_child(intent)
+	row.add_child(intent)
 
 	var hit := Button.new()
 	hit.flat = true
@@ -940,9 +1037,55 @@ func _build_slot(i: int) -> Control:
 	slot.set_meta("vitals", vitals)
 	slot.set_meta("chips", chips)
 	slot.set_meta("intent", intent)
+	slot.set_meta("intent_row", row)
+	slot.set_meta("intent_icon", glyph)
 	slot.set_meta("mark", mark)
+	slot.set_meta("reticle", reticle)
 	slot.set_meta("hit", hit)
 	return slot
+
+## Which painted telegraph goes with which enemy action.
+##
+## The classification is the ENGINE'S, not a second one invented here: an intent is
+## `{"action": EnemyData.Action, "value": int}` and this maps that enum onto the seven
+## files in `ui/intent_*.png`. No string is parsed and no damage is recomputed — the
+## number on the plate stays whatever `intent_text()` says it is, because the moment
+## this screen starts doing its own arithmetic about a telegraph it can disagree with
+## the hit that lands (D50).
+##
+## The three attacks share one blade. SUNDER and DRAIN are attacks that also do
+## something else, and that something else is in the words beside the icon
+## ("ignores Block", "drain"); giving each a symbol of its own would mean three
+## silhouettes the player has to learn apart at 22px, which is the size a distinction
+## has to survive to be worth making.
+##
+## **Two of the seven files have no action to attach to.** `EnemyData.Action` is
+## ATTACK, DEBUFF_VULN, DEBUFF_WEAK, DEFEND, EMPOWER, SUNDER, ENRAGE, DRAIN — there is
+## no multi-hit action and no enemy anywhere applies Poison (only cards do), so
+## `intent_attack_multi` and `intent_poison` are painted for behaviour the engine
+## cannot currently telegraph. They are left unmapped on purpose. Inventing a rule
+## here for "this reads like a multi-hit" would be exactly the private copy of shared
+## data that D34 cost a dungeon, and the fix belongs in `EnemyData.Action` and
+## `CombatEngine._roll_intent`, not on this screen.
+const INTENT_ICONS := {
+	EnemyData.Action.ATTACK: "intent_attack",
+	EnemyData.Action.SUNDER: "intent_attack",
+	EnemyData.Action.DRAIN: "intent_attack",
+	EnemyData.Action.DEFEND: "intent_block",
+	EnemyData.Action.EMPOWER: "intent_buff",
+	EnemyData.Action.ENRAGE: "intent_buff",
+	EnemyData.Action.DEBUFF_VULN: "intent_debuff",
+	EnemyData.Action.DEBUFF_WEAK: "intent_debuff",
+}
+
+## The kit name for enemy `i`'s telegraph. `intent_unknown` is the answer for anything
+## the map does not hold, which is the same "?" `intent_text` falls back to and the
+## honest picture for it: a closed eye rather than a wrong verb.
+func _intent_icon(i: int) -> String:
+	if i < 0 or i >= eng.intents.size():
+		return "intent_unknown"
+	var action := int((eng.intents[i] as Dictionary).get("action", -1))
+	return String(INTENT_ICONS.get(action, "intent_unknown"))
 
 ## How much of the frame, at EACH side, the enemies are kept out of.
 ##
@@ -976,6 +1119,26 @@ const POWER_ART_INSET := 14.0
 ## The band at the bottom of the orb the cost numeral sits in, in unscaled px.
 const POWER_COST_BAND := 30.0
 
+## The three text rows above every enemy, in unscaled px — see the note on `text_h`
+## in `_place_slots` for why it is 66 and what a boss pays for the third row. A
+## constant because the intent icon is sized off a third of it and the two must not be
+## able to drift: an icon built to a number copied out of a layout is the same defect
+## as a reserve taken off a screenshot, which is what `_place_hand` is still apologising
+## for.
+const SLOT_TEXT_BAND := 66.0
+
+## The floor ring, as a multiple of the contact shadow's width and of its own.
+##
+## Slightly WIDER than the shadow so the shadow sits inside it rather than on its line,
+## and squashed because a ring lying on a floor seen from the front is an ellipse, not
+## a circle. Together they put the far arc 12.7% of the creature's height up its shins
+## — high enough to read as a ring around the enemy rather than a line under it, and
+## low enough that what it crosses is ankles. It is allowed to cross them because it is
+## four arcs of open ironwork; the thing D109 banned there was a FILLED bright mark,
+## which reads as a platform.
+const RING_WIDEN := 1.14
+const RING_SQUASH := 0.36
+
 ## Where each living enemy stands. Feet on `PixelArt.STAND_LINE`, spread across the
 ## middle of the frame (see `STAGE_INSET`), and the flanks pushed slightly back — the
 ## backdrops are one-point corridors, so a dead-flat row of equal sizes reads as
@@ -999,7 +1162,7 @@ func _place_slots(living: Array[int]) -> void:
 	# one of 356.4. So a boss now draws 2.8% shorter and nothing else moves (an elite
 	# wants 311.9 and an ordinary enemy 273.6, both well clear). Paid knowingly: the
 	# status row it buys is the thing that says why the boss is hitting for 50.
-	var text_h := UITheme.px(66)
+	var text_h := UITheme.px(SLOT_TEXT_BAND)
 	var line_h := text_h / 3.0
 	var top_limit := UITheme.px(96)
 	# A boss should loom. Same corridor, same floor line, more of the frame — this is
@@ -1026,9 +1189,11 @@ func _place_slots(living: Array[int]) -> void:
 		var chips: HBoxContainer = slot.get_meta("chips")
 		chips.position = Vector2(0, line_h)
 		chips.size = Vector2(w, line_h)
-		var intent: Label = slot.get_meta("intent")
-		intent.position = Vector2(0, line_h * 2.0)
-		intent.size = Vector2(w, line_h)
+		# The icon and the number travel together, so the ROW takes the third line and
+		# the HBox centres the pair inside it.
+		var intent_row: HBoxContainer = slot.get_meta("intent_row")
+		intent_row.position = Vector2(0, line_h * 2.0)
+		intent_row.size = Vector2(w, line_h)
 		var art: TextureRect = slot.get_meta("art")
 		var box: Panel = slot.get_meta("box")
 		box.position = Vector2(0, text_h)
@@ -1049,6 +1214,21 @@ func _place_slots(living: Array[int]) -> void:
 		var mark: Panel = slot.get_meta("mark")
 		mark.size = Vector2(w * 0.62, maxf(4.0, h * 0.10))
 		mark.position = Vector2((w - mark.size.x) * 0.5, text_h + h - mark.size.y * 0.5)
+		# The reticle shares that centre and that floor line, wider and taller (see
+		# RING_WIDEN / RING_SQUASH).
+		#
+		# Resampled to the ring's HEIGHT rather than its width, which looks like the
+		# wrong axis and is the right one: a 256px square going into a ~190x69 box is a
+		# 3.7x downscale vertically and a 1.3x one horizontally, and downscaling is the
+		# direction that eats detail. Taking the source to 69px square with Lanczos and
+		# letting the GPU stretch it back out sideways means the only resample the
+		# hardware does is an UPscale, which cannot alias.
+		var reticle: TextureRect = slot.get_meta("reticle")
+		var rw := mark.size.x * RING_WIDEN
+		var rh := rw * RING_SQUASH
+		reticle.size = Vector2(rw, rh)
+		reticle.position = Vector2((w - rw) * 0.5, text_h + h - rh * 0.5)
+		reticle.texture = _kit_at("target_ring", rh)
 
 ## The hand is diffed, not rebuilt: cards that stayed keep their node (and so can
 ## be animated), cards that left are flown out, cards that arrived are dealt in.
@@ -1069,7 +1249,8 @@ func _refresh_hand() -> void:
 		# A card you cannot afford used to look exactly like one you could, and the
 		# only way to find out was to click it and be refused. Dimmed, not disabled —
 		# pressing it still explains why, which is how the rule gets learned.
-		var want_a := 1.0 if eng.can_play(card) else 0.45
+		var playable := eng.can_play(card)
+		var want_a := 1.0 if playable else 0.45
 		if holder == null:
 			# `eng` passed in: the face quotes what this card does THIS turn, with
 			# Strength, Dexterity, Weak and per-combat growth applied.
@@ -1077,6 +1258,7 @@ func _refresh_hand() -> void:
 				_on_card_pressed.bind(card), "", eng)
 			holder = cb.get_parent() as Control
 			card_widgets[card] = holder
+			_add_card_glow(holder, base)
 			holder.modulate = Color(1, 1, 1, want_a)
 			_deal_in(holder, want_a)
 		else:
@@ -1085,7 +1267,69 @@ func _refresh_hand() -> void:
 			if again.is_valid():
 				again.call(eng)
 			holder.modulate = Color(1, 1, 1, want_a)
+		# Affordability said twice, once in each direction: what you cannot pay for
+		# goes dim, and what you can pay for is lit. The dimming alone was a statement
+		# about the cards you are NOT going to play, which is the wrong half to draw
+		# attention to, and at 0.45 against 1.0 it needs two cards side by side to be
+		# legible at all. The halo is on the card the answer is about (D125).
+		var glow: TextureRect = holder.get_meta("glow", null)
+		if glow != null:
+			glow.visible = playable
 	_place_hand()
+
+## How far past the card's own rect the affordability halo spreads, and how hard it
+## burns.
+##
+## The art is a rounded band of light with an empty middle, and the band is INSET from
+## the file's own edge — measured on `card_glow.png` itself, its brightest ring runs
+## 7.5% of the width in from the left and right and 6.5% of the height down from the
+## top. So the halo drawn at exactly the card's rect puts every lit pixel it has behind
+## the card, under an opaque painted frame, and the first render of this showed a hand
+## with no glow on it at all and no error anywhere. The multiple that lands the band ON
+## the border solves `inset * k = (k - 1) / 2`, which is 1.18 across and 1.15 down; 1.20
+## takes both a shade past it so the fade actually falls outside the card, which is what
+## "the light that would spill around one" means.
+##
+## 0.50 because five cards wear this at once. A hint that reads as a highlight is a
+## highlight on the whole hand, which says nothing. Rendered and looked at: full
+## strength is a rim of light on every card and shouts; a third is a warm smudge that
+## does not survive being next to a lit card illustration; half reads as an edge you
+## notice without reading, which is the whole job. Additive rather than
+## alpha-blended so it can only ever ADD light — over the backdrop it glows, over the
+## card's own frame it does nothing, and it can never dim or tint a face the player is
+## trying to read.
+const CARD_GLOW_SPILL := 1.20
+const CARD_GLOW_BURN := 0.50
+
+## Put the halo behind one freshly dealt card. Silent no-op with no
+## `ui/card_glow.png` on disk: the hand then marks affordability exactly as it did
+## before, by dimming what cannot be paid for.
+func _add_card_glow(holder: Control, base: Vector2) -> void:
+	var outer := base * CARD_GLOW_SPILL
+	var tex := _kit_at("card_glow", outer.y)
+	if tex == null:
+		return
+	var glow := TextureRect.new()
+	glow.texture = tex
+	glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	glow.stretch_mode = TextureRect.STRETCH_SCALE
+	glow.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	glow.modulate = Color(1, 1, 1, CARD_GLOW_BURN)
+	var mat := CanvasItemMaterial.new()
+	mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	glow.material = mat
+	glow.visible = false
+	# Sized and placed by hand rather than by a preset, and NOT anchored: the halo is
+	# deliberately bigger than its parent, and `set_anchors_preset` on a node with no
+	# rect yet is the trap that cost D121 a whole tier of card illustrations.
+	glow.position = -(outer - base) * 0.5
+	glow.size = outer
+	holder.add_child(glow)
+	# BEHIND the card, which is where a spill comes from. Also behind the Button, so
+	# it cannot come between the player and the click.
+	holder.move_child(glow, 0)
+	holder.set_meta("glow", glow)
 
 ## Lay the hand out as a hand: an arc across the bottom, cards overlapping, each
 ## tilted a little, the middle of the fan riding highest.
@@ -1825,11 +2069,27 @@ func _lose() -> void:
 
 ## Whatever is still standing gets the credit. The current target first: that is
 ## the one the player was looking at.
+##
+## WITHOUT the duplicate's number, and this is the one place that is right. A
+## second Bone Picker on the field makes the combat log's `%s dies!` a claim about
+## the pair unless the name carries an index, which is why `combat_engine.gd`
+## numbers them and why D125 decided to keep it. None of that applies once the
+## fight is over: there is no second line to disambiguate, nothing left to target,
+## and this is the highest-drama sentence the game writes — "Bone Picker 2 brought
+## you down in The Crypt" reads like a bug report at the exact moment it should
+## not (D125).
 func _killer_name() -> String:
 	var foe := eng.current_target()
 	if foe != null and not foe.is_dead():
-		return foe.name
+		return _unnumbered(foe.name)
 	for e in eng.enemies:
 		if not e.is_dead():
-			return e.name
+			return _unnumbered(e.name)
 	return "something in the dark"
+
+## A duplicate's display name with its disambiguating index taken off. Only the
+## trailing " <digits>" the engine appends — a name that ends in a numeral of its
+## own would have to be one somebody authored, and no archetype does.
+func _unnumbered(n: String) -> String:
+	var cut := n.rstrip("0123456789").rstrip(" ")
+	return cut if cut != "" and cut != n else n

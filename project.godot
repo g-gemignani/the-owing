@@ -9,6 +9,31 @@ config/name="Deckcrawl"
 run/main_scene="res://scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.7")
 
+; The first frame of the game, and the only one Godot draws before any of this
+; project's code has run — which is why all four of these are settings and not
+; script (D125).
+boot_splash/image="res://assets/art/ui/boot_splash.png"
+; Godot's default is a 0.14 grey. The painting is a lantern in the dark averaging
+; 0.075 luminance, so the default would have framed it in something four times
+; brighter than the picture — the letterbox reading as the screen and the art as a
+; hole in it. This is the same colour UITheme hands RenderingServer as the clear
+; colour, so the splash, the bars around it and the game's own first frame are all
+; one colour and nothing flashes at the handover.
+boot_splash/bg_color=Color(0.07, 0.06, 0.09, 1)
+; 4 = Cover. The default (1, Keep) fits the image inside the window and pads the
+; rest, and `display/window/size/mode=3` means this opens FULLSCREEN on whatever
+; the desktop happens to be — 16:10 here, which is exactly the aspect that hid a
+; live bug in D115. Cover crops instead of padding, for the reason UI.illustration
+; gives about the title screen: letterboxing reads as a bug rather than a choice.
+; Safe to crop because the composition is head-on and symmetrical — the door and
+; its lantern are dead centre and the frame's outer eighth is unlit stone.
+boot_splash/stretch_mode=4
+; Godot's default, written down because the [rendering] block below says the
+; opposite for everything else. That NEAREST is for the pixel art; this is a
+; painting being resized to an unknown window, and point-sampling it would put
+; jagged steps on the door's arch.
+boot_splash/use_filter=true
+
 [autoload]
 
 UITheme="*res://scripts/ui_theme.gd"

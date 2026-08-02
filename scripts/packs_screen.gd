@@ -14,6 +14,13 @@
 ## machine, and the reveal is meant to be the payoff of a decision already made.
 extends Control
 
+## The two cells every row on this screen is built from. They were literals at their
+## one call site each until the bulk-open row became a third row that has to line up
+## with the other two — a number that two rows agree on is a constant, and this is the
+## column whose x positions were the bug in the first place (D95).
+const TITLE_W := 600.0
+const OPEN_W := 140.0
+
 var list_box: VBoxContainer
 var result_box: VBoxContainer
 var info_label: Label
@@ -46,9 +53,6 @@ func _refresh() -> void:
 		return
 
 	info_label.text = "%d sealed. Opened here, never in the dungeon." % packs.size()
-	if packs.size() > 1:
-		# several packs a run was the point of D81; several Open buttons was not
-		UI.button(list_box, "Open all %d" % packs.size(), _on_open_all, 38.0)
 
 	for i in packs.size():
 		var p: Dictionary = packs[i]
@@ -62,7 +66,7 @@ func _refresh() -> void:
 		# grows past it to fit its text, so the button's x tracked the length of the
 		# pack's name. Clipped, the width is the width, and the column is straight.
 		# 600 fits the longest title a pack can have; the tooltip carries the rest.
-		lbl.custom_minimum_size.x = UITheme.px(600)
+		lbl.custom_minimum_size.x = UITheme.px(TITLE_W)
 		lbl.clip_text = true
 		lbl.add_theme_color_override("font_color", _tier_colour(tier))
 		# what is inside is stated up front: a sealed pack is a promise, not a lottery
@@ -74,7 +78,33 @@ func _refresh() -> void:
 		# the carved frame is a nine-patch: squeezed to the width of the word "Open"
 		# its borders meet in the middle and the label is drawn over its own edge
 		var open_btn := UI.button(row, "Open", _on_open.bind(i), 38.0)
-		open_btn.custom_minimum_size.x = UITheme.px(140)
+		open_btn.custom_minimum_size.x = UITheme.px(OPEN_W)
+
+	# several packs a run was the point of D81; several Open buttons was not — but
+	# where the shortcut SITS is the whole of it. It used to be the first pressable
+	# thing on the screen, one full-width bar directly above the three packs it
+	# short-circuits, which is the interface saying the reveal is a chore to clear
+	# (REVIEW.md P1 #7). D116 narrowed it and recorded that the narrowing changed
+	# nothing, because what invites the skip is reading order and position, not size.
+	#
+	# So it is demoted by BOTH of those and by class. It is now the last row of the
+	# list rather than the first, so the three packs — their tier, their build, where
+	# each was found, which is the thing D81 put on them — are read before the button
+	# that throws all three away at once. It carries the same leading cell as a pack
+	# row, so it lands at the bottom of the `Open` column and reads as one more Open
+	# rather than as a headline; and it is the same 140 wide as the three above it,
+	# where it used to be 480. Kept, not removed: eight packs is eight presses.
+	if packs.size() > 1:
+		var bulk := UI.row(list_box, 10)
+		var note := Label.new()
+		note.custom_minimum_size.x = UITheme.px(TITLE_W)
+		note.clip_text = true
+		note.add_theme_color_override("font_color", Color(0.62, 0.61, 0.58))
+		note.text = "Every one of them, unread."
+		bulk.add_child(note)
+		var all_btn := UI.button(bulk, "Open all %d" % packs.size(), _on_open_all, 38.0)
+		all_btn.custom_minimum_size.x = UITheme.px(OPEN_W)
+		UI.hoverable(bulk, "Opens all %d at once. The cards are the same either way; you just do not get to see them arrive one at a time." % packs.size())
 
 ## The tooltip states the cap in words, because "cannot contain a legendary" is the
 ## whole meaning of a tier and it is not derivable from the name.

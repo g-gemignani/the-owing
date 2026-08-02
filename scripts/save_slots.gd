@@ -31,9 +31,13 @@ func _refresh() -> void:
 			UI.button(box, "  Delete", func(): _delete(i), 36.0)
 			UI.button(box, "  Start new game here (overwrites)", func(): _confirm_new(i), 36.0)
 		else:
-			UI.label(box, "Slot %d — %d clears, %d gold, %d relics, %d card types (%d copies)%s" % [
-				i + 1, s.get("clears", 0), s.get("gold", 0), s.get("relics", 0),
-				s.get("types", 0), s.get("copies", 0),
+			# A first save is "1 clear, 1 relic, 1 card type" far more often than it is
+			# anything else, and this is the first line of the game (D125).
+			UI.label(box, "Slot %d — %s, %d gold, %s, %s (%s)%s" % [
+				i + 1, Wording.count(int(s.get("clears", 0)), "clear"), s.get("gold", 0),
+				Wording.count(int(s.get("relics", 0)), "relic"),
+				Wording.count(int(s.get("types", 0)), "card type"),
+				Wording.count(int(s.get("copies", 0)), "copy", "copies"),
 				"   [run in progress]" if bool(s.get("in_run", false)) else ""])
 			var r := UI.row(box, 8)
 			UI.button(r, "Load", func(): _load(i), 36.0)

@@ -32,8 +32,8 @@ func _ready() -> void:
 		var gate: int = Balance.clears_required_for(b)
 		var reachable: bool = MetaState.clear_count() >= gate
 		title.text = "%s   %d/%d%s" % [b.name, owned.size(), b.cards.size(),
-			"   COMPLETE" if done else ("" if reachable else "   (needs %d clears, you have %d)" % [
-				gate, MetaState.clear_count()])]
+			"   COMPLETE" if done else ("" if reachable else "   (needs %s, you have %d)" % [
+				Wording.count(gate, "clear"), MetaState.clear_count()])]
 		list.add_child(title)
 		UI.label(list, "    %s" % b.description)
 

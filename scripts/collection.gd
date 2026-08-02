@@ -170,5 +170,6 @@ func _on_fuse(id: String, times: int = 1) -> void:
 	var gained := MetaState.fuse_many(id, times)
 	if gained > 0:
 		Audio.play("fuse")
-		info_label.text = "Fused %s: +%d level(s).   Gold left %d" % [id, gained, MetaState.gold]
+		info_label.text = "Fused %s: +%s.   Gold left %d" % [
+			id, Wording.count(gained, "level"), MetaState.gold]
 		_refresh()

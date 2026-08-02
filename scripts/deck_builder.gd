@@ -7,6 +7,7 @@ var selection: Dictionary = {}  # id -> count chosen
 
 var info_label: Label
 var decks_box: HBoxContainer
+var list_bay: MarginContainer
 var list_box: VBoxContainer
 var filter_box: VBoxContainer
 var power_box: HBoxContainer
@@ -99,13 +100,16 @@ func _build_ui() -> void:
 	filter_box = VBoxContainer.new()
 	root.add_child(filter_box)
 
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(scroll)
-	list_box = VBoxContainer.new()
-	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	list_box.add_theme_constant_override("separation", UITheme.sep(4))
-	scroll.add_child(list_box)
+	# The card list is clipped to WHOLE rows — see `_snap_list_to_rows`. The frame
+	# around it is what the slack is taken out of, so the scroll itself can be handed
+	# a height that ends where a row does. `UI.scroll` builds the pair inside it
+	# rather than this screen hand-rolling a second copy of the shared scaffold.
+	list_bay = MarginContainer.new()
+	list_bay.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_bay.resized.connect(_snap_list_to_rows)
+	root.add_child(list_bay)
+	list_box = UI.scroll(list_bay)
+	list_box.sort_children.connect(func(): _snap_list_to_rows.call_deferred())
 
 	var save_row := HBoxContainer.new()
 	save_row.add_theme_constant_override("separation", UITheme.sep(6))
@@ -142,6 +146,54 @@ func _build_ui() -> void:
 	start_btn.text = "Save loadout and leave" if GameState.manage_only else "Start Dungeon"
 	start_btn.pressed.connect(_on_start)
 	bottom.add_child(start_btn)
+
+## Trim the frame around the list so its bottom edge falls in the gap BETWEEN two
+## rows instead of through the middle of one.
+##
+## A `ScrollContainer` is given whatever height the column has left over, and a
+## leftover is not a multiple of anything: the card list ended under the save bar
+## with a row sliced in half, which reads as a rendering fault rather than as "there
+## is more below this". The slack comes out of the frame instead of out of a row.
+##
+## Measured off the BUILT TREE rather than off a row-pitch constant. Partly because
+## a restated pitch is the thing that goes stale the first time a row grows a
+## control, and partly because the same defect on the world screen is a list whose
+## rows are deliberately different heights (sealed zones are shorter than unlocked
+## ones), so there is no single pitch there to state. One algorithm covers both.
+##
+## Two things it does not claim. It fixes the RESTING frame — the one every capture
+## and every first glance shows — and scrolling can still stop mid-row, because
+## Godot has no row-snapped scroll to ask for and re-snapping on every wheel click
+## would change the viewport height under the wheel. And it is duplicated: the right
+## home is `UI.scroll()`, so both screens get it from one place, and that file
+## belongs to another agent this batch (D125).
+func _snap_list_to_rows() -> void:
+	var scroll := list_box.get_parent() as ScrollContainer
+	if scroll == null:
+		return
+	# The FRAME's height, never the scroll's. Measuring the scroll makes the margin a
+	# function of itself: trim 30px off, ask again, the last row now ends exactly at
+	# the bottom, so the answer is "trim 0" and the fix undoes itself on the next
+	# layout pass. It did, silently, and the capture looked like the code had not run.
+	var avail := list_bay.size.y
+	# in the scroll's own coordinates, so a rebuild while the list is scrolled down
+	# does not measure content that is above the top edge
+	var top := float(scroll.scroll_vertical)
+	var fits := 0.0
+	for c in list_box.get_children():
+		var ctl := c as Control
+		if ctl == null or not ctl.visible:
+			continue
+		var bottom := ctl.position.y + ctl.size.y - top
+		if bottom > avail:
+			break
+		fits = bottom
+	# nothing fits whole — a window shorter than one row. Leave the frame alone
+	# rather than blanking the list, which is the worse of the two failures.
+	var slack: int = 0 if fits <= 0.0 else int(avail - fits)
+	if list_bay.get_theme_constant("margin_bottom") == slack:
+		return
+	list_bay.add_theme_constant_override("margin_bottom", slack)
 
 func _go_select() -> void:
 	get_tree().change_scene_to_file("res://scenes/Overworld.tscn")

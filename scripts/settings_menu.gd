@@ -35,7 +35,7 @@ func _build() -> void:
 		SettingsState.save_settings())
 	col.add_child(nums)
 
-	UI.label(col, "")
+	UI.divider(col)
 	UI.label(col, "Audio")
 	UI.slider(col, "Master volume", SettingsState.master_volume, 0, 100, 5, func(v):
 		SettingsState.master_volume = int(v)

@@ -74,17 +74,31 @@ func _show_event() -> void:
 	title_label.text = ev.title
 	body_label.text = "%s\n\n%s" % [ev.description, _status()]
 	for i in ev.choice_count():
-		var b := Button.new()
-		UITheme.style_button(b)
-		b.text = ev.choice_labels[i]
-		b.custom_minimum_size = Vector2(0, UITheme.button_height(40))
+		# Through `UI.button()`, not `Button.new()`. This screen hand-rolled its own
+		# and so was the last place in the game still building banners: three choices
+		# at 1244px, stacked, covering the bottom third of the shrine (D116 fixed the
+		# helper and could not fix a caller that never called it).
+		#
+		# The question worth asking first is whether these three SHOULD be wide, and
+		# unusually there is a case for it — they are exclusive prose choices, so
+		# equal weight between them is meaningful in a way it is not for a `Back`. The
+		# case does not reach 1244: that width is not a fact about the text, it is
+		# whatever the VBox had, and the label floats in the middle of it. It also
+		# does not need an exception, because the widest label the event tables can
+		# produce is 34 characters — plus the 19 of the refusal suffix below, so 53,
+		# about 450px with the frame's padding — and `BUTTON_WIDTH` is 480. Every
+		# choice in the game therefore comes out at exactly 480 and the column is
+		# uniform for free. If a future event writes a longer one it will grow past
+		# 480 on its own, because the helper's width is a minimum (D116); it is the
+		# 1244 that was never derivable from anything.
+		var text: String = ev.choice_labels[i]
 		# do not offer a choice the player cannot pay for
-		if GameState.available_gold() + ev.gold_delta(i) < 0:
-			b.disabled = true
-			b.text += "  (not enough gold)"
-		else:
-			b.pressed.connect(_on_choice.bind(i))
-		options_box.add_child(b)
+		var affordable: bool = GameState.available_gold() + ev.gold_delta(i) >= 0
+		if not affordable:
+			text += "  (not enough gold)"
+		UI.button(options_box, text,
+			_on_choice.bind(i) if affordable else Callable(),
+			40.0)
 
 func _pick_event() -> EventData:
 	var pool := Balance.EVENTS.duplicate()
@@ -142,12 +156,9 @@ func _on_choice(i: int) -> void:
 		return
 
 	result_label.text = "\n".join(lines) + "\n\n" + _status()
-	var cont := Button.new()
-	UITheme.style_button(cont)
-	cont.text = "Continue"
-	cont.custom_minimum_size = Vector2(0, UITheme.button_height(40))
-	cont.pressed.connect(_finish)
-	options_box.add_child(cont)
+	# Same helper as the choices it replaces, so the control the player is looking at
+	# does not change width the instant they press one.
+	UI.button(options_box, "Continue", _finish, 40.0)
 
 # ---------------- shared ----------------
 ## Grant a card from this dungeon's pool (so exclusives stay exclusive), added to

@@ -227,7 +227,7 @@ static func card_tooltip(c: CardData, live_damage: int = -1, live_block: int = -
 	if c.energy_gain > 0:
 		lines.append("Grants %d Energy this turn." % c.energy_gain)
 	if c.eff_draw() > 0:
-		lines.append("Draws %d card(s)." % c.eff_draw())
+		lines.append("Draws %s." % Wording.count(c.eff_draw(), "card"))
 	if c.eff_vulnerable() > 0:
 		lines.append("Vulnerable %d: target takes +50%% damage while it lasts." % c.eff_vulnerable())
 	if c.eff_weak() > 0:

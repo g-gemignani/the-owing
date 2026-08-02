@@ -277,6 +277,10 @@ static func _context_zone() -> String:
 		return GameState.current_zone
 	return Balance.ZONES[0] if Balance.ZONES.size() > 0 else "barrows"
 
+## Counted nouns ("1 clear" / "4 clears") are `Wording.count()`, not a method here —
+## `UI` names the `UITheme` autoload, which puts it out of reach of every `--script`
+## test, and half the text in the game is written by code those tests call (D19, D125).
+
 static func label(parent: Node, text: String, wrap: bool = true) -> Label:
 	var l := Label.new()
 	l.text = text
@@ -350,6 +354,35 @@ static func hspacer(parent: Node) -> Control:
 	parent.add_child(c)
 	return c
 
+## The carved rule between two sections of a screen.
+##
+## `ui/divider.png` was generated with the rest of the frame kit and read by nothing
+## (D125) — the D115 gap, where a file on disk is not a file in the game and no test
+## can fail. It is wired here rather than into `screen()`, because a rule under every
+## title would be decoration on twenty screens that have one section each; what the
+## asset is FOR is a screen with two, and Settings is the one that has them.
+##
+## Tiled rather than stretched: the strip is 128px of a repeating profile, and
+## stretching it across a 1240px column would smear the cut into a gradient — the
+## nine-slice lesson (D83) in one axis. Falls back to the plain vertical gap the
+## screens used before, on the same "use it if it exists" contract as the backdrops,
+## so a tree without the file looks exactly as it did.
+static func divider(parent: Node) -> Control:
+	var tex := PixelArt.ui_kit("divider")
+	if tex == null:
+		var gap := Control.new()
+		gap.custom_minimum_size = Vector2(0, UITheme.px(16))
+		parent.add_child(gap)
+		return gap
+	var rule := TextureRect.new()
+	rule.texture = tex
+	rule.stretch_mode = TextureRect.STRETCH_TILE
+	rule.custom_minimum_size = Vector2(0, UITheme.px(tex.get_height()))
+	rule.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(rule)
+	return rule
+
 static func scroll(parent: Node) -> VBoxContainer:
 	var s := ScrollContainer.new()
 	s.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -378,12 +411,31 @@ static func slider(parent: Node, text: String, value: float, lo: float, hi: floa
 	h.add_child(s)
 	var v := Label.new()
 	v.custom_minimum_size.x = UITheme.px(90)
-	v.text = str(snappedf(value, step))
+	v.text = _slider_value(value, step)
 	h.add_child(v)
 	s.value_changed.connect(func(nv):
-		v.text = str(snappedf(nv, step))
+		v.text = _slider_value(nv, step)
 		on_change.call(nv))
 	return s
+
+## The number beside the slider, in the precision its STEP implies.
+##
+## `str(snappedf(100.0, 5))` is "100.0", so Settings read "Master volume 100.0" — a
+## decimal point shown because the value is carried as a float, not because anything
+## about the setting is fractional. All three sliders in the game are whole numbers
+## (0..100 by 5) and every one of them was reading like debug output (D125).
+##
+## Decided by the STEP and not by the value, which is the bit worth keeping. A slider
+## that genuinely moves in halves must still print its half, and asking the value
+## instead would flip such a row between "1" and "1.5" as the grabber moves — a string
+## that changes width inside a fixed 90px label, which is the D95 defect wearing a
+## different hat. A step of 0 means the caller wants no snapping at all, so it is
+## treated as fractional rather than rounded away.
+static func _slider_value(value: float, step: float) -> String:
+	var v := snappedf(value, step)
+	if step > 0.0 and is_equal_approx(step, roundf(step)):
+		return str(int(roundf(v)))
+	return str(v)
 
 ## A card: rarity-framed, with its illustration behind the text and its *meaningful*
 ## effect symbol in front.

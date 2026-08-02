@@ -7344,3 +7344,51 @@ driver artifact — D109's exact shape, one layer down.
   clears 0% at both dungeons with 13-turn normal fights, under *all three* policies. That
   is a content fact, not a driver one, and it is why the new shipped profile keeps Mid's
   attacking spine.
+
+### D125 — Quiet is not empty, and four backdrops were filled in rather than painted
+
+Four meta-screen backdrops shipped with their lower halves as flat rectangles. It hid
+under a full list and was glaring on Packs, which is sparse: the bottom 60% of that
+screen was a grey slab with a hard seam across the middle of it.
+
+**The brief asked for it.** D123's Tier 5d recipe said the lower half must be "ONE
+continuous surface at one even value ... with no object, no edge and no highlight
+crossing it", and the per-image prompts went further with "no grain that changes value".
+That is a description of a fill, and a generator delivered one. What these screens
+actually need is QUIET — nothing an eye stops on, nothing competing with a row of text —
+and quiet still has tooth. The recipe now says so, and says it twice, because the first
+half of the sentence is the part that reads as permission to flood.
+
+**The reviewer's symptom was right and the cause was not.** It was reported as a crop
+artifact — `install_scene_backdrops.gd` cropping to 16:9 and dragging pad along. That is
+not what happened: the sources were cropped by exact rect at aspect 1.790 and the
+installer *strips* letterbox rather than adding it. The flat region was in the generated
+art. Worth recording because the fix that follows from the wrong cause — adjusting the
+installer — would have changed nothing and left four bad paintings on disk.
+
+**Finding a measurement that catches it took three attempts, and the first two are the
+instructive ones.** Counting rows with zero horizontal variance catches `bg_reliquary`
+(49%) and `bg_ledger` (48%) and MISSES `bg_table`, whose dead half is filled at 0.021
+rather than at nothing. Thresholding the bottom half's texture on its own cannot work
+either: `bg_shop` legitimately bottoms out at 0.016, the same neighbourhood. Restricting
+either to the lower half helps but still cannot separate a quiet painting from a quiet
+fill, because *level* is not what distinguishes them.
+
+The DROP does. Mean row-variance in the top half against the bottom half:
+
+```
+bg_table      0.104 / 0.021   4.9x        bg_crypt    0.069 / 0.107   0.6x
+bg_world      0.145 / 0.015   9.9x        bg_shop     0.061 / 0.053   1.2x
+bg_ledger     0.101 / 0.003  40.4x        bg_event    0.058 / 0.087   0.7x
+bg_reliquary  0.094 / 0.002  49.9x        main_menu   0.160 / 0.174   0.9x
+```
+
+Broken 4.9–49.9, legitimate 0.4–1.2. `tests/test_art.gd` asserts on it at 3.0 with a
+texture floor underneath for the degenerate case a ratio cannot see. Unlike the
+floor-fraction heuristic in the same file, this one is not a judgement call and is safe
+to assert on: paint always has tooth, and fill never does.
+
+All four re-rolled against the corrected brief and measured after: 1.0, 1.3, 1.6, 2.8.
+`bg_event` is the case that proves the check is aimed correctly — it is 17.6% flat rows
+overall and passes, because its flat rows are a night sky at the top and a dark strip at
+the bottom rather than a slab where the list sits.

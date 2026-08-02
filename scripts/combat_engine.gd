@@ -154,6 +154,16 @@ func _spawn_enemies(forced_archetype: String) -> void:
 
 	for i in count:
 		var c := Combatant.new()
+		# "Bone Picker 2" reads as developer output, and taking the suffix off was
+		# looked at and declined (D125). The name is not a label, it is the SUBJECT of
+		# every line the fight writes: eleven sentences in this file are built around
+		# it — "%s hits for %d", "%s dies!", "Poison deals %d to %s", "%s blocks %d",
+		# "%s ENRAGES" — and the log has no other handle on which one it means. Slay
+		# the Spire can drop the number because its feedback is spatial: damage floats
+		# over the creature it happened to. This game says it in prose, so with two
+		# unnumbered Bone Pickers "Bone Picker dies!" claims the pair is dead, and
+		# nothing on screen resolves it. The number is doing work; it stays until the
+		# log can point.
 		c.name = arch.name if count == 1 else "%s %d" % [arch.name, i + 1]
 		c.max_hp = maxi(1, int(round(hp_budget * arch.hp_mult / count)))
 		c.hp = c.max_hp

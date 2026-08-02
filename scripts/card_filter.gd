@@ -107,5 +107,7 @@ static func summary(shown: int, total: int, st: Dictionary = state) -> String:
 		bits.append(CardData.Type.keys()[int(st["type"])].to_lower())
 	var f := ", ".join(bits)
 	if shown == total:
-		return "%d cards, %s" % [total, f]
-	return "%d of %d cards, %s" % [shown, total, f]
+		return "%s, %s" % [Wording.count(total, "card"), f]
+	# Only the total is counted here: "1 of 4 cards" is right, and "1 of 1 cards"
+	# cannot happen because the equal case is the branch above (D125).
+	return "%d of %s, %s" % [shown, Wording.count(total, "card"), f]

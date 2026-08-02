@@ -82,7 +82,9 @@ func _refresh() -> void:
 			if not MetaState.power_available(pid):
 				var gate := Button.new()
 				UITheme.style_button(gate)
-				gate.text = "needs %d clears" % p.unlock_after_clears
+				# Two powers unlock at exactly one clear, so this button read
+				# "needs 1 clears" for the whole life of the screen (D125).
+				gate.text = "needs %s" % Wording.count(p.unlock_after_clears, "clear")
 				gate.disabled = true
 				row.add_child(gate)
 			else:

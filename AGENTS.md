@@ -447,6 +447,12 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `REDO` so a single file can still carry its own worse fault: `combat`, `elite` and
   `boss` are 100% identical silhouettes and that is not the family's problem, it is
   theirs.
+- **Quiet is not empty, and a brief that conflates them gets a fill.** Four meta-screen
+  backdrops shipped with their lower halves flooded flat, because the recipe asked for
+  "one continuous surface at one even value ... no grain that changes value" (D125). The
+  screens need nothing an eye stops on; they do not need nothing at all. When a brief
+  constrains a region, say what it must NOT have — features, brightness, objects — and
+  say separately that it must still be painted.
 - **A harness is only as honest as its list, and an absent row looks like a passing
   one.** Every screenshot entered `DUNGEONS[0]` — the Crypt, which is `stone` — so three
   of the four isometric terrains had never been photographed at all, and Settings had no

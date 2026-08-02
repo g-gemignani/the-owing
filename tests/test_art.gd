@@ -601,6 +601,72 @@ func _init() -> void:
 		fails += 1
 		print("FAIL nothing loads the scene backdrops — the files would do nothing")
 
+	# --- a painted backdrop must be painted all the way down -------------------
+	#
+	# Unlike the floor-fraction heuristic above, this one is not a judgement call and
+	# is safe to assert on: a ROW of a painted image whose pixels all share one
+	# luminance is not art, it is fill. Real paint always has tooth.
+	#
+	# It is here because four meta-screen backdrops shipped with their lower halves
+	# filled in as flat rectangles, and the brief asked for it — "one continuous
+	# surface at one even value ... no grain that changes value" reads to a generator
+	# as "flood this". `bg_world.png` measured 0.001 row-variance below 65% of frame
+	# height where `bg_crypt.png` runs 0.049-0.202 throughout. It hides under a full
+	# list and is a grey slab on a sparse screen like Packs (D125).
+	#
+	# The threshold is deliberately far below anything a painting produces: the worst
+	# legitimate row measured across the twelve dungeons and six scene backdrops is an
+	# order of magnitude above it, so this fires on fill and on nothing else.
+	## Texture in the top half against texture in the bottom half. A painting keeps
+	## comparable tooth all the way down; one that stops partway falls off a cliff.
+	##
+	## This is the measurement that works, and it took three tries. Counting rows with
+	## ZERO horizontal variance catches the worst two and misses `bg_table.png`, whose
+	## dead half is filled at 0.021 rather than at nothing. Thresholding the bottom
+	## half's texture on its own cannot work either: `bg_shop.png` legitimately bottoms
+	## out at 0.016, which is the same neighbourhood. Only the DROP separates them, and
+	## it separates them with an enormous margin — the four broken meta backdrops run
+	## 4.9 to 49.9, and every legitimate backdrop in the tree runs 0.4 to 1.2 (D125).
+	##
+	## The floor underneath is for the degenerate case the ratio cannot see: an image
+	## flat in BOTH halves would score 1.0 and pass. Nothing in the tree is close —
+	## the lowest legitimate bottom half is 0.053, ten times the floor.
+	var TEXTURE_DROP_MAX := 3.0
+	var TEXTURE_FLOOR := 0.005
+	for bgname in PixelArt.SCENE_ART:
+		var bgt := PixelArt.scene_art(bgname)
+		if bgt == null:
+			continue
+		var bgi := bgt.get_image()
+		bgi.convert(Image.FORMAT_RGBA8)
+		var bw := bgi.get_width()
+		var bh := bgi.get_height()
+		var halves := [0.0, 0.0]
+		for half in 2:
+			var tot := 0.0
+			var n := 0
+			for yy in range(bh * half / 2, bh * (half + 1) / 2):
+				var rs := 0.0
+				var rs2 := 0.0
+				for xx in bw:
+					var rl := bgi.get_pixel(xx, yy).get_luminance()
+					rs += rl
+					rs2 += rl * rl
+				var rmean := rs / float(bw)
+				tot += sqrt(maxf(rs2 / float(bw) - rmean * rmean, 0.0))
+				n += 1
+			halves[half] = tot / float(maxi(n, 1))
+		var top_t: float = halves[0]
+		var bot_t: float = halves[1]
+		if bot_t < TEXTURE_FLOOR:
+			fails += 1
+			print("FAIL bg_%s.png: its lower half has no paint in it at all (texture %.4f)" % [
+				bgname, bot_t])
+		elif top_t / bot_t > TEXTURE_DROP_MAX:
+			fails += 1
+			print("FAIL bg_%s.png: the painting stops partway down (top %.3f, bottom %.3f, %.0fx drop) — a list cannot sit on a slab" % [
+				bgname, top_t, bot_t, top_t / bot_t])
+
 	# --- painted enemies are keyed by id, not by position ----------------------
 	#
 	# The CC0 pixel sprites are assigned by position in a sorted directory listing,

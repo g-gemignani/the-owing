@@ -105,8 +105,8 @@ func _use_rope() -> void:
 		return
 	Audio.play("leave")
 	var kept := GameState.commit_escrow()
-	GameState.last_haul = "Escaped with %d cards and %d gold. The dungeon remains." % [
-		kept["cards"], kept["gold"]]
+	GameState.last_haul = "Escaped with %s and %d gold. The dungeon remains." % [
+		Wording.count(int(kept["cards"]), "card"), kept["gold"]]
 	GameState.clear_run()
 	GameState.reset_run_progress()
 	MetaState.save_game()   # explicit full write
