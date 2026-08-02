@@ -1,10 +1,32 @@
 # The Owing
 
+[![ci](https://github.com/g-gemignani/deckcrawl/actions/workflows/ci.yml/badge.svg)](https://github.com/g-gemignani/deckcrawl/actions/workflows/ci.yml)
+[![latest build](https://img.shields.io/github/release-date-pre/g-gemignani/deckcrawl?label=latest%20build)](https://github.com/g-gemignani/deckcrawl/releases/tag/latest)
+
 A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 (GDScript). Slay-the-Spire-shaped combat — but what you carry between runs is a
 *collection* you grow, fuse and spend, and a run you lose costs you most of it.
 
 ![A fight in the Crypt](docs/screenshots/CombatGroup.webp)
+
+## Play it
+
+No build step. Every green push to `main` publishes a fresh binary for all three
+desktop platforms under [one permanent link](https://github.com/g-gemignani/deckcrawl/releases/tag/latest) —
+so these are always the newest commit, not the last time somebody remembered to cut a
+release.
+
+| | download | first run |
+|---|---|---|
+| **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/deckcrawl/releases/download/latest/TheOwing-linux-x86_64.zip) (65 MB) | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
+| **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/deckcrawl/releases/download/latest/TheOwing-windows-x86_64.zip) (74 MB) | SmartScreen warns once → *More info* → *Run anyway* |
+| **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/deckcrawl/releases/download/latest/TheOwing-macos-universal.zip) (95 MB) | `xattr -dr com.apple.quarantine "The Owing.app"`, then open it |
+
+None of the three is code-signed, and none of them will be — that needs a paid
+developer identity per platform, which is why both desktop OSes want a word from you
+first. On **NixOS** the Linux binary needs `steam-run`, or a `patchelf
+--set-interpreter`; see [BUILD.md](BUILD.md). Android and iOS are *exportable* but not
+published — see the bottom of that file for why.
 
 > **Status: playable prototype, fully painted.** All 310 art files are in — 27
 > backdrops, 35 enemy plates, an illustration for every one of the 100 cards, and a
@@ -68,7 +90,10 @@ Both are re-run when anything visual lands, so these cannot quietly go stale.</s
 Every piece of that is a `.tres` file plus one catalogue line. Adding more is a data
 task, not a code task — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Running it
+## Running it from source
+
+If you only want to *play* it, take a binary from [Play it](#play-it) above — this
+section is for working on it.
 
 Needs **Godot 4.7**. Either put it on `PATH`, or:
 

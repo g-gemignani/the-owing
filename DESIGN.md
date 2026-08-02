@@ -8570,3 +8570,80 @@ code eventually will.
 provide** — a snapshot from before D136 installed the card sheets, which is the exact
 failure the generator was written to make impossible and which happened anyway because
 generating it is a manual step nobody's checklist names. It says 310 · 310 · 0 now.
+
+### D142 — One Ubuntu runner builds all three desktop platforms, and the download link is only stable because the tag never moves
+
+The project had CI — suite, plus an export-readiness job that has proved every preset
+still builds since it was written — and nothing to show for it. Anyone who wanted to
+*play* the game had to install Godot 4.7, fetch a 1GB template pack and run three export
+commands. The artifacts were already being built on every push and thrown away.
+
+## What the pipeline actually needed, and what it did not
+
+Almost nothing. Godot cross-exports Windows and macOS from Linux — no Windows runner, no
+Mac, no matrix — so all three desktop binaries come out of one `ubuntu-latest` job that
+already had the templates cached. Measured on this machine: Linux 109MB, Windows 143MB,
+macOS 95MB raw; 65 / 74 / 95 MB packaged. The whole release job is an export loop, a
+`zip`, and one `gh release create`. No secret is involved: `GITHUB_TOKEN` with
+`contents: write` is the entire credential story, and the job refuses to run outside this
+repository so a fork cannot try to publish into it.
+
+Android was considered and left out. It *is* buildable in CI — the runners ship a JDK and
+the SDK installs from `sdkmanager` — but BUILD.md has said since D65 that nobody has run
+this on a phone, and publishing a download for hardware no one has tested it on is
+shipping a bug report generator.
+
+## Rolling `latest`, not version tags
+
+The README needs a URL that is correct forever and points at something current. Those two
+pull in opposite directions: `/releases/latest` resolves to the newest tagged release,
+which means the link is only as fresh as the last time somebody remembered to cut a tag —
+and on a prototype with no versions, that is never. So the tag is the fixed string
+`latest`, force-recreated on every green push to main, and the README links straight at
+`releases/download/latest/<file>`. There is no version history and that is the point; a
+`v*`-triggered job goes *beside* this one the day there is a v1, rather than repointing
+it.
+
+**The release is deleted and recreated rather than edited, and that is not laziness.**
+The obvious implementation moves the git tag and edits the existing release. Force-moving
+a tag under an existing GitHub release leaves the release still recording the *old*
+commit — `gh release edit` has no `--target`, so there is no way to correct it — and the
+page would then state a provenance that is false. Delete-and-recreate costs a few seconds
+where the download 404s, on a channel whose whole contract is "whatever is current". The
+assets are uploaded in the `create` call itself, so a failed upload cannot leave an empty
+release standing where a good one was.
+
+## Two things the export step will not do
+
+**Trust the exit code.** `--export-release` returns non-zero on import warnings that did
+not stop it — `tests/export_ready.sh` has treated the output FILE as the verdict since it
+was written, for exactly this reason, and the release job now does the same with a 20MB
+size floor. A zero-byte file at the right path is the failure that would otherwise be
+published as a release.
+
+**Download into the workspace.** The old workflow pulled `godot.zip` and a 1GB
+`templates.tpz` into the project root and left them there. Harmless for a test job; for an
+export job the project root is `res://`, and the only thing between a 1GB tarball and the
+shipped PCK is an `include_filter` nobody is auditing. The shared setup step puts both in
+`$RUNNER_TEMP`.
+
+That shared step is new too: `.github/actions/setup-godot`. The cache-download-PATH dance
+was pasted into two jobs and about to be pasted into a third. The engine version is an
+input rather than a read of the caller's `env`, because a composite action that silently
+depends on a variable the caller happens to have set breaks the first time it is used
+somewhere else — and pinning the version in one place is the whole reason it exists.
+
+`tests.yml` became `ci.yml`, since a workflow that publishes releases is not called tests.
+The JOB names are unchanged, so any required status check still resolves. One workflow
+rather than two chained by `workflow_run`: the release must not publish a build the suite
+has not passed, and `needs: [test, export-ready]` says that in one line where
+`workflow_run` says it in a second file with its own checkout of a SHA threaded through
+by hand.
+
+## What the front page says now
+
+A **Play it** table above the fold: three direct download links with sizes, and the exact
+first-run incantation for each. All three are unsigned and will stay that way — signing
+needs a paid identity per platform — so Windows names SmartScreen and macOS gives the
+`xattr` line, because "it doesn't open" is the most likely outcome otherwise and the fix
+is one command the player will not guess.

@@ -2,11 +2,48 @@
 
 ## Just playing it
 
-Needs **Godot 4.7**. From a checkout:
+Don't build it — download it. Every green push to `main` publishes Linux, Windows and
+macOS binaries under a permanent link:
+
+**<https://github.com/g-gemignani/deckcrawl/releases/tag/latest>**
+
+Or, from a checkout with **Godot 4.7**:
 
 ```bash
 GODOT=/path/to/godot ./run.sh      # or put godot on PATH and run ./run.sh
 ```
+
+## The release pipeline
+
+`.github/workflows/ci.yml` runs the suite, checks every preset is still exportable, and
+then — only from `main`, only after both of those pass — exports the three desktop
+platforms and republishes them under the fixed tag `latest`. One Ubuntu runner does all
+three; Godot cross-exports Windows and macOS from Linux without a Windows or a Mac
+anywhere in the loop.
+
+Three things about it are deliberate and easy to undo by accident:
+
+* **The tag is fixed, and there is no version history.** The README links to
+  `releases/download/latest/<file>`, which is only a stable URL because the tag never
+  moves off that name. A release channel that depends on somebody remembering to cut a
+  version tag is a download link that goes stale, which is worse than no link. Add a
+  `v*`-triggered job beside it the day there is a v1; do not repoint this one.
+* **The release is deleted and recreated, not edited.** Force-moving a git tag under an
+  existing GitHub release leaves the release still recording the *old* commit, and
+  nothing in `gh release edit` can correct it — so the page would state a provenance
+  that is false. The cost is a few seconds where the download 404s.
+* **The exit code of `--export-release` is not trusted.** It returns non-zero on import
+  warnings that did not stop it, so the job checks the output file exists and clears a
+  size floor instead — the same verdict `tests/export_ready.sh` uses, for the same
+  reason. A zero-byte file at the right path is precisely what would otherwise be
+  published.
+
+Nothing in it needs a secret. `GITHUB_TOKEN` with `contents: write` is enough, and the
+job refuses to run outside this repository so a fork cannot try to publish into it.
+
+Android and iOS are **exportable but not published**: see [Mobile](#mobile) below. The
+blocker is a toolchain and a paid identity, not the project — `export_ready.sh` proves
+that on every run.
 
 ## Building distributables
 

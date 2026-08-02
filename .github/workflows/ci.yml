@@ -1,0 +1,181 @@
+name: ci
+
+# Was `tests.yml`, and was only tests until the `release` job below joined it. One
+# workflow rather than two chained by `workflow_run`: a release must never publish a
+# build the suite has not passed, and `needs:` says that in one line where
+# `workflow_run` says it in a second file, with its own checkout of a SHA that has to
+# be threaded through by hand. The JOB names are unchanged, so any required status
+# check still resolves.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # One place to bump. The project targets 4.7; a mismatch shows up as parse
+  # errors rather than test failures, so it is pinned.
+  GODOT_VERSION: "4.7.1-stable"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Keyed on the assets and resources themselves, so changing one correctly
+      # misses the cache and a stale import can never mask a broken resource.
+      - name: Cache import artifacts
+        uses: actions/cache@v4
+        with:
+          path: .godot
+          key: godot-import-${{ env.GODOT_VERSION }}-${{ hashFiles('assets/**', 'resources/**', 'project.godot') }}
+          restore-keys: |
+            godot-import-${{ env.GODOT_VERSION }}-
+
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+
+      - name: Run test suite
+        run: tests/run.sh
+
+  # Android and iOS can never be BUILT here — one needs a JDK and the Android SDK,
+  # the other macOS with Xcode and a developer team ID. This job proves the only
+  # thing standing between the project and those builds is the toolchain, so the
+  # day someone installs it, the export works with no further edits.
+  export-ready:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          templates: "true"
+
+      # every platform must be either buildable or blocked ONLY by a missing
+      # toolchain — never by the project
+      - name: Export readiness
+        run: tests/export_ready.sh
+
+      # and the built pack must actually contain its art, which only an export
+      # can prove
+      - name: Export smoke test
+        run: tests/export.sh
+
+  # A rolling build of main, published under the fixed tag `latest`, so the README can
+  # link to a URL that never changes and always resolves to today's binary. No version
+  # history, on purpose: this is a prototype with nothing to version, and a release
+  # channel that depends on somebody remembering to cut a tag is a download link that
+  # goes stale. Add a tag-triggered job beside this one the day there is a v1.
+  release:
+    needs: [test, export-ready]
+    # Only from main, only on a real push, and never from a fork — a fork has no
+    # business moving a tag in its upstream, and would fail on permissions anyway,
+    # which reads as a broken build rather than as a job that should not have run.
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && github.repository == 'g-gemignani/deckcrawl'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Two pushes in quick succession would otherwise race to delete and recreate the
+    # same release. Queued, not cancelled: the loser publishing a slightly older commit
+    # is recoverable, and half a release is not.
+    concurrency:
+      group: release-latest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          templates: "true"
+
+      # `--export-release` is not reliably a truthful exit code — it returns non-zero
+      # on import warnings that did not stop it, which is why `tests/export_ready.sh`
+      # already treats the OUTPUT FILE as the verdict. So does this, with a size floor:
+      # a zero-byte file at the right path is exactly the failure that would otherwise
+      # be published as a release.
+      - name: Export the desktop platforms
+        run: |
+          set -uo pipefail
+          mkdir -p build/linux build/windows build/macos
+          fail=0
+          export_one() {
+            local preset="$1" out="$2"
+            godot --headless --export-release "$preset" "$PWD/$out" || true
+            if [ ! -s "$out" ] || [ "$(stat -c%s "$out")" -lt 20000000 ]; then
+              echo "::error::$preset produced no usable binary at $out"
+              fail=1
+              return
+            fi
+            printf '  %-8s %s\n' "$preset" "$(du -h "$out" | cut -f1)"
+          }
+          export_one Linux   build/linux/TheOwing.x86_64
+          export_one Windows build/windows/TheOwing.exe
+          export_one macOS   build/macos/TheOwing.zip
+          exit $fail
+
+      # Named for the game and the platform, because an asset name is the filename in
+      # somebody's downloads folder. The macOS export is ALREADY a zip holding
+      # `The Owing.app` and is only renamed: repacking it is how an .app loses the
+      # permissions and symlinks that make it launchable.
+      - name: Package
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          zip -qj9 dist/TheOwing-linux-x86_64.zip   build/linux/TheOwing.x86_64 LICENSE
+          zip -qj9 dist/TheOwing-windows-x86_64.zip build/windows/TheOwing.exe  LICENSE
+          cp build/macos/TheOwing.zip dist/TheOwing-macos-universal.zip
+          ls -lh dist
+
+      - name: Write the release notes
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
+          An automatic build of the newest commit on `main`, replaced on every green
+          push. It is a **prototype**, not a version: this tag always points at whatever
+          is current, and there is no history behind it.
+
+          | platform | file | first run |
+          |---|---|---|
+          | Linux | `TheOwing-linux-x86_64.zip` | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
+          | Windows | `TheOwing-windows-x86_64.zip` | unsigned — SmartScreen warns once: *More info* → *Run anyway* |
+          | macOS | `TheOwing-macos-universal.zip` | unsigned — `xattr -dr com.apple.quarantine "The Owing.app"` before opening |
+
+          None of the three is code-signed and none of them will be: that needs a paid
+          developer identity per platform. On **NixOS** the Linux binary needs
+          `steam-run`, or a `patchelf --set-interpreter` — see
+          [BUILD.md](https://github.com/g-gemignani/deckcrawl/blob/main/BUILD.md).
+          NOTES
+          # A second, UNQUOTED heredoc: the first must not expand anything (it is full
+          # of backticks and markdown), and this one has to expand exactly one variable.
+          cat >> "$RUNNER_TEMP/notes.md" <<NOTES
+
+          Built from \`$GITHUB_SHA\`.
+          NOTES
+
+      # Deleted and recreated rather than edited in place. Force-moving a git tag under
+      # an existing release leaves the release still recording the OLD commit, and
+      # `gh release edit` has no way to correct it — so the page would claim a build
+      # came from a commit it did not. The cost is a few seconds where the download URL
+      # 404s, on a rolling dev channel. The assets go up in the create call itself, so a
+      # failed upload cannot leave an empty release standing where a good one was.
+      - name: Publish the rolling build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest dist/* \
+            --target "$GITHUB_SHA" \
+            --prerelease \
+            --title "Latest build of main" \
+            --notes-file "$RUNNER_TEMP/notes.md"
+          echo "Published https://github.com/${GITHUB_REPOSITORY}/releases/tag/latest" \
+            >> "$GITHUB_STEP_SUMMARY"

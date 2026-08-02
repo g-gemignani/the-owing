@@ -1,0 +1,82 @@
+name: Set up Godot
+description: >
+  Put a pinned Godot on PATH, optionally with the export templates. The binary is
+  ~100MB and the templates ~1GB, so both are cached; without that, three jobs would
+  spend most of their wall clock downloading the same two files.
+
+# Extracted because the same twenty lines were pasted into two jobs and were about to
+# be pasted into a third. The version is an INPUT rather than read from the caller's
+# env: a composite action that silently depends on a variable the caller happens to
+# have set is one that breaks the first time it is used somewhere else, and the whole
+# reason this exists is that the engine version has to be pinned in exactly one place.
+
+inputs:
+  version:
+    description: Godot version, spelled as the release tag does — e.g. 4.7.1-stable.
+    required: true
+  templates:
+    description: >
+      Also install the export templates. Only the jobs that export need them, and they
+      are ten times the size of the engine, so this is off by default.
+    required: false
+    default: "false"
+
+runs:
+  using: composite
+  steps:
+    - name: Cache Godot binary
+      id: godot-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/godot-bin
+        key: godot-${{ inputs.version }}-linux-x86_64
+
+    - name: Download Godot
+      if: steps.godot-cache.outputs.cache-hit != 'true'
+      shell: bash
+      # Downloads land in RUNNER_TEMP, never the workspace: the workspace is the
+      # project root, and an export job that leaves a 100MB zip lying in it is one
+      # `include_filter` away from shipping it inside the game.
+      run: |
+        set -euo pipefail
+        file="Godot_v${{ inputs.version }}_linux.x86_64"
+        curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
+          "https://github.com/godotengine/godot/releases/download/${{ inputs.version }}/${file}.zip"
+        unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP"
+        mkdir -p ~/godot-bin
+        mv "$RUNNER_TEMP/${file}" ~/godot-bin/godot
+        chmod +x ~/godot-bin/godot
+
+    - name: Put Godot on PATH
+      shell: bash
+      run: echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+
+    - name: Cache export templates
+      if: inputs.templates == 'true'
+      id: template-cache
+      uses: actions/cache@v4
+      with:
+        path: ~/.local/share/godot/export_templates
+        key: godot-templates-${{ inputs.version }}
+
+    - name: Install export templates
+      if: inputs.templates == 'true' && steps.template-cache.outputs.cache-hit != 'true'
+      shell: bash
+      # The .tpz lays its contents out under `templates/`; Godot wants them flat, in a
+      # directory named for the version as the ENGINE spells it — dots, not the dash
+      # the release tag uses. Getting that wrong reports as "no export template found"
+      # with the templates plainly on disk.
+      run: |
+        set -euo pipefail
+        curl -fsSL -o "$RUNNER_TEMP/templates.tpz" \
+          "https://github.com/godotengine/godot/releases/download/${{ inputs.version }}/Godot_v${{ inputs.version }}_export_templates.tpz"
+        dest=~/.local/share/godot/export_templates/$(echo "${{ inputs.version }}" | tr '-' '.')
+        mkdir -p "$dest"
+        unzip -q -j "$RUNNER_TEMP/templates.tpz" 'templates/*' -d "$dest"
+
+    - name: Import resources
+      shell: bash
+      # The first import is expected to be noisy and is allowed to fail — whatever runs
+      # next is the real check. Reimporting every texture and sound takes longer than
+      # the test suite does, so the caller caches `.godot/` around this.
+      run: godot --headless --import || true
