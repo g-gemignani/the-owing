@@ -114,9 +114,9 @@ static func render(polys: Array, holes: Array, w: int, h: int, ramp: Array,
 	# no outline at all — the single thing most responsible for the first pass looking
 	# unfinished.
 	var r: int = maxi(2, int(ink_px * float(SS)))
-	var body_dark := _tinted(ramp, hue, sat, BODY_DARK)
-	var body_light := _tinted(ramp, hue, sat, BODY_LIGHT)
-	var rim := _tinted(ramp, hue, sat * 0.55, RIM)
+	var body_dark := tinted(ramp, hue, sat, BODY_DARK)
+	var body_light := tinted(ramp, hue, sat, BODY_LIGHT)
+	var rim := tinted(ramp, hue, sat * 0.55, RIM)
 	var ink := ArtPalette.ink(ramp)
 
 	var big := Image.create(sw, sh, false, Image.FORMAT_RGBA8)
@@ -148,13 +148,18 @@ static func render(polys: Array, holes: Array, w: int, h: int, ramp: Array,
 ## A value on the ramp, pushed toward the figure's own hue. Value comes from the
 ## palette so the figure belongs to the room; hue and saturation are its own so it does
 ## not disappear into the floor.
+##
+## Public because the combat effects (`scripts/fx.gd`) mix their colours exactly this
+## way and a second copy of the formula is D34 in a new medium. It was `_tinted` while
+## this file was its only caller.
+##
 ## `v` IS the intended value. It used to be run through `0.25 + luminance * 1.25`,
 ## which put a floor of 0.25 under everything and rendered `BODY_DARK = 0.10` at about
 ## 0.50 — so the constants said "dark silhouette" and the capture showed a pale pink
 ## creature floating in front of the room instead of standing in it. The lesson is
 ## narrow and worth keeping: **a constant named DARK has to survive the transform
 ## applied to it**, and the only way to know is to photograph the result in context.
-static func _tinted(ramp: Array, hue: float, sat: float, v: float) -> Color:
+static func tinted(ramp: Array, hue: float, sat: float, v: float) -> Color:
 	# blended toward the room's own colour at that value, so two figures lit by
 	# different dungeons differ, without the ramp deciding how dark they are
 	return Color.from_hsv(hue, sat, clampf(v, 0.03, 1.0)).lerp(ArtPalette.shade(ramp, v), 0.30)

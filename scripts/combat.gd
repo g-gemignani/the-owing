@@ -68,6 +68,11 @@ var kit_scaled: Dictionary = {}
 ## Where floating numbers and flashes are drawn: on top of everything, deaf to the
 ## mouse, and never a parent of anything the game logic reads.
 var fx_layer: Control
+## The room's own five-stop ramp, handed to every effect so what is drawn over the
+## backdrop is lit like it (`Fx.palette`). Read once while the scene loads: sampling a
+## painting costs ~45ms, which is nothing during a transition and a visible hitch if it
+## happened on the first hit of the fight instead.
+var fx_ramp: Array = []
 var hurt_veil: ColorRect
 var reward_box: VBoxContainer
 var end_btn: Button
@@ -86,6 +91,7 @@ var controls_box: HBoxContainer
 
 func _ready() -> void:
 	tier = _tier_of(GameState.pending.get("type", GameState.NodeType.COMBAT))
+	fx_ramp = Fx.palette(GameState.dungeon_id)
 	_build_ui()
 	eng = CombatEngine.new()
 	if not GameState.combat_state.is_empty():
@@ -186,7 +192,12 @@ func _build_ui() -> void:
 	root.add_child(header)
 
 	place_label = Label.new()
-	place_label.add_theme_font_size_override("font_size", UITheme.title_font())
+	# the dungeon's name is a heading, so it takes the display face like every other
+	# heading (D129). The other two labels on this screen at title SIZE deliberately do
+	# not: `status_label` is running prose ("Encounter cleared. +12 gold...") and
+	# `_float_number` is a numeral, and an inscriptional serif reads as decoration on
+	# both — size is not what makes a heading.
+	UITheme.style_title(place_label)
 	place_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var dd0 := GameState.dungeon_data()
 	place_label.text = "%s%s" % [dd0.name if dd0 != null else "The dark", _tier_suffix()]
@@ -728,17 +739,52 @@ func _flash_orb(i: int) -> void:
 	tw.tween_property(g, "modulate:a", 0.0, FX_RISE * 0.55).set_delay(FX_FLASH * 0.6)
 	tw.chain().tween_callback(g.queue_free)
 
+## Above this, an attack is a bludgeoning; below it, a cut. It is the threshold the
+## attack SOUND has always used, named rather than restated — the ear and the eye are
+## now told the same thing by the same decision, and two constants would have been two
+## thresholds within a week.
+const HEAVY_BLOW := 12
+
+## Which of the two hit pictures a card leaves on what it hits.
+##
+## Two, because `Fx` draws two: at 0.15s a player can tell a cut from a bludgeoning and
+## cannot tell six kinds of cut apart. The classification reads CardData — the same
+## fields the face and the sound already read — and never the log line, for
+## `_intent_icon`'s reason: the moment this screen parses prose it can disagree with
+## what happened.
+##
+## Called BEFORE the card resolves, so `card_damage` is the number the player was
+## looking at when they pressed it, and so a card that leaves the hand still has one.
+func _blow_of(card: CardData) -> String:
+	# a flurry is cuts however hard it lands: it is the multiplicity that reads
+	if card.hits > 1:
+		return Fx.SLASH
+	# Ram and its family swing your own guard at the thing, which is the definition of
+	# blunt whatever the number on it is
+	if card.damage_from_block or eng.card_damage(card) >= HEAVY_BLOW:
+		return Fx.IMPACT
+	return Fx.SLASH
+
+func _attack_sound(blow: String) -> String:
+	return "attack_heavy" if blow == Fx.IMPACT else "attack"
+
 func _on_power_pressed() -> void:
-	var before := _snapshot_hp()
+	if eng.power == null:
+		return
+	var before := _snapshot_vitals()
+	# a power resolves through `_resolve` exactly as a card does (PowerData extends
+	# CardData), so it is classified exactly as a card is
+	var blow := _blow_of(eng.power)
 	var msg := eng.use_power()
 	if msg == "":
 		return
-	Audio.play("buff" if eng.power != null and eng.power.eff_damage() == 0 else "attack")
+	Audio.play("buff" if eng.power.eff_damage() == 0 else _attack_sound(blow))
 	_log(msg)
-	_after_action(before)
+	_after_action(before, blow)
 
 func _on_card_pressed(card: CardData) -> void:
-	var before := _snapshot_hp()
+	var before := _snapshot_vitals()
+	var blow := _blow_of(card)
 	var msg := eng.play_card(card)
 	if msg == "":
 		Audio.play("ui_denied")
@@ -748,43 +794,47 @@ func _on_card_pressed(card: CardData) -> void:
 	if card.eff_poison() > 0:
 		Audio.play("poison")
 	elif card.eff_damage() > 0 or card.damage_from_block:
-		Audio.play("attack_heavy" if card.eff_damage() >= 12 else "attack")
+		Audio.play(_attack_sound(blow))
 	elif card.eff_block() > 0 or card.double_block:
 		Audio.play("block")
 	elif card.eff_strength() > 0 or card.eff_dexterity() > 0 or card.retain_block:
 		Audio.play("buff")
 	_log(msg)
-	_after_action(before)
+	_after_action(before, blow)
 
 ## Shared tail for anything the player does on their own turn: a kill may have
 ## ended the fight, and if not the run must be saved and the screen redrawn.
-func _after_action(before: Dictionary = {}) -> void:
+func _after_action(before: Dictionary = {}, blow: String = Fx.IMPACT) -> void:
 	if eng.won():
 		_refresh_enemies()      # so the killing blow is shown before the plates go
-		_show_deltas(before)
+		_show_deltas(before, blow)
 		_win()
 		return
 	_snapshot()
 	_refresh()
-	_show_deltas(before)
+	_show_deltas(before, blow)
 
 func _on_end_turn() -> void:
-	var before := _snapshot_hp()
+	var before := _snapshot_vitals()
 	var hp_before := eng.player.hp
 	_log(eng.end_turn())
 	if eng.player.hp < hp_before:
 		Audio.play("hurt")
+	# Everything the room does lands as a bludgeoning: no enemy in the game carries a
+	# blade in its intent set (`INTENT_ICONS` shares one attack symbol between the three
+	# attacking actions for the same reason), and a cut arcing across the HP bar would be
+	# the screen claiming a distinction the rules do not make.
 	if eng.lost():
-		_show_deltas(before)
+		_show_deltas(before, Fx.IMPACT, true)
 		_lose()
 		return
 	if eng.won():
-		_show_deltas(before)
+		_show_deltas(before, Fx.IMPACT, true)
 		_win()
 		return
 	_snapshot()
 	_refresh()
-	_show_deltas(before)
+	_show_deltas(before, Fx.IMPACT, true)
 
 func _refresh() -> void:
 	var p := eng.player
@@ -1533,41 +1583,120 @@ const FX_RISE := 0.55        ## how long a floating number lives
 const FX_FLASH := 0.22       ## hit tint
 const FX_SHAKE := 0.20
 
-## HP of everything, before an action. Compared afterwards to work out what to
-## show — derived from the real numbers rather than from parsing the log line.
-func _snapshot_hp() -> Dictionary:
-	var out := {"player": eng.player.hp, "block": eng.player.block}
+## The state an effect is a difference from, before an action.
+##
+## Everything the effects layer draws is DERIVED from this against the state after —
+## never from parsing the log line, and never from the engine telling the screen what
+## to play. `combat_engine.gd` says at the top of itself that it has no UI in it, and it
+## drives the headless simulator; a fight that has to fire animations is a fight that
+## costs something to simulate.
+##
+## Poison is here because a stack that changed is the only honest signal that poison
+## DID something: it goes up when a card applies it and down after it bites (see
+## `Combatant.end_turn`), so one comparison covers both and neither needs a flag.
+##
+## The intents are the enemies' telegraphs, snapshotted because `end_turn` re-rolls
+## them: what an enemy was about to do is the game's own answer to what it just did, and
+## it is more truthful than reading its Block afterwards — an enemy that blocks 5 every
+## turn has its guard expire and rebuild to the same number, and a delta sees nothing.
+func _snapshot_vitals() -> Dictionary:
+	var foes: Array = []
 	for i in eng.enemies.size():
-		out[i] = eng.enemies[i].hp
-	return out
+		var e: Combatant = eng.enemies[i]
+		foes.append({
+			"hp": e.hp, "block": e.block, "poison": e.poison, "dead": e.is_dead(),
+			"intent": int((eng.intents[i] as Dictionary).get("action", -1)),
+		})
+	return {
+		"player": eng.player.hp, "block": eng.player.block,
+		"poison": eng.player.poison, "foes": foes,
+	}
 
-## Float the difference above whoever it happened to, and shake them.
-func _show_deltas(before: Dictionary) -> void:
+## How hard a hit landed, as a share of the target's own bar, for the effects that
+## scale with it. Same shape as `_flash_hurt`'s: a 4-point chip must not look like a
+## boss landing 40, and a floor under it stops a 1-point tick drawing nothing at all.
+func _blow_force(amount: int, max_hp: int) -> float:
+	return clampf(float(amount) / maxf(1.0, float(max_hp) * 0.30), 0.35, 1.0)
+
+## Float the difference above whoever it happened to, shake them, and draw what
+## happened over the top.
+##
+## `blow` is which hit picture a landing attack leaves (`_blow_of`). `their_turn` says
+## the enemies have just acted, which is the one thing the before/after pair cannot
+## tell: it is what licenses reading the snapshotted intents.
+##
+## Everything below tolerates a partial `before` — a caller that only knows about the
+## player passes only the player, and the enemy loop simply does not run.
+func _show_deltas(before: Dictionary, blow: String = Fx.IMPACT,
+		their_turn: bool = false) -> void:
+	var foes: Array = before.get("foes", [])
 	for i in eng.enemies.size():
-		if not before.has(i) or i >= enemy_plates.size():
+		if i >= foes.size() or i >= enemy_plates.size():
 			continue
-		var lost: int = int(before[i]) - eng.enemies[i].hp
+		var was: Dictionary = foes[i]
+		var e: Combatant = eng.enemies[i]
 		var plate: Control = enemy_plates[i]
+		var art := _body_art(plate)
+		var body: Rect2 = art.get_global_rect() if art != null else plate.get_global_rect()
+		var lost: int = int(was["hp"]) - e.hp
 		if lost > 0:
 			_float_number(plate, "-%d" % lost, Color(1.0, 0.62, 0.42))
 			_hit(plate)
+			var force := _blow_force(lost, e.max_hp)
+			if blow == Fx.SLASH:
+				Fx.slash(fx_layer, body, fx_ramp, force)
+			else:
+				Fx.impact(fx_layer, body, fx_ramp, force)
 		elif lost < 0:
 			_float_number(plate, "+%d" % (-lost), Color(0.62, 0.95, 0.62))
+			Fx.heal(fx_layer, body, fx_ramp)      # a drain heals the thing draining you
+		if e.poison != int(was["poison"]):
+			Fx.poison_cloud(fx_layer, body, fx_ramp)
+		if their_turn and int(was["intent"]) == EnemyData.Action.DEFEND \
+				and not e.is_dead() and e.block > 0:
+			Fx.block_up(fx_layer, body, fx_ramp)
+		if e.is_dead() and not bool(was["dead"]):
+			# The slot is already hidden by the refresh that ran before this, so the
+			# dissolve stands in for it — same rect, same texture, same tint, on the
+			# effects layer where `_win()`'s clear-out cannot reach it. The tint matters:
+			# a stand-in silhouette is a 16x16 sprite drawn at `modulate` 0.16, and a
+			# ghost that dropped that would come apart in the wrong colour entirely.
+			Fx.death_dissolve(fx_layer, body, fx_ramp,
+				art.texture if art != null else null,
+				art.modulate if art != null else Color(1, 1, 1))
 
 	# The player's own numbers rise off the thing that just changed. That used to be
 	# the status line because the status line was the only thing there; now HP and
 	# Block are a bar, so they rise off the bar, and off the line only when there is
-	# no bar installed.
+	# no bar installed. The effects go to the same place for the same reason: there is
+	# no player figure on this screen to put them on.
 	var pin: Control = hp_bar if hp_bar != null else status_label
+	# Grown, because the bar is 256x44 and every effect here sizes itself off the
+	# SMALLER side of the box it is given — a ward or a shock inside 44px of height is a
+	# mark you would have to go looking for. The bar is the anchor; this is the room
+	# around it, and it stays inside the HUD column either way.
+	var pin_rect := pin.get_global_rect().grow(UITheme.px(30))
 	var p_lost: int = int(before.get("player", eng.player.hp)) - eng.player.hp
 	if p_lost > 0:
 		_float_number(pin, "-%d" % p_lost, Color(1.0, 0.5, 0.45))
 		_flash_hurt(p_lost)
+		Fx.impact(fx_layer, pin_rect, fx_ramp, _blow_force(p_lost, eng.player.max_hp))
 	elif p_lost < 0:
 		_float_number(pin, "+%d" % (-p_lost), Color(0.62, 0.95, 0.62))
+		Fx.heal(fx_layer, pin_rect, fx_ramp)
 	var gained_block: int = eng.player.block - int(before.get("block", eng.player.block))
 	if gained_block > 0:
 		_float_number(pin, "+%d block" % gained_block, Color(0.62, 0.80, 1.0))
+		Fx.block_up(fx_layer, pin_rect, fx_ramp)
+	if eng.player.poison != int(before.get("poison", eng.player.poison)):
+		Fx.poison_cloud(fx_layer, pin_rect, fx_ramp)
+
+## The creature inside its slot — the TextureRect the plate was built with, painted
+## plate or 16x16 stand-in. Effects go on THIS and not on the plate: a plate is the art
+## plus three lines of text above it, and an effect centred on that is drawn over the
+## name.
+func _body_art(plate: Control) -> TextureRect:
+	return plate.get_meta("art", null) as TextureRect
 
 func _float_number(over: Control, text: String, colour: Color) -> void:
 	if fx_layer == null or not is_inside_tree():
