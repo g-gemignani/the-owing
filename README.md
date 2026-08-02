@@ -1,7 +1,12 @@
 # The Owing
 
-[![ci](https://github.com/g-gemignani/deckcrawl/actions/workflows/ci.yml/badge.svg)](https://github.com/g-gemignani/deckcrawl/actions/workflows/ci.yml)
-[![latest build](https://img.shields.io/github/release-date-pre/g-gemignani/deckcrawl?label=latest%20build)](https://github.com/g-gemignani/deckcrawl/releases/tag/latest)
+[![ci](https://github.com/g-gemignani/the-owing/actions/workflows/ci.yml/badge.svg)](https://github.com/g-gemignani/the-owing/actions/workflows/ci.yml)
+[![tests](https://img.shields.io/badge/tests-39%20suites-brightgreen)](#tests)
+[![latest build](https://img.shields.io/github/release-date-pre/g-gemignani/the-owing?label=latest%20build&color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
+[![downloads](https://img.shields.io/github/downloads/g-gemignani/the-owing/latest/total?color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
+[![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android%20%7C%20iOS-brightgreen)](#play-it)
+[![Godot](https://img.shields.io/badge/Godot-4.7-478cbf)](https://godotengine.org)
+[![licence](https://img.shields.io/github/license/g-gemignani/the-owing?color=brightgreen)](LICENSE)
 
 A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
 (GDScript). Slay-the-Spire-shaped combat — but what you carry between runs is a
@@ -14,22 +19,28 @@ name, and what he does, on the screen where you picked the dungeon.</sub>
 
 ## Play it
 
-No build step. Every green push to `main` publishes a fresh binary for all three
-desktop platforms under [one permanent link](https://github.com/g-gemignani/deckcrawl/releases/tag/latest) —
+No build step. Every green push to `main` publishes a fresh binary for all five
+platforms under [one permanent link](https://github.com/g-gemignani/the-owing/releases/tag/latest) —
 so these are always the newest commit, not the last time somebody remembered to cut a
 release.
 
 | | download | first run |
 |---|---|---|
-| **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/deckcrawl/releases/download/latest/TheOwing-linux-x86_64.zip) (65 MB) | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
-| **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/deckcrawl/releases/download/latest/TheOwing-windows-x86_64.zip) (74 MB) | SmartScreen warns once → *More info* → *Run anyway* |
-| **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/deckcrawl/releases/download/latest/TheOwing-macos-universal.zip) (95 MB) | `xattr -dr com.apple.quarantine "The Owing.app"`, then open it |
+| **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-linux-x86_64.zip) (65 MB) | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
+| **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-windows-x86_64.zip) (74 MB) | SmartScreen warns once → *More info* → *Run anyway* |
+| **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (95 MB) | `xattr -dr com.apple.quarantine "The Owing.app"`, then open it |
+| **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) | `adb install`, or copy it over and allow unknown sources |
+| **iOS** | [`TheOwing-ios-unsigned.ipa`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-ios-unsigned.ipa) | **unsigned** — re-sign with Sideloadly, AltStore or your own Xcode account |
 
-None of the three is code-signed, and none of them will be — that needs a paid
-developer identity per platform, which is why both desktop OSes want a word from you
-first. On **NixOS** the Linux binary needs `steam-run`, or a `patchelf
---set-interpreter`; see [BUILD.md](BUILD.md). Android and iOS are *exportable* but not
-published — see the bottom of that file for why.
+Nothing here is code-signed and nothing here will be: that needs a paid developer
+identity per platform. Two consequences worth knowing before you download rather than
+after — **the APK is signed with a throwaway key regenerated every build**, so Android
+will refuse to install one over another (uninstall the old one first); and **the .ipa
+will not install as-is**, because iOS runs signed code only. On **NixOS** the Linux
+binary needs `steam-run`, or a `patchelf --set-interpreter`; see [BUILD.md](BUILD.md).
+
+Both mobile builds are **untested on real hardware** — nobody has run this on a phone
+yet, and text size at phone DPI is the most likely thing to be wrong (D65).
 
 > **Status: playable prototype, fully painted.** All 310 art files are in — 27
 > backdrops, 35 enemy plates, an illustration for every one of the 100 cards, and a
@@ -132,6 +143,13 @@ Two kinds live in `tests/`:
 always has something to press. Both exist because a black screen once shipped and
 survived five green runs: `--import` does not compile scripts, and `load()` returns a
 non-null Resource for a script that failed to parse.
+
+**There is no coverage badge, and that is deliberate.** GDScript has no line-coverage
+instrumentation — no `gcov`, no `coverage.py`, nothing the engine exposes — so any
+percentage on this page would be a number somebody typed. Everything in the badge row
+above is either read live from GitHub or asserted by a test: the `39 suites` count is
+checked against the globs `tests/run.sh` actually runs, by `tests/test_content.gd`, so
+adding a suite fails the build until the badge is corrected.
 
 Tests are sandboxed away from real save data, and the runner fails if any test leaves a
 file behind. That is not paranoia: a test once overwrote a real `settings.json`, and a

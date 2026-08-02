@@ -8675,3 +8675,114 @@ what survives being the small image at the top of a page.
 `combat_boss` in the harness deliberately sets no `enemy` key, unlike `combat_group`. A
 boss is read off the DUNGEON (`dd.boss`), because every dungeon has exactly one named
 finale — forcing an archetype here would photograph a fight the game cannot deal.
+
+### D144 — Five platforms out of three runners, and the one that is allowed to fail
+
+D142 shipped desktop-only and said Android was left out because nobody has run the game
+on a phone. That reasoning still holds for whether the build is *trustworthy*; it does
+not hold for whether the build should *exist*. A download nobody has tested is how it
+gets tested.
+
+## Android needed no editor settings, which is not what the docs imply
+
+Godot's Android export reports four separate "configure it in Editor Settings" errors
+when the SDK is missing, and every CI recipe on the internet answers that by forging an
+`editor_settings-4.x.tres`. Measured instead: exporting against a stubbed SDK tree with
+`ANDROID_HOME` and `JAVA_HOME` set makes all four disappear. Godot seeds those editor
+settings *from the environment* the first time it creates them, and a CI runner has no
+prior settings file. So the whole SDK question is two variables the runner image already
+sets.
+
+Signing is the other half, and Godot has a real answer for it:
+`GODOT_ANDROID_KEYSTORE_RELEASE_{PATH,USER,PASSWORD}`, found by reading the binary's
+strings rather than the manual. The key is generated per build with `keytool` and thrown
+away. **Every build is therefore signed by a different key, so Android refuses to install
+one over another** — that is a fact about the download and belongs on the release page,
+not in a bug report. The preset already sets `use_gradle_build=false`, so this uses the
+prebuilt APK template from the `.tpz`: no Gradle, no `--install-android-build-template`,
+and the only SDK tools that matter are `apksigner` and `zipalign`. `apksigner verify`
+runs afterwards, because an APK that exports and is not a valid signed package is exactly
+the artifact that would otherwise reach a phone.
+
+## iOS cannot be tested from here, so the job is built to fail readably
+
+Apple's toolchain runs on macOS and nowhere else, which makes `build-ios` the only job on
+a different runner and the only part of this that could not be dry-run locally. Three
+things had to be settled blind:
+
+* Godot refuses an iOS export with no App Store team ID *even when asked only for an
+  Xcode project*. So CI patches the preset — placeholder team ID plus
+  `export_project_only` — and the committed preset stays honest, because
+  `export_project_only` is wrong for anyone doing a real signed build on their own Mac.
+  The patch locates the section by `name="iOS"` and not by `preset.4`: an index is a fact
+  about the current file. Dry-run against the real `export_presets.cfg` before shipping.
+* `xcodebuild ... CODE_SIGNING_ALLOWED=NO` builds the `.app`, which is wrapped in a
+  `Payload/` directory and zipped into an `.ipa` by hand. It is **unsigned**: iOS runs
+  signed code only, so the file exists to be re-signed with Sideloadly, AltStore or an
+  Xcode account, and for no other reason. Saying so on the release page is the whole
+  difference between a useful artifact and a support burden.
+* The exact layout Godot writes for a project-only export is the one thing that could not
+  be checked, so the job `find`s the `.xcodeproj` and the `.app` rather than assuming
+  either, and prints the tree either way. A first failure has to be readable, because the
+  only debugger available is the next CI run.
+
+**`build-ios` carries `continue-on-error` and nothing else does.** It depends on whatever
+Xcode the macOS image ships this month, and a gameplay fix must not sit unreleased
+because Apple moved something. The release job reads which artifacts actually arrived and
+says so in the notes — a release missing a platform must not read like a complete one.
+
+## The shape changed: builders fan out, one job publishes
+
+D142's single `release` job exported and published in one place, which stops working the
+moment the exports need three different machines. Now three `build-*` jobs upload
+artifacts and `release` downloads and publishes them. The desktop steps are unchanged;
+they simply end in an `upload-artifact` instead of a `gh release create`.
+
+`github.repository == 'g-gemignani/deckcrawl'` became `github.repository_owner ==
+'g-gemignani'` in the same pass — the guard exists to stop forks publishing, and pinning
+it to a repository NAME meant a rename silently disabled every release. Which is exactly
+what happened next.
+
+### D145 — The repository was still called deckcrawl, and one badge was a number somebody typed
+
+D127 renamed the game to **The Owing** and deliberately pinned the save directory to
+`Deckcrawl`, because a rename is a display change and must never be a data migration. The
+repository itself was never renamed, so the URL, the clone path and every download link
+still said `deckcrawl` — the one name in the project written in a different language from
+The Grave-Sexton and The False Step, which is the exact argument D127 made.
+
+`deckcrawl` → `the-owing`, and with it the export filenames: `TheOwing.x86_64`,
+`TheOwing.exe`, `TheOwing.zip`, `TheOwing.apk`, `TheOwing.ipa`. Those were `deckcrawl.*`
+in `export_presets.cfg` while CI was already publishing assets named `TheOwing-*`, so a
+manual build and a released build produced differently-named binaries of the same thing.
+
+**Two things did NOT change, and both are load-bearing.** The `user://` directory is
+still `Deckcrawl` (D127 — moving it orphans every existing save with no error and no
+missing file). And the Android `package/unique_name` and iOS `application/bundle_
+identifier` are still `io.github.ggemignani.theowing`: a bundle identifier is app
+IDENTITY, not a display name, and changing one makes the store treat it as a different
+app. Nothing is published to a store yet, so that change is free *today* and expensive
+the day after the first upload — it is called out here so it is a decision rather than an
+oversight.
+
+## Badges, and the one that would have been a lie
+
+The front page gained six: CI status, suite count, latest build date, download total,
+platforms and licence. Five are read live — from the Actions API, the releases API or the
+repository itself — and cannot go stale.
+
+The sixth, `tests-39 suites`, is a hand-written string on shields.io, because nothing is
+counting suites for us. So `tests/test_content.gd` now counts them the way `tests/run.sh`
+does — `test_*.gd` plus `*Test.tscn` — and asserts the README says that number, in both
+the badge and the prose. Add a suite and the build fails until the badge is corrected.
+Verified by breaking it: 41 in the badge, red; 39, green. That mechanism is the only thing
+that has ever kept a number in this repository honest, and D141 is the counter-example —
+`ART_ASSETS.md` sat at "249 present · 61 to provide" for a week because regenerating it
+was a manual step nobody's checklist named.
+
+**There is no coverage badge and there will not be one.** GDScript has no line-coverage
+instrumentation — no `gcov`, no `coverage.py`, nothing the engine exposes — so any
+percentage would be a number somebody typed, on a page whose whole claim is that its
+numbers are generated or asserted. A green badge measuring nothing is worse than no
+badge: it is an invitation to stop asking. The README says this in place of the badge,
+which is the honest version of the same information.

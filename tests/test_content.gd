@@ -207,8 +207,40 @@ func _init() -> void:
 		fails += 1
 		print("FAIL no touch path in card_button — cards would be unreadable until played")
 
+	# --- the README's numbers are claims, and a claim nobody re-checks goes stale ---
+	#
+	# The front page carries a `tests-N suites` badge and a "39 suites" row, and the
+	# badge is a hand-written string on shields.io — there is no service counting them
+	# for us. So the count is asserted HERE, against the same globs `tests/run.sh`
+	# actually runs. Add a suite and this fails until the badge is corrected, which is
+	# the only mechanism that has ever kept a number in this repo honest (D141).
+	var suites := 0
+	var td := DirAccess.open("res://tests")
+	if td == null:
+		fails += 1; print("FAIL cannot open res://tests to count suites")
+	else:
+		td.list_dir_begin()
+		var f := td.get_next()
+		while f != "":
+			if (f.begins_with("test_") and f.ends_with(".gd")) or f.ends_with("Test.tscn"):
+				suites += 1
+			f = td.get_next()
+		td.list_dir_end()
+		var readme := FileAccess.open("res://README.md", FileAccess.READ)
+		if readme == null:
+			fails += 1; print("FAIL README.md is missing")
+		else:
+			var text := readme.get_as_text()
+			readme.close()
+			# both the badge (URL-encoded) and the prose row
+			for claim in ["tests-%d%%20suites" % suites, "%d suites" % suites]:
+				if text.find(claim) == -1:
+					fails += 1
+					print("FAIL README does not say '%s' — there are %d suites now" % [
+						claim, suites])
+
 	if fails == 0:
-		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness)")
+		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness, README counts)")
 	else:
 		print("CONTENT TEST: FAIL (%d)" % fails)
 	quit()

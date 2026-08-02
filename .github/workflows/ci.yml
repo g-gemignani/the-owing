@@ -65,32 +65,23 @@ jobs:
       - name: Export smoke test
         run: tests/export.sh
 
-  # A rolling build of main, published under the fixed tag `latest`, so the README can
-  # link to a URL that never changes and always resolves to today's binary. No version
-  # history, on purpose: this is a prototype with nothing to version, and a release
-  # channel that depends on somebody remembering to cut a tag is a download link that
-  # goes stale. Add a tag-triggered job beside this one the day there is a v1.
-  release:
+  # --- builders -----------------------------------------------------------------
+  #
+  # One job per platform family rather than one job that exports everything, because
+  # they no longer share a machine: iOS can only be built on macOS. They run only on
+  # main, for the same reason the release does — a PR gets the suite and the
+  # export-readiness check, which is what catches a project-side regression, and the
+  # binaries are only wanted for something that is going to be published.
+
+  build-desktop:
     needs: [test, export-ready]
-    # Only from main, only on a real push, and never from a fork — a fork has no
-    # business moving a tag in its upstream, and would fail on permissions anyway,
-    # which reads as a broken build rather than as a job that should not have run.
     if: >-
       github.event_name == 'push'
       && github.ref == 'refs/heads/main'
-      && github.repository == 'g-gemignani/deckcrawl'
+      && github.repository_owner == 'g-gemignani'
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    # Two pushes in quick succession would otherwise race to delete and recreate the
-    # same release. Queued, not cancelled: the loser publishing a slightly older commit
-    # is recoverable, and half a release is not.
-    concurrency:
-      group: release-latest
-      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
-
       - uses: ./.github/actions/setup-godot
         with:
           version: ${{ env.GODOT_VERSION }}
@@ -101,7 +92,7 @@ jobs:
       # already treats the OUTPUT FILE as the verdict. So does this, with a size floor:
       # a zero-byte file at the right path is exactly the failure that would otherwise
       # be published as a release.
-      - name: Export the desktop platforms
+      - name: Export Linux, Windows and macOS
         run: |
           set -uo pipefail
           mkdir -p build/linux build/windows build/macos
@@ -134,7 +125,212 @@ jobs:
           cp build/macos/TheOwing.zip dist/TheOwing-macos-universal.zip
           ls -lh dist
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-desktop
+          path: dist/
+          retention-days: 1
+
+  # Godot finds the SDK and the JDK through ANDROID_HOME and JAVA_HOME, which the
+  # runner image already sets — verified by exporting against a stubbed SDK: without
+  # them Godot reports four separate "configure it in Editor Settings" errors, with
+  # them all four disappear. So no editor-settings file has to be forged here.
+  #
+  # The preset sets `use_gradle_build=false`, so this uses the prebuilt APK template
+  # from the .tpz and needs no `--install-android-build-template` and no Gradle. What
+  # it does still need from the SDK is `apksigner` and `zipalign`.
+  build-android:
+    needs: [test, export-ready]
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && github.repository_owner == 'g-gemignani'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          templates: "true"
+
+      # A throwaway self-signed key, generated per build. It is NOT a secret and must
+      # never become one: it exists so the APK is installable, not so it is trusted,
+      # and a Play Store upload would need a real key held outside this repository.
+      #
+      # The consequence is worth stating on the download page rather than discovering:
+      # every build is signed by a DIFFERENT key, so Android refuses to install one
+      # over another. Uninstall the old build first.
+      - name: Generate a throwaway signing key
+        run: |
+          set -euo pipefail
+          keytool -keyalg RSA -genkeypair -alias theowing -keypass theowing \
+            -keystore "$RUNNER_TEMP/ci.keystore" -storepass theowing \
+            -dname "CN=The Owing CI, O=The Owing, C=IT" \
+            -validity 9999 -deststoretype pkcs12
+
+      - name: Export the APK
+        env:
+          # Godot reads these instead of the editor settings — the one part of Android
+          # export that was designed for CI.
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/ci.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: theowing
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: theowing
+        run: |
+          set -uo pipefail
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}  JAVA_HOME=${JAVA_HOME:-unset}"
+          mkdir -p dist
+          godot --headless --export-release "Android" "$PWD/dist/TheOwing-android.apk" || true
+          if [ ! -s dist/TheOwing-android.apk ]; then
+            echo "::error::the Android export produced no APK"
+            exit 1
+          fi
+          du -h dist/TheOwing-android.apk
+
+      # An APK that exports and is not a valid signed package is the failure this
+      # catches: `apksigner verify` reads the archive the way a phone does.
+      - name: Verify the signature
+        run: |
+          set -euo pipefail
+          signer=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -1)
+          "$signer" verify --verbose dist/TheOwing-android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-android
+          path: dist/
+          retention-days: 1
+
+  # iOS is the one target that cannot be cross-compiled: Apple's toolchain runs on
+  # macOS and nowhere else. It is also the one target whose output cannot be installed
+  # by double-clicking it — the .ipa below is UNSIGNED, because signing needs a paid
+  # Apple developer identity that no repository can carry, so it is for re-signing
+  # with AltStore/Sideloadly or an Xcode account, not for handing to a stranger.
+  #
+  # `continue-on-error` is deliberate and is the only job that gets it. This build
+  # depends on whatever Xcode the macOS image happens to ship this month, and a
+  # gameplay fix must not sit unreleased because Apple moved something. A failure here
+  # is loud on the job, the release still goes out, and the notes say which platforms
+  # are actually in it rather than quietly listing three.
+  build-ios:
+    needs: [test, export-ready]
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && github.repository_owner == 'g-gemignani'
+    runs-on: macos-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+          templates: "true"
+
+      # Patched HERE and not committed. Godot refuses an iOS export with no team ID
+      # even when it is only being asked for an Xcode project, and `export_project_only`
+      # is wrong for anyone doing a real signed build on their own Mac — so the
+      # committed preset stays honest and CI overrides it for the length of one job.
+      # Located by NAME, not by `preset.4`: an index is a fact about the current file.
+      - name: Point the iOS preset at an unsigned project build
+        run: |
+          set -euo pipefail
+          awk '
+            /^\[preset\.[0-9]+\]$/            { sect = $0; sub(/\]$/, ".options]", sect); ios = 0 }
+            /^name="iOS"$/                    { want = sect }
+            $0 == want && want != ""          { print; print "application/app_store_team_id=\"CIONLY\"";
+                                                print "application/export_project_only=true"; next }
+            { print }
+          ' export_presets.cfg > "$RUNNER_TEMP/presets.cfg"
+          mv "$RUNNER_TEMP/presets.cfg" export_presets.cfg
+          sed -n '/^\[preset\.[0-9]*\]$/,$p' export_presets.cfg | grep -A4 'app_store_team_id' || {
+            echo "::error::the iOS preset was not patched — check the section names"; exit 1; }
+
+      # Project-only, so Godot writes an Xcode project instead of trying to sign an
+      # .ipa it has no identity for.
+      - name: Export the Xcode project
+        run: |
+          set -uo pipefail
+          mkdir -p build/ios
+          godot --headless --export-release "iOS" "$PWD/build/ios/TheOwing.ipa" || true
+          echo "--- what the export actually produced ---"
+          find build/ios -maxdepth 3 | head -40
+
+      # Discovered rather than assumed, and the listing above is printed either way:
+      # the exact layout Godot writes for a project-only iOS export is the one thing
+      # here that cannot be checked from Linux, so a first failure has to be readable.
+      - name: Build an unsigned .app, and wrap it as an .ipa
+        run: |
+          set -euo pipefail
+          proj=$(find build/ios -maxdepth 3 -name '*.xcodeproj' | head -1)
+          [ -n "$proj" ] || { echo "::error::no .xcodeproj under build/ios"; exit 1; }
+          echo "building $proj"
+          xcodebuild -project "$proj" -scheme "$(basename "$proj" .xcodeproj)" \
+            -sdk iphoneos -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+          app=$(find "$RUNNER_TEMP/dd" -maxdepth 4 -name '*.app' -type d | head -1)
+          [ -n "$app" ] || { echo "::error::xcodebuild produced no .app"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/Payload" dist
+          cp -R "$app" "$RUNNER_TEMP/Payload/"
+          (cd "$RUNNER_TEMP" && zip -qry9 "$OLDPWD/dist/TheOwing-ios-unsigned.ipa" Payload)
+          du -h dist/TheOwing-ios-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-ios
+          path: dist/
+          retention-days: 1
+
+  # --- publish ------------------------------------------------------------------
+  #
+  # A rolling build of main under the fixed tag `latest`, so the README can link to a
+  # URL that never changes and always resolves to today's binary. No version history,
+  # on purpose: this is a prototype with nothing to version, and a release channel that
+  # depends on somebody remembering to cut a tag is a download link that goes stale.
+  # Add a tag-triggered job beside this one the day there is a v1.
+  release:
+    needs: [build-desktop, build-android, build-ios]
+    if: >-
+      github.event_name == 'push'
+      && github.ref == 'refs/heads/main'
+      && github.repository_owner == 'g-gemignani'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    # Two pushes in quick succession would otherwise race to delete and recreate the
+    # same release. Queued, not cancelled: the loser publishing a slightly older commit
+    # is recoverable, and half a release is not.
+    concurrency:
+      group: release-latest
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: staged
+          pattern: dist-*
+          merge-multiple: true
+
+      # `build-ios` is allowed to fail, so its artifact may simply not be here. That is
+      # a thing to SAY, not a thing to paper over: the notes list what was actually
+      # built, so a release missing a platform cannot read like a complete one.
+      - name: Take stock of what arrived
+        id: stock
+        run: |
+          set -euo pipefail
+          ls -lh staged
+          have() { [ -s "staged/$1" ] && echo yes || echo no; }
+          {
+            echo "linux=$(have TheOwing-linux-x86_64.zip)"
+            echo "windows=$(have TheOwing-windows-x86_64.zip)"
+            echo "macos=$(have TheOwing-macos-universal.zip)"
+            echo "android=$(have TheOwing-android.apk)"
+            echo "ios=$(have TheOwing-ios-unsigned.ipa)"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Write the release notes
+        env:
+          HAVE_IOS: ${{ steps.stock.outputs.ios }}
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
@@ -147,14 +343,29 @@ jobs:
           | Linux | `TheOwing-linux-x86_64.zip` | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
           | Windows | `TheOwing-windows-x86_64.zip` | unsigned — SmartScreen warns once: *More info* → *Run anyway* |
           | macOS | `TheOwing-macos-universal.zip` | unsigned — `xattr -dr com.apple.quarantine "The Owing.app"` before opening |
+          | Android | `TheOwing-android.apk` | `adb install`, or copy it over and allow unknown sources |
+          | iOS | `TheOwing-ios-unsigned.ipa` | **unsigned** — needs re-signing with Sideloadly, AltStore or your own Xcode account |
 
-          None of the three is code-signed and none of them will be: that needs a paid
-          developer identity per platform. On **NixOS** the Linux binary needs
-          `steam-run`, or a `patchelf --set-interpreter` — see
-          [BUILD.md](https://github.com/g-gemignani/deckcrawl/blob/main/BUILD.md).
+          Nothing here is code-signed, and nothing here will be: that needs a paid
+          developer identity per platform. Two consequences worth knowing before you
+          download rather than after:
+
+          * **The APK is signed with a throwaway key that is regenerated every build**,
+            so Android will refuse to install one build over another. Uninstall the old
+            one first. It is installable, not trusted, and it is not a Play Store build.
+          * **The .ipa will not install as-is.** iOS runs signed code only; the file is
+            here so somebody with an Apple ID can re-sign it, and for no other reason.
+
+          On **NixOS** the Linux binary needs `steam-run`, or a `patchelf
+          --set-interpreter` — see
+          [BUILD.md](https://github.com/g-gemignani/the-owing/blob/main/BUILD.md).
           NOTES
-          # A second, UNQUOTED heredoc: the first must not expand anything (it is full
-          # of backticks and markdown), and this one has to expand exactly one variable.
+          if [ "$HAVE_IOS" != "yes" ]; then
+            printf '\n> **This build has no iOS asset** — that job failed and is allowed to.\n' \
+              >> "$RUNNER_TEMP/notes.md"
+          fi
+          # Unquoted heredoc: the block above must expand nothing (it is all backticks
+          # and markdown), and this must expand exactly one variable.
           cat >> "$RUNNER_TEMP/notes.md" <<NOTES
 
           Built from \`$GITHUB_SHA\`.
@@ -172,10 +383,14 @@ jobs:
         run: |
           set -euo pipefail
           gh release delete latest --yes --cleanup-tag || true
-          gh release create latest dist/* \
+          gh release create latest staged/* \
             --target "$GITHUB_SHA" \
             --prerelease \
             --title "Latest build of main" \
             --notes-file "$RUNNER_TEMP/notes.md"
-          echo "Published https://github.com/${GITHUB_REPOSITORY}/releases/tag/latest" \
-            >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "### Published"
+            echo "<https://github.com/${GITHUB_REPOSITORY}/releases/tag/latest>"
+            echo
+            find staged -maxdepth 1 -type f -printf '- %f\n' | sort
+          } >> "$GITHUB_STEP_SUMMARY"

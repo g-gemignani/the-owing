@@ -5,7 +5,7 @@
 Don't build it — download it. Every green push to `main` publishes Linux, Windows and
 macOS binaries under a permanent link:
 
-**<https://github.com/g-gemignani/deckcrawl/releases/tag/latest>**
+**<https://github.com/g-gemignani/the-owing/releases/tag/latest>**
 
 Or, from a checkout with **Godot 4.7**:
 
@@ -16,12 +16,16 @@ GODOT=/path/to/godot ./run.sh      # or put godot on PATH and run ./run.sh
 ## The release pipeline
 
 `.github/workflows/ci.yml` runs the suite, checks every preset is still exportable, and
-then — only from `main`, only after both of those pass — exports the three desktop
-platforms and republishes them under the fixed tag `latest`. One Ubuntu runner does all
-three; Godot cross-exports Windows and macOS from Linux without a Windows or a Mac
-anywhere in the loop.
+then — only from `main`, only after both of those pass — builds **all five platforms**
+and republishes them under the fixed tag `latest`.
 
-Three things about it are deliberate and easy to undo by accident:
+| job | runner | why |
+|---|---|---|
+| `build-desktop` | `ubuntu-latest` | Godot cross-exports Windows and macOS from Linux, so one runner does three platforms |
+| `build-android` | `ubuntu-latest` | the runner image already carries a JDK and the SDK; Godot finds both through `JAVA_HOME` and `ANDROID_HOME` |
+| `build-ios` | `macos-latest` | Apple's toolchain runs nowhere else, and this is the only job that needs a Mac |
+
+Five things about it are deliberate and easy to undo by accident:
 
 * **The tag is fixed, and there is no version history.** The README links to
   `releases/download/latest/<file>`, which is only a stable URL because the tag never
@@ -38,12 +42,31 @@ Three things about it are deliberate and easy to undo by accident:
   reason. A zero-byte file at the right path is precisely what would otherwise be
   published.
 
-Nothing in it needs a secret. `GITHUB_TOKEN` with `contents: write` is enough, and the
-job refuses to run outside this repository so a fork cannot try to publish into it.
+* **The Android key is a throwaway, regenerated every build.** It exists so the APK is
+  installable, not so it is trusted, and it is passed in through
+  `GODOT_ANDROID_KEYSTORE_RELEASE_*` — the one part of Android export designed for CI,
+  so no editor-settings file has to be forged. The consequence belongs on the download
+  page and not in a bug report: every build is signed by a *different* key, so Android
+  refuses to install one over another. A Play Store build would need a real key held
+  outside this repository.
+* **`build-ios` is the only job allowed to fail.** It depends on whatever Xcode the
+  macOS image ships this month, and a gameplay fix must not sit unreleased because Apple
+  moved something. The failure is loud on the job, the release still goes out, and the
+  notes say which platforms are actually in it. The iOS preset is patched *in CI* — a
+  placeholder team ID and `export_project_only` — because Godot refuses an iOS export
+  with no team ID even when it is only being asked for an Xcode project, and
+  `export_project_only` is wrong for anyone doing a real signed build on their own Mac.
+  The committed preset stays honest.
 
-Android and iOS are **exportable but not published**: see [Mobile](#mobile) below. The
-blocker is a toolchain and a paid identity, not the project — `export_ready.sh` proves
-that on every run.
+Nothing in it needs a secret. `GITHUB_TOKEN` with `contents: write` is enough, and the
+jobs refuse to run outside this owner's repositories so a fork cannot try to publish
+into it.
+
+**Neither mobile build is signed for distribution**, and neither has been run on real
+hardware. The `.ipa` in particular will not install as-is: iOS runs signed code only, so
+it is there for somebody to re-sign with Sideloadly, AltStore or their own Xcode account.
+See [Is it actually playable on a phone?](#is-it-actually-playable-on-a-phone) — the
+answer is still "nobody has checked".
 
 ## Building distributables
 
@@ -61,9 +84,9 @@ unzip -j templates.tpz 'templates/*' -d ~/.local/share/godot/export_templates/4.
 Then, from the project root:
 
 ```bash
-godot --headless --export-release "Linux"   "$PWD/build/linux/deckcrawl.x86_64"
-godot --headless --export-release "Windows" "$PWD/build/windows/deckcrawl.exe"
-godot --headless --export-release "macOS"   "$PWD/build/macos/deckcrawl.zip"
+godot --headless --export-release "Linux"   "$PWD/build/linux/TheOwing.x86_64"
+godot --headless --export-release "Windows" "$PWD/build/windows/TheOwing.exe"
+godot --headless --export-release "macOS"   "$PWD/build/macos/TheOwing.zip"
 ```
 
 Presets live in `export_presets.cfg` and contain no credentials.
@@ -108,15 +131,15 @@ in a shipped build. Nothing but a real export can catch that.
 
 | platform | how |
 |----------|-----|
-| **Linux** | `chmod +x deckcrawl.x86_64 && ./deckcrawl.x86_64` |
-| **Windows** | double-click `deckcrawl.exe` (unsigned: SmartScreen will warn once → *More info* → *Run anyway*) |
-| **macOS** | unzip, then `xattr -dr com.apple.quarantine Deckcrawl.app` and open it. Unsigned and un-notarised, so Gatekeeper blocks it otherwise |
-| **Android** | `adb install deckcrawl.apk`, or copy it to the device and allow install from unknown sources |
+| **Linux** | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
+| **Windows** | double-click `TheOwing.exe` (unsigned: SmartScreen will warn once → *More info* → *Run anyway*) |
+| **macOS** | unzip, then `xattr -dr com.apple.quarantine "The Owing.app"` and open it. Unsigned and un-notarised, so Gatekeeper blocks it otherwise |
+| **Android** | `adb install TheOwing-android.apk`, or copy it to the device and allow install from unknown sources |
 | **iOS** | must be built on macOS; see below |
 
 > On **NixOS** a stock Linux binary will not start (`Could not start dynamically
 > linked executable`). Either run it with `steam-run`, or patch it:
-> `patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" deckcrawl.x86_64`
+> `patchelf --set-interpreter "$(cat $NIX_CC/nix-support/dynamic-linker)" TheOwing.x86_64`
 
 ## Mobile
 
@@ -138,7 +161,7 @@ Point Godot at both in *Editor Settings → Export → Android* (`java_sdk_path`
 `android_sdk_path`), then:
 
 ```bash
-godot --headless --export-release "Android" "$PWD/build/android/deckcrawl.apk"
+godot --headless --export-release "Android" "$PWD/build/android/TheOwing.apk"
 ```
 
 The preset is already in `export_presets.cfg`.

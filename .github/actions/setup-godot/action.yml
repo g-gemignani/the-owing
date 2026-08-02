@@ -1,7 +1,7 @@
 name: Set up Godot
 description: >
   Put a pinned Godot on PATH, optionally with the export templates. The binary is
-  ~100MB and the templates ~1GB, so both are cached; without that, three jobs would
+  ~100MB and the templates ~1GB, so both are cached; without that, five jobs would
   spend most of their wall clock downloading the same two files.
 
 # Extracted because the same twenty lines were pasted into two jobs and were about to
@@ -9,6 +9,12 @@ description: >
 # env: a composite action that silently depends on a variable the caller happens to
 # have set is one that breaks the first time it is used somewhere else, and the whole
 # reason this exists is that the engine version has to be pinned in exactly one place.
+#
+# Runs on Linux AND macOS, because iOS can only be exported from a Mac (D144). The two
+# differ in three ways and nothing else: the release asset is a zip of `Godot.app`
+# rather than a bare ELF, the templates live under `~/Library/Application Support`
+# rather than `~/.local/share`, and macOS ships BSD tools — so nothing here may reach
+# for a GNU flag.
 
 inputs:
   version:
@@ -29,7 +35,7 @@ runs:
       uses: actions/cache@v4
       with:
         path: ~/godot-bin
-        key: godot-${{ inputs.version }}-linux-x86_64
+        key: godot-${{ inputs.version }}-${{ runner.os }}
 
     - name: Download Godot
       if: steps.godot-cache.outputs.cache-hit != 'true'
@@ -39,13 +45,26 @@ runs:
       # `include_filter` away from shipping it inside the game.
       run: |
         set -euo pipefail
-        file="Godot_v${{ inputs.version }}_linux.x86_64"
-        curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
-          "https://github.com/godotengine/godot/releases/download/${{ inputs.version }}/${file}.zip"
-        unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP"
+        base="https://github.com/godotengine/godot/releases/download/${{ inputs.version }}"
         mkdir -p ~/godot-bin
-        mv "$RUNNER_TEMP/${file}" ~/godot-bin/godot
-        chmod +x ~/godot-bin/godot
+        if [ "${{ runner.os }}" = "macOS" ]; then
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" \
+            "$base/Godot_v${{ inputs.version }}_macos.universal.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP"
+          # The macOS release is an .app bundle, and the executable inside it must stay
+          # inside it — it resolves its own resources by walking up from argv[0]. So the
+          # bundle is kept whole and only a symlink goes on PATH.
+          rm -rf ~/godot-bin/Godot.app
+          mv "$RUNNER_TEMP/Godot.app" ~/godot-bin/Godot.app
+          ln -sf ~/godot-bin/Godot.app/Contents/MacOS/Godot ~/godot-bin/godot
+          chmod +x ~/godot-bin/Godot.app/Contents/MacOS/Godot
+        else
+          file="Godot_v${{ inputs.version }}_linux.x86_64"
+          curl -fsSL -o "$RUNNER_TEMP/godot.zip" "$base/${file}.zip"
+          unzip -q "$RUNNER_TEMP/godot.zip" -d "$RUNNER_TEMP"
+          mv "$RUNNER_TEMP/${file}" ~/godot-bin/godot
+          chmod +x ~/godot-bin/godot
+        fi
 
     - name: Put Godot on PATH
       shell: bash
@@ -56,8 +75,10 @@ runs:
       id: template-cache
       uses: actions/cache@v4
       with:
-        path: ~/.local/share/godot/export_templates
-        key: godot-templates-${{ inputs.version }}
+        path: |
+          ~/.local/share/godot/export_templates
+          ~/Library/Application Support/Godot/export_templates
+        key: godot-templates-${{ inputs.version }}-${{ runner.os }}
 
     - name: Install export templates
       if: inputs.templates == 'true' && steps.template-cache.outputs.cache-hit != 'true'
@@ -70,7 +91,12 @@ runs:
         set -euo pipefail
         curl -fsSL -o "$RUNNER_TEMP/templates.tpz" \
           "https://github.com/godotengine/godot/releases/download/${{ inputs.version }}/Godot_v${{ inputs.version }}_export_templates.tpz"
-        dest=~/.local/share/godot/export_templates/$(echo "${{ inputs.version }}" | tr '-' '.')
+        if [ "${{ runner.os }}" = "macOS" ]; then
+          root="$HOME/Library/Application Support/Godot/export_templates"
+        else
+          root="$HOME/.local/share/godot/export_templates"
+        fi
+        dest="$root/$(echo "${{ inputs.version }}" | tr '-' '.')"
         mkdir -p "$dest"
         unzip -q -j "$RUNNER_TEMP/templates.tpz" 'templates/*' -d "$dest"
 
