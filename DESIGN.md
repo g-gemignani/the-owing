@@ -7418,3 +7418,132 @@ All four re-rolled against the corrected brief and measured after: 1.0, 1.3, 1.6
 `bg_event` is the case that proves the check is aimed correctly — it is 17.6% flat rows
 overall and passes, because its flat rows are a night sky at the top and a dark strip at
 the bottom rather than a slab where the list sits.
+
+### D125 — Three shipped files were nine-tenths transparent and looked perfect in a file browser
+
+A look through all 24 screens at a true 1280x720 after the art batch landed, then four
+parallel fixes. The look found more than the fixes did.
+
+## The matte silently gutted the Tier 7 art
+
+`install_chrome.gd` specced `logo`, `cursor` and `cursor_press` with `matte: true`. All
+three are **dark subjects on a near-black field**, which is the one case a border flood
+fill cannot key: the subject sits inside `TOL` of its own background, so the fill walks
+through it and `despeckle` then keeps the largest surviving island and discards the rest.
+It does not fail. It returns a plausible file.
+
+Measured, opaque against non-black RGB:
+
+| file | opaque | RGB present |
+|---|---|---|
+| `ui/cursor.png` | **9.4%** | 93.9% |
+| `ui/cursor_press.png` | **12.6%** | 93.9% |
+| `ui/logo.png` | **44.0%** | 74.8% |
+
+Nine tenths of the cursor was there in colour and invisible; what shipped was the
+highlight hairline, a pointer that vanished over the title art. The logo kept its flat
+inner panel and lost **every piece of carved scrollwork**, which is the entire reason the
+asset exists. **Both look correct in an image viewer** — the RGB is untouched — which is
+why this survived generation, installation, a re-roll and a commit.
+
+The repair is `lumakey`: alpha from luminance, geometry untouched. Deliberately not the
+existing `glow` mode, which trims to the ink and re-fits — `pointer.gd` pins its hotspot
+to the spike's tip in image coordinates, so re-framing would move the point the player
+aims with, and recovering alpha is the whole job. Afterwards opaque tracks the artwork to
+two decimals: cursor 9.4% → **93.85%** against 93.85% RGB, logo 44% → **74.95%** against
+74.80%. The sources were gone from `~/Downloads`, so this ran on the installed files
+themselves — possible only because the matte destroys alpha and leaves colour alone.
+
+**The wider lesson is about which failures are loud.** `BORDER_AGREE` refuses a
+subject-in-a-room and says so; `MIN_COVER`/`MAX_COVER` refuse a matte that ate the subject
+or found no background. This case passed all three — 9.4% coverage is above `MIN_COVER`'s
+2% — and the only signal was `dropped_islands`, which the tool prints and nobody read.
+
+## The boot splash shipped the generator's watermark
+
+Not a matte problem: `boot_splash` is `matte: false` and correct, and it carried the
+four-point sparkle at 110px in from the right — the brightest thing in the lower half of
+the **first image anyone sees**.
+
+Stripping it needed a new lever. `strip_sparkle.gd` finds the stamp by intersecting "lit
+above local background" across images, so **the least-contrasty frame in the batch decides
+how far the mask reaches**. Keyed against bright square generator output, a near-black
+splash yielded the stamp's 53x45 core and left its halo behind — and a soft pale smudge on
+a boot splash is worse than the crisp star it replaced. `--grow=` overrides the default 8;
+at 22 the mask is 81x73 and the corner comes out clean. The default is untouched, because
+it is right for a batch that shares one look; `LIT` was right both times and was not
+touched either.
+
+## Painted, installed, and read by nothing
+
+The batch landed and the screens went on drawing placeholders past it — the pitfall AGENTS
+already carries, at larger scale. Now wired: the **target ring** (combat drew a
+`StyleBoxFlat` capsule), the **intent telegraphs** (combat printed `hit 6` as text), the
+**card glow** as an affordability hint, the **logo**, the **boot splash**, the **cursors**,
+and `divider` in the one screen that has two labelled sections.
+
+Two of the seven intent telegraphs have **no behaviour to attach to**. `EnemyData.Action`
+is ATTACK / DEBUFF_VULN / DEBUFF_WEAK / DEFEND / EMPOWER / SUNDER / ENRAGE / DRAIN — there
+is no multi-hit action, and **no enemy anywhere applies Poison**; only cards do. So
+`intent_attack_multi` and `intent_poison` were specified, prompted, generated, re-rolled
+with the stone-tile batch, installed, and telegraph something the engine cannot produce.
+The manifest's `INTENTS` table was written against a design and nothing compares it to the
+enum. They are left unmapped rather than papered over with a parallel classification.
+
+The card glow needed a measurement to work at all: its brightest band is inset 7.5% of its
+own width, so at the card's rect every lit pixel lands behind the opaque frame. Solving
+`inset·k = (k−1)/2` gives the spill that puts the band on the border.
+
+## The pluralisation helper could not live where it belonged
+
+"needs 1 clears" ships — `blight.tres` and `expose.tres` both unlock at exactly one clear.
+A grep found ~90 `%d <noun>` sites and **four different idioms for one rule**: six wrong at
+n=1, three using the `(s)` evasion, several correct but hand-spelled at the call site.
+
+Putting the helper on `UI` **silently broke four headless suites**. `ui.gd` names the
+`UITheme` autoload, and an autoload referenced at compile time makes every script touching
+it unloadable in a `--script` run — the D19 hang, fourth occurrence. `CardFilter.summary()`
+started returning `""` rather than failing. The helper is a dependency-free `Wording` class
+now, with that constraint in its docstring.
+
+## The enemy numbers stay, and the reason is the log
+
+"Bone Picker 1 / Bone Picker 2" reads as developer output, and removing the suffix is
+*safe* — nothing parses the name back, targeting is by index. It would still be wrong. The
+name is the subject of **eleven sentences** in `combat_engine.gd`: `%s dies!`,
+`%s hits for %d`, `Poison deals %d to %s`. With two unnumbered Bone Pickers, "Bone Picker
+dies!" is a claim about the pair. Slay the Spire can drop the number because its feedback
+is spatial; this game says it in prose and the log has no other handle.
+
+The one place it does no work is the defeat screen — the fight is over, there is nothing
+to disambiguate, and "Bone Picker 2 brought you down in The Crypt" is a bug report at the
+game's highest-drama moment. `_killer_name()` strips the index there and only there.
+
+## Layout, measured rather than nudged
+
+Victory's ascension line ran across the lit doorway at **3.86:1**, under the 4.5:1 floor
+`menu_art_test.gd` holds every button to — and `ui.gd`'s own `SCENE_FOOT_ALPHA` comment
+claimed 3.9:1 for that line, so the scrim that existed was tuned to a number that fails. A
+480-wide plate above the buttons takes it to **5.8:1**; narrowing alone would not have
+done it, because the wall immediately outside the plate's edge reads 3.1:1.
+
+Encounter's three 1244px bars route through `UI.button()` with no exception, because the
+longest `choice_labels` string in the game is 34 characters — every choice lands at 480 for
+free. The clipped lists in the deck builder and the overworld take their leftover out of a
+frame around the scroll: **the first attempt measured `scroll.size.y`, which makes the
+margin a function of itself** — trim 30px, ask again, answer is now "trim 0", fix undone
+next layout. Only the capture caught it. Shop's four buttons at three x positions were two
+D95 causes at once, now one row builder with a derived gutter: `before 616/616/616/556/813`
+→ `after all five at 716`. Packs' "Open all" moved to the *last* row of the list, so all
+three packs are read before the control that skips them.
+
+## Coordination cost, recorded because it will happen again
+
+A concurrent session's commit `5b7342c`, titled *"Paint the halves of four backdrops that
+were only filled in"*, swept in **31 files and ~1000 lines** of this decision's work. It
+also split a feature across the commit boundary by **one second**: `pointer.gd` was written
+at 06:45:10 and committed at 06:45:20; the `project.godot` line registering it as an
+autoload was written at 06:45:21 and missed, leaving an autoload script in history that
+nothing loads. The history was not rewritten — the commit is another session's, it contains
+their real work, and amending would change the SHA under a running agent. The repair is
+forward, and this entry is where the code actually landed.

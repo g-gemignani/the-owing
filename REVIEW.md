@@ -521,6 +521,25 @@ Two costs worth naming:
 
 ---
 
+## Found 2026-08-02, after the art batch landed
+
+Recorded here rather than in the lists above because these are *new* and the lists are
+the original review's queue. All measured at a true 1280x720 (D115: the harness renders
+1280x800 on a 16:10 desktop and hides anything that only clips at the shipped height).
+
+| what | state |
+|---|---|
+| `bg_world`, `bg_table`, `bg_ledger`, `bg_reliquary` are **half painted** — a hard seam at 42-59% down, flat grey below, across nine screen instances | handed to a concurrent session |
+| `ui/cursor.png` 9.4% opaque, `ui/logo.png` 44%, both with the artwork intact in RGB — the matte cannot key a dark subject on a near-black field | FIXED (D125, `lumakey`) |
+| `ui/boot_splash.png` shipped the generator's watermark, brightest thing in the first image anyone sees | FIXED (D125, `strip_sparkle --grow=`) |
+| logo, target ring, all seven intent telegraphs, card glow, boot splash, cursors, divider: installed and read by nothing | FIXED (D125) |
+| `intent_attack_multi` and `intent_poison` telegraph behaviour `EnemyData.Action` cannot produce — no multi-hit action, and no enemy applies Poison | OPEN; the fix is in the enum, not the art |
+| "needs 1 clears"; every slider value rendered as "100.0"; "Block 0" shown at zero | FIXED (D125) |
+| Victory's ascension line at **3.86:1** over the lit doorway, under the 4.5:1 floor the suite holds buttons to | FIXED (D125) — 5.8:1 |
+| Encounter's three 1244px option bars; deck builder and overworld lists clipped mid-row; Shop's buttons at three x positions; Packs' "Open all" above the packs it skips | FIXED (D125) |
+| **12 card illustrations across 100 cards**, so a five-card hand can show the same picture twice — "Abyssal Gift" and "Kick" are pixel-identical neighbours | OPEN, and it is a content decision, not a defect |
+| Energy orbs read as three small dots at their shipped ~20px | OPEN |
+
 ## Priorities
 
 ### P0 — do these before anything else
