@@ -25,8 +25,36 @@ var master_volume: int = 80
 var music_volume: int = 70
 var sfx_volume: int = 80
 var fullscreen: bool = true
-## Show the balance-facing numbers (incoming damage, intents) in combat.
+## Float the damage, heal and block numbers off the thing that changed.
+##
+## Cosmetic only, and deliberately so: the bars and the enemy's intent carry the same
+## information and are not affected by this. A setting that can hide what the player
+## needs in order to choose a card is not a comfort setting, it is a difficulty one.
+##
+## Was dead for its whole life — persisted, offered in the menu, and read by nothing
+## outside that menu (D130). The label promised "and intents" as well, which was the
+## half that would have changed the game.
 var show_numbers: bool = true
+
+# --- combat effects (D129's six, and who they are not for) ----------------------
+#
+# Two controls rather than one, because they answer two different needs and a single
+# "effects" slider serves neither properly. Speed is a pace preference; the toggle is
+# an accessibility answer, and turning particles UP is not a reduced-motion setting.
+
+## Draw the combat effects at all. Off is safe by construction: every effect goes
+## through `Fx._ok`, nothing downstream depends on one having run, and the death
+## dissolve is a stand-in for a slot the refresh already hid rather than the thing
+## that removes it.
+var effects_enabled: bool = true
+## Percent of `Fx`'s authored durations. 100 is what D129 tuned by eye.
+##
+## Bounded well away from zero at the bottom: an effect fast enough to be a single
+## frame is a flash, which is the one thing a motion-sensitive player is most likely
+## to have come to this screen to stop. Off is the toggle's job, not this slider's.
+var effect_speed: int = 100
+const EFFECT_SPEED_MIN := 50
+const EFFECT_SPEED_MAX := 200
 
 func _ready() -> void:
 	load_settings()
@@ -53,6 +81,7 @@ func save_settings() -> void:
 			"master_volume": master_volume, "music_volume": music_volume,
 			"sfx_volume": sfx_volume,
 			"fullscreen": fullscreen, "show_numbers": show_numbers,
+			"effects_enabled": effects_enabled, "effect_speed": effect_speed,
 		}))
 		f.close()
 
@@ -73,3 +102,9 @@ func load_settings() -> void:
 	# nobody now and deliberately not carried forward: the zoom it drove is gone.
 	fullscreen = bool(d.get("fullscreen", fullscreen))
 	show_numbers = bool(d.get("show_numbers", show_numbers))
+	# absent in a settings file written before D130, and `get`'s default is what makes
+	# that a non-event: an older file simply keeps the shipped defaults. That is why
+	# there is no migration step here and VERSION did not move.
+	effects_enabled = bool(d.get("effects_enabled", effects_enabled))
+	effect_speed = clampi(int(d.get("effect_speed", effect_speed)),
+		EFFECT_SPEED_MIN, EFFECT_SPEED_MAX)

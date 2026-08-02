@@ -115,7 +115,7 @@ static func slash(layer: Control, rect: Rect2, ramp: Array, force: float = 1.0) 
 	# One tween on `t`; the trim inside `Mark` is what makes the tail catch up with the
 	# head exactly at 1.0, so the stroke leaves a clean frame rather than being faded out.
 	var tw := m.create_tween()
-	tw.tween_property(m, "t", 1.0, T_SLASH)
+	tw.tween_property(m, "t", 1.0, _dur(layer, T_SLASH))
 	tw.tween_callback(m.queue_free)
 
 ## A blunt hit: a shock ring thrown out of the point of contact, and the dust it knocks
@@ -131,7 +131,7 @@ static func impact(layer: Control, rect: Rect2, ramp: Array, force: float = 1.0)
 	m.edge = ArtPalette.ink(ramp)
 	m.weight = 0.65 + 0.5 * f
 	var tw := m.create_tween()
-	tw.tween_property(m, "t", 1.0, T_IMPACT)
+	tw.tween_property(m, "t", 1.0, _dur(layer, T_IMPACT))
 	tw.tween_callback(m.queue_free)
 
 	# Dust off the lower body, where a struck thing meets the ground: the room's own
@@ -166,10 +166,11 @@ static func block_up(layer: Control, rect: Rect2, ramp: Array) -> void:
 	m.modulate.a = 0.0
 	var tw := m.create_tween()
 	tw.set_parallel(true)
-	tw.tween_property(m, "scale", Vector2.ONE, T_WARD) \
+	var d_ward := _dur(layer, T_WARD)
+	tw.tween_property(m, "scale", Vector2.ONE, d_ward) \
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	tw.tween_property(m, "modulate:a", 1.0, T_WARD * 0.25)
-	tw.tween_property(m, "modulate:a", 0.0, T_WARD * 0.55).set_delay(T_WARD * 0.45)
+	tw.tween_property(m, "modulate:a", 1.0, d_ward * 0.25)
+	tw.tween_property(m, "modulate:a", 0.0, d_ward * 0.55).set_delay(d_ward * 0.45)
 	tw.chain().tween_callback(m.queue_free)
 
 ## Green miasma settling: slow, wide motes that drift up out of the body and then sink,
@@ -178,7 +179,7 @@ static func poison_cloud(layer: Control, rect: Rect2, ramp: Array) -> void:
 	if not _ok(layer, rect):
 		return
 	var side: float = minf(rect.size.x, rect.size.y)
-	var p := _particles(layer, rect.get_center(), 20, T_CLOUD)
+	var p := _particles(layer, rect.get_center(), 20, _dur(layer, T_CLOUD))
 	p.explosiveness = 0.55       # it seeps rather than bursts
 	p.emission_sphere_radius = side * 0.32
 	p.direction = Vector2(0, -1)
@@ -204,7 +205,7 @@ static func heal(layer: Control, rect: Rect2, ramp: Array) -> void:
 		return
 	var side: float = minf(rect.size.x, rect.size.y)
 	var p := _particles(layer, Vector2(rect.get_center().x,
-		rect.position.y + rect.size.y * 0.66), 16, T_HEAL)
+		rect.position.y + rect.size.y * 0.66), 16, _dur(layer, T_HEAL))
 	p.explosiveness = 0.55
 	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	p.emission_rect_extents = Vector2(rect.size.x * 0.30, rect.size.y * 0.16)
@@ -244,6 +245,7 @@ static func death_dissolve(layer: Control, rect: Rect2, ramp: Array,
 	if not _ok(layer, rect):
 		return
 	var ember := ArtShapes.tinted(ramp, EMBER_HUE, EMBER_SAT, 0.85)
+	var d_death := _dur(layer, T_DEATH)
 	if tex != null:
 		var ghost := TextureRect.new()
 		ghost.texture = tex
@@ -262,18 +264,18 @@ static func death_dissolve(layer: Control, rect: Rect2, ramp: Array,
 		ghost.size = rect.size
 		var tw := ghost.create_tween()
 		tw.set_parallel(true)
-		tw.tween_property(mat, "shader_parameter/progress", 1.0, T_DEATH)
+		tw.tween_property(mat, "shader_parameter/progress", 1.0, d_death)
 		# a small sag, so the body loses its footing before it loses its outline
 		tw.tween_property(ghost, "position:y", ghost.position.y + rect.size.y * 0.04,
-			T_DEATH)
+			d_death)
 		# Belt and braces: if the shader ever fails to compile the ghost must still
 		# leave, and a fade is a worse death than a dissolve but an infinitely better
 		# one than a corpse standing on the floor for the rest of the fight.
-		tw.tween_property(ghost, "modulate:a", 0.0, T_DEATH * 0.4).set_delay(T_DEATH * 0.6)
+		tw.tween_property(ghost, "modulate:a", 0.0, d_death * 0.4).set_delay(d_death * 0.6)
 		tw.chain().tween_callback(ghost.queue_free)
 
 	var side: float = minf(rect.size.x, rect.size.y)
-	var p := _particles(layer, rect.get_center(), 26, T_DEATH * 1.25)
+	var p := _particles(layer, rect.get_center(), 26, d_death * 1.25)
 	p.explosiveness = 0.7
 	p.emission_shape = CPUParticles2D.EMISSION_SHAPE_RECTANGLE
 	p.emission_rect_extents = rect.size * 0.34
@@ -425,10 +427,42 @@ class Mark:
 ## A layer worth drawing on, and a box worth drawing in. The second half is not
 ## paranoia: a Control has no rect until the frame after it is laid out, and combat's
 ## first refresh runs before that (see `_on_bar_resized`).
+##
+## Also where the player's "off" lands (D130). ONE gate for all six, because six
+## early-outs is six chances to add a seventh effect and forget one — and the whole
+## reason a toggle is safe here is that this function already sat in front of
+## everything and nothing downstream depends on an effect having run.
 static func _ok(layer: Control, rect: Rect2) -> bool:
 	if layer == null or not is_instance_valid(layer) or not layer.is_inside_tree():
 		return false
+	if not _settings_flag(layer, "effects_enabled"):
+		return false
 	return rect.size.x >= 4.0 and rect.size.y >= 4.0
+
+## An authored duration at the player's chosen pace.
+##
+## Every `T_*` goes through here rather than being scaled at the tween: the death
+## dissolve alone poses four tweens off `T_DEATH` at four different fractions, and a
+## multiplier applied per tween is four places for the fractions to stop agreeing.
+static func _dur(layer: Control, base: float) -> float:
+	return base * _settings_pct(layer, "effect_speed") / 100.0
+
+## SettingsState by path, never as a global. Autoloads are not registered in a headless
+## `--script` run, so a compile-time reference here would make `Fx` unloadable in the
+## suite that loads every script — the same rule `settings_state.gd` follows to reach
+## Audio. Absent autoload means shipped defaults, which is what a test should see.
+static func _settings(layer: Control):
+	if layer == null or not layer.is_inside_tree():
+		return null
+	return layer.get_node_or_null("/root/SettingsState")
+
+static func _settings_flag(layer: Control, key: String) -> bool:
+	var s = _settings(layer)
+	return true if s == null else bool(s.get(key))
+
+static func _settings_pct(layer: Control, key: String) -> float:
+	var s = _settings(layer)
+	return 100.0 if s == null else float(int(s.get(key)))
 
 ## A `Mark` placed over `rect` and pivoting about its middle, so a scale tween grows it
 ## from the centre of the thing it is about.

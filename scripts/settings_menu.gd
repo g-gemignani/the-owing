@@ -27,13 +27,36 @@ func _build() -> void:
 		SettingsState.save_settings())
 	col.add_child(fs)
 
+	# "and intents" came off the label in D130. The setting had never touched the intent
+	# — it had never touched anything — and an intent is what the player reads to decide
+	# whether to block, so hiding it would have been a difficulty option wearing a
+	# comfort option's clothes. A control now says exactly what it does.
 	var nums := CheckBox.new()
-	nums.text = "Show damage numbers and intents"
+	nums.text = "Float damage numbers"
 	nums.button_pressed = SettingsState.show_numbers
 	nums.toggled.connect(func(on):
 		SettingsState.show_numbers = on
 		SettingsState.save_settings())
 	col.add_child(nums)
+
+	UI.divider(col)
+	UI.label(col, "Combat effects")
+	# The toggle is the accessibility answer and the slider is a pace preference; see
+	# the two of them in settings_state.gd for why one control could not be both.
+	var fx_on := CheckBox.new()
+	fx_on.text = "Show combat effects"
+	fx_on.button_pressed = SettingsState.effects_enabled
+	fx_on.toggled.connect(func(on):
+		SettingsState.effects_enabled = on
+		SettingsState.save_settings()
+		_build())   # the speed slider below is meaningless with effects off
+	col.add_child(fx_on)
+
+	if SettingsState.effects_enabled:
+		UI.slider(col, "Effect speed", SettingsState.effect_speed,
+				SettingsState.EFFECT_SPEED_MIN, SettingsState.EFFECT_SPEED_MAX, 25, func(v):
+			SettingsState.effect_speed = int(v)
+			SettingsState.save_settings())
 
 	UI.divider(col)
 	UI.label(col, "Audio")
