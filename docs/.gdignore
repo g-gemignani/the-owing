@@ -1,0 +1,4 @@
+# Not game assets. Godot imports every image under res:// and writes a .import
+# and a .uid beside it; these seven are for GitHub's README and nothing in the game
+# loads them, so the presence of this file keeps them out of the import pipeline
+# entirely. Its CONTENT is ignored by the engine — only the filename matters.

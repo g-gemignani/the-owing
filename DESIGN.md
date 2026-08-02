@@ -8515,3 +8515,58 @@ is about the reader — a deserializer that can raise is a deserializer that ret
 half-built object, because GDScript's error handling for this is to abandon the frame and
 carry on. `_bools` had a padding loop that would have made the corrupt save merely dim
 rather than broken, and it never executed.
+
+### D141 — The README described a game with no card art, and had no pictures of the one it had
+
+The README's status paragraph said "no card art, no vitals bars and no status or intent
+icons." All three have been in for weeks — D131 and D136 painted an illustration for every
+one of the hundred cards, and the art list closed at 310/310 in D135. It also said 37 test
+suites (39), and decisions "D1 through D111" (D140). None of that is a bug in the game; it
+is the front page of the project telling a visitor the opposite of what the screenshots
+would show, if there had been any screenshots.
+
+## The pictures are generated, because a curated set is a set that goes stale
+
+`tools/screenshots.gd` has photographed every screen since D56 and nothing downstream ever
+consumed the output — it is a thing you look at, once, while working on a screen. Dropping
+seven hand-picked PNGs into the repo would have made the README pretty and immediately put
+it in the same category as the stale paragraph above: correct on the day, unverifiable
+after, and nobody's job to re-check.
+
+So `tools/readme_shots.gd` is the second half of the existing harness rather than a new
+one. It takes the 25 captures, picks the seven the README shows, downsamples them and
+writes `docs/screenshots/`. Refreshing the front page after anything visual lands is two
+commands, both of which already had to be run.
+
+Three things it settles, none of them obvious:
+
+* **WebP at 0.95, not PNG.** These are painted backdrops with soft gradients — the worst
+  case for a lossless encoder. The same seven files are **4.1MB as PNG and 0.83MB as
+  WebP**. 0.95 rather than the usual 0.85 because four of the seven are dense UI text at
+  half size, which is where a lossy encoder shows first; checked by decoding one back and
+  reading it, not by trusting the quality number.
+* **LANCZOS, not the default bilinear.** Every capture is 1280x720 and six of them render
+  at 960. The frame kit's carved border is drawn 1:1 and bilinear turns it into a grey
+  smudge at that ratio — which would have made the generated kit look like exactly the
+  smear D83 exists to prevent, in the one place a stranger sees first.
+* **`docs/.gdignore`.** Godot imports every image under `res://` and writes a `.import`
+  and a `.uid` beside it. Nothing in the game loads these, so the directory is kept out of
+  the pipeline entirely rather than committing fourteen files of import metadata for seven
+  pictures.
+
+## What the page says now
+
+The rewrite leads with the four-step loop and puts a capture beside each step, because the
+thing that distinguishes this from every other Slay-the-Spire-shaped project is structural
+and does not survive being listed in a table: the boss is named before you commit, the
+floor is a building rather than a field, and a run you lose costs you most of what you
+found. The content table stays, with the numbers now generated-or-checked rather than
+remembered, and the "two ideas" section gains a third that was already true of four
+different systems — the art shopping list, the frame kit, the combat effects and now the
+screenshots are all produced by a script, because a document that can disagree with the
+code eventually will.
+
+`ART_ASSETS.md` was regenerated in the same pass. It still read **249 present · 61 to
+provide** — a snapshot from before D136 installed the card sheets, which is the exact
+failure the generator was written to make impossible and which happened anyway because
+generating it is a manual step nobody's checklist names. It says 310 · 310 · 0 now.
