@@ -178,16 +178,16 @@ var KIT := {
 	# Same reason as the HUD block above: loose `ui/` paintings with no catalogue
 	# behind them. Added in D122, when the tier was finally generated.
 	"logo": {
-		# Matted, not stretched. The cartouche is a SHAPE on a field and the title
-		# screen draws it over a backdrop, so the field has to go; and the source
-		# banner will not land on 10:3 exactly, so trimming to the subject's own
-		# bounding box and fitting is the only way the ornament keeps its proportions.
-		# Stretching here would squash the carved border on one axis and not the other,
-		# which is the `card_back` mistake (D109) with a worse aspect gap to hide it.
+		# LUMAKEY, not matte. The cartouche is carved stone on a near-black field, so
+		# the subject sits inside the flood fill's own tolerance and the fill walks
+		# through it: shipped, this file was 44% opaque against 74.8% non-black RGB —
+		# the flat inner panel survived and every piece of carved scrollwork, which is
+		# the entire reason the asset exists, was transparent (D125).
 		"canvas": Vector2i(1600, 480),
 		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
-		"matte": true,
+		"matte": false,
 		"stretch": false,
+		"lumakey": true,
 	},
 	"boot_splash": {
 		# A SCENE, so opaque and stretched, like `card_back`: it fills its frame edge
@@ -199,16 +199,28 @@ var KIT := {
 		"stretch": false,
 	},
 	"cursor": {
+		# Same as the logo and worse: an iron spike on near-black keyed to 9.4%
+		# opaque against 93.9% non-black RGB, so what shipped was the highlight
+		# hairline and nothing else — a pointer that disappeared over the title art.
+		# `lumakey` also leaves the geometry alone, which matters here: `pointer.gd`
+		# pins its hotspot to the tip in image coordinates (D125).
 		"canvas": Vector2i(64, 64),
 		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
-		"matte": true,
+		"matte": false,
 		"stretch": false,
+		"lumakey": true,
 	},
 	"cursor_press": {
+		# Same as the logo and worse: an iron spike on near-black keyed to 9.4%
+		# opaque against 93.9% non-black RGB, so what shipped was the highlight
+		# hairline and nothing else — a pointer that disappeared over the title art.
+		# `lumakey` also leaves the geometry alone, which matters here: `pointer.gd`
+		# pins its hotspot to the tip in image coordinates (D125).
 		"canvas": Vector2i(64, 64),
 		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
-		"matte": true,
+		"matte": false,
 		"stretch": false,
+		"lumakey": true,
 	},
 }
 
