@@ -185,8 +185,17 @@ func _init() -> void:
 			cut.resize(CARD_SIZE.x, CARD_SIZE.y, Image.INTERPOLATE_LANCZOS)
 			pending.append([cid, cut])
 
+	# Refusing the whole sheet because one cell is wrong is D122's mistake in a new place:
+	# `install_backdrops.gd` used to fail a nine-file delivery because a re-roll only
+	# answered one row, which read as eight failures. A cell that is too dark is a QUALITY
+	# fault and belongs to that cell alone, so the good ones install and the bad ones are
+	# named for a re-roll. The id check above stays atomic, because a wrong NAME is the
+	# invisible failure — the file lands somewhere plausible and looks like art that was
+	# never made — and that is worth blocking the batch for.
 	if fails > 0:
-		push_error("%d of %d cells refused; nothing written — fix the sheet, not the tool" % [fails, ids.size()])
+		print("%d of %d cells refused and are left for a re-roll" % [fails, ids.size()])
+	if pending.is_empty():
+		push_error("every cell refused — fix the sheet, not the tool")
 		quit(1)
 		return
 
