@@ -186,6 +186,12 @@ jobs:
           fi
           du -h dist/TheOwing-android.apk
 
+      # apksigner writes a `.idsig` sidecar next to the APK — the v4 signature, which
+      # `adb install` can use and a human downloading a file cannot. It shipped as a
+      # release asset once; nothing reads it off a release page, so it goes.
+      - name: Drop the v4 signature sidecar
+        run: rm -f dist/*.idsig
+
       # An APK that exports and is not a valid signed package is the failure this
       # catches: `apksigner verify` reads the archive the way a phone does.
       - name: Verify the signature

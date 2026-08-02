@@ -4,7 +4,7 @@
 [![tests](https://img.shields.io/badge/tests-39%20suites-brightgreen)](#tests)
 [![latest build](https://img.shields.io/github/release-date-pre/g-gemignani/the-owing?label=latest%20build&color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
 [![downloads](https://img.shields.io/github/downloads/g-gemignani/the-owing/latest/total?color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
-[![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android%20%7C%20iOS-brightgreen)](#play-it)
+[![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-brightgreen)](#play-it)
 [![Godot](https://img.shields.io/badge/Godot-4.7-478cbf)](https://godotengine.org)
 [![licence](https://img.shields.io/github/license/g-gemignani/the-owing?color=brightgreen)](LICENSE)
 
@@ -19,8 +19,8 @@ name, and what he does, on the screen where you picked the dungeon.</sub>
 
 ## Play it
 
-No build step. Every green push to `main` publishes a fresh binary for all five
-platforms under [one permanent link](https://github.com/g-gemignani/the-owing/releases/tag/latest) —
+No build step. Every green push to `main` publishes a fresh binary for every
+platform that builds, under [one permanent link](https://github.com/g-gemignani/the-owing/releases/tag/latest) —
 so these are always the newest commit, not the last time somebody remembered to cut a
 release.
 
@@ -30,7 +30,7 @@ release.
 | **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-windows-x86_64.zip) (74 MB) | SmartScreen warns once → *More info* → *Run anyway* |
 | **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (95 MB) | `xattr -dr com.apple.quarantine "The Owing.app"`, then open it |
 | **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) | `adb install`, or copy it over and allow unknown sources |
-| **iOS** | [`TheOwing-ios-unsigned.ipa`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-ios-unsigned.ipa) | **unsigned** — re-sign with Sideloadly, AltStore or your own Xcode account |
+| **iOS** | *not in the release yet* | the build exists and is currently red — see below |
 
 Nothing here is code-signed and nothing here will be: that needs a paid developer
 identity per platform. Two consequences worth knowing before you download rather than
@@ -39,7 +39,14 @@ will refuse to install one over another (uninstall the old one first); and **the
 will not install as-is**, because iOS runs signed code only. On **NixOS** the Linux
 binary needs `steam-run`, or a `patchelf --set-interpreter`; see [BUILD.md](BUILD.md).
 
-Both mobile builds are **untested on real hardware** — nobody has run this on a phone
+**iOS is wired up and not yet working.** `build-ios` runs on every push, is allowed to
+fail so it cannot hold up the other four, and is failing at `xcodebuild` today — so the
+release carries four platforms, not five, and says so on its own page. When it goes
+green the asset appears here with no further change. It will be **unsigned** when it
+does: iOS runs signed code only, so it is for re-signing with Sideloadly, AltStore or
+your own Xcode account.
+
+The Android build is **untested on real hardware** — nobody has run this on a phone
 yet, and text size at phone DPI is the most likely thing to be wrong (D65).
 
 > **Status: playable prototype, fully painted.** All 310 art files are in — 27
