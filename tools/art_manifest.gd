@@ -294,7 +294,7 @@ const SYMBOLS := [
 	# for; anywhere else and it would not be found. Until it lands that control renders
 	# the word "Settings", which is why nothing is broken while this row is unfilled —
 	# and why the row exists at all, so the absence is on the shopping list instead of
-	# in somebody's memory (D130).
+	# in somebody's memory (D133).
 	["gear", "Settings. The door in the top-right corner of every screen.",
 		"A cog of dark iron, seen face-on, six square teeth and a round hole at its centre. One solid shape, nothing behind it."],
 ]
@@ -1008,7 +1008,7 @@ func _emit_prompt_section(s: Array) -> void:
 		# "RE-ROLL" only when it IS one. A partial sheet is usually a re-roll, and the
 		# first version of this line said so unconditionally — then the gear was added
 		# to a set whose other twenty-one were already painted, and the sheet asked an
-		# artist to re-roll a file that had never been drawn (D130).
+		# artist to re-roll a file that had never been drawn (D133).
 		var what := "a RE-ROLL of" if rows.is_empty() else "%d new and %d re-rolled of" % [
 			rows.size(), redone.size()] if not redone.is_empty() else "NEW —"
 		print("**Generate these as ONE image, not %d.** A %dx%d grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is %s %d of this tier's %d files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- %s <sheet.png> --only=%s`" % [
