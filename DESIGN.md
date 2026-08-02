@@ -1,4 +1,4 @@
-# Deckcrawl — Design & Implementation Plan
+# The Owing — Design & Implementation Plan
 
 A 2D deckbuilding roguelike with RPG progression, built in Godot 4.7.1 (GDScript) on NixOS.
 
@@ -7547,3 +7547,116 @@ autoload was written at 06:45:21 and missed, leaving an autoload script in histo
 nothing loads. The history was not rewritten — the commit is another session's, it contains
 their real work, and amending would change the SHA under a running agent. The repair is
 forward, and this entry is where the code actually landed.
+
+### D127 — The game was named after its mechanic, in a project whose own rule forbids that
+
+`Deckcrawl` was a genre description standing in for a name. It is now **The Owing**.
+
+**It broke the voice pillar by name.** AGENTS.md says *"Borrowed genre grammar is fine;
+a borrowed proper noun is not"* — Block and Energy and intents are how the genre speaks,
+but a proper noun has to come from this game's register. "Deck" is genre grammar, and the
+title used it as the proper noun. Set beside what the project actually calls things —
+The Grave-Sexton, The False Step, The Maw Itself, The Last Vendor, *"Cold stone and old
+debts"*, cards named `old_debt`, `all_you_have`, `dead_weight`, `something_worse` — it was
+the one proper noun in the tree written in a different language from everything else.
+Which is the same fault as D114 one layer out: the title screen was off-register in its
+words as well as its picture.
+
+**The Owing fits the house grammar exactly.** Definite article plus one concrete noun, the
+form every boss and dungeon already uses. `owe` is Old English *āgan*, so it satisfies the
+plain-Anglo-Saxon rule. And it names the *loop* rather than the interface: the meta layer
+is a debt — you descend, you take, winning banks it and dying forfeits it — which is what
+`The Coin Press`, `The Old Bargain`, `The Cursed Hoard` and the starting zone's *"Cold
+stone and old debts"* have been saying all along.
+
+**The subtitle went with it.** The title screen read *"A deckbuilding descent."* directly
+under the carved plate. Same mistake in a second place: explaining the genre on the one
+surface that should be speaking in the game's own voice, on the asset (D119) whose entire
+brief was to carry a title alone.
+
+**Scope was held to the display name.** `config/name`, the title Label, and the headings
+in README/AGENTS/ART/DESIGN. Bundle identifiers, build artefact filenames and the
+`DECKCRAWL_SANDBOX` environment variable were left alone — they are app identity and
+tooling, not what the player reads, and changing them makes installed builds look like a
+different application.
+
+**The save directory was the trap, and the first fix for it silently did nothing.** Godot
+derives `user://` from `config/name`, so the rename alone moves
+`app_userdata/Deckcrawl/` to `app_userdata/The Owing/` — and orphans every save with no
+error, because the new directory is empty and `MetaState` reads empty as a new player. The
+fix is `config/use_custom_user_dir` + `config/custom_user_dir_name`, pinning the data path
+so this and every future rename is free. Two things went wrong on the way:
+
+1. **The keys were first written fully-qualified** — `application/config/use_custom_user_dir`
+   inside the `[application]` section, where the header already supplies the prefix. Godot
+   accepts the line into the file, ignores it, and reports nothing; `user://` still
+   resolved to `app_userdata/The Owing/`. The guard against silent orphaning failed
+   silently.
+2. **`use_custom_user_dir` is not a rename of the last segment.** It drops the
+   `godot/app_userdata/` layer entirely, so the directory becomes
+   `~/.local/share/Deckcrawl/`. The pin is therefore a MOVE and not a no-op — the live
+   `save.json`, `save.run.json` and `settings.json` were **copied**, not moved, so the
+   originals remain at the old path as a backup.
+
+**`tests/run.sh` hardcoded that directory, and a wrong path there fails open.** It sweeps
+`$USERDATA` for `t_*` sandbox files to prove no suite wrote over a real save. Pointed at a
+directory that no longer exists, `ls` returns nothing, the check passes, and a real
+regression stops being caught — the guard reports green precisely when it has gone blind.
+Updated with the pin, and the comment now says which way it fails.
+
+**Verified rather than assumed:** `user://` resolves to `~/.local/share/Deckcrawl/`, all
+three JSON files parse from it under the new name, `run.sh`'s log directory lands there
+(so the stray check is watching the live directory), the full suite is 37/37, and the
+captured title screen shows `THE OWING` set in the cartouche with no subtitle under it.
+
+**Found in passing, not fixed:** `DESIGN.md` has **two** `### D125` sections — *"Quiet is
+not empty"* and *"Three shipped files were nine-tenths transparent"* — and `### D126` sits
+above both rather than below. Three code and doc sites cite "D125" and cannot say which
+one they mean. Renumbering would break those inbound references, so it is left for whoever
+knows which decision came first.
+
+### D128 — The title screen was printing the size of its own data tables
+
+Reported as "log prints on several screens". There is no `print()` anywhere in
+`scripts/` — the shipped code is clean, and grep confirms it. What the report is
+actually about is on-screen text that *reads* like a log, and the named example is the
+clearest case in the game.
+
+**`main_menu.gd` printed `Cards 100   Relics 30   Dungeons 12   Zones 5`** — the sizes of
+`CATALOG`, `RELIC_CATALOG`, `Balance.DUNGEONS` and `Balance.ZONES`. Not what the player
+owns; **how many rows are in the game's own data files.** Identical for every player who
+will ever launch it, changing only when content is added, and answering no question
+anybody holding a mouse is asking. A developer's "did my content load" check, dimmed to
+60% alpha and shipped. Deleted.
+
+The test that separates the rest is: **does this line inform the decision the screen
+exists to support, or is it a readout of internal state?** By that rule most of the stat
+strips survive — the chest states HP, gold and keys because you are deciding whether to
+spend a key; the shop states banked-versus-at-risk gold because that is the purchase; the
+combat piles are card-game information. Three did not:
+
+- **`powers_screen.gd` showed `Equipped: bulwark`** — a lowercase database key, on the
+  screen whose entire subject is that power, one row below the same power written
+  "Bulwark". `MetaState.equipped_power` is an id and was interpolated raw. The same leak
+  D115 gave one owner for the rarity badges, in a different table.
+- **`overworld.gd` led with `Slot 1`.** Which save file is open is a thing chosen two
+  screens earlier and unchangeable from the world map, so it informs nothing there. It is
+  bookkeeping about the *program*, not the run. The save-slots screen names it, which is
+  where it means something.
+- **`deck_builder.gd` ended its strip with a bare `OK`.** A hint exists to say what is
+  *wrong*; a screen that congratulates you on every legal state has to be read every time
+  to discover it had nothing to say. Empty when valid now — and the Start Dungeon button
+  is already enabled or not, which is the same fact where the player is looking.
+
+Left alone deliberately: Victory's five totals, which are a completion summary on the
+completion screen; `run_flow`'s "one card seen every 22.4 turns", which is a derived
+statistic but the exact one the thinning decision needs; and combat's `Draw / Discard /
+Hand`, which is what a card game owes its player.
+
+**And a one-line change broke a screen, caught by looking rather than by the suite.** The
+new local in `_refresh()` was called `eq`, which collides with the `var eq := Button.new()`
+forty lines further down the same function — a GDScript parse error, so the whole screen
+failed to load and rendered black. The suite had been green *before* the edit and was not
+re-run in between; the render was. `tools/screenshots.gd` printing a parse error into an
+otherwise ordinary capture is the cheapest failure detector in the project, and it only
+works if something actually opens the picture (D56).
