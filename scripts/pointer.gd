@@ -25,13 +25,22 @@ const PRESSED_ART := "res://assets/art/ui/cursor_press.png"
 ## player was aiming at, and it is the kind of wrong nobody can name — the game
 ## just feels loose. So it was measured off the two files rather than left at the
 ## (0, 0) the call defaults to. Both are a slim iron spike lying along the 45°
-## diagonal, and both carry a 1px border the generator drew around the frame, so
-## the point is emphatically not in the corner:
+## diagonal, and both were painted with a 1px border around the frame, so the point
+## is emphatically not in the corner:
 ##
 ##   `cursor.png`        first ink on the diagonal is (1, 1); the first pixel that
 ##                       is solid rather than antialiased edge is (2, 2).
 ##   `cursor_press.png`  the spike is shorter and its point flared, and the leading
 ##                       edge of the flare crosses the diagonal at (8, 8).
+##
+## **Both numbers were re-measured in D133 and neither moved.** That repair rewrote
+## every alpha value in both files — the field had been keyed to 58% opaque and the
+## pointer was dragging a grey box — so the hotspots could not be assumed to survive
+## it, and a hotspot that drifts is the failure nobody can name. They did survive,
+## because `lumakey` recovers alpha and touches no geometry (`install_chrome.gd`).
+## What did change is that the painted border is now keyed OUT: the outermost ring is
+## fully transparent, so on `cursor.png` (1, 1) is both the first ink and the first
+## pixel of the spike, at alpha 240, with (2, 2) at 255.
 ##
 ## The two DIFFER on purpose. Each hotspot is that image's own point, so the point
 ## stays nailed to one screen pixel across the click and the spike reads as driving

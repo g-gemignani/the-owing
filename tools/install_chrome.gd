@@ -54,10 +54,36 @@
 ## unchanged under the additive blend ART_ASSETS.md asks for and merely a slightly
 ## tighter glow under a normal one — dividing a near-black tail by its own alpha to
 ## recover "true" colour amplifies the noise down there into speckle.
+##
+## **LUMAKEY.** The fifth case, and the one that has now been wrong twice. Three files
+## are dark art on a dark field, which the flood-fill matte cannot key at all — the
+## subject sits inside its own background's tolerance, so the fill walks straight
+## through it and hands back a plausible, mostly-transparent file (D125). These key on
+## DISTANCE FROM THE FIELD instead, and unlike `glow` they keep their geometry, because
+## `pointer.gd` pins a hotspot to the cursor's tip in image coordinates. `_lumakey` has
+## the measurements; the short version is that "distance", "field" and "zero" each had
+## to be defined more carefully than the first attempt defined them (D133).
 extends SceneTree
 
 const Cut := preload("res://tools/cutout_lib.gd")
 const OUT := "res://assets/art/ui/"
+
+## --- `lumakey` tuning. All four were measured off the two cursors in D133; see
+## `_lumakey` for what each one is holding back.
+##
+## How wide a band around the frame edge is sampled to find the field level. Six pixels
+## of a 64px cursor, which is enough to out-vote the corner the spike's tip sits in.
+const LUMA_BAND := 6
+## How far from the field a ring has to sit, in luminance, before it is called a drawn
+## frame rather than art. The generator's frame line is a full 0.256 away; the field's
+## own dither is under 0.013. Anywhere in that gap works.
+const LUMA_FRAME_FAR := 0.05
+## And how many rings may be peeled before we stop believing it is a frame. The cursors
+## carry exactly one; three is room for a thicker one and still far short of eating art.
+const LUMA_MAX_PEEL := 3
+## The knee: alpha under this fraction of the keyed range is field, not subject, and is
+## floored to zero rather than kept. **This is the number the whole of D133 is about.**
+const LUMA_FLOOR := 0.06
 
 ## Every loose `ui/` file the game reaches for by name, with the recipe each needs.
 ##   canvas  — the size ART_ASSETS asks for, already 2x the 1280x720 layout
@@ -68,6 +94,8 @@ const OUT := "res://assets/art/ui/"
 ##   glow    — alpha from luminance instead of a matte; see GLOW above. Carried only
 ##             by the two files that are blooms, since it is the only column here
 ##             that does not vary across the rest.
+##   lumakey — alpha from distance to the field, geometry untouched; see LUMAKEY above.
+##             Carried, like `glow`, only by the three files that need it.
 var KIT := {
 	"dropdown_arrow": {
 		# Both of these were installed opaque on a hand-measured crop until D112,
@@ -183,6 +211,16 @@ var KIT := {
 		# through it: shipped, this file was 44% opaque against 74.8% non-black RGB —
 		# the flat inner panel survived and every piece of carved scrollwork, which is
 		# the entire reason the asset exists, was transparent (D125).
+		#
+		# The one of the three that was NOT also broken by the first `lumakey`. Its
+		# field really is pure black — every ring out to nine pixels reads 0.0000 — so
+		# the border mean the old key trusted happened to be right here, and the plate
+		# came back on a genuinely transparent field. Checked on grey, on black and on
+		# a light panel in D133 before being cleared: no square, no haze. It is
+		# re-installed with the rest only so the file on disk is what the tool
+		# produces; the knee costs it a soft outer fringe under alpha 15 and moves the
+		# bounding box not at all (74.82% -> 72.26% opaque, box (32, 49) 1536x381 both
+		# sides).
 		"canvas": Vector2i(1600, 480),
 		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
 		"matte": false,
@@ -204,6 +242,13 @@ var KIT := {
 		# hairline and nothing else — a pointer that disappeared over the title art.
 		# `lumakey` also leaves the geometry alone, which matters here: `pointer.gd`
 		# pins its hotspot to the tip in image coordinates (D125).
+		#
+		# Then it went wrong the other way. Unlike the logo these two are painted on a
+		# GREY field (62, 66, 69) inside a black frame line, and the first `lumakey`
+		# keyed them against the frame instead of the field: 93.85% opaque, the field
+		# itself sitting at alpha 147, a pointer dragging a grey box across every
+		# screen. Re-keyed in D133 to 13.09%; the field is now 3,509 pixels of literal
+		# zero and the outermost ring is transparent. See `_lumakey`.
 		"canvas": Vector2i(64, 64),
 		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
 		"matte": false,
@@ -211,11 +256,10 @@ var KIT := {
 		"lumakey": true,
 	},
 	"cursor_press": {
-		# Same as the logo and worse: an iron spike on near-black keyed to 9.4%
-		# opaque against 93.9% non-black RGB, so what shipped was the highlight
-		# hairline and nothing else — a pointer that disappeared over the title art.
-		# `lumakey` also leaves the geometry alone, which matters here: `pointer.gd`
-		# pins its hotspot to the tip in image coordinates (D125).
+		# Everything the entry above says, twice — same field, same frame line, same
+		# 93.85%, same repair, 18.36% opaque afterwards. The one thing that differs is
+		# the hotspot, which is (8, 8) here against (2, 2) there because the flare puts
+		# the point somewhere else, and `pointer.gd` says why they must not be shared.
 		"canvas": Vector2i(64, 64),
 		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
 		"matte": false,
@@ -374,10 +418,8 @@ func _shape(img: Image, spec: Dictionary) -> String:
 	return ""
 
 
-## A bloom: alpha from luminance, colour kept, trimmed to the light and stretched to
-## fill. See GLOW in the header for why this is not the matte.
-## Alpha from LUMINANCE, geometry untouched. For a subject the flood-fill matte
-## cannot key: dark art on a near-black field.
+## Alpha from DISTANCE TO THE FIELD, geometry untouched. For a subject the flood-fill
+## matte cannot key: dark art on a dark field.
 ##
 ## `matte()` samples the border, then floods inward while a pixel stays within `TOL`
 ## of it. That is right for a monster on a flat violet field and catastrophic for an
@@ -389,21 +431,150 @@ func _shape(img: Image, spec: Dictionary) -> String:
 ## and `logo.png` lost its entire carved scrollwork while keeping the flat panel
 ## behind it. Both looked correct in a file browser, which is why nobody caught it.
 ##
-## Unlike `glow` this does NOT trim or resize. The two files that needed rescuing
+## Unlike `glow` this does NOT trim or resize. The three files that needed rescuing
 ## already sat at their canvas with their framing correct, and a cursor's framing is
 ## load-bearing: `pointer.gd` pins a hotspot to the spike's tip in image
 ## coordinates, so trimming to the ink and re-fitting would move the point the
 ## player aims with. Recovering alpha is the whole job here; moving anything else
 ## would be a second change hiding inside a repair.
+##
+## **The first version of this called `Cut.mono_alpha()` and shipped a pointer that
+## dragged a grey box across the screen.** D133 took the three things apart:
+##
+## 1. **The field level came off the border MEAN, and the border is not the field.**
+##    The generator drew a 1px pure-black frame line around both cursors, so the mean
+##    of the border ring is 0.000 while the field it is supposed to describe sits at
+##    0.256. Everything got keyed against black: the field itself landed at alpha 147
+##    of 255 and 3,210 of the 4,096 pixels came out **58% opaque**. Not the faint wash
+##    it was first diagnosed as — a solid grey square, and the reason the report says
+##    "dirty background". So the level is the MEDIAN of a `LUMA_BAND`-wide band, which
+##    a frame line cannot move, and any complete ring further than `LUMA_FRAME_FAR`
+##    from that level is peeled as a drawn frame before anything else happens.
+##
+## 2. **The key was one-sided, and half of a dark subject is darker than its field.**
+##    `mono_alpha` measures brightness ABOVE the field, which is right for a white
+##    glyph and wrong for an iron spike: these are drawn with a dark outline and shaded
+##    facets on one side and a lit shaft on the other, running 0.06 to 0.60 across a
+##    field at 0.256. Keyed one-sided off the correct level the spike comes back as a
+##    two-pixel bright hairline — which is the D125 defect a second time. So alpha is
+##    |luminance − field|: a pixel is subject because it DIFFERS from the field, in
+##    either direction.
+##
+## 3. **There was no floor, so the field's own dither stayed visible.** The field is
+##    one painted colour, (62, 66, 69), dithered a few LSB wide — 530 distinct RGB
+##    values in `cursor.png`, 710 in `cursor_press.png`. Against a correct field level
+##    that dither still keys to something: scattered pixels out to alpha 15, all over
+##    the frame. `LUMA_FLOOR` is where that stops. Both cursors put 79-84% of the frame
+##    at or under alpha 15 in three tight lumps (0-1, 4-5, 9-10 — the dither levels) and
+##    then fall to a flat 3-10 pixels per level, which is the spike's gradient; 0.06 of
+##    the range is alpha 15, in the middle of that gap. Anything from 12 to 20 would
+##    behave the same, which is what makes it a gap rather than a tuned threshold.
+##
+## Floored and RESCALED, not thresholded. A hard cut-off is the staircase `cut_mono`'s
+## docstring warns about — these are 64px files that a 4K display scales up — so what
+## survives the floor is stretched back over the full range and the anti-aliased edge
+## stays a ramp.
+##
+## Coverage is checked here now. It was not, which is how a 93.85%-opaque cursor got
+## installed without a word: `Cut.MAX_COVER` is 0.92 and would have refused it.
 func _lumakey(img: Image, canvas: Vector2i) -> String:
 	img.convert(Image.FORMAT_RGBA8)
-	var a := Cut.mono_alpha(img)
-	if Cut.last_mono_range < Cut.MONO_MIN_RANGE:
-		return "flat — nothing to key (dynamic range %.3f)" % Cut.last_mono_range
+	var w := img.get_width()
+	var h := img.get_height()
+	var lum := PackedFloat32Array()
+	lum.resize(w * h)
+	for y in h:
+		for x in w:
+			lum[y * w + x] = img.get_pixel(x, y).get_luminance()
+
+	# Peel the generator's drawn frame. A ring only counts as one if EVERY pixel in it
+	# is far from the field — a single field-level pixel means this ring is background
+	# and the peeling has to stop, which is what keeps this from eating a subject that
+	# reaches the edge.
+	var peel := 0
+	var field := _field_level(lum, w, h, 0)
+	while peel < LUMA_MAX_PEEL and (peel + 1) * 2 + LUMA_BAND < mini(w, h):
+		var drawn := true
+		for i in _ring(w, h, peel):
+			if absf(lum[i] - field) < LUMA_FRAME_FAR:
+				drawn = false
+				break
+		if not drawn:
+			break
+		peel += 1
+		field = _field_level(lum, w, h, peel)
+
+	# Distance from the field, both directions. A peeled ring is background by the test
+	# that peeled it, so it is zeroed rather than keyed — left in, a black frame line is
+	# the pixel furthest from the field in the whole image and comes back fully opaque.
+	var dist := PackedFloat32Array()
+	dist.resize(w * h)
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			var d: int = mini(mini(x, y), mini(w - 1 - x, h - 1 - y))
+			dist[i] = 0.0 if d < peel else absf(lum[i] - field)
+
+	# The peak is a high percentile of the interior, for the reason `mono_alpha` gives:
+	# one specular pixel setting the scale leaves the whole subject translucent.
+	var inner := PackedFloat32Array()
+	for y in range(peel, h - peel):
+		for x in range(peel, w - peel):
+			inner.append(dist[y * w + x])
+	inner.sort()
+	var peak: float = inner[int((inner.size() - 1) * Cut.MONO_PEAK_PCT)]
+	if peak < Cut.MONO_MIN_RANGE:
+		return "flat — nothing to key (dynamic range %.3f)" % peak
+
+	var knee: float = peak * LUMA_FLOOR
+	var span: float = maxf(0.001, peak - knee)
+	var a := PackedByteArray()
+	a.resize(w * h)
+	for i in dist.size():
+		a[i] = int(round(clampf((dist[i] - knee) / span, 0.0, 1.0) * 255.0))
+
+	var cover := Cut.opaque_fraction(a)
+	if cover < Cut.MIN_COVER:
+		return "only %.1f%% of the frame survived the key — it ate the subject" % (cover * 100.0)
+	if cover > Cut.MAX_COVER:
+		return "%.1f%% of the frame survived — the key found no field" % (cover * 100.0)
+
 	Cut.apply_alpha(img, a)
+	print("        lumakey: field %.4f, %d frame ring(s) peeled, peak %.4f, knee %.4f, %.2f%% opaque" % [
+		field, peel, peak, knee, cover * 100.0])
 	if img.get_width() != canvas.x or img.get_height() != canvas.y:
 		img.resize(canvas.x, canvas.y, Image.INTERPOLATE_LANCZOS)
 	return ""
+
+
+## The field's luminance, as the MEDIAN of a band `peel` pixels in from the frame edge.
+## Median rather than mean because that is the whole point: a drawn frame line, or a
+## subject that reaches the edge, moves a mean and cannot move a median until it owns
+## half the band.
+func _field_level(lum: PackedFloat32Array, w: int, h: int, peel: int) -> float:
+	var vals := PackedFloat32Array()
+	for y in range(peel, h - peel):
+		for x in range(peel, w - peel):
+			var d: int = mini(mini(x, y), mini(w - 1 - x, h - 1 - y))
+			if d < peel + LUMA_BAND:
+				vals.append(lum[y * w + x])
+	vals.sort()
+	return vals[vals.size() / 2]
+
+
+func _ring(w: int, h: int, d: int) -> Array[int]:
+	var out: Array[int] = []
+	for x in range(d, w - d):
+		out.append(d * w + x)
+		out.append((h - 1 - d) * w + x)
+	for y in range(d + 1, h - 1 - d):
+		out.append(y * w + d)
+		out.append(y * w + w - 1 - d)
+	return out
+
+
+## A bloom: alpha from luminance, colour kept, trimmed to the light and stretched to
+## fill. See GLOW in the header for why this is not the matte.
 
 
 func _glow(img: Image, canvas: Vector2i) -> String:
