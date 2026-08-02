@@ -73,6 +73,25 @@ func _refresh() -> void:
 		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(art)
 
+		# How far up its track this power has come, over the sigil rather than beside it
+		# (D132). Only over a painted sigil — the procedural glyph is a flat shape with no
+		# room inside it for light to read as anything but smudging. A child of the art
+		# rather than a sibling in the row, so it lands on the sigil's rect and not in a
+		# column of its own.
+		var fx := PixelArt.level_overlay("power", level, p.level_capped()) if painted != null else null
+		if fx != null:
+			var glow := TextureRect.new()
+			glow.texture = fx
+			glow.set_anchors_preset(Control.PRESET_FULL_RECT)
+			glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			glow.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var add := CanvasItemMaterial.new()
+			add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			glow.material = add
+			glow.modulate = Icons.rarity_colour(p.rarity)
+			art.add_child(glow)
+
 		var lbl := Label.new()
 		lbl.custom_minimum_size.x = UITheme.px(520)
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity))

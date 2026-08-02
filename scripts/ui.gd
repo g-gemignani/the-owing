@@ -894,6 +894,25 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 			_place(pic, roundf((inner.x - side) * 0.5), roundf((art_h - side) * 0.5),
 				side, side)
 
+		# How far up its own level track this card has come, as LIGHT over the picture
+		# rather than a repaint of it (D132). Added, not blended, so the overlay's black
+		# is invisible and only its glow lands; tinted to the rarity so the same three
+		# files serve all five. Above the illustration and BELOW the scrim, because the
+		# scrim's job — keeping the corner numerals readable — has to outrank it.
+		var fx := PixelArt.level_overlay("card", card.level, card.level_cap())
+		if fx != null:
+			var glow := TextureRect.new()
+			glow.texture = fx
+			glow.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+			glow.stretch_mode = TextureRect.STRETCH_SCALE
+			glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			var add := CanvasItemMaterial.new()
+			add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+			glow.material = add
+			glow.modulate = Icons.rarity_colour(card.rarity)
+			win.add_child(glow)
+			glow.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+
 		# A scrim along the BOTTOM of the picture only. The old one covered the whole
 		# card because the text was over the whole card; now it exists to stop a
 		# bright patch of illustration meeting the name strip on a hard line, and to

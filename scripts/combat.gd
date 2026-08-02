@@ -81,6 +81,7 @@ var menu_btn: Button
 var place_label: Label
 var power_ring: Panel
 var power_art: TextureRect
+var power_fx: TextureRect
 var power_cost: Label
 ## The two bottom corners the hand has to stay out of. Kept as members so the fan
 ## can measure them instead of guessing: a hardcoded reserve was wrong the moment a
@@ -349,6 +350,23 @@ func _build_ui() -> void:
 	power_art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	power_art.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	orb.add_child(power_art)
+
+	# The level-progress glow, on the same rect as the sigil and added rather than blended
+	# so its black is invisible (D132). Its own node instead of a modulate on the sigil,
+	# because the two dim independently: a spent power fades, its progress does not change.
+	power_fx = TextureRect.new()
+	power_fx.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	power_fx.offset_left = inset
+	power_fx.offset_top = inset
+	power_fx.offset_right = -inset
+	power_fx.offset_bottom = -inset
+	power_fx.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	power_fx.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	power_fx.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var power_add := CanvasItemMaterial.new()
+	power_add.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
+	power_fx.material = power_add
+	orb.add_child(power_fx)
 
 	power_btn = Button.new()
 	power_btn.flat = true
@@ -1527,6 +1545,7 @@ func _refresh_power() -> void:
 		power_btn.visible = false
 		power_ring.visible = false
 		power_art.visible = false
+		power_fx.visible = false
 		return
 	power_btn.visible = true
 	power_ring.visible = true
@@ -1535,6 +1554,11 @@ func _refresh_power() -> void:
 	var sigil := PixelArt.power_art(p.id)
 	power_art.texture = sigil
 	power_art.visible = sigil != null
+	# Only over a painted sigil. Laid over the name-text fallback it would be light
+	# sitting on nothing, which reads as a rendering fault rather than as progress.
+	var fx := PixelArt.level_overlay("power", p.level, p.level_capped()) if sigil != null else null
+	power_fx.texture = fx
+	power_fx.visible = fx != null
 	var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
 	# With a sigil the Button carries no text at all — the picture is the button, the
 	# numeral is the Label below, and the name is on hover.
@@ -1548,6 +1572,9 @@ func _refresh_power() -> void:
 	power_art.modulate = Color(1, 1, 1) if not power_btn.disabled \
 		else Color(0.55, 0.55, 0.6, 0.65)
 	power_cost.modulate = power_art.modulate
+	# goes dim with the sigil it sits on, or it would glow brightest on a power that
+	# cannot be fired
+	power_fx.modulate = Color(1, 1, 1) if not power_btn.disabled else Color(0.55, 0.55, 0.6, 0.65)
 	# spent or unaffordable reads on the ring, not only in the tooltip: the orb is
 	# small, so its STATE has to be visible from the shape rather than the words
 	power_ring.modulate = Color(1, 1, 1) if not power_btn.disabled else Color(0.5, 0.5, 0.55, 0.7)
