@@ -33,9 +33,14 @@ func _back_to() -> String:
 	return "res://scenes/Overworld.tscn"
 
 func _refresh() -> void:
+	# The equipped power by its NAME. `MetaState.equipped_power` is an id, so this
+	# read "Equipped: bulwark" — a lowercase database key on a screen whose whole
+	# subject is that power, one row below the same thing written "Bulwark" (D128).
+	# Same leak as the `[RARE]` badges D115 gave one owner, in a different table.
+	var worn := Balance.power(MetaState.equipped_power)
 	info_label.text = "Gold %d    Clears %d    Equipped: %s" % [
 		MetaState.gold, MetaState.clear_count(),
-		MetaState.equipped_power if MetaState.equipped_power != "" else "none"]
+		worn.name if worn != null else "none"]
 
 	for c in list_box.get_children():
 		c.queue_free()

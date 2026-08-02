@@ -20,14 +20,17 @@ const LOGO_ART := "res://assets/art/ui/logo.png"
 const LOGO_TEXT := Rect2(0.19, 0.35, 0.62, 0.30)
 
 func _ready() -> void:
-	var col := UI.screen(self, "DECKCRAWL", PixelArt.title_art_path())
+	var col := UI.screen(self, "THE OWING", PixelArt.title_art_path())
 	# Keep the menu inside the scrim. Buttons centre their text by default, which
 	# would drop every label into the middle of the picture where the backdrop is
 	# brightest and no longer covered.
 	col.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	col.custom_minimum_size.x = get_viewport_rect().size.x * UI.MENU_WIDTH
 	_cut_the_wordmark(col)
-	UI.label(col, "A deckbuilding descent.")
+	# No subtitle. There was one — "A deckbuilding descent." — and it was the same
+	# mistake as the old name in a second place: it explained the genre on the one
+	# surface that should be saying the game's own voice, directly under a carved
+	# plate whose whole job is to carry the title alone (D127).
 	UI.spacer(col)
 
 	var latest := _latest_slot()
@@ -46,10 +49,14 @@ func _ready() -> void:
 	UI.spacer(col)
 	UI.button(col, "Quit", func(): get_tree().quit())
 
-	var v := UI.label(col, "Cards %d   Relics %d   Dungeons %d   Zones %d" % [
-		MetaState.CATALOG.size(), MetaState.RELIC_CATALOG.size(),
-		Balance.DUNGEONS.size(), Balance.ZONES.size()])
-	v.modulate = Color(1, 1, 1, 0.6)
+	# A line reading "Cards 100  Relics 30  Dungeons 12  Zones 5" used to sit here.
+	# It printed the SIZES OF THE CATALOGUES — `CATALOG.size()`, `RELIC_CATALOG.size()`
+	# and friends — so it was identical for every player who will ever launch this
+	# game, changed only when content was added, and answered no question anybody
+	# holding a mouse was asking. It is a developer's "did my content load" check that
+	# was dimmed to 60% and shipped (D128). The title screen states what the game is
+	# and offers the four things you can do; a manifest of its own data files is not
+	# one of them.
 
 ## Re-home the title Label onto the painted cartouche, or leave it exactly where
 ## `UI.screen` put it if the ornament is not installed — the same "use it if it

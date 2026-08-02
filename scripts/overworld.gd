@@ -173,8 +173,12 @@ func _refresh() -> void:
 	news.visible = not told.is_empty()
 
 	# Only what is always true, and only what is not already on a button below.
-	stats.text = "Slot %d    Gold %d    Cleared %d/%d    Cards %d copies    Ropes %d%s" % [
-		MetaState.slot + 1, MetaState.gold,
+	# No "Slot 1". Which save file is open is a thing you chose two screens ago and
+	# cannot change from here, so it informs no decision the world map offers — it is
+	# bookkeeping about the program rather than about the run (D128). The save slots
+	# screen names it, which is where it means something.
+	stats.text = "Gold %d    Cleared %d/%d    Cards %d copies    Ropes %d%s" % [
+		MetaState.gold,
 		MetaState.clear_count(), Balance.DUNGEONS.size(),
 		owned, MetaState.item_count("escape_rope"),
 		"    Ascension %d" % MetaState.ascension if MetaState.ascension > 0 else ""]

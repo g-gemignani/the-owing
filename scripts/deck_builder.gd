@@ -216,12 +216,16 @@ func _adjust(id: String, delta: int) -> void:
 func _refresh() -> void:
 	var size := MetaState.loadout_size(selection)
 	var valid := MetaState.deck_valid(selection)
-	var hint := "OK"
+	# Empty when the deck is legal, not "OK". A hint exists to say what is WRONG, and
+	# a screen that congratulates you on every valid state has to be read every time
+	# to find out it had nothing to say. The Start Dungeon button below is already
+	# enabled or not, which is the same fact where the player is looking (D128).
+	var hint := ""
 	if size < MetaState.MIN_DECK_SIZE:
-		hint = "need %d more" % (MetaState.MIN_DECK_SIZE - size)
+		hint = "    need %d more" % (MetaState.MIN_DECK_SIZE - size)
 	elif size > MetaState.MAX_DECK_SIZE:
-		hint = "over cap by %d" % (size - MetaState.MAX_DECK_SIZE)
-	info_label.text = "Deck %d  (min %d, max %d)    HP %d/%d    Gold %d    %s" % [
+		hint = "    over cap by %d" % (size - MetaState.MAX_DECK_SIZE)
+	info_label.text = "Deck %d  (min %d, max %d)    HP %d/%d    Gold %d%s" % [
 		size, MetaState.MIN_DECK_SIZE, MetaState.MAX_DECK_SIZE,
 		GameState.hp, GameState.max_hp, MetaState.gold, hint]
 	if start_btn:
