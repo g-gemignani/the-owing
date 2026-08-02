@@ -7660,3 +7660,103 @@ failed to load and rendered black. The suite had been green *before* the edit an
 re-run in between; the render was. `tools/screenshots.gd` printing a parse error into an
 otherwise ordinary capture is the cheapest failure detector in the project, and it only
 works if something actually opens the picture (D56).
+
+### D129 — The last eight files were the two the pipeline was built to refuse
+
+`ART_ASSETS.md` had sat at *8 to provide* for a long time, and the eight were the only
+ones the generation pipeline deliberately cannot make: six `fx/*.png` sprite sheets
+(`Kind.SHEET`) and two fonts (`Kind.LICENCE`). `ART_PROMPTS.md` reported **0 files can
+be generated** and was right to.
+
+Both were done at once, by two agents in parallel, because they share nothing but the
+manifest.
+
+#### The fonts were a download, and the interesting part was choosing them
+
+**`display.ttf` — Cinzel Bold 2.000**, OFL 1.1. Roman inscriptional, which is what the
+computed frame kit is already pretending to be: carved stone with a parchment inlay. It
+is the one shortlisted display face that *agrees* with the art direction rather than
+merely not fighting it. **Bold, not Regular**, because the display face is not only a
+title face here — it is the card NAME, and `UI.fit_label` takes a name down to 7px in a
+crowded fan, where Cinzel Regular's hairline serifs are simply gone.
+
+Google Fonts ships Cinzel only as a variable `Cinzel[wght].ttf`. The static Bold came
+from the upstream repository that Google's own `METADATA.pb` names as canonical, at the
+same 2.000 the variable is cut from.
+
+**`body.ttf` — Fira Sans Regular 4.203**, OFL 1.1. **Chosen by measurement, not taste.**
+Alegreya Sans Regular, Alegreya Sans Medium, Fira Sans, Spectral and the engine default
+were rendered at 12/14/16px on the game's own dark backing; at 12px Fira Sans has
+visibly the largest x-height and the most open counters of the set. It was drawn for
+small text on screens and it measures that way. 12px is the binding constraint, because
+card rules text shrinks to fit.
+
+Provenance follows the Kenney house pattern — verbatim upstream `OFL.txt` beside each
+file, plus a `PROVENANCE.txt` carrying name, version, author, exact source path and **a
+sha256 of each shipped binary**. Both checksums verified against the installed files.
+
+Wired as `theme.default_font`, not as a font on `"Label"`: a per-type entry would have
+left TooltipLabel, the OptionButton popup and LineEdit on the engine face. `style_title`
+sets the display face and the title size *together*, so the two cannot drift apart
+screen by screen.
+
+**Nothing was adjusted for metrics.** `test_layout`, `TooltipTest`, `CardTextTest` and
+`PlayableTest` all measure real wrapped line counts and control rects, and all stayed
+green first time — `UI.fit_label`'s shrink-to-fit absorbs the change by construction,
+which is what it is for.
+
+*Where the display face deliberately does NOT go:* the iso risk/ropes/vitals chips,
+"You take N gold.", combat's `status_label` (running prose — "Encounter cleared. +12
+gold... Choose a reward:") and `_float_number`. **Size is not what makes a heading.** An
+inscriptional serif on a numeral or a sentence reads as decoration.
+
+#### The six VFX were never a generation job, and are not files at all now
+
+The manifest's own brief said it: *"eight plausible frames of eight different explosions
+read as a strobe, not an impact."* An image model returns eight slashes, not eight
+frames of one slash.
+
+So they are computed. `scripts/fx.gd` draws all six at runtime and **no PNG was added**.
+Its shape is two pieces rather than six systems: a `Mark` control that `_draw()`s one
+inked primitive at whatever progress it is tweened to (`CUT`, `SHOCK`, `WARD`), and one
+self-reaping `CPUParticles2D` each effect tunes. CPU, not GPU, because the counts are
+12–26 and a headless run has no GPU. Colours come from `ArtPalette.ramp()` of the
+dungeon's own backdrop, so an effect is in the room's palette for free — there is not
+one hex literal in the file.
+
+The slash is a bowed quadratic chord whose head runs ahead of the tween and whose tail
+chases it, so it is a stroke *travelling*; the ward's snap is `TRANS_BACK/EASE_OUT`
+rather than a drawing; the dissolve discards the plate's own texture through a cell+fine
+noise threshold tilted by UV.y, so an enemy comes apart from the top down.
+
+**`combat_engine.gd` was not touched.** It is a pure state machine driving both the real
+scene and the balance simulator, and the whole effect layer is derived from a
+before/after vitals snapshot the *screen* takes itself. `git diff` on the engine,
+`combatant.gd`, `balance.gd` and `card_data.gd` is empty.
+
+**Three defects only rendering could find.** The effects were captured on the real
+Combat screen under Xvfb at `Engine.time_scale = 0.2` — 14 frames of each of seven
+poses. Every particle was invisible (4px motes at the value of the floor, on a painted
+corridor). The dot texture's squared falloff made the poison cloud a green *haze* rather
+than a cloud. The dissolve came apart in tidy squares until a second finer noise
+raggedized the flake edges. **None of these are visible in code review** — this is D56's
+lesson again, and it is now three for three.
+
+#### What this closes, and the one thing it opened
+
+`ART_ASSETS.md`: **205 wanted · 205 present · 0 to provide.** The six `SHEET` rows came
+out of `tools/art_manifest.gd` — this manifest lists files the game will look for, and
+it will never look for those — replaced by a comment saying where the effects went, and
+the `Kind.SHEET` enum member kept as vocabulary with a note that nothing uses it.
+
+Then the prompt sheet started lying. With every file present it still opened *"0 files
+can be generated. The rest of the list cannot"* — which reads as art outstanding that a
+generator is no use for, when there was no rest. `--prompts` now branches on whether
+anything is absent at all. **A generated sheet that misreports its own state is the
+exact failure it was generated to prevent** (D101), and it took reaching zero to notice
+the zero case had never been written.
+
+*Still open:* no animation-speed or accessibility setting exists — `Fx`'s six `T_*`
+constants and its `_ok()` early-out are where one would hang. And `project.godot` still
+forces NEAREST globally, so the font atlas will sample nearest on a 1440p/4K scale-up;
+at the 1:1 1280x720 canvas it is invisible, which is why it has survived.

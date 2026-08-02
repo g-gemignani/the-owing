@@ -46,6 +46,12 @@ Two-tier state makes this work:
 suites. All content is `.tres` data plus one catalogue line; adding more is a data
 task, not a code task.
 
+**Art: 205 files wanted, 205 present, 0 to provide** (D129). The shopping list is
+generated — `godot --headless --script tools/art_manifest.gd > ART_ASSETS.md` — so it
+cannot fall out of step with the catalogues. Two things in it are not paintings and
+never will be: the frame kit is computed by `tools/gen_ui_kit.gd`, and the six combat
+effects are drawn at runtime by `scripts/fx.gd`.
+
 ## The two ideas that run through everything
 
 1. **`scripts/balance.gd` is the single source of truth for tuning.** Every constant
@@ -343,6 +349,12 @@ These are failure modes that have actually bitten this project. Treat each as a 
   Barricade at the Foundry went 24% to 100% run completion. Constants whose comments say
   "measured" must be re-measured with `tools/sim_balance.gd`, against a baseline from
   the tree you started from. The analytic version was elegant and wrong.
+- **Anything visual has to be LOOKED at, and the suite cannot do it for you.** The six
+  combat effects passed review and passed 37 suites while every particle was invisible
+  — 4px motes at the value of the floor, on a painted corridor. Rendering them under
+  Xvfb at `Engine.time_scale = 0.2` found that plus a poison cloud that was a haze and
+  a dissolve that came apart in tidy squares (D129). Three for three with D56 and D89:
+  **capture the frame.** `tools/screenshots.gd`.
 - **Booting is not playability.** A scene that loads can still be a black screen. 34
   suites once passed while the first dungeon was unplayable. `tests/test_compile.gd`
   and `tests/PlayableTest.tscn` exist because of this — run them.

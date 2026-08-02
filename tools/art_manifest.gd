@@ -40,7 +40,11 @@ enum Kind {
 	PAINT,    ## image generator, subject on a flat field -> tools/install_cutouts.gd
 	SCENE,    ## image generator, full-bleed opaque 1280x720 -> tools/install_*backdrops.gd
 	KIT,      ## COMPUTED by tools/gen_ui_kit.gd. A nine-slice or a tileable strip.
-	SHEET,    ## an animation. Frame-to-frame coherence is not something to prompt for.
+	## An animation. Frame-to-frame coherence is not something to prompt for.
+	## NOTHING uses this today — the six combat effects that did are drawn at runtime
+	## by `scripts/fx.gd` (D129). Kept as vocabulary: the next animation to come up
+	## should be classified before someone briefs eight frames of eight explosions.
+	SHEET,
 	LICENCE,  ## a download with a licence, not a drawing.
 }
 
@@ -286,14 +290,17 @@ const SYMBOLS := [
 	["chest", "Treasure.", "A small chest, lid shut, one iron band across it."],
 ]
 
-const VFX := [
-	["fx/slash.png", "8 frames of 256x256", "A weapon arc across the target."],
-	["fx/impact.png", "8 frames of 256x256", "Blunt hit, dust and shock."],
-	["fx/block_up.png", "8 frames of 256x256", "A ward snapping into place."],
-	["fx/poison_cloud.png", "8 frames of 256x256", "Green miasma settling."],
-	["fx/heal.png", "8 frames of 256x256", "Warm motes rising."],
-	["fx/death_dissolve.png", "8 frames of 256x256", "An enemy coming apart. Plays on the kill."],
-]
+## Tier 1e — combat VFX — used to live here: six `fx/*.png` sprite sheets, 8 frames of
+## 256x256 each, for the slash, impact, ward, poison cloud, heal and death dissolve.
+## This manifest lists files THE GAME WILL LOOK FOR, and it will never look for those:
+## `scripts/fx.gd` draws all six at runtime out of primitives, particles and one
+## dissolve shader (D129).
+##
+## Kept as a note rather than deleted, because "no combat feedback animation at all"
+## was the single most-cited gap in this file and its absence needs an explanation
+## that is not silence. The row that briefs a file nobody loads is the expensive kind
+## of stale (D101) — and a SHEET row is worse than an ordinary one, because the only
+## way to fill it is by hand.
 
 ## Tier 4 — map and traversal — used to live here: seven `node_*` icons, seven
 ## `tile_*` icons, six dice faces and a six-file map kit, 26 files in all. They were
@@ -306,8 +313,8 @@ const VFX := [
 ## keeps its gap so the captures in ART.md §6 still line up.
 
 const SHELL := [
-	["fonts/display.ttf", "-", "Display face for titles and card names. Needs an OFL/SIL licence, recorded like the Kenney ones. THE GAME HAS NO CUSTOM FONT — everything is Godot's default.", Kind.LICENCE],
-	["fonts/body.ttf", "-", "Body face for rules text. Must stay legible at 12px, since card text shrinks to fit.", Kind.LICENCE],
+	["fonts/display.ttf", "-", "Display face for titles and card names. Cinzel Bold 2.000, OFL 1.1 — Roman inscriptional, which is what the frame kit is already pretending to be. Bold, not Regular: this is the card NAME too, and `UI.fit_label` takes a name to 7px in a crowded fan where hairline serifs disappear. Wired as `UITheme.display_face()`.", Kind.LICENCE],
+	["fonts/body.ttf", "-", "Body face for rules text. Must stay legible at 12px, since card text shrinks to fit — Fira Sans Regular 4.203, OFL 1.1, picked by rendering the shortlist at 12/14/16px rather than by taste: largest x-height and most open counters of the set. Theme `default_font`, so nothing falls back to the engine face.", Kind.LICENCE],
 	## The title art was the one painting in the tree that no row named, so the sheet
 	## could not report it either way — the tier that owns the title screen listed the
 	## logo that sits on top of it, the boot splash before it and the cursor over it, and
@@ -315,7 +322,7 @@ const SHELL := [
 	## most-seen image in the game (D114).
 	["main_menu.png", "1280x720", "The title screen backdrop. `main_menu.gd` resolves it through `PixelArt.title_art_path()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. It was `.jpg` until D114 renamed it on the re-roll; this row is one of the references that had to move with it, and it did not until D122 noticed the tier still reporting one file missing.", Kind.SCENE,
 		"A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. One cold cyan flame in a stone bowl beside them is the only light source. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white."],
-	["ui/logo.png", "1600x480", "The wordmark. The title screen currently draws a plain Label reading 'DECKCRAWL'. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
+	["ui/logo.png", "1600x480", "The wordmark. The title screen sets a plain Label reading 'THE OWING' into this plate's empty middle. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
 		"An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind."],
 	["ui/boot_splash.png", "1280x720", "Boot splash. None configured.", Kind.SCENE,
 		"A shut iron door at the foot of a stair, one lantern burning above it, seen head-on. Nobody in frame."],
@@ -484,12 +491,6 @@ func _init() -> void:
 	for e in SYMBOLS:
 		_add("ui/sym_%s.png" % String(e[0]), "64x64", String(e[1]), null, String(e[2]))
 
-	_section("Tier 1e — combat VFX", "The game has no combat feedback animation at all.",
-		Kind.SHEET,
-		"NOT A GENERATION JOB. Eight frames that have to be the same effect evolving is exactly the thing image models do not hold — eight plausible frames of eight different explosions read as a strobe, not an impact. Shader, particle system, or hand-drawn.")
-	for e in VFX:
-		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
-
 	# --- data-driven from here down ------------------------------------------
 	_enemies()
 	_cards()
@@ -499,7 +500,7 @@ func _init() -> void:
 
 	_section("Tier 7 — identity and shell", "Two of these are downloads, not drawings.",
 		Kind.PAINT,
-		"The fonts are licensed downloads (OFL/SIL), recorded like the Kenney ones. The logo is the one asset in the game that must carry text and the one place a generator is reliably wrong — generate the ornament and set the wordmark yourself.")
+		"The fonts are licensed downloads (OFL/SIL), not drawings — both now installed, with the upstream OFL verbatim beside them and a sha256 of each shipped binary in `assets/art/fonts/PROVENANCE.txt`. The logo is the one asset in the game that must carry text and the one place a generator is reliably wrong — generate the ornament and set the wordmark yourself.")
 	for e in SHELL:
 		_add(String(e[0]), String(e[1]), String(e[2]), _kind_of(e), _subject_of(e))
 
@@ -782,6 +783,15 @@ func _emit_prompts() -> void:
 	for r in _rows:
 		if _generable(r[4]) and (not bool(r[3]) or _redo(String(r[0])) != ""):
 			todo += 1
+	# ...and separately, how much of the game is still UNPAINTED. The two differ, and
+	# once they did the sheet started lying: with every file present it still opened
+	# "0 files can be generated, the rest of the list cannot", which reads as art
+	# outstanding that a generator is no use for. There was no rest. A sheet that
+	# misreports its own state is the failure it exists to prevent (D101).
+	var absent := 0
+	for r in _rows:
+		if not bool(r[3]):
+			absent += 1
 	print("<!-- GENERATED by tools/art_manifest.gd — do not edit by hand.")
 	print("     Regenerate: godot --headless --script tools/art_manifest.gd -- --prompts > ART_PROMPTS.md -->")
 	print("")
@@ -792,9 +802,18 @@ func _emit_prompts() -> void:
 	print("the game no longer has produces a painting with nowhere to go. The *why* is")
 	print("[ART.md](ART.md); that file is the shopping list; this one is the wording.")
 	print("")
-	print("**%d files can be generated.** The rest of the list cannot, and the sections below" % todo)
-	print("say which and why — the expensive mistake is not a bad painting, it is a good")
-	print("painting of a thing that had to be computed.")
+	if absent == 0 and todo == 0:
+		print("**Nothing is outstanding.** Every file the game looks for is present, so there is")
+		print("nothing here to ask a generator for. The sections below are kept for the next")
+		print("thing added to a catalogue, which will appear in them the moment it is.")
+	elif todo == 0:
+		print("**None of the %d missing files can be generated**, and the sections below say why" % absent)
+		print("— computed kits, animations and licensed downloads. The expensive mistake is not")
+		print("a bad painting, it is a good painting of a thing that had to be computed.")
+	else:
+		print("**%d files can be generated.** The rest of the list cannot, and the sections below" % todo)
+		print("say which and why — the expensive mistake is not a bad painting, it is a good")
+		print("painting of a thing that had to be computed.")
 	print("")
 	print("## The three rules that do the work")
 	print("")
