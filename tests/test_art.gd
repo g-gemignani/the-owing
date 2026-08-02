@@ -796,18 +796,85 @@ func _init() -> void:
 	if not _source_has("res://scripts/audio.gd", "_music.bus = \"Music\""):
 		fails += 1; print("FAIL the music player is not on the Music bus — the slider does nothing")
 
-	# licences for the audio packs too
-	var has_audio_licence := false
-	if d != null:
-		d.list_dir_begin()
-		var f2 := d.get_next()
+	# --- the audio has to be accounted for, the same way the PNGs do ---
+	#
+	# This asked for a file with "licen" in its name and nothing else, which was the right
+	# check while the effects were three downloaded CC0 packs. It is the wrong check now
+	# that they are generated (D150): deleting the packs deleted their licence files, and a
+	# rule that only understands "somebody else's, with paperwork" reads our own work as
+	# undeclared. So it is the PNG rule instead — every audio directory is either licensed
+	# or names the generator that made it, and the generator has to still exist.
+	for adir in [A.DIR, A.MUSIC_DIR]:
+		var ad := DirAccess.open(adir)
+		if ad == null:
+			fails += 1; print("FAIL audio directory %s is not there at all" % adir); continue
+		var accounted := false
+		var oggs := 0
+		ad.list_dir_begin()
+		var f2 := ad.get_next()
 		while f2 != "":
 			if f2.to_lower().contains("licen"):
-				has_audio_licence = true
-			f2 = d.get_next()
-		d.list_dir_end()
-	if not has_audio_licence:
-		fails += 1; print("FAIL no licence file in %s" % A.DIR)
+				accounted = true
+			if f2.ends_with(".ogg"):
+				oggs += 1
+			f2 = ad.get_next()
+		ad.list_dir_end()
+		if not accounted:
+			accounted = _names_generator(adir + "PROVENANCE.txt")
+		if oggs > 0 and not accounted:
+			fails += 1
+			print("FAIL %d sound file(s) in %s with no licence beside them and no PROVENANCE naming a generator that exists" % [
+				oggs, adir])
+
+	# --- an iso figure stands on its tile, and on the SAME spot mirrored (D149) ---
+	#
+	# The floor draws four facings from two paintings by mirroring the right-hand pair, so
+	# any horizontal anchor error on the hero is doubled: it moves her one way when she
+	# walks down-right and the other way when she walks down-left, while the tile under her
+	# does not move. That was the visible bug, and it was invisible in the files — both
+	# paintings are bottom-flush and bounding-box centred, which is what the drawing code
+	# assumed WAS the stand point.
+	#
+	# So the invariant is stated the way the drawing code states it: whichever way a sprite
+	# faces, the column at `0.5 + dx` of its own width lands on the middle of the tile.
+	# `IsoFooting` exists to be reachable from here — `iso_run.gd` references autoloads and
+	# cannot be loaded in a `--script` run at all.
+	var tile := Vector2(116.0, 58.0)
+	var here := Vector2(400.0, 300.0)
+	var iso_roles: Array = ["hero_s", "hero_n", "combat", "elite", "boss", "shop", "rest",
+		"event", "treasure"]
+	for fam in Balance.ISO_FAMILIES:
+		iso_roles.append("mon_%s_s" % fam)
+		iso_roles.append("mon_%s_n" % fam)
+	for i in Balance.ISO_WANDERERS:
+		iso_roles.append("wander_%d_s" % i)
+		iso_roles.append("wander_%d_n" % i)
+	var worst := 0.0
+	var worst_role := ""
+	for role in iso_roles:
+		var path: String = "res://assets/art/iso/%s.png" % role
+		if not ResourceLoader.exists(path):
+			continue        # a half-installed art set is legal; it falls back to glyphs
+		var tex := load(path) as Texture2D
+		if tex == null:
+			fails += 1; print("FAIL iso sprite %s did not load" % role); continue
+		var dx: float = IsoFooting.offset(tex)
+		# A stand point outside the canvas is a measurement that has gone wrong, not art
+		# that is unusual — the band it is taken from is inside the image by construction.
+		if absf(dx) >= 0.5:
+			fails += 1; print("FAIL iso sprite %s measured a stand point off its own canvas (%.3f)" % [role, dx])
+		if absf(dx) > worst:
+			worst = absf(dx)
+			worst_role = role
+		for mirrored in [false, true]:
+			var r: Rect2 = IsoFooting.rect(tex, here, tile, tile.y * 1.95, dx, mirrored)
+			var stand_x: float = r.position.x + (0.5 + dx) * r.size.x
+			if absf(stand_x - here.x) > 0.5:
+				fails += 1
+				print("FAIL iso sprite %s stands %.1fpx off its tile%s" % [
+					role, stand_x - here.x, " mirrored" if mirrored else ""])
+	print("  (info: worst iso stand point is %s, %.1f%% of its own width off centre)" % [
+		worst_role, worst * 100.0])
 
 	# --- painted title art exists and is not filtered like a pixel sprite ---
 	#

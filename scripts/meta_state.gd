@@ -20,10 +20,10 @@ var slot: int = 0
 ##
 ## One sandbox for every headless process is only safe while they run one at a time.
 ## `tests/run.sh` runs suites concurrently, so it hands each one its own name in
-## DECKCRAWL_SANDBOX; without that, two suites share `t_headless_save_0.json` and
+## OWING_SANDBOX; without that, two suites share `t_headless_save_0.json` and
 ## whichever writes second decides what the first one reads back. A suite that sets
 ## `path_prefix` itself still wins — this is the floor, not the policy.
-static var _sandbox := OS.get_environment("DECKCRAWL_SANDBOX")
+static var _sandbox := OS.get_environment("OWING_SANDBOX")
 static var path_prefix := (
 	("t_%s_" % _sandbox if _sandbox != "" else "t_headless_")
 	if DisplayServer.get_name() == "headless" else "")

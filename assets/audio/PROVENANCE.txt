@@ -1,0 +1,33 @@
+Sound effects: generated for this project, not a downloaded pack.
+
+Source: tools/gen_sfx.py (run under `nix shell nixpkgs#ffmpeg-headless`).
+Licence: same as the rest of this repository — see ../../LICENSE.
+
+Why generated (D150). These were three CC0 Kenney packs, and the packs do not agree
+with each other about what kind of game this is. The file headers were the receipt:
+16 files at 48 kHz stereo (RPG Audio: recorded foley), 5 at 44.1 kHz mono (Interface
+Sounds: soft modern UI blips), 5 at 44.1 kHz stereo (Music Jingles: 8-bit chiptune
+fanfares) — over a score of our own at 22.05 kHz mono. So winning played a chiptune
+fanfare, taking a hit played a foley recording, and clicking a button played a modern
+blip. Every file was fine; the set was three sets.
+
+Three packs cannot be reconciled by turning knobs, because the difference is the
+instrument and not the level. The 23 effects here are synthesised from four voices —
+square, triangle, filtered noise, a two-operator bell — at the score's sample rate,
+in the score's key (A natural minor), on one stated loudness ladder: the interface
+under the world, the world under the stingers, all of it over the music.
+
+Measurements for the shipped files are in measurements.json, regenerated on every run
+of the script, which fails rather than writing a set that:
+
+  * puts a file outside its family's loudness, length or register band,
+  * spans more than 22 dB of RMS end to end, which is not one set,
+  * lets the interface family span more than x2.6 in timbre — menu sounds play
+    back-to-back and mean nearly the same thing, so they have to BE one instrument,
+  * ships two effects that measure identically under two names.
+
+The three Kenney licence files that used to sit here are gone with the packs they
+covered. Nothing in this directory came from outside the repository.
+
+Replacing any of these with recorded or commissioned sound is a file swap: keep the
+names in `Audio.SOUNDS` and drop OGG files here.

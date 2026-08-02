@@ -1,8 +1,17 @@
 ## Sound. Autoload.
 ##
-## Sounds are CC0 Kenney packs (`assets/audio/`, licences alongside). Unlike the
-## art packs these ship *named* files, so the mapping is semantically correct
-## rather than arbitrary: `knifeSlice` really is the attack sound.
+## Everything it plays is *generated*, and both generators are in `tools/`: the score by
+## `gen_music.py` (D33) and the 23 effects by `gen_sfx.py` (D150). Provenance and the
+## measurements that gate each run sit beside the files, in `assets/audio/PROVENANCE.txt`.
+##
+## The effects were three CC0 Kenney packs until D150, and the reason they are not any
+## more is the one thing worth knowing at this level: three packs is three instruments.
+## They arrived at three sample rates (48 kHz recorded foley, 44.1 kHz UI blips, 44.1 kHz
+## chiptune fanfares) over a 22.05 kHz score of our own, so the game answered a button
+## press, a sword blow and a won run in three different voices. They are now one set —
+## four synth voices, one rate, one key, one loudness ladder — and the ladder is the part
+## this file relies on: nothing here adjusts a level per event, because the files are
+## already in proportion to each other when they land.
 ##
 ## Three things this owns:
 ##
@@ -16,10 +25,10 @@
 ##   nothing was routed to them: the slider adjusted the volume of silence, which
 ##   is the same placeholder problem the sliders were built to end.
 ##
-## The music is *generated* (`tools/gen_music.py`), not a downloaded pack, and the
-## reasoning is in that file: there was no CC0 music pack whose licence I could
-## verify the way the art packs' were, and choosing tracks by ear is not something
-## I can do honestly. It is measured instead — loop seam, level, distinctness.
+## Choosing sound by ear is not something I can do honestly, so neither generator does:
+## each authors a recipe and then *measures* the result — loop seam, level and
+## distinctness for the score, and level, length, register and timbre spread for the
+## effects. A run that produces a file outside its band fails instead of shipping.
 extends Node
 
 const DIR := "res://assets/audio/"

@@ -1,0 +1,186 @@
+{
+  "attack": {
+    "centroid_hz": 446,
+    "family": "world",
+    "kb": 4.1,
+    "peak": 0.72,
+    "rms": 0.081,
+    "seconds": 0.113
+  },
+  "attack_heavy": {
+    "centroid_hz": 187,
+    "family": "world",
+    "kb": 4.7,
+    "peak": 0.72,
+    "rms": 0.0886,
+    "seconds": 0.262
+  },
+  "block": {
+    "centroid_hz": 2201,
+    "family": "world",
+    "kb": 4.1,
+    "peak": 0.72,
+    "rms": 0.1182,
+    "seconds": 0.203
+  },
+  "boss_cleared": {
+    "centroid_hz": 606,
+    "family": "stinger",
+    "kb": 8.3,
+    "peak": 0.85,
+    "rms": 0.1876,
+    "seconds": 1.415
+  },
+  "buff": {
+    "centroid_hz": 1360,
+    "family": "world",
+    "kb": 4.2,
+    "peak": 0.72,
+    "rms": 0.2064,
+    "seconds": 0.245
+  },
+  "card_play": {
+    "centroid_hz": 948,
+    "family": "world",
+    "kb": 4.2,
+    "peak": 0.72,
+    "rms": 0.1547,
+    "seconds": 0.145
+  },
+  "defeat": {
+    "centroid_hz": 345,
+    "family": "stinger",
+    "kb": 8.1,
+    "peak": 0.85,
+    "rms": 0.2823,
+    "seconds": 1.505
+  },
+  "enter": {
+    "centroid_hz": 722,
+    "family": "world",
+    "kb": 4.9,
+    "peak": 0.72,
+    "rms": 0.1927,
+    "seconds": 0.307
+  },
+  "event": {
+    "centroid_hz": 493,
+    "family": "world",
+    "kb": 5.2,
+    "peak": 0.72,
+    "rms": 0.1846,
+    "seconds": 0.345
+  },
+  "fuse": {
+    "centroid_hz": 631,
+    "family": "world",
+    "kb": 4.4,
+    "peak": 0.72,
+    "rms": 0.1781,
+    "seconds": 0.46
+  },
+  "gold": {
+    "centroid_hz": 2790,
+    "family": "world",
+    "kb": 4.9,
+    "peak": 0.72,
+    "rms": 0.1353,
+    "seconds": 0.375
+  },
+  "hurt": {
+    "centroid_hz": 558,
+    "family": "world",
+    "kb": 4.4,
+    "peak": 0.72,
+    "rms": 0.133,
+    "seconds": 0.205
+  },
+  "leave": {
+    "centroid_hz": 537,
+    "family": "world",
+    "kb": 5.0,
+    "peak": 0.72,
+    "rms": 0.1861,
+    "seconds": 0.331
+  },
+  "poison": {
+    "centroid_hz": 622,
+    "family": "world",
+    "kb": 5.3,
+    "peak": 0.72,
+    "rms": 0.147,
+    "seconds": 0.345
+  },
+  "reward": {
+    "centroid_hz": 1435,
+    "family": "stinger",
+    "kb": 5.9,
+    "peak": 0.85,
+    "rms": 0.2077,
+    "seconds": 0.825
+  },
+  "treasure": {
+    "centroid_hz": 921,
+    "family": "world",
+    "kb": 4.8,
+    "peak": 0.72,
+    "rms": 0.197,
+    "seconds": 0.435
+  },
+  "ui_back": {
+    "centroid_hz": 1314,
+    "family": "ui",
+    "kb": 3.7,
+    "peak": 0.5,
+    "rms": 0.1215,
+    "seconds": 0.08
+  },
+  "ui_click": {
+    "centroid_hz": 1811,
+    "family": "ui",
+    "kb": 3.6,
+    "peak": 0.5,
+    "rms": 0.1176,
+    "seconds": 0.054
+  },
+  "ui_confirm": {
+    "centroid_hz": 1930,
+    "family": "ui",
+    "kb": 3.9,
+    "peak": 0.5,
+    "rms": 0.1192,
+    "seconds": 0.11
+  },
+  "ui_denied": {
+    "centroid_hz": 2006,
+    "family": "ui",
+    "kb": 3.7,
+    "peak": 0.5,
+    "rms": 0.092,
+    "seconds": 0.095
+  },
+  "ui_open": {
+    "centroid_hz": 1671,
+    "family": "ui",
+    "kb": 3.8,
+    "peak": 0.5,
+    "rms": 0.1158,
+    "seconds": 0.104
+  },
+  "ui_select": {
+    "centroid_hz": 2141,
+    "family": "ui",
+    "kb": 3.7,
+    "peak": 0.5,
+    "rms": 0.1194,
+    "seconds": 0.07
+  },
+  "victory": {
+    "centroid_hz": 878,
+    "family": "stinger",
+    "kb": 7.6,
+    "peak": 0.85,
+    "rms": 0.1772,
+    "seconds": 1.275
+  }
+}

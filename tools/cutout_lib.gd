@@ -40,6 +40,35 @@ const HOLE_TOL := 0.05
 const HOLE_MIN := 0.0005
 ## Alpha at or under this is transparent for trimming purposes.
 const ALPHA_CUT := 8
+## How steep a local gradient stops the background fill, as Sobel magnitude on luma
+## normalised to 0-1. This is the guard that keeps the fill OUT of the subject, and it is
+## the fix for the defect that cost five iso figures (D152): tolerance alone cannot
+## separate a grey mummy from a grey field, because the mummy's own bandages sit inside
+## `TOL` of the field colour. The fill then walks in through one shaded pixel, spreads
+## through the whole body, and `despeckle` keeps whichever scraps survive — a painting
+## shredded into confetti with no error printed anywhere.
+##
+## A painted subject has an inked outline and a field does not have anything, so the edge
+## between them is the one reliable difference when the colours agree. Measured across the
+## 23 iso figures: at 0.05 every subject is recovered whole and no field survives; at 0.10
+## the mummies and the hounds are still torn, because a soft edge on a low-contrast flank
+## does not clear it. Seeds on the frame border are exempt — the border IS field by the
+## `BORDER_AGREE` check above, so gating the seeds would leave the fill nowhere to start.
+const EDGE_STOP := 0.05
+## How much DETAIL a trapped pocket may contain before it is judged to be paint rather than
+## field, as a fraction of the pocket's own pixels over `EDGE_STOP`.
+##
+## `fill_trapped` and the edge gate above pull in opposite directions and both are needed.
+## The gate keeps the border fill out of a subject whose colour agrees with the field; the
+## pocket pass then reaches the same pixels from the inside, because a body sealed off by its
+## own outline is exactly what "enclosed, and close to the field colour" describes. On the
+## first attempt at D152 the two cancelled out and the mummies were shredded by the second
+## pass instead of the first.
+##
+## What separates them is not colour or shape, it is that a field has NOTHING in it. Real
+## field, even sealed between two legs, is flat; a mummy's bandages, a hound's fur and a
+## rune stone's carved face are detail. So the same edge map settles both questions.
+const POCKET_DETAIL_MAX := 0.03
 ## Breathing room left at the top and sides, as a fraction of the canvas. NEVER at the
 ## bottom on a bottom-anchored family — see `place()`.
 const PAD := 0.02
@@ -187,9 +216,12 @@ static func matte(img: Image, a: PackedByteArray) -> String:
 		return "background is not flat (%.0f%% of the border agrees, need %.0f%%) — this looks like a painting of a room, not a subject on a field" % [
 			frac * 100.0, BORDER_AGREE * 100.0]
 
-	# 4-connected flood from every border pixel that IS the background. Connectivity is
-	# what stops a patch of stone inside the subject that happens to match the field
-	# from being punched out into a hole.
+	# 4-connected flood from every border pixel that IS the background, and it may not
+	# cross an EDGE. Connectivity alone is what stops a patch of stone inside the subject
+	# that happens to match the field from being punched out into a hole; connectivity plus
+	# the edge gate is what stops the fill walking INTO a subject whose own colour agrees
+	# with the field through one shaded pixel on its flank (D152).
+	var edge := _edges(img, w, h)
 	var seen := PackedByteArray()
 	seen.resize(w * h)
 	var stack: Array[int] = []
@@ -208,12 +240,42 @@ static func matte(img: Image, a: PackedByteArray) -> String:
 			if nx < 0 or ny < 0 or nx >= w or ny >= h:
 				continue
 			var j: int = ny * w + nx
-			if seen[j] == 0 and _near(img.get_pixel(nx, ny), bg):
+			if seen[j] == 0 and edge[j] < EDGE_STOP and _near(img.get_pixel(nx, ny), bg):
 				seen[j] = 1
 				stack.append(j)
 
-	fill_trapped(img, a, bg, w, h)
+	fill_trapped(img, a, bg, w, h, edge)
 	return ""
+
+
+## Is a candidate pocket flat enough to be the untouched field? With no edge map supplied
+## (a direct `fill_trapped` call) this is the pre-D152 behaviour: colour and enclosure only.
+static func _is_field(size: int, detail: int) -> bool:
+	if size <= 0:
+		return false
+	return float(detail) / float(size) <= POCKET_DETAIL_MAX
+
+
+## Sobel magnitude on luma, per pixel, normalised to roughly 0-1. The frame's own border
+## reads 0 rather than an edge against nothing.
+static func _edges(img: Image, w: int, h: int) -> PackedFloat32Array:
+	var lum := PackedFloat32Array()
+	lum.resize(w * h)
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			lum[y * w + x] = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b
+	var out := PackedFloat32Array()
+	out.resize(w * h)
+	for y in range(1, h - 1):
+		for x in range(1, w - 1):
+			var i := y * w + x
+			var gx: float = (lum[i - w + 1] + 2.0 * lum[i + 1] + lum[i + w + 1]) \
+				- (lum[i - w - 1] + 2.0 * lum[i - 1] + lum[i + w - 1])
+			var gy: float = (lum[i + w - 1] + 2.0 * lum[i + w] + lum[i + w + 1]) \
+				- (lum[i - w - 1] + 2.0 * lum[i - w] + lum[i - w + 1])
+			out[i] = sqrt(gx * gx + gy * gy) / 4.0
+	return out
 
 
 ## Clear background the flood fill could not REACH.
@@ -238,24 +300,29 @@ static func matte(img: Image, a: PackedByteArray) -> String:
 ##     would be the border fill overreaching at a tolerance it was never granted.
 ## Returns how many pockets were filled; reported by the callers for the same reason
 ## `dropped_islands` is — from in here, a filled pocket and a gouged subject look alike.
-static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int) -> int:
+static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int,
+		edges: PackedFloat32Array = PackedFloat32Array()) -> int:
 	var min_area := int(w * h * HOLE_MIN)
 	var comp := PackedInt32Array()
 	comp.resize(w * h)
 	comp.fill(-1)
 	var sizes: Array[int] = []
 	var open: Array[bool] = []   # touches the frame edge, therefore not trapped
+	var textured: Array[int] = []   # how much of it is DETAIL rather than flat field
 	for start in w * h:
 		if comp[start] >= 0 or a[start] <= ALPHA_CUT or not _tight(img, start, w, bg):
 			continue
 		var id := sizes.size()
 		var n := 0
+		var detail := 0
 		var edge := false
 		var stack: Array[int] = [start]
 		comp[start] = id
 		while not stack.is_empty():
 			var i: int = stack.pop_back()
 			n += 1
+			if i < edges.size() and edges[i] >= EDGE_STOP:
+				detail += 1
 			var x: int = i % w
 			var y: int = i / w
 			if x == 0 or y == 0 or x == w - 1 or y == h - 1:
@@ -271,10 +338,11 @@ static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 					stack.append(j)
 		sizes.append(n)
 		open.append(edge)
+		textured.append(detail)
 
 	var filled := 0
 	for id in sizes.size():
-		if not open[id] and sizes[id] >= min_area:
+		if not open[id] and sizes[id] >= min_area and _is_field(sizes[id], textured[id]):
 			filled += 1
 	filled_pockets = filled
 	if filled == 0:
@@ -298,7 +366,7 @@ static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 	var stack2: Array[int] = []
 	for i in w * h:
 		var id := comp[i]
-		if id >= 0 and not open[id] and sizes[id] >= min_area:
+		if id >= 0 and not open[id] and sizes[id] >= min_area and _is_field(sizes[id], textured[id]):
 			seen[i] = 1
 			stack2.append(i)
 	while not stack2.is_empty():

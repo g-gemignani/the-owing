@@ -9,9 +9,9 @@ const PATH := "user://settings.json"
 ##
 ## Sandboxed by default under `--headless` for the same reason MetaState is: the
 ## game is never played headless, so a headless writer is a test or a diagnostic,
-## and this file was corrupted once by one that forgot to opt out. DECKCRAWL_SANDBOX
+## and this file was corrupted once by one that forgot to opt out. OWING_SANDBOX
 ## separates concurrently-running suites from each other; see meta_state.gd.
-static var _sandbox := OS.get_environment("DECKCRAWL_SANDBOX")
+static var _sandbox := OS.get_environment("OWING_SANDBOX")
 static var path_override := (
 	("user://t_%s_settings.json" % _sandbox if _sandbox != "" else "user://t_headless_settings.json")
 	if DisplayServer.get_name() == "headless" else "")

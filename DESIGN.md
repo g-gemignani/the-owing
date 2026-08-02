@@ -155,6 +155,9 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `resources/zones/*.tres` | Zone definitions (data, not code). |
 | `resources/builds/*.tres` | Build archetypes (data, not code). |
 | `scripts/audio.gd` | Sound autoload: buses, voice pool, event -> stream. |
+| `scripts/iso_footing.gd` | Where an iso sprite stands and how big: the stand point measured off the art, and the rect that puts it on the tile (D149). |
+| `tools/gen_sfx.py` | The 23 sound effects, one voice, measured (D150). |
+| `tools/rematte_iso.gd` | Re-cuts an installed iso figure whose matte ate it, from the paint still under the mask (D152). |
 | `scripts/pixel_art.gd` | Authored 16x16 symbol glyphs, the card sheet, and the lookup for every painted asset (backdrops, enemy plates, the UI kit). |
 | `assets/pixel/` | What is left of the CC0 pixel art: the 1-Bit card sheet and five Pattern Pack zone tiles, each with its licence. The Tiny Dungeon enemy sprites went in D89 and the UI RPG frames in D83. |
 | `assets/art/` | Everything painted or generated for this project: 23 backdrops, 35 enemy plates, the iso floor, the computed UI kit. Not CC0 — see its README. |
@@ -381,7 +384,7 @@ to that fuzz list.
 | UI panels / buttons | Kenney **UI Pack RPG Expansion**, CC0 | **gone (D83)** — computed by `tools/gen_ui_kit.gd` |
 | Effect symbols (13) | **authored in `pixel_art.gd`** as 16x16 bitmaps | still here; 21 painted replacements are Tier 1d of the art list |
 | Backdrops (5, one per zone) | Kenney **Pattern Pack Pixel**, CC0 | still here as the fallback; the zone screens draw painted establishing shots (D83d) |
-| Sound (23 events) | Kenney **Interface / RPG / Jingles**, CC0 | still here — named files, so mapping is exact |
+| Sound (23 events) | Kenney **Interface / RPG / Jingles**, CC0 | **gone (D150)** — 23 generated effects, one voice, `tools/gen_sfx.py` |
 | Card illustrations (100) | Kenney **1-Bit Pack** sheet, CC0 | still here, and **the worst-looking thing in the game**: a 16x16 tile magnified ten times across a card face. Twelve family illustrations are Tier 3. |
 
 The packs ship *unlabelled* spritesheets (`tile_0093.png`) and there is no way to tell a sword tile from
@@ -431,9 +434,9 @@ can get that ordering wrong.
 
 ### Sound (D32)
 
-23 CC0 Kenney sounds (`assets/audio/`, licences alongside): interface clicks, RPG foley and 8-bit
-stingers. Unlike the art packs these ship **named** files, so the mapping is semantically correct rather
-than arbitrary — `knifeSlice` really is the attack sound, `handleCoins` really is the gold sound.
+23 sounds in `assets/audio/`, **generated** by `tools/gen_sfx.py` since D150. They were 23 CC0 Kenney
+sounds from three packs — interface clicks, RPG foley and 8-bit stingers — which is exactly as coherent
+as it sounds: see D150 for the three sample rates and what replaced them.
 
 `Audio` (autoload) owns two things:
 
@@ -1332,7 +1335,8 @@ skips the checks while the suite still reports a pass. That false pass happened 
 the first attempt at this test.
 
 The image is generated, not CC0 — `assets/art/README.md` records that it is not
-covered by the Kenney licences alongside the pixel and audio assets.
+covered by the Kenney licences alongside the pixel assets. (The audio licences that
+sentence also pointed at are gone with the packs, D150.)
 
 ### D40 — Relics that change how you play
 
@@ -7578,7 +7582,8 @@ brief was to carry a title alone.
 in README/AGENTS/ART/DESIGN. Bundle identifiers, build artefact filenames and the
 `DECKCRAWL_SANDBOX` environment variable were left alone — they are app identity and
 tooling, not what the player reads, and changing them makes installed builds look like a
-different application.
+different application. (The bundle ids followed in D146 and the env var in D151; the save
+directory is the one that never can.)
 
 **The save directory was the trap, and the first fix for it silently did nothing.** Godot
 derives `user://` from `config/name`, so the rename alone moves
@@ -8031,7 +8036,7 @@ pass on a screen that had lost every button of its own.
 redirects to a sandbox when `DisplayServer.get_name() == "headless"`, so anything driven
 under Xvfb that is not `tools/screenshots.gd` (which sets its own prefix) writes
 `save.json`. With six agents rendering at once it happened — the file is stamped mid-batch.
-Any harness driven on an X display needs `DECKCRAWL_SANDBOX`.
+Any harness driven on an X display needs `OWING_SANDBOX` (`DECKCRAWL_SANDBOX` when this was written — renamed in D151).
 
 **And Godot silently falls back to Wayland at 1280x800** if `DISPLAY` points at a dead
 Xvfb — the D115 trap wearing a new hat. `--display-driver x11` with `WAYLAND_DISPLAY`
@@ -8952,3 +8957,267 @@ poison outlives the failure by an unbounded amount. `latest build` and `download
 kept dynamic because a fixed date and a fixed download count would be worse than useless
 — but if either shows an error string, the remedy is not to wait. It is to change the URL,
 by any means: a different endpoint variant, or a `&v=2` nobody reads.
+
+### D149 — Two of the hero's four facings stood beside their own tile, because a painting's bounding box is not its feet
+
+Walking the isometric floor looked wrong in a way that was hard to name: the hero was fine
+walking away up-left and up-right, and visibly off-centre walking down-left and down-right.
+Nothing about the model or the camera distinguishes those two pairs. One thing about the
+*art* does.
+
+The floor draws four facings from two paintings (D131): `hero_s` toward the camera, `hero_n`
+away, and the left-hand facing of each pair is the right-hand file mirrored. So an error in
+the horizontal anchor is invisible on an unmirrored draw's own terms and **doubled** across
+a mirrored pair — the figure sits `dx` to the right facing one way and `dx` to the left
+facing the other, a slide of `2dx` across a tile that has not moved.
+
+## What the anchor was, and why it was wrong
+
+`_footed_rect` placed every sprite bottom-CENTRE, and the comment above it gave the
+reasoning: the installer trims each source to its own silhouette, so the middle of the
+canvas is the foot point. The trim is real. The conclusion does not follow.
+`cutout_lib.place` bottom-anchors the subject and centres its **bounding box**, and a
+painted figure's bounding box is its widest part — a cloak, a swung axe, an awning — not
+the patch of ground it touches. That was harmless while these files were procedural
+markers, which are symmetric about their own foot point by construction. Tier 8 painted
+over all 23 of them and nothing said so.
+
+Measured, as a signed fraction of each file's width from the middle of its canvas
+(`+` is right), on the shipped art:
+
+    hero_s      +10.3%   (+7.7 px drawn → a 15 px slide between her two south facings)
+    hero_n       +0.2%   (which is why the other two facings looked fine)
+    combat      -26.7%   the worst in the set: 20 px on a 116 px tile
+    treasure    +22.2%
+    mon_brute_s -21.7%   and its `_n` pair is +16.6%, so the brute lurches when it turns
+
+The hero was the complaint; the encounter markers were quietly worse, standing a fifth of a
+tile off their own square in every dungeon.
+
+## Measured off the art, not tabulated
+
+`IsoFooting.offset` reads the stand point from each texture at load: the alpha-weighted
+centre of the bottom 8% of the canvas, counting only pixels at alpha ≥ 200. Both numbers
+earn their place. The band is shallow because the art is bottom-anchored with no bottom
+pad, so a shallow band is boots, hooves and chest feet and nothing that hangs over the
+ground — widen it and a cloak joins the average. The alpha floor is because a painted
+subject sits in a soft cast shadow that is wider than the subject and off to one side; on
+`treasure` the faint blob to the right of the chest was dragging the measurement several
+percent on its own. Where a whole contact band is soft — the swarm figures are a haze
+where they meet the floor — it falls back to weighting everything, because a
+wrong-by-a-little anchor beats no anchor.
+
+A hand-kept table of 23 offsets was the alternative and it is the wrong shape for the same
+reason `ART_ASSETS.md` was (D141): it would be wrong the first time anything is repainted,
+and wrong silently. Reading it off the file costs one pass over 8% of 23 images on the
+frame the screen opens, through `Image.get_data()` rather than `get_pixel`.
+
+`IsoFooting` is a separate file for a boring reason that keeps being load-bearing:
+`iso_run.gd` references autoloads, so it cannot be loaded in a headless `--script` run at
+all (D19's trap). The geometry had to be reachable from a test.
+
+## The mirror belongs inside the anchor
+
+`IsoFooting.rect` takes `mirrored` rather than leaving the flip to the call site, because
+the flip reflects the stand point along with everything else: the rect has to be laid out
+for the *mirrored* foot and then turned inside out, and doing those two steps in the wrong
+order moves the figure by twice its offset instead of leaving it still — which is the
+original bug, reintroduced one layer down.
+
+That gives an invariant a test can hold without redrawing anything: whichever way a sprite
+faces, the column at `0.5 + dx` of its own width lands on `centre.x`. `tests/test_art.gd`
+asserts it for all 23 figures in both mirrorings, and it fails on the old code by
+construction, since the old code had no `dx` to place. It also prints the worst offset in
+the set, so repainting a figure into a bad frame shows up as a number rather than as a
+feeling that something looks funny.
+
+**Not fixed, and deliberately:** mirroring still swings a painted figure's *mass* across
+the tile — her cloak is on the left going one way and the right going the other. That is
+inherent to four facings from two files, which is the trade D131 made and still the right
+one. What was a bug is that her feet moved; what remains is that her cloak does.
+
+### D150 — Three sound packs at three sample rates is three games, and the file headers said so
+
+The sound was not uniform, and the reason was not mixing. It was that the 23 effects came
+from three different CC0 Kenney packs and the packs disagree about what kind of game this
+is. The headers are the receipt:
+
+    RPG Audio          16 files   48 kHz   stereo    recorded foley — a real knife, real cloth
+    Interface Sounds    5 files   44.1 kHz mono      soft modern UI blips
+    Music Jingles       5 files   44.1 kHz stereo    8-bit chiptune fanfares
+    the score (ours)    5 files   22.05 kHz mono     square waves and pads (D33)
+
+So winning a fight played a chiptune fanfare, taking a hit played a foley recording of a
+real blade, and clicking a button played a soft modern blip — over a chiptune score. Each
+file is good. Three sample rates and three recording philosophies in one game is not a
+level problem, and no amount of per-event volume fixes it, because the difference is the
+instrument.
+
+D32 chose these packs for a reason that was correct at the time and is worth keeping in
+view: unlike the art packs they ship *named* files, so `knifeSlice` really is the attack
+sound and the mapping could not be arbitrary. Named files solved the wiring problem. They
+guaranteed nothing about coherence, and nothing was watching that, because "does this sound
+like one game" is not a thing a test was asked.
+
+## One set, in the score's own voice
+
+`tools/gen_sfx.py` synthesises all 23 from four voices — square, triangle, filtered noise,
+a two-operator bell — at the score's sample rate, in the score's key, on one stated
+loudness ladder. It is the same answer D33 reached for the music and D29 for the symbols:
+author it, then *measure* it, because choosing by ear is not a judgement I can make
+honestly.
+
+The design is four rules, and they are in the file so the next hand keeps them:
+
+1. **One instrument family.** The voices the score is built from. A sound that cannot be
+   made from them is not a sound this game makes.
+2. **In the key.** Every pitched effect is built from notes of A natural minor through
+   `gen_music.hz` — the score is in it — so `note()` refuses a frequency that is not a
+   scale degree. An effect a semitone out of key is what reads as "borrowed from another
+   game" even at the right volume. The interface plays an octave and a half above the
+   score's arpeggios, so a click is never mistaken for a note in the music; `ui_denied` is
+   the minor second, unresolved, which is the one interval in the key that means no.
+3. **One loudness ladder, stated rather than mixed.** Interface at peak 0.50, the world at
+   0.72, stingers at 0.85, over music that normalises to 0.55. Every file is normalised to
+   its family's peak, so `audio.gd` never adjusts a level per event — the files arrive in
+   proportion to each other.
+4. **Length by family.** ≤ 120 ms for the interface, ≤ 500 ms for a blow, ≤ 1.6 s for a
+   stinger. The old set had a 10 ms click and a 540 ms confirm in the same menu.
+
+## What the run measures, and the one number that would have caught this
+
+Level, length and register per family, plus two set-wide checks. The register band is a
+**spectral centroid** in Hz, and it is the number this whole entry is about: a foley
+recording and a square-wave blip differ there by the better part of an octave whatever
+their volumes, so a timbre that has wandered out of the set fails the run instead of
+shipping. Then:
+
+* the whole set must span ≤ 22 dB of RMS end to end — several sets is what a wide spread
+  means in practice, and it is why one effect could be inaudible and the next startling at
+  one slider setting;
+* the interface family must span ≤ x2.6 in centroid, because menu sounds play back-to-back
+  within a second of each other and mean nearly the same thing, so they have to *be* one
+  instrument. The world is deliberately exempt: a heavy blow at 187 Hz and a handful of
+  coins at 2790 Hz are one instrument set being used for different things, and squeezing
+  that range would cost the game its ability to say which is which.
+
+Shipped: 23 files, one sample rate, one channel count, **112 KB against 350 KB**, RMS
+spread 10.8 dB, interface spread x1.63. The three Kenney licence files are gone with the
+packs they covered, `assets/audio/PROVENANCE.txt` records what replaced them, and
+`tests/test_art.gd` no longer asks for a file with "licen" in its name — it asks the
+question the PNG rule asks, which is whether every sound is *accounted for*, by a licence
+or by a PROVENANCE naming a generator that still exists. A rule that only understands
+"somebody else's, with paperwork" reads our own work as undeclared.
+
+### D151 — The one name that cannot be renamed, and the four that could
+
+`Deckcrawl` became **The Owing** in D127 as a display change, deliberately scoped to what
+the player reads. What was left behind has been cleaned up in two passes since — the
+repository and the export filenames in D145, the bundle ids in D146 — and this is the rest
+of it: `REVIEW.md`'s title and its comparison table, the Android `package/name` (the label
+under the launcher icon, which was still the old name while the bundle id was already the
+new one), the art tool's HTTP user agent, and the `DECKCRAWL_SANDBOX` environment variable,
+now `OWING_SANDBOX`, read by `meta_state.gd` and `settings_state.gd` and set by
+`tests/run.sh` and every harness driven on an X display.
+
+The env var was safe to rename for a reason worth stating: both ends of it live in this
+repository, so there is no installed thing that keeps setting the old spelling. Nothing in
+`.github/` referenced it.
+
+**`config/custom_user_dir_name` is still `Deckcrawl` and it must stay that way.** That is
+not an oversight, it is D127's whole point, and it survives this pass for the third time:
+`user://` resolves to `~/.local/share/Deckcrawl/`, and renaming it moves every save to a
+directory that does not exist yet, with no error and no missing file, because `MetaState`
+reads an empty directory as a new player. A rename is a display change and must never be a
+data migration. `tests/run.sh` hardcodes the same literal path to sweep its sandboxes, and
+it stays in step for the same reason.
+
+The historical mentions in this file also stay. D127, D145 and D146 are entries *about*
+renaming the game, and an entry that says "The Owing was a genre description standing in
+for a name" is not a corrected record, it is a false one.
+
+### D152 — Five iso figures had been shredded by their own matte, and the paint was still in the files
+
+Reported as "the sprite of the rock is broken, too much was removed", and the rock — the
+rune stone that marks an event — was the polite version. Measured across the 23 iso
+figures, `event.png` was missing a third of its stone, and `wander_0_s` was **a scatter of
+dust**: a painted mummy reduced to 23% of its own bounding box in disconnected specks.
+`wander_0_n`, `wander_3_s`, `wander_3_n` and `mon_swarm_s` were torn the same way. Nothing
+had ever printed an error about any of it.
+
+## Why the matte ate them
+
+`cutout_lib.matte` is a magic wand from the frame edge: sample the border, flood-fill
+4-connected everything within `TOL` of it. Connectivity is the guard — a patch inside the
+subject that happens to match the field is not reachable from the border, so it is not
+punched out. That guard fails when the subject's own colour agrees with the field
+*somewhere along its silhouette*: one shaded pixel on a flank is a doorway, and the fill
+goes through it and spreads over the whole body from the inside. Grey bandages on a slate
+field, brown fur on slate, a pale stone's shadowed face on slate. Then `despeckle` keeps
+whichever fragments are still connected and the file lands looking deliberate.
+
+This is the exact gap AGENTS.md has been warning about since D125, when it did this to
+`ui/cursor.png` and `ui/logo.png`. What was new here is that the *paintings* looked fine in
+a viewer, so twenty-three files were reviewed by eye and passed.
+
+## The fix is an edge, because colour cannot tell them apart
+
+The fill now needs a colour match AND a local gradient under `EDGE_STOP` (Sobel on luma,
+0.05) to enter a pixel. A painted subject has an inked outline; a flat field has nothing in
+it. That difference survives the colours agreeing, which is precisely the case tolerance
+cannot handle. Measured across all 23: at 0.05 every subject comes back whole and no field
+survives; at 0.10 the mummies and the hounds are still torn, because a soft edge on a
+low-contrast flank does not clear it.
+
+**The first attempt at this fix changed nothing, and the reason is worth keeping.**
+`fill_trapped` (D90) clears field that the border fill could not REACH — the triangle
+between two legs — by looking for enclosed, field-coloured components. With the fill now
+correctly kept out of the subject, a body sealed inside its own outline is *exactly* what
+that description matches, so the second pass reached the mummy from the inside and shredded
+it again. Two guards, opposite directions, cancelling. What separates them is not colour or
+shape or enclosure: **a field has nothing in it.** A pocket may now only be cleared if it is
+FLAT (`POCKET_DETAIL_MAX`, 3% of its pixels over the edge threshold). Bandages, fur and a
+carved rune face are detail; sealed field is not.
+
+## The repair needed no new art
+
+`apply_alpha` writes alpha and leaves RGB alone, so every pixel the fill "removed" was
+still in the file in full colour — 85% of `event.png`'s transparent pixels carried paint,
+and under the masks were four complete paintings and a rune stone. D125 recorded that
+property as a *diagnostic* (opaque coverage against surviving RGB is how you catch this).
+It is also a repair path.
+
+`tools/rematte_iso.gd` throws the old mask away and cuts each file again with the fixed
+fill. Two details make it safe to run over a shipped directory:
+
+* **It crops to the paint first.** The canvas has transparent padding around the blitted
+  subject; forcing that opaque hands `matte` a black frame border to sample as the field,
+  after which the fill removes the padding and leaves the real background as subject.
+* **It measures inside the same region, before `place`.** Coverage of the *canvas* after
+  placing is not comparable to coverage before, because `place` re-trims to the new
+  bounding box and rescales — so a recovered tall thin subject reports LESS canvas than the
+  broken mask did. On the first attempt that read as five regressions and four repairs, all
+  four of which were bounding boxes moving. Same region, before the rescale, and the
+  ordering is unambiguous.
+
+Nothing is written unless the subject grows by at least 3% of that region, so a file whose
+mask was already right is left byte-identical, and a second run is a no-op.
+
+Recovered, as opaque coverage of the paint region:
+
+    wander_0_s   23.0% → 69.2%      event        52.0% → 71.0%
+    wander_0_n   17.0% → 53.3%      mon_caster_s 50.1% → 71.8%
+    wander_2_n   35.0% → 63.9%      mon_swarm_n  39.4% → 60.5%
+    wander_3_n   35.4% → 57.7%      shop         63.5% → 72.6%
+
+19 of 23 rewritten, 4 already correct, 0 refused. Verified in the game with
+`tools/IsoArtCheck.tscn`, which puts one of every role on one floor — and which needed a
+one-line fix of its own to run at all: it assigned a bool into `TraversalIso.walked`, now a
+`PackedByteArray`, which aborted the stage before a floor was drawn.
+
+**What this does not fix is the pipeline's blindness.** The installers still cannot tell a
+shredded subject from a sparse one — `elite.png` is two crossed weapons and is *supposed*
+to be 30% of its box — so no coverage threshold separates them, and that is why this shipped
+past the D125 rule. The honest guard is the one this entry adds to the fill, plus the fact
+that `rematte_iso.gd` now exists: any figure that comes back wrong can be re-cut in place
+and the gain is printed.

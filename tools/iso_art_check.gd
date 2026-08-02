@@ -99,9 +99,11 @@ func _stage(tv: TraversalIso) -> void:
 				tv.enc[c] = TraversalIso.EMPTY
 				tv.seen[c] = true
 				tv.room_of[c] = 0
-				tv.walked[c] = dy >= 1     # a strip of trodden ground, to show the tint
+				# a strip of trodden ground, to show the tint. `walked` is a PackedByteArray,
+				# and assigning a bool into one aborts the stage with no floor drawn at all.
+				tv.walked[c] = 1 if dy >= 1 else 0
 	tv.pos = mid + 2 * w      # stand at the front so everything is behind/around
-	tv.walked[tv.pos] = true
+	tv.walked[tv.pos] = 1
 
 	# one of each, spread along two rows
 	var roles := [Traversal.Enc.COMBAT, Traversal.Enc.ELITE, Traversal.Enc.BOSS,

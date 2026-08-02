@@ -53,7 +53,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 PROMPTS = REPO / "ART_PROMPTS.md"
 STYLE_REFERENCE = REPO / "assets" / "art" / "bg_crypt.png"
 ENDPOINT = "https://gen.pollinations.ai/v1/images/edits"
-USER_AGENT = "deckcrawl-art-tool/1.0 (+tools/gen_pollinations.py)"
+USER_AGENT = "the-owing-art-tool/1.0 (+tools/gen_pollinations.py)"
 KEY_FILE = pathlib.Path.home() / ".config" / "pollinations" / "api-key"
 
 # Reference-image capable models only (`in=text,image` in /image/models).

@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D148 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D152 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -589,22 +589,33 @@ These are failure modes that have actually bitten this project. Treat each as a 
   a live clipping bug (D115). And Godot **silently falls back to Wayland at 2560x1600 →
   1280x800** if `DISPLAY` points at a dead Xvfb, so a capture can claim the right size and
   not be it (D133). `Xvfb :N -screen 0 1280x720x24` plus `--display-driver x11` with
-  `WAYLAND_DISPLAY` unset, or do not trust the picture. **And set `DECKCRAWL_SANDBOX`:**
+  `WAYLAND_DISPLAY` unset, or do not trust the picture. **And set `OWING_SANDBOX`:**
   `MetaState.path_prefix` only sandboxes when `DisplayServer.get_name() == "headless"`, so
   anything driven under Xvfb that is not the harness writes the player's real `save.json`.
 
 - **A silent partial success is worse than a failure, and the installers can produce one.**
   `cutout_lib.gd` refuses loudly in three places — a subject painted in a room, a matte
-  that ate the subject, a matte that found no background. Between those guards is a gap:
-  a dark subject on a near-black field sits inside the flood fill's own tolerance, so the
-  fill walks through it, `despeckle` keeps the largest surviving island, and what lands is
-  a plausible file. `ui/cursor.png` shipped **9.4% opaque against 93.9% non-black RGB** and
-  `ui/logo.png` lost every piece of its carved scrollwork while keeping the panel behind it
-  (D125; the cursor file itself is gone since D138, the bug it proves is not).
-  **Both look perfect in an image viewer**, because the matte destroys alpha and
+  that ate the subject, a matte that found no background. Between those guards was a gap:
+  a subject whose own colour sits inside the flood fill's tolerance of the field, so the
+  fill walks in through one shaded pixel, `despeckle` keeps whichever scraps survive, and
+  what lands is a plausible file. `ui/cursor.png` shipped **9.4% opaque against 93.9%
+  non-black RGB** and `ui/logo.png` lost its carved scrollwork while keeping the panel
+  behind it (D125; the cursor file is gone since D138, the bug it proves is not). It then
+  did it again to five iso figures — a mummy in grey bandages on a grey field came out as
+  a scatter of dust (D152).
+  **All of them look perfect in an image viewer**, because the matte destroys alpha and
   leaves colour alone — so the check that finds this is opaque coverage against surviving
   RGB, not looking at the thumbnail. The tool even printed the tell (`dropped_islands`) and
   nobody read it.
+
+  The fill now stops at an EDGE as well as at a colour (`EDGE_STOP`), because a painted
+  subject has an inked outline and a field has nothing in it — that difference holds when
+  the colours agree and nothing else does. The same edge map settles the opposite guard:
+  `fill_trapped` clears field the fill could not reach, and it may only clear a pocket that
+  is FLAT, or it reaches the same body from the inside and shreds it anyway. **And the
+  colour surviving under a destroyed mask is a repair path, not just a diagnostic** —
+  `tools/rematte_iso.gd` recovered all five figures from the files themselves, with no new
+  art.
 
 - **A file that exists is invisible to a list of what is missing.** ART_PROMPTS.md asks
   for what is absent, which is right, and is why a file that landed *wrong* had nowhere to
@@ -683,7 +694,7 @@ scripts/     game code — one file per screen or system; balance.gd owns all tu
 resources/   all content as .tres: cards, enemies, relics, powers, events, dungeons,
              zones, builds
 scenes/      thin .tscn wrappers; screens build their UI in code
-assets/      pixel/ (CC0 Kenney) and art/ (generated backdrops + painted UI frames)
+assets/      pixel/ (CC0 Kenney), art/ (painted + generated), audio/ (all ours: 5 loops, 23 effects)
 tests/       39 suites + run.sh; export.sh and export_ready.sh need templates
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
              screenshots.gd (renders every screen to PNG — drive it under
@@ -725,7 +736,7 @@ docs/        the README's screenshots, and nothing else. Carries a .gdignore:
              tag never moves off `latest` — the README's download links are only
              stable URLs because of it (D142). actions/setup-godot/ is the shared
              cache-and-install step, and runs on both Linux and macOS
-DESIGN.md    the full reasoning, decision by decision (D1–D148)
+DESIGN.md    the full reasoning, decision by decision (D1–D152)
 ART.md       the art brief: the diagnosis, the style, the reasoning
 ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
              whether it exists yet. Never edit by hand; regenerate it.

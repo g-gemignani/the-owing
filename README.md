@@ -229,12 +229,17 @@ for headings and card names, and [Fira Sans](https://github.com/mozilla/Fira) by
 Corporate & Edenspiekermann for everything else. Each ships its upstream `OFL.txt` in
 `assets/art/fonts/`, with the versions and hashes in that directory's `PROVENANCE.txt`.
 
-What is left in `assets/pixel/`, and the sound effects, are **CC0** by
-[Kenney](https://kenney.nl) — 1-Bit Pack (the card sheet), Pattern Pack Pixel (the five
-zone tiles), Interface Sounds, RPG Audio and Music Jingles. Each pack's original licence
-file ships in the directory holding its assets. Kenney's work is public domain and
+What is left in `assets/pixel/` is **CC0** by [Kenney](https://kenney.nl) — 1-Bit Pack
+(the card sheet) and Pattern Pack Pixel (the five zone tiles). Each pack's original
+licence file ships in the directory holding its assets. Kenney's work is public domain and
 requires no attribution; it is given here because it is deserved.
 
-Two packs that used to be here are gone rather than unattributed: Tiny Dungeon supplied
-the enemy sprites until generated plates replaced them (D89), and UI Pack RPG Expansion
-supplied the frames until `tools/gen_ui_kit.gd` computed them (D83).
+Four packs that used to be here are gone rather than unattributed: Tiny Dungeon supplied
+the enemy sprites until generated plates replaced them (D89), UI Pack RPG Expansion
+supplied the frames until `tools/gen_ui_kit.gd` computed them (D83), and Interface Sounds,
+RPG Audio and Music Jingles supplied the sound effects until `tools/gen_sfx.py` replaced
+all 23 with one synthesised set (D150) — three packs at three sample rates over a
+generated score is what made the game sound like three games.
+
+All the audio is now ours: `tools/gen_music.py` for the five loops and `tools/gen_sfx.py`
+for the 23 effects, with provenance and measurements beside the files in `assets/audio/`.

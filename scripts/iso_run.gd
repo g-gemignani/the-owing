@@ -76,8 +76,8 @@ const COL_THREAT := Color(1.0, 0.36, 0.34)   ## something walking, while you can
 ## installed must degrade to the drawn floor, not crash a run.
 const ART_DIR := "res://assets/art/iso/"
 ## On-screen height of each sprite, as a multiple of the tile's height. A sprite is
-## anchored by its FEET (the installer trims to the silhouette, so bottom-centre is
-## the foot point) which is why only a height is needed here.
+## anchored by its FEET — horizontally by its own stand point, measured from the art
+## (`IsoFooting.offset`), which is why only a height is needed here.
 const SPRITE_H := {
 	"combat": 1.95, "elite": 2.15, "boss": 2.15,
 	"shop": 1.9, "rest": 1.9, "event": 1.9, "treasure": 1.7,
@@ -92,6 +92,9 @@ const SPRITE_H := {
 const WANDER_DESIGNS := Balance.ISO_WANDERERS
 
 var art := {}          ## role -> Texture2D, or absent
+## role -> where that sprite's feet are, as a signed fraction of its own width from the
+## middle of the canvas. Measured from the art at load (`IsoFooting.offset`), never typed.
+var stand := {}
 ## The last step taken, kept as a grid vector because FOUR directions have to come out
 ## of it and two booleans could not.
 ##
@@ -232,6 +235,9 @@ func _load_art() -> void:
 			var tex := load(path) as Texture2D
 			if tex != null:
 				art[r] = tex
+				# floor and rock are surfaces, not figures — they have no stand point
+				if r != "floor" and r != "rock":
+					stand[r] = IsoFooting.offset(tex)
 	# The dungeon's own surface overwrites the generic pair, so the drawing code keeps
 	# asking for "floor" and "rock" and never learns that terrain exists. A terrain with
 	# no art installed simply leaves the generic pair in place.
@@ -701,9 +707,7 @@ func _role_of(e: int) -> String:
 		TraversalIso.Enc.TREASURE: return "treasure"
 	return ""
 
-## A sprite standing ON a tile: anchored by its feet at the middle of the diamond,
-## which works without a per-file offset table because the installer trims each source
-## to its own silhouette (so bottom-centre IS the foot point).
+## A sprite standing ON a tile: anchored by its feet at the middle of the diamond.
 ##
 ## Falls back to the flat encounter glyph the other three traversal views use, so an
 ## uninstalled art set reads as unfinished instead of invisible.
@@ -718,19 +722,17 @@ func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
 			floor_view.draw_texture_rect(glyph,
 				Rect2(centre - Vector2(s * 0.5, s * 0.5), Vector2(s, s)), false)
 		return
-	floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, key), false,
+	floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, key, role), false,
 		Color(1, 1, 1, alpha))
 
-## Where a sprite goes if its feet are at the middle of `centre`'s tile, sized by
-## SPRITE_H. Shared by the standing art and by the player, so the hero cannot end up
-## standing on a subtly different spot than the monster next to her.
-func _footed_rect(tex: Texture2D, centre: Vector2, t: Vector2, key: String) -> Rect2:
-	var h: float = t.y * float(SPRITE_H.get(key, 1.8))
-	var w: float = h * float(tex.get_width()) / float(tex.get_height())
-	# feet slightly forward of the tile's exact centre, so the figure stands in the
-	# diamond rather than balancing on its back corner
-	var foot := centre + Vector2(0, t.y * 0.16)
-	return Rect2(foot - Vector2(w * 0.5, h), Vector2(w, h))
+## Where a sprite goes if it stands at the middle of `centre`'s tile: the size table here,
+## the geometry and the stand point in `IsoFooting`. Shared by the standing art and by the
+## player, so the hero cannot end up standing on a subtly different spot than the monster
+## next to her.
+func _footed_rect(tex: Texture2D, centre: Vector2, t: Vector2, key: String,
+		role: String, mirrored: bool = false) -> Rect2:
+	return IsoFooting.rect(tex, centre, t, t.y * float(SPRITE_H.get(key, 1.8)),
+		float(stand.get(role, 0.0)), mirrored)
 
 ## The reverse of `_role_of`, for the glyph fallback only.
 func _enc_of(role: String) -> int:
@@ -759,15 +761,13 @@ func _draw_you(centre: Vector2, t: Vector2) -> void:
 	# closes around the boots instead of trailing a hoop's worth of floor in front of them
 	_ground_ring(centre + Vector2(0, t.y * 0.04), t, 0.30,
 		Color(COL_YOU.r, COL_YOU.g, COL_YOU.b, 0.55))
-	# Toward the camera or away, then right or left; the left of each pair is the same
-	# art mirrored. A negative WIDTH is what flips a `draw_texture_rect`, so the rect is
-	# built upright and then turned inside out about its own right edge.
-	var tex: Texture2D = art.get("hero_s" if (face_step.x + face_step.y) > 0 else "hero_n")
+	# Toward the camera or away, then right or left; the left of each pair is the same art
+	# mirrored, and `footed_rect` owns the mirroring so that her stand point survives it.
+	var role: String = "hero_s" if (face_step.x + face_step.y) > 0 else "hero_n"
+	var tex: Texture2D = art.get(role)
 	if tex != null:
-		var r := _footed_rect(tex, centre, t, "hero")
-		if face_step.x <= face_step.y:
-			r = Rect2(r.position.x + r.size.x, r.position.y, -r.size.x, r.size.y)
-		floor_view.draw_texture_rect(tex, r, false)
+		floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, "hero", role,
+			face_step.x <= face_step.y), false)
 		return
 	# no hero installed: the pip is what the eye tracks while the floor scrolls underneath
 	floor_view.draw_circle(centre - Vector2(0, t.y * 0.30), t.y * 0.17,

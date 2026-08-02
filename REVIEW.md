@@ -1,4 +1,4 @@
-# REVIEW.md — Deckcrawl, reviewed as a game
+# REVIEW.md — The Owing, reviewed as a game
 
 A content and design review of the prototype as of `8c55002` (branch
 `art-pipeline-d89`), written 2026-08-01. This is deliberately not an engineering
@@ -330,7 +330,7 @@ That is **30**. Add the one-letter-off cases — Berserker Rage (*Berserk*), Dod
 Reading the effects made this worse rather than better. These are the same *card
 design*, down to the tuned number:
 
-| card | Deckcrawl | Slay the Spire |
+| card | The Owing | Slay the Spire |
 |---|---|---|
 | Barricade | "Block no longer expires at end of turn." | "Block no longer expires at the end of your turn." |
 | Body Slam | "Deal damage equal to your Block." | identical |

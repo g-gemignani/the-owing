@@ -30,3 +30,7 @@ mono_crash.*.json
 # write sandboxed files here if run with an overridden path.
 t_*.json
 _repro/
+
+# `tools/gen_sfx.py` imports its tuning from `tools/gen_music.py`, and importing a Python
+# module writes bytecode beside it.
+tools/__pycache__/

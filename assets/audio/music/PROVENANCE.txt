@@ -3,12 +3,17 @@ Music: generated for this project, not a downloaded pack.
 Source: tools/gen_music.py (run under `nix shell nixpkgs#ffmpeg-headless`).
 Licence: same as the rest of this repository — see ../../../LICENSE.
 
-Why generated. The sprites and the sound effects are CC0 Kenney packs because
-packs of those exist and their licences could be verified on the page AND in each
-pack's own License.txt. No comparable CC0 pack of *looping* game music turned up,
-and picking tracks by ear is not a judgement I can make honestly. Synthesising
-them is the same answer D29 reached for the meaning-carrying UI symbols: author
-it, then measure it.
+Why generated. No CC0 pack of *looping* game music turned up whose licence could be
+verified the way the pixel packs' were, and picking tracks by ear is not a judgement
+I can make honestly. Synthesising them is the same answer D29 reached for the
+meaning-carrying UI symbols: author it, then measure it.
+
+The sound effects were a downloaded set when this was written, and are not any more
+(D150, ../PROVENANCE.txt): three CC0 Kenney packs at three sample rates over one
+generated score is what "the sound is not uniform" sounded like. They are now built
+from the same voices, at the same rate, in the same key as these tracks — which is
+why `tools/gen_sfx.py` imports its tuning from `tools/gen_music.py` rather than
+keeping a second copy of it.
 
 Measurements for the shipped files are in measurements.json, regenerated on every
 run of the script, which fails rather than writing a track that:
