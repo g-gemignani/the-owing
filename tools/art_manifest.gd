@@ -494,6 +494,7 @@ func _init() -> void:
 	# --- data-driven from here down ------------------------------------------
 	_enemies()
 	_cards()
+	_cards_unique()
 	_backdrops()
 	_relics()
 	_powers()
@@ -617,6 +618,38 @@ func _cards() -> void:
 			"%d cards: %s%s" % [names.size(), ", ".join(sample),
 				", ..." if names.size() > sample.size() else ""],
 			null, String(CARD_ART[f]))
+
+## Tier 3b — one painting per card, which is what the family tier was always a stand-in
+## for. `PixelArt.painted_card_art()` has checked `cards/<card_id>.png` BEFORE
+## `cards/<family>.png` since the family art landed, so this tier needs no code: every
+## file added here simply takes over from the shared one, and a card with no unique
+## painting keeps its family's. That is the same one-file-at-a-time contract the relics
+## and the powers run on, and it is why this can be worked through a few cards at a time
+## rather than as a hundred-file blocking batch (D131).
+##
+## The subject is DERIVED from the card, never written down twice: its name, what it
+## actually does, and which family it belongs to all come off the `.tres`. A card whose
+## effect is retuned tomorrow gets a corrected prompt for free, and there is no second
+## list to drift out of step with `resources/cards/`.
+func _cards_unique() -> void:
+	_section("Tier 3b — one illustration per card",
+		"The family paintings in Tier 3 are shared by up to twenty cards each; these replace them one at a time. Nothing breaks while it is half done — the per-card file is checked first and the family file is the fallback.",
+		Kind.SCENE,
+		"A filled 4:3 rectangle, not a cutout — the picture band across the top of a card, filling it edge to edge. One clear subject, centred, read at 320x240 and shown about 3cm wide. LEAVE THE FOUR CORNERS QUIET AND EMPTY: top-left and top-right about a quarter of the width and a fifth of the height, bottom-left and bottom-right the same height and nearly half the width. Quiet means plain background — no object, no plate, no badge, and above all NO NUMERAL AND NO SYMBOL, because the game draws the real cost and damage over those corners and a painted one sits under it as a lie. The bottom two fifths sit under a shadow that deepens almost to black at the bottom edge, so weight the subject into the upper middle and let the lower edge fall away. Paint THIS CARD, not its family: the whole point of this tier is that the twenty cards sharing one picture stop sharing it.")
+	for cid in PixelArt.card_ids():
+		var c := load("res://resources/cards/%s.tres" % cid) as CardData
+		if c == null:
+			continue
+		var fam := Icons.card_family(c)
+		var bits: Array[String] = ["**%s.**" % c.name]
+		if c.description != "":
+			bits.append(String(c.description))
+		# "A attack card" reads as a typo in a hundred prompts, and these are read by a
+		# person as often as by a generator.
+		var fam_words := fam.replace("_", " ")
+		var article := "An" if fam_words.substr(0, 1) in ["a", "e", "i", "o", "u"] else "A"
+		bits.append("%s %s card." % [article, fam_words])
+		_add("cards/%s.png" % cid, "320x240", " ".join(bits))
 
 ## How many dungeons are still on the 16x16 fallback tile. COUNTED, not written down:
 ## this line read "nine of twelve" while nine of them were being installed, which is

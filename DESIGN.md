@@ -7835,3 +7835,37 @@ removing the one clause from `_ok` turns it red on all six effects. A test that 
 never been seen to fail is a test that has never been tested.
 
 38 suites.
+
+### D131 — The hero had two facings for four directions, and one art per card is now on the list
+
+**Two facings, four ways to walk.** `iso_run.gd` set `face_south = (x + y) > 0` and drew
+`hero_s` or `hero_n` from it. The grid's four directions project to the four screen
+DIAGONALS — `x` runs ↘ and `y` runs ↙ — so that test folds ↘ and ↙ together and ↖ and ↗
+together. Walking right and walking left drew the same sprite. Reported as the hero
+looking wrong while a floor is being explored, which is exactly when it shows: exploring
+is when you change direction most.
+
+Four facings out of two files. `x + y` still separates toward-camera from away; `x > y`
+separates right from left, because ↘ is (1,0) against ↙ (0,1) and ↗ is (0,-1) against ↖
+(-1,0). The left-hand facing is the right-hand art **mirrored at draw time** — a negative
+width in the `draw_texture_rect`. That is what 2D isometric games have always done, and
+it is why this costs two paintings instead of four; it also means the same trick is
+available for the wanderers and the three monster families without doubling their tier.
+
+The art has to face along a diagonal for the mirror to buy anything: a figure drawn
+square-on to the camera looks identical flipped. The code shipped ahead of the art
+because a mirrored symmetric sprite is harmless — the facing is simply not yet legible,
+which is where it already was.
+
+**One illustration per card, as Tier 3b.** This needs no code and never did:
+`PixelArt.painted_card_art()` has checked `cards/<card_id>.png` before
+`cards/<family>.png` since the family art landed, and Tier 3's own note said unique art
+"can come later ... which is checked first". So the tier is 100 rows in the manifest and
+nothing else, and a card with no unique painting keeps its family's — the same
+one-file-at-a-time contract the relics and powers run on, which is what lets this be
+worked through a few cards at a time rather than as a blocking batch of a hundred.
+
+Every subject is DERIVED from the card's own `.tres` — name, effect text, family — so a
+card retuned tomorrow gets a corrected prompt for free and there is no second list to
+drift out of step with `resources/cards/` (D34). The file total goes 205/211 to 205/305,
+which is the honest shape of the request rather than a number that flatters it.

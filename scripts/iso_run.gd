@@ -92,12 +92,26 @@ const SPRITE_H := {
 const WANDER_DESIGNS := Balance.ISO_WANDERERS
 
 var art := {}          ## role -> Texture2D, or absent
-## Which way the hero is facing, in the only two facings her art has: toward the camera
-## or away from it. Pure view state, deliberately not saved and not in the model — the
-## rules do not care where she is looking, and a resumed run starts her facing the
-## player, which is the friendlier of the two. Same test the wanderers use for their own
-## facing (`TraversalIso` sets `south` from `dx + dy > 0`).
-var face_south := true
+## The last step taken, kept as a grid vector because FOUR directions have to come out
+## of it and two booleans could not.
+##
+## This was `face_south := (x + y) > 0` and that is half a facing model. The grid's four
+## directions project to the four screen DIAGONALS — `x` runs ↘ and `y` runs ↙ (see
+## `TraversalIso.DIR_ARROW`) — so that test maps ↘ and ↙ both onto "toward the camera"
+## and ↖ and ↗ both onto "away". Walking right and walking left drew the same sprite,
+## which is what makes the hero look wrong while a floor is being explored: she never
+## turns (D131).
+##
+## Four facings, two files. `x + y` still picks toward-camera against away, and `x > y`
+## picks right against left — ↘ is (1,0) and ↙ is (0,1), ↗ is (0,-1) and ↖ is (-1,0), so
+## the one with the larger x is the right-hand one of each pair. The left-hand facing is
+## the right-hand art MIRRORED at draw time, which is what a 2D isometric game has always
+## done and is why this costs two paintings rather than four.
+##
+## Pure view state, deliberately not saved and not in the model — the rules do not care
+## where she is looking, and a resumed run starts her facing down-right, toward the
+## player and toward the side the eye reads first.
+var face_step := Vector2i(1, 0)
 ## Move buttons are a row of short labels, not reward-card slabs: at card size a
 ## three-word label sat in the middle of an empty panel and read as a broken
 ## screen (it did, in the first capture of this view). Widened from 190 to pay for
@@ -745,9 +759,15 @@ func _draw_you(centre: Vector2, t: Vector2) -> void:
 	# closes around the boots instead of trailing a hoop's worth of floor in front of them
 	_ground_ring(centre + Vector2(0, t.y * 0.04), t, 0.30,
 		Color(COL_YOU.r, COL_YOU.g, COL_YOU.b, 0.55))
-	var tex: Texture2D = art.get("hero_s" if face_south else "hero_n")
+	# Toward the camera or away, then right or left; the left of each pair is the same
+	# art mirrored. A negative WIDTH is what flips a `draw_texture_rect`, so the rect is
+	# built upright and then turned inside out about its own right edge.
+	var tex: Texture2D = art.get("hero_s" if (face_step.x + face_step.y) > 0 else "hero_n")
 	if tex != null:
-		floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, "hero"), false)
+		var r := _footed_rect(tex, centre, t, "hero")
+		if face_step.x <= face_step.y:
+			r = Rect2(r.position.x + r.size.x, r.position.y, -r.size.x, r.size.y)
+		floor_view.draw_texture_rect(tex, r, false)
 		return
 	# no hero installed: the pip is what the eye tracks while the floor scrolls underneath
 	floor_view.draw_circle(centre - Vector2(0, t.y * 0.30), t.y * 0.17,
@@ -1060,7 +1080,7 @@ func _on_pick(i: int) -> void:
 	# whose grid components sum positive goes down the screen (x is ↘ and y is ↙, per
 	# DIR_ARROW) — the same test TraversalIso uses to face a wanderer.
 	var step: Vector2i = TraversalIso.DIRS[int(opts[i]["dir"])]
-	face_south = (step.x + step.y) > 0
+	face_step = step
 	# Slipping past a fight is priced on the OPTION, so it is read before the move and paid
 	# here — the model reports a price and never touches run HP (D13), the same contract the
 	# old deck model's dodge always had. Clamped so it can never itself be lethal.
