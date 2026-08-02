@@ -39,6 +39,10 @@ boot_splash/use_filter=true
 UITheme="*res://scripts/ui_theme.gd"
 SettingsState="*res://scripts/settings_state.gd"
 Audio="*res://scripts/audio.gd"
+; Grouped with the three above rather than with the two state singletons below:
+; like them it owns one piece of how the game presents itself, set once and left
+; alone. It depends on none of them, so it could sit anywhere in this list.
+Pointer="*res://scripts/pointer.gd"
 MetaState="*res://scripts/meta_state.gd"
 GameState="*res://scripts/game_state.gd"
 

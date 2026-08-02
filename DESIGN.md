@@ -7345,6 +7345,32 @@ driver artifact — D109's exact shape, one layer down.
   is a content fact, not a driver one, and it is why the new shipped profile keeps Mid's
   attacking spine.
 
+### D126 — The title art's subject was never the problem; the foreground was
+
+D122 concluded that the title screen's SUBJECT could not carry the ink density the
+dungeons set: they are near-field architecture where every form can be outlined, a night
+exterior recedes into haze, and haze cannot take a contour line. It re-composed the
+picture close-up on that basis, measured 13.8%, and the number backed the story up.
+
+The story was wrong, and it was wrong in the way a plausible one usually is — it
+explained the evidence without being tested against the alternative. The wide vista
+scores 1.2% not because it is wide but because the earlier attempts painted the NEAR
+ground as softly as the far. Asked again for the same vista with the near third treated
+as a pen-and-ink plate — every boulder, the ledge, the traveller, the near firs given
+thick unbroken contours and cross-hatching, and only the far ridge and sky allowed to go
+atmospheric — the same composition measures **8.6% / 10.6%**, inside the band, seven
+times the old file, with the cleanest whites of any candidate (0.007% over 0.90).
+
+So the rule is not "this subject cannot be inked". It is: **in a wide view, ink density
+comes from the foreground, and a picture whose near ground is as soft as its distance
+has no linework anywhere.** D122's close-up worked because everything in it was near,
+which is a special case of the same rule rather than a different one.
+
+Recorded because the user asked for the wide version back and the honest answer was
+that my recorded reason for abandoning it did not hold. The measurement that convicted
+the subject was real; the inference from it was not, and a re-roll aimed at the actual
+variable settled it in one attempt.
+
 ### D125 — Quiet is not empty, and four backdrops were filled in rather than painted
 
 Four meta-screen backdrops shipped with their lower halves as flat rectangles. It hid

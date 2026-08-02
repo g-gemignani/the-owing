@@ -306,6 +306,9 @@ func _shape(img: Image, spec: Dictionary) -> String:
 	if spec.get("glow", false):
 		return _glow(img, canvas)
 
+	if spec.get("lumakey", false):
+		return _lumakey(img, canvas)
+
 	if not spec["matte"]:
 		# Opaque by intent: the crop IS the widget. Stretched, it fills the canvas edge
 		# to edge; unstretched it keeps its proportions and the canvas pads it out with
@@ -361,6 +364,36 @@ func _shape(img: Image, spec: Dictionary) -> String:
 
 ## A bloom: alpha from luminance, colour kept, trimmed to the light and stretched to
 ## fill. See GLOW in the header for why this is not the matte.
+## Alpha from LUMINANCE, geometry untouched. For a subject the flood-fill matte
+## cannot key: dark art on a near-black field.
+##
+## `matte()` samples the border, then floods inward while a pixel stays within `TOL`
+## of it. That is right for a monster on a flat violet field and catastrophic for an
+## iron spike on near-black — the subject IS within tolerance of its own background,
+## so the fill walks through it and `despeckle` then keeps the largest surviving
+## island and throws the rest away. It does not fail; it returns a plausible file.
+## D125 measured what that cost: `cursor.png` shipped **9.4% opaque against 93.9%
+## non-black RGB**, so nine tenths of the spike was present in colour and invisible,
+## and `logo.png` lost its entire carved scrollwork while keeping the flat panel
+## behind it. Both looked correct in a file browser, which is why nobody caught it.
+##
+## Unlike `glow` this does NOT trim or resize. The two files that needed rescuing
+## already sat at their canvas with their framing correct, and a cursor's framing is
+## load-bearing: `pointer.gd` pins a hotspot to the spike's tip in image
+## coordinates, so trimming to the ink and re-fitting would move the point the
+## player aims with. Recovering alpha is the whole job here; moving anything else
+## would be a second change hiding inside a repair.
+func _lumakey(img: Image, canvas: Vector2i) -> String:
+	img.convert(Image.FORMAT_RGBA8)
+	var a := Cut.mono_alpha(img)
+	if Cut.last_mono_range < Cut.MONO_MIN_RANGE:
+		return "flat — nothing to key (dynamic range %.3f)" % Cut.last_mono_range
+	Cut.apply_alpha(img, a)
+	if img.get_width() != canvas.x or img.get_height() != canvas.y:
+		img.resize(canvas.x, canvas.y, Image.INTERPOLATE_LANCZOS)
+	return ""
+
+
 func _glow(img: Image, canvas: Vector2i) -> String:
 	img.convert(Image.FORMAT_RGBA8)
 	var a := Cut.mono_alpha(img)

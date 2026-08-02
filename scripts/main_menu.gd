@@ -13,10 +13,10 @@ extends Control
 ## screen with no title on it.
 const LOGO_ART := "res://assets/art/ui/logo.png"
 ## Where that middle is, as fractions of the file. Measured off the pixels, not
-## eyeballed: the flat panel runs x 0.16–0.85 and y 0.33–0.68 of the 1600x480, and
-## the carved scrollwork starts immediately outside it. Type set to the whole plate
-## would be cut across the border. Inset a little from the measurement so a
-## descender does not touch the moulding.
+## eyeballed: the flat panel is the widest unbroken run of one tone in the image and
+## it spans x 0.14–0.85, y 0.33–0.68 of the 1600x480, with the carved scrollwork
+## starting immediately outside it. Type set to the whole plate would be cut across
+## the border. Inset from the measurement so a descender never touches the moulding.
 const LOGO_TEXT := Rect2(0.19, 0.35, 0.62, 0.30)
 
 func _ready() -> void:
