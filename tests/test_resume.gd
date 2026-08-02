@@ -54,6 +54,30 @@ func _init() -> void:
 			if b.cleared != a.cleared:
 				fails += 1; print("FAIL cleared count differs (%s): %d vs %d" % [
 					did, b.cleared, a.cleared])
+			# The EXPLORED FLOOR, cell for cell. Asserted separately from `options()`
+			# because it is invisible to every other check here — a restored run with no
+			# map still offers the same moves, still reports the same counts, and draws
+			# nothing at all (D140). `seen` and `walked` are PackedByteArrays, which
+			# `JSON.stringify` writes as the STRING `str()` of themselves, so the whole
+			# grid used to come back empty and every tile the view asked about was an
+			# out-of-bounds read.
+			if b.seen.size() != a.seen.size() or b.walked.size() != a.walked.size():
+				fails += 1; print("FAIL explored grid lost its size on restore (%s): seen %d->%d walked %d->%d" % [
+					did, a.seen.size(), b.seen.size(), a.walked.size(), b.walked.size()])
+			else:
+				var lit_a := 0
+				var diff := 0
+				for i in a.seen.size():
+					if bool(a.seen[i]):
+						lit_a += 1
+					if bool(a.seen[i]) != bool(b.seen[i]) or bool(a.walked[i]) != bool(b.walked[i]):
+						diff += 1
+				if lit_a == 0:
+					fails += 1; print("FAIL nothing was explored before the save (%s)" % did)
+				if diff != 0:
+					fails += 1; print("FAIL %d cells of the explored floor differ after restore (%s)" % [
+						diff, did])
+
 			var oa := a.options()
 			var ob := b.options()
 			if oa.size() != ob.size():
@@ -118,6 +142,52 @@ func _init() -> void:
 			lvl_ok = false
 	if not lvl_ok:
 		fails += 1; print("FAIL card levels not preserved")
+
+	# --- the two shapes a pre-D140 save can hold, and neither may blank the floor ----
+	#
+	# Saves written between D99 and D140 carry the explored grid as a STRING, because
+	# `JSON.stringify` had no case for `PackedByteArray` and fell through to `str()`.
+	# Those files are on players' disks. The string is valid JSON in its own right, so
+	# it is parsed back; and once a save has been through one bad load-and-write cycle
+	# it holds "[]" instead, with nothing left to parse. That one must still come back
+	# playable — the tile the player stands on is lit, whatever the blob says.
+	var legacy := TraversalIso.new()
+	legacy.generate(Balance.dungeon(Balance.DUNGEONS[0]))
+	for i in 4:
+		if legacy.options().is_empty():
+			break
+		if not legacy.select(0).is_empty():
+			legacy.clear_pending()
+	var want_lit := 0
+	for s in legacy.seen:
+		if bool(s):
+			want_lit += 1
+	var as_str: Dictionary = JSON.parse_string(JSON.stringify(legacy.save_state()))
+	as_str["seen"] = str(legacy.seen)      # exactly what the old writer produced
+	as_str["walked"] = str(legacy.walked)
+	var recovered := Traversal.from_state(as_str, Balance.dungeon(Balance.DUNGEONS[0]))
+	var got_lit := 0
+	for s in recovered.seen:
+		if bool(s):
+			got_lit += 1
+	if recovered.seen.size() != legacy.enc.size():
+		fails += 1; print("FAIL a stringified grid restored to %d cells, wanted %d" % [
+			recovered.seen.size(), legacy.enc.size()])
+	elif got_lit != want_lit:
+		fails += 1; print("FAIL a stringified grid lost explored ground: %d lit, wanted %d" % [
+			got_lit, want_lit])
+
+	var flattened: Dictionary = JSON.parse_string(JSON.stringify(legacy.save_state()))
+	flattened["seen"] = "[]"
+	flattened["walked"] = "[]"
+	var salvaged := Traversal.from_state(flattened, Balance.dungeon(Balance.DUNGEONS[0]))
+	if salvaged.seen.size() != legacy.enc.size():
+		fails += 1; print("FAIL a flattened grid restored to %d cells, wanted %d" % [
+			salvaged.seen.size(), legacy.enc.size()])
+	elif not salvaged.lit(salvaged.pos % salvaged.w, salvaged.pos / salvaged.w):
+		fails += 1; print("FAIL a flattened save resumes onto an unlit floor")
+	elif salvaged.options().is_empty():
+		fails += 1; print("FAIL a flattened save resumes with no moves")
 
 	# --- unknown content in a saved run must be dropped, not crash ---
 	var bad := {"map": [], "current": null}

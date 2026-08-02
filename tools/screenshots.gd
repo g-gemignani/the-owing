@@ -32,6 +32,13 @@ const SHOTS := [
 	# picture of it there is, and it is the one that made the rock look broken (D77).
 	# The second capture is the same screen a third of the way through a floor.
 	["IsoRunExplored", "res://scenes/IsoRun.tscn", "iso_walked"],
+	# The same walked floor, but SAVED AND RELOADED first. Every other row here builds
+	# its state live in memory, so for as long as that was the whole list the harness
+	# had never once photographed the state a player actually boots into — and D140 is
+	# what lives in that gap: two grids that JSON turned into strings, a floor that drew
+	# nothing at all, and 39 green suites. Should be indistinguishable from the row
+	# above; that is the entire point of the capture.
+	["IsoResumed", "res://scenes/IsoRun.tscn", "iso_resumed"],
 	# One walked floor per TERRAIN, because the iso materials are not one set of
 	# textures — `tools/gen_iso_art.gd` builds four, each sampled from the floor band
 	# of the backdrops of the dungeons that use it. Every other capture here enters
@@ -227,7 +234,7 @@ func _setup(need: String, dungeon: String = "") -> void:
 			GameState.pending = {"type": GameState.NodeType.TREASURE, "row": 1, "col": 0, "cleared": false}
 			# a key in hand, so the sealed-chest branch can actually be photographed
 			GameState.keys = 2
-		"iso_walked":
+		"iso_walked", "iso_resumed":
 			# Walk the floor before the screen is built, resolving whatever is stepped
 			# on so the walk keeps going. Uses the model's own first option, which is
 			# the one that gets on with the floor, so the capture shows a plausible
@@ -239,6 +246,14 @@ func _setup(need: String, dungeon: String = "") -> void:
 				if not tv.select(0).is_empty():
 					tv.clear_pending()
 			GameState.pending = {}
+			# Then throw that away and rebuild it from a save, through real
+			# `JSON.stringify`/`parse_string` — not a `duplicate()` of the dictionary,
+			# because the whole class of fault this row exists for is a type that
+			# survives being copied and does not survive being written down (D140).
+			if need == "iso_resumed":
+				var blob = JSON.parse_string(JSON.stringify(GameState.run_to_dict()))
+				if not GameState.run_from_dict(blob):
+					push_error("screenshots: the run would not resume from its own save")
 		"packs":
 			# Packs renders an empty state with nothing sealed, which is a real screen
 			# but not the one worth looking at. Give it one of each kind.

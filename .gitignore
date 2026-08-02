@@ -29,3 +29,4 @@ mono_crash.*.json
 # Save data lives in Godot's user:// dir, never the repo — but tests and tools
 # write sandboxed files here if run with an overridden path.
 t_*.json
+_repro/

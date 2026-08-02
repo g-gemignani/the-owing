@@ -370,6 +370,14 @@ These are failure modes that have actually bitten this project. Treat each as a 
   read as success. It would have kept passing with the settings unwired. Scene tests
   exist for this — and when a test guards a single clause, delete the clause once and
   watch it go red.
+- **`JSON.stringify` does not fail on a type it cannot write — it writes `str()` of it.**
+  A `PackedByteArray` in a save comes back as the *string* `"[1, 0, 1]"`, and the loop
+  that reads it walks characters instead of cells. Two grids of the explored floor were
+  lost on every resume for a day, and the crawl resumed as a hero standing in a void
+  (D140). Only `Packed*Int/Float` arrays survive the trip. **Anything that goes into a
+  save is a plain Array, a Dictionary, a number, a string or a bool — convert at the
+  `_save` boundary**, and assert the round trip *cell by cell*, because a restored run
+  with no map still reports the same counts and offers the same moves.
 - **Anything visual has to be LOOKED at, and the suite cannot do it for you.** The six
   combat effects passed review and passed 37 suites while every particle was invisible
   — 4px motes at the value of the floor, on a painted corridor. Rendering them under

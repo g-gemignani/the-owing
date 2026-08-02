@@ -69,7 +69,11 @@ var h: int = 0
 ## Packed, not a Variant `Array`, and so are the three grids below. `enc[n] == WALL` is
 ## the innermost line of every flood over the floor and those floods are most of a
 ## headless run (D99); a packed array reads an int where a Variant array unboxes one.
-## JSON round-trips them as plain number arrays, so the save format is unchanged.
+##
+## They are packed IN MEMORY ONLY. `_save` unpacks the two byte grids back to plain
+## Arrays because `JSON.stringify` does not know `PackedByteArray` and silently writes
+## `str()` of it — the string `"[1, 0, 1]"` where the reader expects numbers (D140).
+## `PackedInt32Array` does round-trip as numbers, so `enc` and `room_of` go as they are.
 var enc := PackedInt32Array()
 var seen := PackedByteArray()   ## w*h flags: ground you have been near
 ## w*h bools: ground you have actually STOOD on. Distinct from `seen` because this is
@@ -1053,8 +1057,12 @@ func status() -> String:
 		out += "   %d prowling" % mons.size()
 	return out
 
+## `seen` and `walked` go out as plain Arrays, NOT as the `PackedByteArray` they are in
+## memory: `JSON.stringify` has no case for that type and falls through to `str()`, so
+## the save gets a quoted `"[1, 0, 1]"` and the load gets back a String (D140).
 func _save() -> Dictionary:
-	return {"w": w, "h": h, "enc": enc, "seen": seen, "walked": walked,
+	return {"w": w, "h": h, "enc": enc,
+		"seen": Array(seen), "walked": Array(walked),
 		"room_of": room_of, "pos": pos, "tiles": tiles, "content": content,
 		"rooms": rooms, "quota": quota, "steps": steps, "floor_steps": floor_steps,
 		"avoided": avoided, "dodgeable": dodgeable,
@@ -1123,10 +1131,42 @@ func _load(d: Dictionary) -> void:
 		for k in raw:
 			enemy_of[int(String(k))] = String(raw[k])
 
+	# The tile you stand on is ground you have seen and stood on — that is true of every
+	# healthy save already, so this costs one idempotent reveal, and it is what a save
+	# whose flags were flattened by the D140 bug comes back on. Those saves have no
+	# exploration left to recover; without this they resume onto an entirely unlit floor,
+	# which is a blank screen rather than a dungeon. With it the player is back in a lit
+	# room, having lost only the map behind them.
+	if enc.size() > 0:
+		walked[pos] = 1
+		_reveal_around(pos)
+
+## One grid of flags back out of a save, at exactly `want` cells whatever the blob holds.
+##
+## Three shapes reach here and all three have shipped:
+##
+## * an Array of numbers — what `_save` writes now;
+## * a String — what it wrote between D99 and D140, because `JSON.stringify` fell
+##   through to `str(PackedByteArray)`. It is valid JSON in its own right, so it is
+##   parsed rather than dropped and an affected save keeps its explored floor;
+## * anything else, including a missing key — zeroed.
+##
+## It never iterates a String directly. `for s in "[1, 0]"` walks CHARACTERS, and
+## `bool("[")` is not a conversion GDScript has: it raised at the first cell, which
+## aborted this function mid-loop and returned a grid of length ZERO. That is what
+## turned a bad save into a broken screen rather than a dim one — `lit()` and
+## `trodden()` index this per tile per frame, so every draw was an out-of-bounds read
+## and the floor came up empty (D140).
 func _bools(src, want: int) -> PackedByteArray:
 	var out := PackedByteArray()
-	for s in src:
-		out.append(1 if bool(s) else 0)
+	var rows = src
+	if rows is String:
+		rows = JSON.parse_string(rows)
+	if rows is Array or rows is PackedByteArray or rows is PackedInt32Array:
+		for s in rows:
+			if out.size() >= want:
+				break
+			out.append(1 if int(s) != 0 else 0)
 	while out.size() < want:
 		out.append(0)
 	return out

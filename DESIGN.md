@@ -8448,3 +8448,70 @@ carries the rarity tint and, in combat, the dimming of a power that cannot be fi
 silently breakable and nothing else was watching: the blend mode, the light living in the
 alpha, the arithmetic being unable to exceed white against pure white art, and the tween
 actually running and turning about the centre.
+
+### D140 — A resumed dungeon had no floor, and JSON had quietly turned two grids into a sentence
+
+Loading a save that stands in a dungeon put the hero in an empty void: no ground, no walls,
+no stair, and the move buttons showing their key and arrow with no words after them. The run
+was intact in every other respect — the right dungeon, the right HP, the right deck, the
+right position — which is why this survived a suite that already round-trips a traversal
+through real JSON for all twelve dungeons and compares the options it offers.
+
+## What was actually wrong
+
+`JSON.stringify` has no case for `PackedByteArray`. It does not fail on one; it falls
+through to `str()` and writes the *string* `"[1, 0, 1]"` where the reader expects an array
+of numbers. `PackedInt32Array` is handled and comes back as numbers, so `enc` and `room_of`
+— the terrain and the room map — round-tripped perfectly. `seen` and `walked`, the two
+grids that say which of it you have LOOKED at and STOOD on, did not.
+
+The reader then made it much worse than a type mismatch. `_bools` iterated its argument,
+and iterating a String in GDScript walks characters:
+
+    for s in "[1, 0, 1]":     # '[', '1', ',', ' ', ...
+        out.append(1 if bool(s) else 0)
+
+`bool("[")` is not a conversion the language has. It raised, which **aborts the function
+mid-loop** and hands back a `PackedByteArray` of length zero — so `seen.size()` was 0 on a
+144-cell floor, and the padding loop three lines below it never ran. `lit()` and `trodden()`
+index that array once per tile per frame. Every draw was an out-of-bounds read, the floor
+drew nothing, and `_describe` failed the same way, which is where the blank button labels
+came from. A save-format bug presented as an art bug.
+
+The two byte grids arrived in D99, as part of packing the four per-cell arrays so the floods
+that dominate a headless run read ints instead of unboxing Variants. That change was right
+and is kept; the comment above it claiming "JSON round-trips them as plain number arrays"
+was right about two of the four.
+
+## Three parts to the fix, and the third is the one that matters to a player
+
+1. `_save` unpacks the two byte grids with `Array(...)` before handing them to the save.
+   The in-memory type is unchanged, so D99's floods are untouched.
+2. `_bools` accepts an Array, accepts the old String (it is valid JSON in its own right, so
+   it is *parsed* rather than dropped — a save from the affected window keeps its explored
+   floor), zeroes anything else, and truncates as well as pads. It can no longer raise, so
+   it can no longer return a grid of the wrong length.
+3. `_load` ends by asserting the one invariant the view cannot do without: the tile you
+   stand on is lit and trodden. On a healthy save that is an idempotent no-op — everything
+   `_reveal_around(pos)` sets was set when the player walked there. On a save that has
+   already been through one bad load-and-write cycle, where the grid on disk is now the
+   literal `"[]"` and there is nothing left to recover, it is the difference between
+   resuming into a lit room having lost the map behind you, and resuming into a black
+   screen. Both of the saves on this machine were in that state.
+
+## What the suite was missing, and why it read as green
+
+`tests/test_resume.gd` asserted round-trip *identity* on the things a model reasons with:
+completion, cleared count, the number and type of the options. Not one of those changes when
+the map is gone. The floor you have explored is a fact the VIEW reads and the model barely
+consults, so the one check that would have caught this is the one that compares the grid
+cell by cell — which it now does, for every dungeon, alongside the two pre-fix shapes a save
+on disk can hold (the stringified grid, and the flattened `"[]"` left behind by a load that
+already ate it). Stashing the fix turns all twelve dungeons red.
+
+The general rule is in AGENTS.md: only `Packed*Int/Float` arrays survive `JSON.stringify`,
+so anything crossing into a save is converted at the `_save` boundary. The narrower lesson
+is about the reader — a deserializer that can raise is a deserializer that returns a
+half-built object, because GDScript's error handling for this is to abandon the frame and
+carry on. `_bools` had a padding loop that would have made the corrupt save merely dim
+rather than broken, and it never executed.
