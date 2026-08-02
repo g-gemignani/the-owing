@@ -55,13 +55,55 @@ func _init() -> void:
 	S.master_volume = 500
 	S.fullscreen = false
 	S.show_numbers = false
+	S.effects_enabled = false
+	S.effect_speed = 9999
 	S.save_settings()
 	var S2 = load("res://scripts/settings_state.gd").new()
 	S2.load_settings()
 	if S2.master_volume > 100:
 		fails += 1; print("FAIL volume not clamped on load: %d" % S2.master_volume)
-	if S2.fullscreen != false or S2.show_numbers != false:
+	if S2.fullscreen != false or S2.show_numbers != false or S2.effects_enabled != false:
 		fails += 1; print("FAIL settings booleans not persisted")
+	if S2.effect_speed > S2.EFFECT_SPEED_MAX:
+		fails += 1; print("FAIL effect speed not clamped on load: %d" % S2.effect_speed)
+
+	# A settings file written before D130 has neither effects key. It must read as the
+	# shipped defaults, not as zero — `effect_speed` of 0 would make every effect a
+	# single frame, which is a flash, and `effects_enabled` false would silently turn
+	# the feature off for every existing player.
+	var f_old := FileAccess.open(S.settings_path(), FileAccess.WRITE)
+	if f_old:
+		f_old.store_string('{"version": 1, "master_volume": 50, "fullscreen": true}')
+		f_old.close()
+	var S3 = load("res://scripts/settings_state.gd").new()
+	S3.load_settings()
+	if not S3.effects_enabled or S3.effect_speed != 100:
+		fails += 1
+		print("FAIL an older settings file does not default the effects keys: on=%s speed=%d" % [
+			S3.effects_enabled, S3.effect_speed])
+
+	# --- a control the player can move must reach something ---
+	#
+	# `show_numbers` was persisted, drawn in the menu and read by NOTHING for its whole
+	# life (D130). A setting that changes no behaviour is worse than a missing one: the
+	# player concludes the game ignores them. Cheap to assert, so assert it.
+	var menu_src := FileAccess.open("res://scripts/settings_menu.gd", FileAccess.READ)
+	if menu_src != null:
+		var menu_txt := menu_src.get_as_text()
+		menu_src.close()
+		for key in ["show_numbers", "effects_enabled", "effect_speed"]:
+			if menu_txt.find(key) == -1:
+				continue   # not offered in the menu; nothing to promise
+			var reached := false
+			for path in ["res://scripts/combat.gd", "res://scripts/fx.gd"]:
+				var g := FileAccess.open(path, FileAccess.READ)
+				if g != null:
+					if g.get_as_text().find(key) != -1:
+						reached = true
+					g.close()
+			if not reached:
+				fails += 1
+				print("FAIL settings offers '%s' and nothing in the game reads it" % key)
 
 	# --- save slots are independent ---
 	var Meta = load("res://scripts/meta_state.gd")

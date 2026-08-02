@@ -1701,6 +1701,12 @@ func _body_art(plate: Control) -> TextureRect:
 func _float_number(over: Control, text: String, colour: Color) -> void:
 	if fx_layer == null or not is_inside_tree():
 		return
+	# The one place `show_numbers` reaches. It was persisted and offered in the menu
+	# from the day it was added and read by nothing at all, so the checkbox had never
+	# once changed the screen (D130). Everything it hides is a duplicate of a number
+	# already on a bar; nothing the player needs in order to choose a card goes with it.
+	if not SettingsState.show_numbers:
+		return
 	var l := Label.new()
 	l.text = text
 	l.add_theme_color_override("font_color", colour)

@@ -7760,3 +7760,78 @@ the zero case had never been written.
 constants and its `_ok()` early-out are where one would hang. And `project.godot` still
 forces NEAREST globally, so the font atlas will sample nearest on a 1440p/4K scale-up;
 at the 1:1 1280x720 canvas it is invisible, which is why it has survived.
+
+### D130 — Two settings for the new effects, and one that had never done anything
+
+D129 shipped six combat effects with no way to turn them down, which is a problem for
+exactly the players least able to say so. Adding the control turned up an older one
+that had never worked.
+
+#### Two controls, because one cannot do both jobs
+
+The obvious design is a single "effects" slider running 0–200%, where 0 means off. It
+was rejected: **turning particles UP is not a reduced-motion setting**, and the person
+who needs the accessibility answer and the person who finds a 0.34s ward slow are not
+the same person. Conflating them gives each of them a control that is mostly about the
+other.
+
+* **`effects_enabled`** — a checkbox. The accessibility answer.
+* **`effect_speed`** — a percentage, **50–200**, default 100.
+
+The slider's floor is the interesting number. It does not go to zero, and not because
+zero is awkward to implement: an effect fast enough to be a single frame is a *flash*,
+which is the one thing a motion-sensitive player is most likely to have opened this
+screen to stop. Off is the toggle's job. `tests/EffectsTest.tscn` pins the floor at
+0.05s per effect so nobody later "helpfully" widens the range.
+
+**Where they attach cost nothing, and that is the point.** `Fx._ok` already sat in
+front of all six effects, guarding the layer and the rect — one more clause there is
+the whole toggle, and there is no seventh effect that can forget to check. Every `T_*`
+already existed as a named constant, so `_dur()` is one multiply in one place; the
+death dissolve alone poses four tweens off `T_DEATH` at four different fractions, and
+scaling per-tween would have been four places for those fractions to stop agreeing.
+
+Off is safe by construction rather than by testing: nothing downstream reads an effect
+back, and the death dissolve stands in for a slot the refresh has *already* hidden
+rather than being the thing that removes it.
+
+`Fx` reaches SettingsState by node path, not as a global — autoloads are not registered
+in a headless `--script` run and a compile-time reference would make the file
+unloadable in the suite that loads every script. A missing autoload reads as the
+shipped defaults.
+
+#### The setting that was never wired to anything
+
+`show_numbers` had been persisted, saved, offered in the Settings menu — and read by
+**nothing outside that menu** for its entire life. The checkbox had never once changed
+the screen.
+
+Its label was worse than its wiring: *"Show damage numbers and intents"*. The intent is
+what a player reads to decide whether to block, so the half that was never implemented
+was a **difficulty option wearing a comfort option's clothes**. It now says "Float
+damage numbers" and does exactly that — `_float_number` and nothing else, all of which
+duplicates a number already on a bar.
+
+A dead control is worse than a missing one: the player concludes the game ignores them.
+`tests/test_flow.gd` now asserts that anything the settings menu offers is read
+somewhere in the game.
+
+#### The test that passed for the wrong reason
+
+The behavioural test was written first as a `--script` SceneTree test: stand a
+SettingsState up under `/root`, add a layer, fire an effect, count children. It failed
+with the settings correctly wired — and the reason is worth recording, because the
+naive fix is to delete the test.
+
+**In a `--script` run, a node added to `root` during `_init` is not inside the ACTIVE
+tree.** `is_inside_tree()` is false and an absolute node path errors out. So every
+effect bailed at `_ok`'s *first* guard, the setting was never consulted, and "nothing
+was drawn" looked like a pass for the off case. A test shaped that way would have kept
+passing with the settings entirely unwired.
+
+It is a scene test now (`tests/EffectsTest.tscn`), which is what `tests/run.sh`'s header
+has said scene tests are for since it was written. **And it was mutation-checked**:
+removing the one clause from `_ok` turns it red on all six effects. A test that has
+never been seen to fail is a test that has never been tested.
+
+38 suites.

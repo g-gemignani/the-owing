@@ -42,7 +42,7 @@ Two-tier state makes this work:
 ## Content at a glance
 
 100 cards · 35 enemy archetypes (all painted) · 12 bosses (one named per dungeon) · 30 relics ·
-10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 37 test
+10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 38 test
 suites. All content is `.tres` data plus one catalogue line; adding more is a data
 task, not a code task.
 
@@ -349,6 +349,18 @@ These are failure modes that have actually bitten this project. Treat each as a 
   Barricade at the Foundry went 24% to 100% run completion. Constants whose comments say
   "measured" must be re-measured with `tools/sim_balance.gd`, against a baseline from
   the tree you started from. The analytic version was elegant and wrong.
+- **A control the player can move must reach something.** `show_numbers` was
+  persisted, drawn in the Settings menu, and read by nothing at all for its whole life
+  — the checkbox never once changed the screen, and its label promised to hide enemy
+  intents, which would have been a difficulty option wearing a comfort option's clothes
+  (D130). A dead control is worse than a missing one: the player concludes the game
+  ignores them. `tests/test_flow.gd` now asserts every offered setting is read.
+- **A test that has never been seen to fail has not been tested.** D130's effects test
+  passed while proving nothing: in a `--script` run a node added to `root` is not in the
+  ACTIVE tree, so every effect bailed at its own first guard and "nothing was drawn"
+  read as success. It would have kept passing with the settings unwired. Scene tests
+  exist for this — and when a test guards a single clause, delete the clause once and
+  watch it go red.
 - **Anything visual has to be LOOKED at, and the suite cannot do it for you.** The six
   combat effects passed review and passed 37 suites while every particle was invisible
   — 4px motes at the value of the floor, on a painted corridor. Rendering them under
