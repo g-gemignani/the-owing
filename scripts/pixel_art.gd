@@ -547,6 +547,53 @@ static func power_art(power_id: String) -> Texture2D:
 		return load(p) as Texture2D
 	return null
 
+## Which progress band a level falls in: "" below the first milestone, then "1", "2",
+## "max". The thresholds are INTEGER LEVELS derived from the cap, not a float compared
+## against thirds, and that is not fussiness — `(34-1)/(100-1)` is 0.3333 and misses a
+## 0.334 threshold, so a Common card sitting exactly a third of the way up its track
+## showed nothing at all. Integers have no such edge (D132).
+##
+## A fraction of the track rather than an absolute level, because the tracks are not
+## remotely the same length: a Common card caps at 100 and a Legendary at 5, Bulwark at
+## 10 and Foresight at 2 (`Balance.max_level`, `PowerData.level_capped`). Any milestone
+## written as "at level 5" is unreachable for one of those and immediate for another.
+##
+## The floor of 2 is what keeps a two-level track honest: with cap 2 the thirds both
+## round down onto level 1, which is where everything STARTS, and an effect that is
+## present the moment you own the thing is not a progress effect. Clamped up, cap 2 has
+## exactly two states — base and maxed — which is all a two-level track can mean.
+static func level_band(level: int, cap: int) -> String:
+	if cap <= 1:
+		return "max" if level >= cap else ""
+	if level >= cap:
+		return "max"
+	var t2 := maxi(2, 1 + int(round(2.0 * float(cap - 1) / 3.0)))
+	var t1 := maxi(2, 1 + int(round(float(cap - 1) / 3.0)))
+	if level >= t2:
+		return "2"
+	if level >= t1:
+		return "1"
+	return ""
+
+## The progress overlay for a level, or null below the first milestone.
+##
+## THREE files per shape, not three per subject. The overlay is a separate image
+## composited over the illustration and tinted by rarity at draw time, so a hundred
+## cards at five rarities across three milestones costs three files rather than fifteen
+## hundred. `shape` is "card" for the 4:3 illustration band and "power" for the square
+## sigil — the two cannot share one file because they are not the same rectangle, and
+## that is the only reason there is more than one set (D132).
+const LEVEL_FX_DIR := "res://assets/art/fx/"
+
+static func level_overlay(shape: String, level: int, cap: int) -> Texture2D:
+	var band := level_band(level, cap)
+	if band == "":
+		return null
+	var p := LEVEL_FX_DIR + "lvl_%s_%s.png" % [shape, band]
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
 
 ## The installed backdrop art for a zone, or null if it is missing.
 static func backdrop_texture(zone_id: String) -> Texture2D:

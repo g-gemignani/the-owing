@@ -288,6 +288,15 @@ const SYMBOLS := [
 	["campfire", "Rest.", "Three logs stacked, one flame above them."],
 	["rope", "Escape Rope.", "A coiled rope with one end hanging free."],
 	["chest", "Treasure.", "A small chest, lid shut, one iron band across it."],
+	# Not a status — the only entry here that names a CONTROL rather than a rule. It
+	# lives in this table because `PixelArt.symbol()` resolves `ui/sym_<name>.png`, so
+	# that filename is what the settings door in every screen's top-right corner asks
+	# for; anywhere else and it would not be found. Until it lands that control renders
+	# the word "Settings", which is why nothing is broken while this row is unfilled —
+	# and why the row exists at all, so the absence is on the shopping list instead of
+	# in somebody's memory (D130).
+	["gear", "Settings. The door in the top-right corner of every screen.",
+		"A cog of dark iron, seen face-on, six square teeth and a round hole at its centre. One solid shape, nothing behind it."],
 ]
 
 ## Tier 1e — combat VFX — used to live here: six `fx/*.png` sprite sheets, 8 frames of
@@ -495,6 +504,7 @@ func _init() -> void:
 	_enemies()
 	_cards()
 	_cards_unique()
+	_level_fx()
 	_backdrops()
 	_relics()
 	_powers()
@@ -650,6 +660,36 @@ func _cards_unique() -> void:
 		var article := "An" if fam_words.substr(0, 1) in ["a", "e", "i", "o", "u"] else "A"
 		bits.append("%s %s card." % [article, fam_words])
 		_add("cards/%s.png" % cid, "320x240", " ".join(bits))
+
+## Tier 3c — the level-progress overlays, and the reason there are six of them.
+##
+## The ask was effects layered onto a card as it is fused, with a distinct one at max,
+## WITHOUT multiplying the art. Done naively that is 100 cards x 3 milestones = 300 new
+## paintings, and per-rarity variants would make it 1500. These are six.
+##
+## What makes that work is that the effect is not part of the illustration. It is a
+## SEPARATE image composited over the top and tinted by rarity at draw time, so it does
+## not care which card is underneath it — the same three files sit over all hundred, and
+## `Icons.rarity_colour` supplies the five colours without five more files.
+##
+## Six rather than three only because a card's illustration band is 4:3 and a power's
+## sigil is square, and one image cannot be both without stretching. The milestones are
+## FRACTIONS of each thing's own track (`PixelArt.level_band`), never absolute levels: a
+## Common card caps at 100 and a Legendary at 5, Bulwark at 10 and Foresight at 2, so
+## "at level 5" is unreachable for one and immediate for another (D132).
+func _level_fx() -> void:
+	_section("Tier 3c — level-progress overlays",
+		"Six files that serve every card and every power at every rarity. Composited over the art, not painted into it.",
+		Kind.SCENE,
+		"A LAYER, not a picture: this is drawn ON TOP of a finished illustration, so most of the image must be EMPTY BLACK — pure #000000, which the game adds rather than blends, so black is invisible and only the light shows. Paint ONLY the effect and leave everything else black. It must be MONOCHROME, a single warm-white light, because the game tints it to the card's rarity colour; any colour painted in fights that tint. Keep the effect to the EDGES of the frame and the area behind where a subject would stand — the middle must stay clear enough to read the illustration through, and the FOUR CORNERS must stay completely black because the game draws the cost and the damage over them. No text, no numerals, no symbols, no runes, no object: this is light, not a thing. The three steps must read as ESCALATION at a glance and at thumbnail size, which means each one is bigger and brighter than the last rather than merely different.")
+	for shape in [["card", "320x240", "the illustration band of a card"],
+			["power", "128x128", "a power sigil"]]:
+		_add("fx/lvl_%s_1.png" % shape[0], String(shape[1]),
+			"First milestone on %s — a third of the way up its track. The FAINTEST of the three: a thin arc of light along the lower edge and a breath of glow creeping in from the two lower corners. Barely there; it should read as 'this one has been touched' and nothing louder." % shape[2])
+		_add("fx/lvl_%s_2.png" % shape[0], String(shape[1]),
+			"Second milestone on %s — two thirds up. The arc has closed into a full thin ring of light around the whole subject area, brighter than the first, with a few small sparks lifting off it. Still clear in the middle." % shape[2])
+		_add("fx/lvl_%s_max.png" % shape[0], String(shape[1]),
+			"MAXED on %s — the end of the track and the one state a player is working toward, so it must be unmistakable and different in KIND, not just brighter. A full radiant corona breaking outward past the ring, thick rays reaching to the frame edges, the whole border alight. The middle is still readable but everything around it is burning." % shape[2])
 
 ## How many dungeons are still on the 16x16 fallback tile. COUNTED, not written down:
 ## this line read "nine of twelve" while nine of them were being installed, which is
@@ -965,8 +1005,14 @@ func _emit_prompt_section(s: Array) -> void:
 			partial.append(String(r[0]).get_file().get_basename())
 		var pc: int = int(ceil(sqrt(float(partial.size()))))
 		var pr: int = int(ceil(float(partial.size()) / float(pc)))
-		print("**Generate these as ONE image, not %d.** A %dx%d grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is a RE-ROLL of %d of this tier's %d files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- %s <sheet.png> --only=%s`" % [
-			partial.size(), pc, pr, partial.size(), count - blocked.size(),
+		# "RE-ROLL" only when it IS one. A partial sheet is usually a re-roll, and the
+		# first version of this line said so unconditionally — then the gear was added
+		# to a set whose other twenty-one were already painted, and the sheet asked an
+		# artist to re-roll a file that had never been drawn (D130).
+		var what := "a RE-ROLL of" if rows.is_empty() else "%d new and %d re-rolled of" % [
+			rows.size(), redone.size()] if not redone.is_empty() else "NEW —"
+		print("**Generate these as ONE image, not %d.** A %dx%d grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is %s %d of this tier's %d files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- %s <sheet.png> --only=%s`" % [
+			partial.size(), pc, pr, what, partial.size(), count - blocked.size(),
 			_sheet_set(String(s[5])), ",".join(partial)])
 		print("")
 	if not rows.is_empty():

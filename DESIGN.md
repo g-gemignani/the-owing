@@ -7869,3 +7869,51 @@ Every subject is DERIVED from the card's own `.tres` — name, effect text, fami
 card retuned tomorrow gets a corrected prompt for free and there is no second list to
 drift out of step with `resources/cards/` (D34). The file total goes 205/211 to 205/305,
 which is the honest shape of the request rather than a number that flatters it.
+
+
+### D132 — Three overlays for a hundred cards, and thirds of a track rather than levels
+
+The ask was an effect on a card's art once it has been levelled a certain amount, plus a
+different one at max, and then the same for powers — **without multiplying the number of
+arts**. Painted into the illustrations that is 100 cards × 3 states = 300 files for the
+cards alone, which is a year of the browser grind for decoration.
+
+**It is a layer, not a repaint.** Three images per shape, drawn OVER the finished
+illustration and tinted at draw time. Two things make one file serve every subject: the
+overlay is mostly pure black and composited additively, so black is invisible and only
+the painted light lands; and it is monochrome, so `Icons.rarity_colour` supplies the five
+rarity colours instead of five more files. A hundred cards at five rarities across three
+milestones costs **three** files. Six in total only because a card's illustration band is
+4:3 and a power's sigil is square, and one image cannot be both without stretching.
+
+The brief carries the constraints that make it composable: the four corners stay black
+because the cost and damage numbers are drawn over them, the middle stays clear enough to
+read the art through, and the three steps must read as escalation at thumbnail size — the
+max state different in KIND rather than merely brighter, since it is the state a player is
+actually working toward.
+
+**Milestones are fractions of each thing's own track.** Measured before choosing:
+
+    card caps by rarity   100, 40, 15, 5, 5
+    power caps            2 to 10 (Foresight 2, Bulwark 10, Siphon 10)
+
+Any milestone written as an absolute level is wrong on both ends of that range — "at
+level 5" is a Legendary card's cap and a Common card's opening. So `level_band` takes the
+cap and returns "", "1", "2" or "max" from thirds of it.
+
+Thirds computed as INTEGER LEVELS, not a float against 0.334. The float version shipped
+first and was wrong at exactly the levels it was meant to catch: at cap 100, level 34 is
+(34-1)/(100-1) = 0.3333, which misses 0.334, so a Common sitting precisely a third of the
+way up wore nothing; cap 40 missed at level 14 and cap 5 never reached band "1" at all. A
+threshold in level numbers has no such edge. Bands now open at 34/67 of 100, 14/27 of 40,
+6/10 of 15, 2/4 of 5 — where you would put them by hand.
+
+The floor of 2 on both thresholds is what keeps a two-level track honest: at cap 2 the
+thirds round down onto level 1, which is where everything STARTS, and an effect present
+the moment you own the thing is not a progress effect. Clamped up, Foresight has base and
+maxed, which is all two levels can mean.
+
+`test_levels.gd` enumerates every real cap — the five rarities out of `Balance.max_level`,
+every power's own `level_capped()` — and asserts level 1 is bare, the cap and only the cap
+reads maxed, bands never go backwards, and any track of five or more actually shows both
+middle bands. A retuned cap is checked by that test rather than by eye.

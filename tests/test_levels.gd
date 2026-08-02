@@ -107,6 +107,58 @@ func _init() -> void:
 			fails += 1
 			print("FAIL %s sells a level its preview cannot describe" % id3)
 
+	# --- the progress bands land on the track, at every track length -----------
+	#
+	# `PixelArt.level_band` picks which of the three overlays a card or power wears.
+	# It is thresholded on INTEGER levels derived from the cap rather than on a float
+	# against thirds, and this is the test for why: at cap 100, level 34 gives
+	# (34-1)/(100-1) = 0.3333, which misses a 0.334 threshold, so a Common sitting
+	# exactly a third of the way up its track wore nothing (D132).
+	#
+	# Every real cap is exercised rather than a sample: card caps come from
+	# `Balance.max_level` over the five rarities, power caps off the powers themselves,
+	# so a retuned cap is checked here by itself.
+	var caps := {}
+	for r in 5:
+		caps[Balance.max_level(r)] = true
+	for pid2 in Balance.POWERS:
+		var pw := Balance.power(pid2)
+		if pw != null:
+			caps[pw.level_capped()] = true
+	for cap in caps:
+		var c: int = int(cap)
+		# base level is never decorated: an effect you have before you have earned
+		# anything is not a progress effect
+		if PixelArt.level_band(1, c) != "":
+			fails += 1
+			print("FAIL a cap-%d track is already decorated at level 1" % c)
+		# the cap always reads maxed, and only the cap does
+		if PixelArt.level_band(c, c) != "max":
+			fails += 1
+			print("FAIL a cap-%d track does not read maxed at its own cap" % c)
+		if c > 2 and PixelArt.level_band(c - 1, c) == "max":
+			fails += 1
+			print("FAIL a cap-%d track reads maxed one short of its cap" % c)
+		# bands never go backwards as the level climbs
+		var order := {"": 0, "1": 1, "2": 2, "max": 3}
+		var prev := 0
+		for lv in range(1, c + 1):
+			var rank: int = int(order[PixelArt.level_band(lv, c)])
+			if rank < prev:
+				fails += 1
+				print("FAIL a cap-%d track goes backwards a band at level %d" % [c, lv])
+				break
+			prev = rank
+		# a track long enough to have middles must actually show them
+		if c >= 5:
+			var seen := {}
+			for lv2 in range(1, c + 1):
+				seen[PixelArt.level_band(lv2, c)] = true
+			for want in ["1", "2"]:
+				if not seen.has(want):
+					fails += 1
+					print("FAIL a cap-%d track never shows band '%s'" % [c, want])
+
 	if fails == 0:
 		print("LEVELS TEST: PASS (%d level-ups across every card and power, none empty)" % levels_checked)
 	else:
