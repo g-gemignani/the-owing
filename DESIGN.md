@@ -8756,14 +8756,14 @@ The Grave-Sexton and The False Step, which is the exact argument D127 made.
 in `export_presets.cfg` while CI was already publishing assets named `TheOwing-*`, so a
 manual build and a released build produced differently-named binaries of the same thing.
 
-**Two things did NOT change, and both are load-bearing.** The `user://` directory is
-still `Deckcrawl` (D127 — moving it orphans every existing save with no error and no
-missing file). And the Android `package/unique_name` and iOS `application/bundle_
-identifier` are still `io.github.ggemignani.theowing`: a bundle identifier is app
-IDENTITY, not a display name, and changing one makes the store treat it as a different
-app. Nothing is published to a store yet, so that change is free *today* and expensive
-the day after the first upload — it is called out here so it is a decision rather than an
-oversight.
+**Two things did NOT change in this pass, and both are load-bearing.** The `user://`
+directory is still `Deckcrawl` (D127 — moving it orphans every existing save with no
+error and no missing file). And the Android `package/unique_name` and iOS/macOS
+`application/bundle_identifier` kept the old reverse-DNS id they were written with: a
+bundle identifier is app IDENTITY, not a display name, and changing one makes a store
+treat it as a different app. Nothing is published to a store yet, so that change is free
+*today* and expensive the day after the first upload — called out here so it is a
+decision rather than an oversight. **D147 took the decision and changed them.**
 
 ## Badges, and the one that would have been a lie
 
@@ -8840,3 +8840,65 @@ Worth recording plainly: **Android needed no iteration at all.** The stubbed-SDK
 experiment in D144 answered the only question that mattered before the first run, and
 `apksigner verify` confirmed the output on the machine that produced it. The target that
 was measured in advance worked; the target that could not be worked by inspection.
+
+### D147 — A red job nobody can debug is worse than a job that is switched off
+
+Two things, and the second one is a judgement call rather than a fix.
+
+## The bundle identifier
+
+`export_presets.cfg` carried a reverse-DNS id built from an organisation that has nothing
+to do with this project, in all three places that have one (macOS, Android, iOS). D145
+left it alone on the grounds that a bundle identifier is app IDENTITY and changing one
+after a store upload is expensive. Nothing has been uploaded to a store, so the window
+was still open, and it is now `io.github.ggemignani.theowing` — the conventional form for
+a project that owns no domain, valid as a Java package name (no hyphens, which is why it
+is not `the-owing`), and the same name in all three presets. The CI keystore's `-dname`
+carried the same organisation and no longer does.
+
+The `user://` directory is STILL `Deckcrawl` and must stay that way. D127 pinned it
+precisely so that renaming the game is never a data migration, and a bundle identifier is
+not a save path.
+
+## iOS is commented out
+
+It never went green. Three CI rounds: the first failed guessing a scheme name from the
+`.xcodeproj` filename, the second failed after switching to `-target` read out of
+`xcodebuild -list`, and both times the actual error text was unreadable from here —
+GitHub's job-log endpoint requires repository-admin rights, which this environment does
+not have. The next step was blind iteration at ten minutes a round against a toolchain
+that cannot be reproduced anywhere off a Mac.
+
+**Commented out rather than deleted, and rather than left red.** All three options were
+on the table:
+
+* *Left red* is the worst of the three, and it is the tempting one because it looks like
+  honesty. A job that fails on every push trains everyone to read a red tick as "that's
+  just the iOS one", which is precisely the state where the NEXT failure — a real one, in
+  a job that matters — goes unnoticed. `continue-on-error` made it cheap to leave, which
+  made it more dangerous, not less.
+* *Deleted* throws away the part that worked, and most of it did work: the macOS half of
+  `setup-godot`, and the CI-only preset patch without which Godot refuses an iOS export
+  even when only asked for an Xcode project. Rediscovering those costs the same three
+  rounds again.
+* *Commented out* keeps the work, keeps the reasoning next to it, and takes the noise out
+  of the signal. The block carries a header saying exactly what is known to work, what is
+  not, and where to restart: the `xcodebuild -list` dump the job prints before it fails.
+
+Nothing rots silently while it is off, because `tests/export_ready.sh` still exports
+every preset on every run and still classifies iOS as blocked by the toolchain and never
+by the project. The day someone runs this on a Mac, the answer is one log away.
+
+The README and the release notes now say there are four platforms and that iOS is
+written-and-off, rather than listing a fifth download that 404s. **A download table
+promising a file that does not exist is worse than one platform short.**
+
+## And one badge really was red
+
+Not the two that were reported — `license` and `latest build` were red only in the window
+between pushing the README and the repository rename landing, and both resolved on their
+own. The genuinely broken one was `downloads`, permanently: it pointed at
+`github/downloads/:repo/latest/total`, and GitHub's *"latest release"* **excludes
+prereleases**. The rolling build is a prerelease by design, so the endpoint had nothing to
+count and shields rendered "no releases or repo not found". `downloads-pre` is the variant
+that can see one.

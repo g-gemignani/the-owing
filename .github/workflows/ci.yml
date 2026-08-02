@@ -206,97 +206,117 @@ jobs:
           path: dist/
           retention-days: 1
 
-  # iOS is the one target that cannot be cross-compiled: Apple's toolchain runs on
-  # macOS and nowhere else. It is also the one target whose output cannot be installed
-  # by double-clicking it — the .ipa below is UNSIGNED, because signing needs a paid
-  # Apple developer identity that no repository can carry, so it is for re-signing
-  # with AltStore/Sideloadly or an Xcode account, not for handing to a stranger.
+  # --- iOS: COMMENTED OUT, not deleted --------------------------------------------
   #
-  # `continue-on-error` is deliberate and is the only job that gets it. This build
-  # depends on whatever Xcode the macOS image happens to ship this month, and a
-  # gameplay fix must not sit unreleased because Apple moved something. A failure here
-  # is loud on the job, the release still goes out, and the notes say which platforms
-  # are actually in it rather than quietly listing three.
-  build-ios:
-    needs: [test, export-ready]
-    if: >-
-      github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
-      && github.repository_owner == 'g-gemignani'
-    runs-on: macos-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-godot
-        with:
-          version: ${{ env.GODOT_VERSION }}
-          templates: "true"
-
-      # Patched HERE and not committed. Godot refuses an iOS export with no team ID
-      # even when it is only being asked for an Xcode project, and `export_project_only`
-      # is wrong for anyone doing a real signed build on their own Mac — so the
-      # committed preset stays honest and CI overrides it for the length of one job.
-      # Located by NAME, not by `preset.4`: an index is a fact about the current file.
-      - name: Point the iOS preset at an unsigned project build
-        run: |
-          set -euo pipefail
-          awk '
-            /^\[preset\.[0-9]+\]$/            { sect = $0; sub(/\]$/, ".options]", sect); ios = 0 }
-            /^name="iOS"$/                    { want = sect }
-            $0 == want && want != ""          { print; print "application/app_store_team_id=\"CIONLY\"";
-                                                print "application/export_project_only=true"; next }
-            { print }
-          ' export_presets.cfg > "$RUNNER_TEMP/presets.cfg"
-          mv "$RUNNER_TEMP/presets.cfg" export_presets.cfg
-          sed -n '/^\[preset\.[0-9]*\]$/,$p' export_presets.cfg | grep -A4 'app_store_team_id' || {
-            echo "::error::the iOS preset was not patched — check the section names"; exit 1; }
-
-      # Project-only, so Godot writes an Xcode project instead of trying to sign an
-      # .ipa it has no identity for.
-      - name: Export the Xcode project
-        run: |
-          set -uo pipefail
-          mkdir -p build/ios
-          godot --headless --export-release "iOS" "$PWD/build/ios/TheOwing.ipa" || true
-          echo "--- what the export actually produced ---"
-          find build/ios -maxdepth 3 | head -40
-
-      # Discovered rather than assumed, and the listing above is printed either way:
-      # the exact layout Godot writes for a project-only iOS export is the one thing
-      # here that cannot be checked from Linux, so a first failure has to be readable.
-      - name: Build an unsigned .app, and wrap it as an .ipa
-        run: |
-          set -euo pipefail
-          proj=$(find build/ios -maxdepth 3 -name '*.xcodeproj' | head -1)
-          [ -n "$proj" ] || { echo "::error::no .xcodeproj under build/ios"; exit 1; }
-          echo "--- what this project actually offers ---"
-          xcodebuild -list -project "$proj" || true
-          # A TARGET, not a scheme. Godot's generated project has no *shared* scheme, so
-          # `-scheme <name>` is a coin flip on whether xcodebuild can see one; every
-          # project has targets. The name is read out of the project rather than guessed
-          # from the filename, which is what the first attempt did.
-          target=$(xcodebuild -list -json -project "$proj" \
-            | python3 -c 'import sys,json; print((json.load(sys.stdin)["project"].get("targets") or [""])[0])')
-          [ -n "$target" ] || { echo "::error::no target in $proj"; exit 1; }
-          echo "building target '$target' from $proj"
-          xcodebuild -project "$proj" -target "$target" \
-            -sdk iphoneos -configuration Release \
-            -derivedDataPath "$RUNNER_TEMP/dd" \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            ENABLE_BITCODE=NO \
-            build
-          app=$(find "$RUNNER_TEMP/dd" -maxdepth 4 -name '*.app' -type d | head -1)
-          [ -n "$app" ] || { echo "::error::xcodebuild produced no .app"; exit 1; }
-          mkdir -p "$RUNNER_TEMP/Payload" dist
-          cp -R "$app" "$RUNNER_TEMP/Payload/"
-          (cd "$RUNNER_TEMP" && zip -qry9 "$OLDPWD/dist/TheOwing-ios-unsigned.ipa" Payload)
-          du -h dist/TheOwing-ios-unsigned.ipa
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-ios
-          path: dist/
-          retention-days: 1
+  # It never went green. Three CI rounds got the Xcode project out of Godot and then
+  # stalled at `xcodebuild`, and the job log needs repository-admin rights to read, so
+  # the next step was blind iteration at ten minutes a round against a toolchain that
+  # cannot be reproduced on this machine. Commented out rather than deleted or left
+  # red: a permanently failing job trains everyone to ignore the one place a failure is
+  # supposed to be visible, and deleting it would throw away the part that DID work
+  # (D147).
+  #
+  # What is known to work, and is preserved verbatim below: the macOS half of
+  # `setup-godot`, the preset patch that gets Godot to emit an Xcode project at all
+  # (placeholder team ID + `export_project_only`, located by `name="iOS"`), and the
+  # Payload/-wrapping recipe. What is NOT known is why `xcodebuild` refuses. Restart
+  # from the `xcodebuild -list` dump the job prints before it fails.
+  #
+  # `tests/export_ready.sh` still proves on EVERY run that the iOS preset is blocked
+  # only by a missing toolchain and never by the project, so nothing here can rot
+  # silently while it is switched off.
+  #
+  #   # iOS is the one target that cannot be cross-compiled: Apple's toolchain runs on
+  #   # macOS and nowhere else. It is also the one target whose output cannot be installed
+  #   # by double-clicking it — the .ipa below is UNSIGNED, because signing needs a paid
+  #   # Apple developer identity that no repository can carry, so it is for re-signing
+  #   # with AltStore/Sideloadly or an Xcode account, not for handing to a stranger.
+  #   #
+  #   # `continue-on-error` is deliberate and is the only job that gets it. This build
+  #   # depends on whatever Xcode the macOS image happens to ship this month, and a
+  #   # gameplay fix must not sit unreleased because Apple moved something. A failure here
+  #   # is loud on the job, the release still goes out, and the notes say which platforms
+  #   # are actually in it rather than quietly listing three.
+  #   build-ios:
+  #     needs: [test, export-ready]
+  #     if: >-
+  #       github.event_name == 'push'
+  #       && github.ref == 'refs/heads/main'
+  #       && github.repository_owner == 'g-gemignani'
+  #     runs-on: macos-latest
+  #     continue-on-error: true
+  #     steps:
+  #       - uses: actions/checkout@v4
+  #       - uses: ./.github/actions/setup-godot
+  #         with:
+  #           version: ${{ env.GODOT_VERSION }}
+  #           templates: "true"
+  #
+  #       # Patched HERE and not committed. Godot refuses an iOS export with no team ID
+  #       # even when it is only being asked for an Xcode project, and `export_project_only`
+  #       # is wrong for anyone doing a real signed build on their own Mac — so the
+  #       # committed preset stays honest and CI overrides it for the length of one job.
+  #       # Located by NAME, not by `preset.4`: an index is a fact about the current file.
+  #       - name: Point the iOS preset at an unsigned project build
+  #         run: |
+  #           set -euo pipefail
+  #           awk '
+  #             /^\[preset\.[0-9]+\]$/            { sect = $0; sub(/\]$/, ".options]", sect); ios = 0 }
+  #             /^name="iOS"$/                    { want = sect }
+  #             $0 == want && want != ""          { print; print "application/app_store_team_id=\"CIONLY\"";
+  #                                                 print "application/export_project_only=true"; next }
+  #             { print }
+  #           ' export_presets.cfg > "$RUNNER_TEMP/presets.cfg"
+  #           mv "$RUNNER_TEMP/presets.cfg" export_presets.cfg
+  #           sed -n '/^\[preset\.[0-9]*\]$/,$p' export_presets.cfg | grep -A4 'app_store_team_id' || {
+  #             echo "::error::the iOS preset was not patched — check the section names"; exit 1; }
+  #
+  #       # Project-only, so Godot writes an Xcode project instead of trying to sign an
+  #       # .ipa it has no identity for.
+  #       - name: Export the Xcode project
+  #         run: |
+  #           set -uo pipefail
+  #           mkdir -p build/ios
+  #           godot --headless --export-release "iOS" "$PWD/build/ios/TheOwing.ipa" || true
+  #           echo "--- what the export actually produced ---"
+  #           find build/ios -maxdepth 3 | head -40
+  #
+  #       # Discovered rather than assumed, and the listing above is printed either way:
+  #       # the exact layout Godot writes for a project-only iOS export is the one thing
+  #       # here that cannot be checked from Linux, so a first failure has to be readable.
+  #       - name: Build an unsigned .app, and wrap it as an .ipa
+  #         run: |
+  #           set -euo pipefail
+  #           proj=$(find build/ios -maxdepth 3 -name '*.xcodeproj' | head -1)
+  #           [ -n "$proj" ] || { echo "::error::no .xcodeproj under build/ios"; exit 1; }
+  #           echo "--- what this project actually offers ---"
+  #           xcodebuild -list -project "$proj" || true
+  #           # A TARGET, not a scheme. Godot's generated project has no *shared* scheme, so
+  #           # `-scheme <name>` is a coin flip on whether xcodebuild can see one; every
+  #           # project has targets. The name is read out of the project rather than guessed
+  #           # from the filename, which is what the first attempt did.
+  #           target=$(xcodebuild -list -json -project "$proj" \
+  #             | python3 -c 'import sys,json; print((json.load(sys.stdin)["project"].get("targets") or [""])[0])')
+  #           [ -n "$target" ] || { echo "::error::no target in $proj"; exit 1; }
+  #           echo "building target '$target' from $proj"
+  #           xcodebuild -project "$proj" -target "$target" \
+  #             -sdk iphoneos -configuration Release \
+  #             -derivedDataPath "$RUNNER_TEMP/dd" \
+  #             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+  #             ENABLE_BITCODE=NO \
+  #             build
+  #           app=$(find "$RUNNER_TEMP/dd" -maxdepth 4 -name '*.app' -type d | head -1)
+  #           [ -n "$app" ] || { echo "::error::xcodebuild produced no .app"; exit 1; }
+  #           mkdir -p "$RUNNER_TEMP/Payload" dist
+  #           cp -R "$app" "$RUNNER_TEMP/Payload/"
+  #           (cd "$RUNNER_TEMP" && zip -qry9 "$OLDPWD/dist/TheOwing-ios-unsigned.ipa" Payload)
+  #           du -h dist/TheOwing-ios-unsigned.ipa
+  #
+  #       - uses: actions/upload-artifact@v4
+  #         with:
+  #           name: dist-ios
+  #           path: dist/
+  #           retention-days: 1
 
   # --- publish ------------------------------------------------------------------
   #
@@ -306,7 +326,7 @@ jobs:
   # depends on somebody remembering to cut a tag is a download link that goes stale.
   # Add a tag-triggered job beside this one the day there is a v1.
   release:
-    needs: [build-desktop, build-android, build-ios]
+    needs: [build-desktop, build-android]
     if: >-
       github.event_name == 'push'
       && github.ref == 'refs/heads/main'
@@ -341,12 +361,9 @@ jobs:
             echo "windows=$(have TheOwing-windows-x86_64.zip)"
             echo "macos=$(have TheOwing-macos-universal.zip)"
             echo "android=$(have TheOwing-android.apk)"
-            echo "ios=$(have TheOwing-ios-unsigned.ipa)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Write the release notes
-        env:
-          HAVE_IOS: ${{ steps.stock.outputs.ios }}
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
@@ -360,7 +377,10 @@ jobs:
           | Windows | `TheOwing-windows-x86_64.zip` | unsigned — SmartScreen warns once: *More info* → *Run anyway* |
           | macOS | `TheOwing-macos-universal.zip` | unsigned — `xattr -dr com.apple.quarantine "The Owing.app"` before opening |
           | Android | `TheOwing-android.apk` | `adb install`, or copy it over and allow unknown sources |
-          | iOS | `TheOwing-ios-unsigned.ipa` | **unsigned** — needs re-signing with Sideloadly, AltStore or your own Xcode account |
+
+          There is **no iOS build**. It is written and commented out in
+          `.github/workflows/ci.yml`, because it never got past `xcodebuild`; the
+          reasoning is in D147.
 
           Nothing here is code-signed, and nothing here will be: that needs a paid
           developer identity per platform. Two consequences worth knowing before you
@@ -369,17 +389,13 @@ jobs:
           * **The APK is signed with a throwaway key that is regenerated every build**,
             so Android will refuse to install one build over another. Uninstall the old
             one first. It is installable, not trusted, and it is not a Play Store build.
-          * **The .ipa will not install as-is.** iOS runs signed code only; the file is
-            here so somebody with an Apple ID can re-sign it, and for no other reason.
+          * **Neither mobile build has been run on real hardware.** Text size at phone
+            DPI is the most likely thing to be wrong.
 
           On **NixOS** the Linux binary needs `steam-run`, or a `patchelf
           --set-interpreter` — see
           [BUILD.md](https://github.com/g-gemignani/the-owing/blob/main/BUILD.md).
           NOTES
-          if [ "$HAVE_IOS" != "yes" ]; then
-            printf '\n> **This build has no iOS asset** — that job failed and is allowed to.\n' \
-              >> "$RUNNER_TEMP/notes.md"
-          fi
           # Unquoted heredoc: the block above must expand nothing (it is all backticks
           # and markdown), and this must expand exactly one variable.
           cat >> "$RUNNER_TEMP/notes.md" <<NOTES

@@ -23,7 +23,7 @@ and republishes them under the fixed tag `latest`.
 |---|---|---|
 | `build-desktop` | `ubuntu-latest` | Godot cross-exports Windows and macOS from Linux, so one runner does three platforms |
 | `build-android` | `ubuntu-latest` | the runner image already carries a JDK and the SDK; Godot finds both through `JAVA_HOME` and `ANDROID_HOME` |
-| `build-ios` | `macos-latest` | Apple's toolchain runs nowhere else, and this is the only job that needs a Mac |
+| ~~`build-ios`~~ | `macos-latest` | written, **commented out** — it never got past `xcodebuild` (D147) |
 
 Five things about it are deliberate and easy to undo by accident:
 
@@ -49,24 +49,24 @@ Five things about it are deliberate and easy to undo by accident:
   page and not in a bug report: every build is signed by a *different* key, so Android
   refuses to install one over another. A Play Store build would need a real key held
   outside this repository.
-* **`build-ios` is the only job allowed to fail.** It depends on whatever Xcode the
-  macOS image ships this month, and a gameplay fix must not sit unreleased because Apple
-  moved something. The failure is loud on the job, the release still goes out, and the
-  notes say which platforms are actually in it. The iOS preset is patched *in CI* — a
-  placeholder team ID and `export_project_only` — because Godot refuses an iOS export
-  with no team ID even when it is only being asked for an Xcode project, and
-  `export_project_only` is wrong for anyone doing a real signed build on their own Mac.
-  The committed preset stays honest.
+* **`build-ios` is commented out, not deleted.** It ran for three rounds and never got
+  past `xcodebuild`; the job log needs repository-admin rights to read, so continuing
+  meant blind iteration against a toolchain that cannot be reproduced off a Mac. A
+  permanently red job trains everyone to ignore the one place a failure is supposed to
+  be visible. The whole block is preserved verbatim in `ci.yml` — including the parts
+  that DID work: the macOS half of `setup-godot`, and the CI-only preset patch (a
+  placeholder team ID plus `export_project_only`) without which Godot refuses an iOS
+  export even when it is only being asked for an Xcode project. Restart from the
+  `xcodebuild -list` dump the job prints before it fails. `export_ready.sh` still proves
+  on every run that the preset is blocked by the toolchain and never by the project.
 
 Nothing in it needs a secret. `GITHUB_TOKEN` with `contents: write` is enough, and the
 jobs refuse to run outside this owner's repositories so a fork cannot try to publish
 into it.
 
-**Neither mobile build is signed for distribution**, and neither has been run on real
-hardware. The `.ipa` in particular will not install as-is: iOS runs signed code only, so
-it is there for somebody to re-sign with Sideloadly, AltStore or their own Xcode account.
-See [Is it actually playable on a phone?](#is-it-actually-playable-on-a-phone) — the
-answer is still "nobody has checked".
+**The Android build is not signed for distribution and has not been run on real
+hardware.** See [Is it actually playable on a phone?](#is-it-actually-playable-on-a-phone)
+— the answer is still "nobody has checked".
 
 ## Building distributables
 
