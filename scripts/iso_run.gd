@@ -768,6 +768,16 @@ func _enc_of(role: String) -> int:
 ## If the hero art is not installed the ring keeps its old companion, a lantern-bright
 ## pip, so an empty `assets/art/iso/` still gives a playable, legible marker rather than
 ## a floor with nobody on it.
+## Which of the four hero draws the current facing resolves to. Exists for the art check,
+## which has no other way to say in its own output WHICH state it photographed — and a
+## capture that cannot name its state is how three rounds of facing bugs got signed off
+## (D155).
+func hero_art_name() -> String:
+	var role := IsoFooting.hero_role(face_step)
+	if IsoFooting.hero_mirrored(face_step) and art.has(role + FLIP):
+		role += FLIP
+	return role if art.has(role) else "(no art: ring and pip)"
+
 func _draw_you(centre: Vector2, t: Vector2) -> void:
 	# offset to the same place the feet land, not to the tile's exact centre, so the ring
 	# closes around the boots instead of trailing a hoop's worth of floor in front of them

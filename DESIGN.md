@@ -9392,3 +9392,58 @@ exercises the mirrored path by default, because the corrected facing table makes
 the mirrored one — which is luck rather than design, and the durable answer is that a view
 with N discrete states needs N captures or a test that reads the geometry the engine actually
 produced, not the geometry the call site asked for.
+
+### D155 — The fix was already in; the harness and my own metrics were the last thing lying
+
+Reported again after D154 shipped: "the d and s directions are wrong and they are not
+centered". Both of those are true of the code as it stood **before** D154 and neither is true
+after it, which is the first thing worth writing down — the report describes the state that
+D154 diagnosed:
+
+* **D (↘)** drew the front painting unmirrored, and that painting looks down-LEFT, so she
+  walked down-right facing down-left.
+* **S (↙)** drew the mirror, and the mirror was expressed as a negative-width rect, which
+  this engine draws from `position` rightwards — so she was placed a whole sprite width off
+  her tile. Wrong facing and not centred, exactly as described.
+
+Verified in the game rather than argued: with D154 in, the four facings resolve to four
+distinct draws (`hero_s_flip`, `hero_s`, `hero_n_flip`, `hero_n`), and her body sits within
+**3 px** of the middle of her own lit ring in all four — ring centre x=639.5, body centre
+637.0 walking ↘ and 642.0 walking ↙, on a 116 px tile. So the answer to the report is a pull,
+not a patch.
+
+## What went wrong in the checking, twice, and cost most of this round
+
+**The rig photographed one state.** `IsoArtCheck` renders the hero at her default facing, so
+three attempts at her mirrored facings were checked against pictures that could not contain
+the defect (D154 said this; this decision fixes it). It now takes `--facing SE|SW|NW|NE` and
+prints which of the four draws is in the file, via a new `iso_run.hero_art_name()` — a capture
+that cannot name its own state is a capture that certifies nothing.
+
+**One process per capture, because two captures in one process return the same frame.**
+The first version looped over the facings: set `face_step`, `queue_redraw`, wait three idle
+frames, `await RenderingServer.frame_post_draw`, read the viewport. Under
+`--rendering-driver opengl3` the second read came back with the FIRST frame's pixels. Four
+files, one state, and the loop existed *specifically* to stop that. Two `frame_post_draw`s did
+not fix it either. One capture per process does, and that is how `tools/screenshots.gd` has
+always worked.
+
+**And my own metric sent me chasing a bug that was not there.** Mean absolute pixel
+difference over a window around the hero read ~6 for every pair of facings, including front
+against back, so I concluded the captures were identical and went looking for the mirror
+failing in the game. It was not: her sprite is ~4500 px of a ~25000 px window, so a complete
+change of sprite moves that mean by about 6, and 6 was the *signal*. The lesson is the same
+one D141 keeps teaching in a different costume: **a number is only evidence if you know what
+it should read when the thing is working.** Differencing two facings to isolate the sprite,
+then measuring its centre against the ring, is a metric with a known answer — and it settled
+the question in one run.
+
+## The facing follows movement, and it is deliberately not saved
+
+Asked directly, so it belongs in the log: `face_step` is written once per step, in `_on_pick`,
+from the direction actually taken — every movement path funnels through there, whether it came
+from a key, a button or a click. It is **view state**: not in the model, not in the save. A
+resumed run therefore starts her facing down-right no matter which way she was walking when it
+was saved, which is a real if minor oddity of resuming, and the price of keeping the rules and
+the picture separate (D131). If it ever needs to survive a resume, the place for it is the run
+save's view section, not `TraversalIso`.

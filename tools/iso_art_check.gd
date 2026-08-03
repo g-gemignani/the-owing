@@ -8,6 +8,21 @@
 ## explanations and one real one. This puts every sprite on screen at once, at the
 ## real tile size, so scale, footing and facing can all be judged in a single look.
 ##
+## The hero is FOUR draws — two paintings, each with a mirror — and this rig used to
+## photograph one of them, the default. Three consecutive attempts at her mirrored facings
+## were signed off against pictures that could not contain the bug (D154, D155). So it takes
+## `--facing`, one capture per process, and prints WHICH of the four draws is in the file:
+##
+##   for f in SE SW NW NE; do
+##     DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 godot --display-driver x11 \
+##       --rendering-driver opengl3 res://tools/IsoArtCheck.tscn -- --facing $f
+##   done
+##
+## One process each is not fussiness. Capturing twice inside one process returns the FIRST
+## frame's pixels here — `queue_redraw`, three idle frames and `frame_post_draw` all pass and
+## the viewport still hands back the old image, so a loop over the facings writes four copies
+## of one state (measured, D155).
+##
 ## Needs a real GL context, like tools/screenshots.gd. Under a bare Xvfb:
 ##   Xvfb :99 -screen 0 1280x720x24 &
 ##   DISPLAY=:99 LIBGL_ALWAYS_SOFTWARE=1 godot --rendering-driver opengl3 \
@@ -15,6 +30,11 @@
 extends Node
 
 const OUT := "user://shots/"
+## Indexed like `TraversalIso.DIRS`, for filenames a human can pick out of a directory.
+const DIR_NAME := ["SE", "NW", "SW", "NE"]
+## The key that walks each of them, from `iso_run.MOVE_KEYS`. In the filename because the
+## report that found D154 named the keys, not the arrows.
+const KEY_NAME := ["D", "A", "S", "W"]
 
 func _ready() -> void:
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
@@ -74,13 +94,34 @@ func _capture() -> void:
 
 	var packed := load("res://scenes/IsoRun.tscn") as PackedScene
 	var inst := packed.instantiate()
+
+	# The facing is chosen BEFORE the first draw and the process captures once, because
+	# capturing repeatedly inside one process does not work here: with `--rendering-driver
+	# opengl3` a second `get_viewport().get_texture().get_image()` after a `queue_redraw`
+	# came back with the FIRST frame's pixels, so a loop over the four facings saved four
+	# copies of one state and certified a bug it was built to catch (D155). Run it four
+	# times instead:
+	#
+	#   for f in SE SW NW NE; do godot ... res://tools/IsoArtCheck.tscn -- --facing $f; done
+	var want := ""
+	var args := OS.get_cmdline_user_args()
+	for i in args.size():
+		if String(args[i]) == "--facing" and i + 1 < args.size():
+			want = String(args[i + 1]).to_upper()
+	var label := "IsoArtCheck"
+	if want != "" and DIR_NAME.has(want):
+		var d: int = DIR_NAME.find(want)
+		inst.face_step = TraversalIso.DIRS[d]
+		label = "IsoFacing_%s_%s_key%s" % [want, TraversalIso.DIR_ARROW[d], KEY_NAME[d]]
+		print("FACING %s: step %s, key %s" % [want, TraversalIso.DIRS[d], KEY_NAME[d]])
+
 	add_child(inst)
 	for i in 4:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
-	img.save_png(OUT + "IsoArtCheck.png")
-	print("SHOT IsoArtCheck")
+	img.save_png(OUT + label + ".png")
+	print("SHOT %s (hero drawn as %s)" % [label, inst.hero_art_name()])
 	inst.queue_free()
 
 ## Put the player in the middle of the plate, carve a generous open area around them,
