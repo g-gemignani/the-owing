@@ -29,8 +29,17 @@ release.
 | **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-linux-x86_64.zip) (65 MB) | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
 | **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-windows-x86_64.zip) (74 MB) | SmartScreen warns once → *More info* → *Run anyway* |
 | **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (95 MB) | `xattr -dr com.apple.quarantine "The Owing.app"`, then open it |
-| **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) | `adb install`, or copy it over and allow unknown sources |
+| **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) | `adb install`, or copy it over and allow unknown sources. **If it says "App not installed", uninstall the old copy first** — see below |
 | **iOS** | *not in the release yet* | the build exists and is currently red — see below |
+
+**"App not installed" when you already have it.** Android identifies an app by the key that
+signed it, not by its version, so a build signed with a different key is a different app
+claiming the same name and the installer refuses it — without ever mentioning signatures. If
+this repository has no `ANDROID_KEYSTORE_BASE64` secret, CI generates a throwaway key per
+build and that refusal is guaranteed: uninstall the old copy, then install the new one. With
+the secret set (`tools/make_release_key.sh` makes the key and prints the three secrets to
+create), every build installs over the last one, and each release's notes say which of the two
+it was (D157).
 
 The links never change and always serve the newest build: the `latest` release is deleted and
 recreated on every green push to `main`, so the URL is permanent and the file behind it is
@@ -38,12 +47,11 @@ whatever `main` is now. That is deliberate, and it is also why **every build tel
 one it is** — the title screen carries `v0.1.0+<date>.<commit>` in the corner and Settings
 spells it out under *Build*. Quote that string in a bug report; the filenames cannot.
 
-Nothing here is code-signed and nothing here will be: that needs a paid developer
-identity per platform. Two consequences worth knowing before you download rather than
-after — **the APK is signed with a throwaway key regenerated every build**, so Android
-will refuse to install one over another (uninstall the old one first); and **the .ipa
-will not install as-is**, because iOS runs signed code only. On **NixOS** the Linux
-binary needs `steam-run`, or a `patchelf --set-interpreter`; see [BUILD.md](BUILD.md).
+Nothing here is code-signed by a paid identity and nothing here will be. The Android key
+above only decides whether two builds count as the same app — it does not make either one
+trusted — and **the .ipa will not install as-is**, because iOS runs signed code only. On
+**NixOS** the Linux binary needs `steam-run`, or a `patchelf --set-interpreter`; see
+[BUILD.md](BUILD.md).
 
 **iOS is wired up and not yet working.** `build-ios` runs on every push, is allowed to
 fail so it cannot hold up the other four, and is failing at `xcodebuild` today — so the

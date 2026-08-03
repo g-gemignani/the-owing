@@ -9511,3 +9511,57 @@ download links are always current *by design*. The release is replaced in place,
 file. The two costs are a few seconds of 404 while the release is recreated (D146) and a
 download count that resets — both cheap next to a link that goes stale, and neither of them
 tells you what you downloaded, which is what the stamp is for.
+
+### D157 — "App not installed" is what Android says when the signature changed, and it says nothing else
+
+Reported as a bug in the build: installing the APK over an existing copy fails with *"App not
+installed"* instead of updating. It is not a bug in the APK. **Android identifies an app by
+the key that signed it, not by its package name or its version** — two builds signed by
+different keys are two different applications claiming one name, and the installer refuses the
+second one. The message never mentions signatures, keys or certificates, which is why this was
+diagnosed from the CI configuration rather than from the phone.
+
+CI generated a fresh self-signed key on every build (documented in D144's notes and in
+BUILD.md, and still reported, which is the useful part of this decision: **a caveat on a
+download page is not a fix**). Every published APK was therefore signed by a key that had
+never existed before and would never exist again, so *no* build could ever install over *any*
+other.
+
+## A stable key when the repository has one, a throwaway when it does not
+
+`ANDROID_KEYSTORE_BASE64` — plus optional `ANDROID_KEYSTORE_ALIAS` and
+`ANDROID_KEYSTORE_PASSWORD` — is decoded to a keystore before the export, and
+`tools/make_release_key.sh` generates the key and prints the three secrets to create. With it
+set, every build installs over the last one. Without it, the old behaviour stands.
+
+The fallback is deliberate, not laziness. A fork has no secrets, and an Android job that fails
+for a missing secret is a red build that means nothing — the exact thing D147 switched the iOS
+job off to avoid. So the missing secret is a `::warning::` naming the script that fixes it, and
+the build still produces an installable APK.
+
+Three details that would each have cost a round:
+
+* **The keystore is opened with `keytool -list` before the export.** A corrupt or
+  wrong-password keystore otherwise reaches Godot, which falls back to producing an *unsigned*
+  package and exits zero — a failure that looks like success until a phone rejects it.
+* **The password is masked with `::add-mask::` before it is passed on**, because it travels
+  through a step output to reach the export step's environment.
+* **`version/code` was already the run number** as of D156, and that is the other half of what
+  an update needs: Android wants a *newer* version code AND a matching signature. Either alone
+  fails, and they fail with different messages, so getting one right and calling it done is a
+  live trap.
+
+## The notes now describe the build rather than the project
+
+`build-android` publishes `signing: stable | throwaway` as a job output and the release notes
+branch on it: either "installs over an earlier build" or "uninstall the old one first, and
+*App not installed* is what refusing looks like". A note that says "uninstall first" after that
+stopped being true is how a fixed problem keeps being reported — the same failure mode as a
+stale count in a README (D141), one layer out.
+
+**The first build after a key is introduced still needs one uninstall**, because the signature
+changes exactly once more. Both the script and the notes say so; there is no way around it, and
+a promise of "this is the last time" that turns out to be wrong is worse than the uninstall.
+
+**What this does not buy.** The key is self-signed, so the app is still "unknown source" and
+still not a Play Store build. It decides only whether a phone thinks two APKs are the same app.

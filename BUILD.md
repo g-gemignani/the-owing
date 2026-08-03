@@ -42,13 +42,27 @@ Five things about it are deliberate and easy to undo by accident:
   reason. A zero-byte file at the right path is precisely what would otherwise be
   published.
 
-* **The Android key is a throwaway, regenerated every build.** It exists so the APK is
-  installable, not so it is trusted, and it is passed in through
-  `GODOT_ANDROID_KEYSTORE_RELEASE_*` — the one part of Android export designed for CI,
-  so no editor-settings file has to be forged. The consequence belongs on the download
-  page and not in a bug report: every build is signed by a *different* key, so Android
-  refuses to install one over another. A Play Store build would need a real key held
-  outside this repository.
+* **The Android key is stable if the repository has one, and a throwaway if it does not.**
+  Either way it is passed in through `GODOT_ANDROID_KEYSTORE_RELEASE_*` — the one part of
+  Android export designed for CI, so no editor-settings file has to be forged — and either
+  way the APK is installable rather than *trusted*; a Play Store build needs a real identity
+  held outside this repository.
+
+  Which one matters to anyone with a phone. **Android identifies an app by the key that
+  signed it, not by its version**, so two builds signed by different keys are two different
+  apps claiming one package name and the installer refuses the second with *"App not
+  installed"* — a message that never mentions signatures, which is why it was reported as a
+  bug in the build (D157). With `ANDROID_KEYSTORE_BASE64` set (plus the optional
+  `ANDROID_KEYSTORE_ALIAS` and `ANDROID_KEYSTORE_PASSWORD`), every build installs over the
+  last one. Without it, CI generates a fresh key per build and every install needs an
+  uninstall first — which is deliberate rather than lazy, because a fork with no secrets
+  must still produce an APK, and a job that fails for a missing secret teaches people to
+  ignore red builds.
+
+  `tools/make_release_key.sh` creates the key and prints the three secrets to set. **Keep the
+  file**: a different key is a different app, so losing it costs everyone one more uninstall.
+  `version/code` is stamped from the CI run number (D156), which is the other half of what an
+  update needs — a newer code AND a matching signature.
 * **`build-ios` is commented out, not deleted.** It ran for three rounds and never got
   past `xcodebuild`; the job log needs repository-admin rights to read, so continuing
   meant blind iteration against a toolchain that cannot be reproduced off a Mac. A

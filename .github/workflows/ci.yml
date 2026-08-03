@@ -148,6 +148,8 @@ jobs:
   # it does still need from the SDK is `apksigner` and `zipalign`.
   build-android:
     needs: [test, export-ready]
+    outputs:
+      signing: ${{ steps.key.outputs.signing }}
     if: >-
       github.event_name == 'push'
       && github.ref == 'refs/heads/main'
@@ -160,20 +162,56 @@ jobs:
           version: ${{ env.GODOT_VERSION }}
           templates: "true"
 
-      # A throwaway self-signed key, generated per build. It is NOT a secret and must
-      # never become one: it exists so the APK is installable, not so it is trusted,
-      # and a Play Store upload would need a real key held outside this repository.
+      # Android identifies an app by its SIGNATURE, not by its version: a package signed
+      # with a different key than the installed copy is a different app claiming the same
+      # name, and the installer refuses it with "App not installed" — no mention of keys,
+      # which is why this cost a report to find (D157).
       #
-      # The consequence is worth stating on the download page rather than discovering:
-      # every build is signed by a DIFFERENT key, so Android refuses to install one
-      # over another. Uninstall the old build first.
-      - name: Generate a throwaway signing key
+      # So the key is stable IF the repository has one, and thrown away if it does not:
+      #
+      #   ANDROID_KEYSTORE_BASE64   the keystore, base64 (`tools/make_release_key.sh` prints it)
+      #   ANDROID_KEYSTORE_ALIAS    optional, defaults to `theowing`
+      #   ANDROID_KEYSTORE_PASSWORD optional, defaults to `theowing`
+      #
+      # With the secret set, every build installs over the last one. Without it the old
+      # behaviour stands — a fresh self-signed key per build, installable but never
+      # updatable — because a fork with no secrets must still produce an APK, and a job
+      # that fails for a missing secret trains people to ignore a red build.
+      #
+      # Neither key makes the APK TRUSTED. A Play Store upload needs a real identity held
+      # outside this repository; this only decides whether a phone treats two builds as
+      # the same app.
+      - name: Prepare the signing key
+        id: key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
-          keytool -keyalg RSA -genkeypair -alias theowing -keypass theowing \
-            -keystore "$RUNNER_TEMP/ci.keystore" -storepass theowing \
-            -dname "CN=The Owing CI, O=The Owing, C=IT" \
-            -validity 9999 -deststoretype pkcs12
+          ks="$RUNNER_TEMP/release.keystore"
+          if [ -n "${KEYSTORE_B64:-}" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$ks"
+            alias="${KEYSTORE_ALIAS:-theowing}"
+            pass="${KEYSTORE_PASSWORD:-theowing}"
+            # A keystore that cannot be opened must fail HERE, loudly, rather than as a
+            # Godot export that silently falls back to an unsigned package.
+            keytool -list -keystore "$ks" -storepass "$pass" -alias "$alias" >/dev/null
+            echo "signing=stable" >> "$GITHUB_OUTPUT"
+            echo "This build is signed with the repository's own key: it installs over the previous one."
+          else
+            keytool -keyalg RSA -genkeypair -alias theowing -keypass theowing \
+              -keystore "$ks" -storepass theowing \
+              -dname "CN=The Owing CI, O=The Owing, C=IT" \
+              -validity 9999 -deststoretype pkcs12
+            alias=theowing
+            pass=theowing
+            echo "signing=throwaway" >> "$GITHUB_OUTPUT"
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: signing with a throwaway key, so this APK cannot be installed over an earlier build. See tools/make_release_key.sh"
+          fi
+          echo "alias=$alias" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$pass"
+          echo "pass=$pass" >> "$GITHUB_OUTPUT"
 
       # Stamp the commit into the build before exporting. The release channel is a rolling
       # tag, so every published APK has the same filename and a downloaded copy cannot
@@ -186,9 +224,9 @@ jobs:
         env:
           # Godot reads these instead of the editor settings — the one part of Android
           # export that was designed for CI.
-          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/ci.keystore
-          GODOT_ANDROID_KEYSTORE_RELEASE_USER: theowing
-          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: theowing
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/release.keystore
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ steps.key.outputs.alias }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ steps.key.outputs.pass }}
         run: |
           set -uo pipefail
           echo "ANDROID_HOME=${ANDROID_HOME:-unset}  JAVA_HOME=${JAVA_HOME:-unset}"
@@ -213,6 +251,9 @@ jobs:
           set -euo pipefail
           signer=$(find "$ANDROID_HOME/build-tools" -name apksigner | sort | tail -1)
           "$signer" verify --verbose dist/TheOwing-android.apk
+          # The certificate digest is the thing a phone compares. Printed so that "why
+          # will it not update" can be answered from two build logs (D157).
+          "$signer" verify --print-certs dist/TheOwing-android.apk | grep -i "SHA-256 digest" || true
 
       - uses: actions/upload-artifact@v4
         with:
@@ -378,6 +419,8 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Write the release notes
+        env:
+          SIGNING: ${{ needs.build-android.outputs.signing }}
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
@@ -400,9 +443,6 @@ jobs:
           developer identity per platform. Two consequences worth knowing before you
           download rather than after:
 
-          * **The APK is signed with a throwaway key that is regenerated every build**,
-            so Android will refuse to install one build over another. Uninstall the old
-            one first. It is installable, not trusted, and it is not a Play Store build.
           * **Neither mobile build has been run on real hardware.** Text size at phone
             DPI is the most likely thing to be wrong.
 
@@ -415,6 +455,26 @@ jobs:
           --set-interpreter` — see
           [BUILD.md](https://github.com/g-gemignani/the-owing/blob/main/BUILD.md).
           NOTES
+          # What signing means for THIS build, which is a fact about the run rather than
+          # about the project — a note that says "uninstall first" when it is no longer
+          # true is how a fixed problem keeps being reported (D157).
+          if [ "${SIGNING:-throwaway}" = stable ]; then
+            cat >> "$RUNNER_TEMP/notes.md" <<'NOTES'
+          * **The APK is signed with the project's own key, so it installs over an earlier
+            build.** It is still self-signed: installable, not trusted, and not a Play Store
+            build. The first build after the key was introduced needed one uninstall; this is
+            not that build.
+          NOTES
+          else
+            cat >> "$RUNNER_TEMP/notes.md" <<'NOTES'
+          * **The APK is signed with a throwaway key, regenerated every build**, so Android
+            treats it as a different app from the copy already on the phone and refuses the
+            install. *"App not installed"* is what that refusal looks like — it says nothing
+            about signatures. **Uninstall the old build first.** Set
+            `ANDROID_KEYSTORE_BASE64` (see `tools/make_release_key.sh`) and this stops
+            happening.
+          NOTES
+          fi
           # Unquoted heredoc: the block above must expand nothing (it is all backticks
           # and markdown), and this must expand exactly one variable.
           cat >> "$RUNNER_TEMP/notes.md" <<NOTES
