@@ -9309,3 +9309,86 @@ always in the files.
 its base and the mummies keep a few faint marks on their wrappings, because those are in the
 painting and a matte is not entitled to an opinion about them. If they should go, the fix is a
 repaint, not a threshold.
+
+### D154 — A negative width does not mean what the floor thought, and a front/back pair cannot share one mirror rule
+
+Third report on the same sprite, and it was three faults stacked. Two of them were mine from
+D149; the one underneath had been there since mirroring was introduced in D131.
+
+## `draw_texture_rect` with a negative width draws from the position RIGHTWARDS
+
+The floor expressed "flip this" as a rect whose width is negative and whose position is the
+subject's RIGHT edge, on the reading that a negative size means "from here, leftwards,
+flipped". Half of that is true. Measured directly, by drawing the same texture three ways in
+one frame and reading the pixels back: the engine flips the image, and it draws it from
+`position` **rightwards** by the absolute width. So the mirrored facings were drawn one whole
+sprite width to the side of the tile they belong to — 75 px, most of a tile — and the two
+unmirrored ones were fine.
+
+That is why every previous round of this bug pointed at the anchor: the visible error was
+enormous, the anchor was the thing being changed, and **the anchor arithmetic was innocent.**
+Two decisions were spent moving a figure by 6 to 13 px while one facing in two was sitting 75
+px away, and none of it was caught because the invariant the test checked — the stand point
+lands on the tile centre — is a statement about the *rect*, and the rect was right. The
+engine was doing something else with it.
+
+Mirroring is now done to the TEXTURE, once, at load: `IsoFooting.flipped` returns a flipped
+`ImageTexture`, and the flipped copy is drawn through exactly the same code path as the
+original with its anchor negated. There is no engine behaviour left to remember, no call site
+that can get the order wrong, and the test now asserts the thing that actually failed — that
+the mirrored draw's rect has a POSITIVE width.
+
+## One mirror rule cannot serve both pairs
+
+`hero_s` and `hero_n` are the same character from the front and from behind, so the character
+turned around between the two paintings, so **the two files look at opposite sides of the
+screen.** The rule was symmetric — "of each pair, the one with the larger x is the right-hand
+facing, draw it as painted" — and a symmetric rule applied to an antisymmetric pair of files
+is necessarily backwards for one pair of the four facings, whichever way the art happens to
+face. One of her four directions was always wrong, and no amount of tuning the rule could fix
+it, because the rule had the wrong shape.
+
+Which way each file faces is now stated per file (`IsoFooting.HERO_PAINTED`) and it is
+checkable by eye rather than derived: the face inside `hero_s`'s hood is turned to the
+viewer's LEFT, so she is painted walking down-left, and the back view is that same character
+turned 180°, so it is up-right. Everything else follows — the other member of each pair is
+the mirror. `tests/test_art.gd` asserts the four directions resolve to four *distinct* draws
+and that a file is never mirrored when walking the way it was painted.
+
+## The contact band was too shallow to hold a stance
+
+D149 measured the stand point over the bottom 8% of the canvas. That band holds only her
+FRONT boot: her rear boot's sole sits 22 rows higher, because a foot placed behind is further
+up the screen in this projection. So she was anchored on one foot, which hung her body 13 px
+off the tile and swung it 26 px between her two mirrored facings — the "off centre" half of
+this report, and a real regression from the bounding-box centring D149 replaced.
+
+Three changes, each measured over all 23 figures:
+
+* **15% band**, which is where her rear sole enters (12%) with margin, and still well below
+  the knees on every figure in the set.
+* **Trimmed-span midpoint** rather than a centroid. A centroid follows whichever foot has
+  more pixels low in the band — that is how she came to be anchored on one boot. A plain
+  min-to-max midpoint fixes that and then follows a single stray pixel instead: a tail, a
+  dangling strap, one lit speck of floor moved three wanderers by 15-20 px between
+  neighbouring band depths. Trimming a tenth of the contact weight off each end is stable
+  across every depth from 12% to 18%.
+* **A clamp at 12% of width.** Every standing figure measures inside it; what it catches is
+  art that is not a standing figure. `combat.png` is a sword lying across its frame and its
+  lowest pixel is the blade tip in one corner — an honest 27%, which would hang the whole
+  sword up and to the right of the tile it marks. A marker whose contact point is that far
+  out reads better centred.
+
+Her stand point is now -4.3% of her width (hero_s) and -0.8% (hero_n), so the swing between
+mirrored facings is 6 px rather than 26, and her boots straddle the ring in all four.
+
+## The lesson about the harness, which is the expensive part
+
+`tools/IsoArtCheck.tscn` renders the floor with the hero at her DEFAULT facing, and the
+default is down-right. Down-right was the unmirrored facing until this decision, so **the
+mirrored code path was never once photographed** across three rounds of fixing it. A harness
+that only ever captures one state is a harness that certifies one state. The capture now
+exercises the mirrored path by default, because the corrected facing table makes down-right
+the mirrored one — which is luck rather than design, and the durable answer is that a view
+with N discrete states needs N captures or a test that reads the geometry the engine actually
+produced, not the geometry the call site asked for.

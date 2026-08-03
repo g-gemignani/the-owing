@@ -75,6 +75,8 @@ const COL_THREAT := Color(1.0, 0.36, 0.34)   ## something walking, while you can
 ## per redraw, and every lookup tolerates a missing file: art that has not been
 ## installed must degrade to the drawn floor, not crash a run.
 const ART_DIR := "res://assets/art/iso/"
+## Suffix for the mirrored copy of a sprite in `art` and `stand`. Not a file on disk.
+const FLIP := "_flip"
 ## On-screen height of each sprite, as a multiple of the tile's height. A sprite is
 ## anchored by its FEET — horizontally by its own stand point, measured from the art
 ## (`IsoFooting.offset`), which is why only a height is needed here.
@@ -105,11 +107,12 @@ var stand := {}
 ## which is what makes the hero look wrong while a floor is being explored: she never
 ## turns (D131).
 ##
-## Four facings, two files. `x + y` still picks toward-camera against away, and `x > y`
-## picks right against left — ↘ is (1,0) and ↙ is (0,1), ↗ is (0,-1) and ↖ is (-1,0), so
-## the one with the larger x is the right-hand one of each pair. The left-hand facing is
-## the right-hand art MIRRORED at draw time, which is what a 2D isometric game has always
-## done and is why this costs two paintings rather than four.
+## Four facings, two files: `x + y` picks toward-camera against away, and `IsoFooting`
+## decides which of the pair is the painting and which is its mirror, from the diagonal each
+## file was painted looking along. That decision is NOT the symmetric one this comment used
+## to describe ("the larger x is the right-hand one, drawn as painted") — the two paintings
+## are one character turned around, so they look at opposite sides of the screen and no
+## symmetric rule can suit both pairs (D154).
 ##
 ## Pure view state, deliberately not saved and not in the model — the rules do not care
 ## where she is looking, and a resumed run starts her facing down-right, toward the
@@ -238,6 +241,15 @@ func _load_art() -> void:
 				# floor and rock are surfaces, not figures — they have no stand point
 				if r != "floor" and r != "rock":
 					stand[r] = IsoFooting.offset(tex)
+				# The hero is the only art the floor mirrors, and the mirror is a TEXTURE
+				# rather than a flipped rect (D154). Built once here: her left-hand facings
+				# then draw through exactly the same code as her right-hand ones, with the
+				# anchor negated, and no call site has to remember what a negative width does.
+				if r == "hero_s" or r == "hero_n":
+					var flip := IsoFooting.flipped(tex)
+					if flip != null:
+						art[r + FLIP] = flip
+						stand[r + FLIP] = -float(stand.get(r, 0.0))
 	# The dungeon's own surface overwrites the generic pair, so the drawing code keeps
 	# asking for "floor" and "rock" and never learns that terrain exists. A terrain with
 	# no art installed simply leaves the generic pair in place.
@@ -730,9 +742,9 @@ func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
 ## player, so the hero cannot end up standing on a subtly different spot than the monster
 ## next to her.
 func _footed_rect(tex: Texture2D, centre: Vector2, t: Vector2, key: String,
-		role: String, mirrored: bool = false) -> Rect2:
+		role: String) -> Rect2:
 	return IsoFooting.rect(tex, centre, t, t.y * float(SPRITE_H.get(key, 1.8)),
-		float(stand.get(role, 0.0)), mirrored)
+		float(stand.get(role, 0.0)))
 
 ## The reverse of `_role_of`, for the glyph fallback only.
 func _enc_of(role: String) -> int:
@@ -761,13 +773,16 @@ func _draw_you(centre: Vector2, t: Vector2) -> void:
 	# closes around the boots instead of trailing a hoop's worth of floor in front of them
 	_ground_ring(centre + Vector2(0, t.y * 0.04), t, 0.30,
 		Color(COL_YOU.r, COL_YOU.g, COL_YOU.b, 0.55))
-	# Toward the camera or away, then right or left; the left of each pair is the same art
-	# mirrored, and `footed_rect` owns the mirroring so that her stand point survives it.
-	var role: String = "hero_s" if (face_step.x + face_step.y) > 0 else "hero_n"
+	# Which painting, and whether it is the mirrored copy: both come from `IsoFooting`, which
+	# knows which diagonal each file was painted looking along. The rule that used to live
+	# here — unmirrored for whichever of the pair had the larger x — was wrong for one facing
+	# of the four no matter what the art did (D154).
+	var role := IsoFooting.hero_role(face_step)
+	if IsoFooting.hero_mirrored(face_step) and art.has(role + FLIP):
+		role += FLIP
 	var tex: Texture2D = art.get(role)
 	if tex != null:
-		floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, "hero", role,
-			face_step.x <= face_step.y), false)
+		floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, "hero", role), false)
 		return
 	# no hero installed: the pip is what the eye tracks while the floor scrolls underneath
 	floor_view.draw_circle(centre - Vector2(0, t.y * 0.30), t.y * 0.17,

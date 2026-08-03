@@ -859,22 +859,72 @@ func _init() -> void:
 		if tex == null:
 			fails += 1; print("FAIL iso sprite %s did not load" % role); continue
 		var dx: float = IsoFooting.offset(tex)
-		# A stand point outside the canvas is a measurement that has gone wrong, not art
-		# that is unusual — the band it is taken from is inside the image by construction.
-		if absf(dx) >= 0.5:
-			fails += 1; print("FAIL iso sprite %s measured a stand point off its own canvas (%.3f)" % [role, dx])
+		# The clamp is what a stand point outside this range means: art that is not a standing
+		# figure (D154). Past the clamp is a measurement that has gone wrong.
+		if absf(dx) > IsoFooting.STAND_MAX + 0.0001:
+			fails += 1; print("FAIL iso sprite %s measured a stand point past the clamp (%.3f)" % [role, dx])
 		if absf(dx) > worst:
 			worst = absf(dx)
 			worst_role = role
-		for mirrored in [false, true]:
-			var r: Rect2 = IsoFooting.rect(tex, here, tile, tile.y * 1.95, dx, mirrored)
-			var stand_x: float = r.position.x + (0.5 + dx) * r.size.x
-			if absf(stand_x - here.x) > 0.5:
-				fails += 1
-				print("FAIL iso sprite %s stands %.1fpx off its tile%s" % [
-					role, stand_x - here.x, " mirrored" if mirrored else ""])
+		var r: Rect2 = IsoFooting.rect(tex, here, tile, tile.y * 1.95, dx)
+		var stand_x: float = r.position.x + (0.5 + dx) * r.size.x
+		if absf(stand_x - here.x) > 0.5:
+			fails += 1
+			print("FAIL iso sprite %s stands %.1fpx off its tile" % [role, stand_x - here.x])
+		# and the mirrored copy is a real texture whose stand point is the reflection of it,
+		# because that is the whole reason mirroring is done to the texture (D154)
+		var flip := IsoFooting.flipped(tex)
+		if flip == null:
+			fails += 1; print("FAIL iso sprite %s could not be mirrored" % role); continue
+		if flip.get_width() != tex.get_width() or flip.get_height() != tex.get_height():
+			fails += 1; print("FAIL mirrored %s changed size" % role)
+		var fdx: float = IsoFooting.offset(flip)
+		if absf(fdx + dx) > 1.0 / float(maxi(1, tex.get_width())) + 0.005:
+			fails += 1
+			print("FAIL mirrored %s stands at %.3f, not the reflection of %.3f" % [role, fdx, dx])
+		var fr: Rect2 = IsoFooting.rect(flip, here, tile, tile.y * 1.95, fdx)
+		if absf(fr.position.x + (0.5 + fdx) * fr.size.x - here.x) > 0.5:
+			fails += 1; print("FAIL mirrored %s stands off its tile" % role)
+		if fr.size.x <= 0.0:
+			fails += 1; print("FAIL mirrored %s got a negative-width rect (D154)" % role)
 	print("  (info: worst iso stand point is %s, %.1f%% of its own width off centre)" % [
 		worst_role, worst * 100.0])
+
+	# --- the hero's four facings are four DIFFERENT draws, and each looks where she walks ---
+	#
+	# Two paintings, four directions, one mirror each: the only way that works is if the two
+	# files look at opposite sides of the screen, which they do, because they are the same
+	# character turned around. The rule this replaced assumed both looked the same way and so
+	# was backwards for one facing of the four whatever the art did (D154).
+	var draws := {}
+	for step in TraversalIso.DIRS:
+		var key: String = "%s%s" % [IsoFooting.hero_role(step),
+			" mirrored" if IsoFooting.hero_mirrored(step) else ""]
+		if draws.has(key):
+			fails += 1
+			print("FAIL the hero is drawn identically walking %s and %s" % [draws[key], step])
+		draws[key] = step
+		# and the painting used has to be the one for that half of the compass
+		var toward: bool = (step.x + step.y) > 0
+		if (IsoFooting.hero_role(step) == "hero_s") != toward:
+			fails += 1
+			print("FAIL walking %s shows the %s painting" % [step, IsoFooting.hero_role(step)])
+	if draws.size() != TraversalIso.DIRS.size():
+		fails += 1
+		print("FAIL %d directions resolve to only %d distinct hero draws" % [
+			TraversalIso.DIRS.size(), draws.size()])
+	# The facing each file was painted looking along has to BE one of the directions, or the
+	# mirror test compares against something the game can never ask for.
+	for hrole in IsoFooting.HERO_PAINTED:
+		var as_painted: Vector2i = IsoFooting.HERO_PAINTED[hrole]
+		if not TraversalIso.DIRS.has(as_painted):
+			fails += 1
+			print("FAIL %s is declared painted facing %s, which is not a direction" % [
+				hrole, as_painted])
+		if IsoFooting.hero_mirrored(as_painted):
+			fails += 1
+			print("FAIL %s is mirrored when walking the way it was painted" % hrole)
+	print("  (info: hero facings %s)" % [draws.keys()])
 
 	# --- painted title art exists and is not filtered like a pixel sprite ---
 	#
