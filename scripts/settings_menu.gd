@@ -96,6 +96,19 @@ func _build() -> void:
 		Audio.play("ui_click")   # hear the change you just made
 		SettingsState.save_settings())
 
+	UI.divider(col)
+	UI.label(col, "Build")
+	# The same string as the title screen's corner, from the same place, because a build
+	# stamp that two screens can disagree about is worse than no stamp (D156). This is the
+	# deliberate place to look for it: the corner of the menu is for noticing, a Settings
+	# row is for reading out to somebody.
+	var stamp := UI.label(col, BuildInfo.label(), false)
+	if BuildInfo.is_dev():
+		UI.label(col, "Made by hand from a checkout, not by CI, so there is no commit in it.")
+	else:
+		UI.label(col, "Commit %s. Quote this in a bug report — every published build has the same filename." % BuildInfo.commit())
+	stamp.add_theme_font_size_override("font_size", UITheme.title_font())
+
 	UI.spacer(col)
 	UI.label(col, "Shortcuts: F11 fullscreen, Esc back")
 	UI.exit_button(col, "Back", func(): UI.goto(self, back_to))

@@ -9,6 +9,19 @@ config/name="The Owing"
 run/main_scene="res://scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.7")
 
+; What build this is, shown on the main menu and in Settings by `BuildInfo` (D156).
+;
+; The COMMITTED value is always the dev sentinel and `tests/test_content.gd` asserts it,
+; because the release channel is a rolling tag: every build is called `TheOwing-android.apk`
+; and replaces the last one, so a downloaded copy is otherwise unidentifiable — which is the
+; question this answers. `tools/stamp_build.sh` rewrites this line in CI, per export, to
+; `0.1.0+<date>.<short sha>`; it must never be committed stamped, or every build would claim
+; to be whichever one was last exported by hand.
+;
+; This key is read through `ProjectSettings`, so it travels in the PCK with no export filter
+; to remember and no file that could be left out.
+config/version="0.1.0-dev"
+
 ; The save directory is DECOUPLED from the game's name, which is the whole point of
 ; these two lines (D127). Godot derives `user://` from `config/name`, so renaming the
 ; game moves `app_userdata/Deckcrawl/` to `app_userdata/The Owing/` and orphans every

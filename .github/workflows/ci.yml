@@ -87,6 +87,13 @@ jobs:
           version: ${{ env.GODOT_VERSION }}
           templates: "true"
 
+      # Stamp the commit into the build before exporting. The release channel is a rolling
+      # tag, so every published APK has the same filename and a downloaded copy cannot
+      # otherwise say which one it is (D156). Never committed stamped — `test_content.gd`
+      # fails if it is.
+      - name: Stamp the build
+        run: tools/stamp_build.sh "$(git rev-parse --short=7 HEAD)" "${{ github.run_number }}"
+
       # `--export-release` is not reliably a truthful exit code — it returns non-zero
       # on import warnings that did not stop it, which is why `tests/export_ready.sh`
       # already treats the OUTPUT FILE as the verdict. So does this, with a size floor:
@@ -167,6 +174,13 @@ jobs:
             -keystore "$RUNNER_TEMP/ci.keystore" -storepass theowing \
             -dname "CN=The Owing CI, O=The Owing, C=IT" \
             -validity 9999 -deststoretype pkcs12
+
+      # Stamp the commit into the build before exporting. The release channel is a rolling
+      # tag, so every published APK has the same filename and a downloaded copy cannot
+      # otherwise say which one it is (D156). Never committed stamped — `test_content.gd`
+      # fails if it is.
+      - name: Stamp the build
+        run: tools/stamp_build.sh "$(git rev-parse --short=7 HEAD)" "${{ github.run_number }}"
 
       - name: Export the APK
         env:
@@ -391,6 +405,11 @@ jobs:
             one first. It is installable, not trusted, and it is not a Play Store build.
           * **Neither mobile build has been run on real hardware.** Text size at phone
             DPI is the most likely thing to be wrong.
+
+          **Which build is this?** Every build stamps its own commit: the title screen shows
+          it in the bottom corner and Settings spells it out, as
+          `v0.1.0+<date>.<commit>`. Quote that in a bug report — the filenames here never
+          change, because this tag is replaced in place on every push.
 
           On **NixOS** the Linux binary needs `steam-run`, or a `patchelf
           --set-interpreter` — see

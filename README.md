@@ -32,6 +32,12 @@ release.
 | **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) | `adb install`, or copy it over and allow unknown sources |
 | **iOS** | *not in the release yet* | the build exists and is currently red — see below |
 
+The links never change and always serve the newest build: the `latest` release is deleted and
+recreated on every green push to `main`, so the URL is permanent and the file behind it is
+whatever `main` is now. That is deliberate, and it is also why **every build tells you which
+one it is** — the title screen carries `v0.1.0+<date>.<commit>` in the corner and Settings
+spells it out under *Build*. Quote that string in a bug report; the filenames cannot.
+
 Nothing here is code-signed and nothing here will be: that needs a paid developer
 identity per platform. Two consequences worth knowing before you download rather than
 after — **the APK is signed with a throwaway key regenerated every build**, so Android

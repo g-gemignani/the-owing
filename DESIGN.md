@@ -9447,3 +9447,67 @@ resumed run therefore starts her facing down-right no matter which way she was w
 was saved, which is a real if minor oddity of resuming, and the price of keeping the rules and
 the picture separate (D131). If it ever needs to survive a resume, the place for it is the run
 save's view section, not `TraversalIso`.
+
+### D156 — Every published build has the same filename, so the build had to say its own name
+
+Asked directly, after downloading the APK for the second time: how do you tell which build
+you are holding? You could not, and the reason is a deliberate property of the release
+channel. `latest` is deleted and recreated on every green push (D142, D146), which is what
+makes the README's download links permanent — the URL never changes and always serves the
+newest commit — and it also means **every Android build this project has ever published is
+called `TheOwing-android.apk`**. Same name, same size to the megabyte, no dates on the file.
+The release notes record the commit, but the notes are a web page and the build is on a phone.
+
+So the commit travels inside the build.
+
+## Where the stamp lives
+
+`application/config/version` in `project.godot`, read through `BuildInfo`. That key is in the
+PCK by construction: no export filter to remember, no file that can be left out of a preset,
+and it works identically on all four platforms. The alternative — a generated `res://build.txt`
+— is exactly the kind of thing that works locally and is missing from the export, because
+Godot exports *imported resources* and a bare text file needs an `include_filter` nobody will
+maintain.
+
+`tools/stamp_build.sh` rewrites it immediately before each export in CI, to
+`0.1.0+<UTC date>.<short sha>`, and rewrites the Android preset's `version/name` to match with
+`version/code` set to the run number — so the OS's own App info screen agrees with the game,
+and a phone can tell that one build is newer than another. The base version comes from
+whatever is committed, minus the sentinel: this script stamps builds, it does not get to
+decide what release the game is.
+
+**The committed value is always `0.1.0-dev` and a test enforces it.** If a stamped
+`project.godot` were ever committed, every hand build afterwards would claim to be whichever
+CI build was exported last — a version string that lies is worse than one that says "dev",
+which is why an unstamped build says exactly that rather than inventing a number.
+
+## Where it shows, and why the title screen is allowed to have it
+
+Two places, one string, from one function. The corner of the title screen is for *noticing*
+(0.8x font, 55% alpha, under the buttons, on the scrim); the `Build` row in Settings is for
+*reading out to somebody* — full size, with the bare commit spelled out and told what it is
+for.
+
+D128 deleted a dimmed line from that exact spot on the title screen, and its reasoning is
+worth honouring rather than working around: "Cards 100 Relics 30 Dungeons 12 Zones 5" printed
+the sizes of the catalogues, so it was identical for every player who will ever launch the
+game and answered nothing anyone was asking. The stamp is the opposite on all three counts. It
+changes with every build, it is the one fact a bug report cannot be written without, and it
+was asked for. A footnote earns its place by being *different tomorrow*.
+
+## What the test pins
+
+`tests/test_content.gd` fails if: the setting is empty; the committed value is not the dev
+sentinel; `BuildInfo.label()` stops reading as a version; `tools/stamp_build.sh` is deleted;
+either screen stops mentioning `BuildInfo`; or `ci.yml` calls the stamper fewer than twice —
+one per export job, so adding a platform without stamping it is caught by the suite rather
+than by a puzzled tester. That last check counts strings in a workflow file, which is crude,
+and it is still the difference between "the stamp is wired" and "the stamp was wired in
+August".
+
+**The related question, answered here because it came up in the same breath:** the README's
+download links are always current *by design*. The release is replaced in place, so
+`releases/download/latest/TheOwing-android.apk` is permanent as a URL and never stale as a
+file. The two costs are a few seconds of 404 while the release is recreated (D146) and a
+download count that resets — both cheap next to a link that goes stale, and neither of them
+tells you what you downloaded, which is what the stamp is for.

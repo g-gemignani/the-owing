@@ -66,6 +66,20 @@ func _ready() -> void:
 	# was dimmed to 60% and shipped (D128). The title screen states what the game is
 	# and offers the four things you can do; a manifest of its own data files is not
 	# one of them.
+	#
+	# The build stamp that IS here now passes the test that line failed, and it is worth
+	# being explicit about why, so the next dimmed footnote has something to argue with.
+	# It changes on every build; it is the same string the release notes and a bug report
+	# need to agree on; and it answers a question that was actually asked, by somebody
+	# holding an APK that has the same filename as every other APK this project has ever
+	# published (D156).
+	var stamp := UI.label(col, BuildInfo.label(), false)
+	stamp.add_theme_font_size_override("font_size", int(UITheme.font() * 0.8))
+	stamp.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	stamp.modulate.a = 0.55
+	# A dev build says so out loud rather than showing a version number it does not have.
+	UI.hoverable(stamp, "Which build this is. CI stamps the commit into it; a `-dev` build was made by hand."
+		if BuildInfo.is_dev() else "Built from commit %s. Quote it in a bug report." % BuildInfo.commit())
 
 ## Re-home the title Label onto the painted cartouche, or leave it exactly where
 ## `UI.screen` put it if the ornament is not installed — the same "use it if it

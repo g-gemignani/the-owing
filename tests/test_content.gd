@@ -260,8 +260,54 @@ func _init() -> void:
 					fails += 1
 					print("FAIL README licence badge does not match LICENSE (Apache 2.0)")
 
+	# --- the build says which build it is, and the committed value is never a stamped one ---
+	#
+	# The release channel is a rolling tag: `latest` is deleted and recreated on every green
+	# push, so the README's download links always serve the newest build AND every published
+	# APK has the identical filename. That is a good property for the link and a bad one for
+	# a bug report — hence the stamp (D156), and hence this check, which guards the two ways
+	# it can quietly stop working.
+	var stamp := String(ProjectSettings.get_setting(BuildInfo.KEY, ""))
+	if stamp == "":
+		fails += 1; print("FAIL %s is not set — a build cannot say which build it is" % BuildInfo.KEY)
+	# A stamped `project.godot` must never be committed: `tools/stamp_build.sh` runs per
+	# export in CI, and if its output were committed then every hand build afterwards would
+	# claim to be whichever CI build was exported last.
+	elif not stamp.ends_with(BuildInfo.DEV_SUFFIX):
+		fails += 1
+		print("FAIL config/version is committed as '%s' — a stamped build got committed; it must end in '%s'" % [
+			stamp, BuildInfo.DEV_SUFFIX])
+	if not BuildInfo.is_dev():
+		fails += 1; print("FAIL BuildInfo.is_dev() is false in the repository")
+	if not BuildInfo.label().begins_with("v"):
+		fails += 1; print("FAIL BuildInfo.label() does not read as a version: %s" % BuildInfo.label())
+	if not FileAccess.file_exists("res://tools/stamp_build.sh"):
+		fails += 1; print("FAIL tools/stamp_build.sh is gone — nothing stamps a release")
+	# The stamp is worth nothing if no screen shows it. Source-level, because both screens
+	# reference autoloads and cannot be built in a `--script` run.
+	for screen in ["res://scripts/main_menu.gd", "res://scripts/settings_menu.gd"]:
+		var src := FileAccess.open(screen, FileAccess.READ)
+		if src == null:
+			fails += 1; print("FAIL %s is missing" % screen); continue
+		var body := src.get_as_text()
+		src.close()
+		if body.find("BuildInfo") == -1:
+			fails += 1
+			print("FAIL %s no longer shows the build stamp" % screen)
+	# And CI has to actually stamp, in every job that exports something.
+	var wf := FileAccess.open("res://.github/workflows/ci.yml", FileAccess.READ)
+	if wf != null:
+		var yml := wf.get_as_text()
+		wf.close()
+		var stamps := yml.count("tools/stamp_build.sh")
+		var exports := yml.count("--export-release")
+		if stamps < 2:
+			fails += 1
+			print("FAIL ci.yml calls the stamper %d time(s) for %d export step(s)" % [stamps, exports])
+	print("  (info: build stamp is '%s', dev=%s)" % [stamp, BuildInfo.is_dev()])
+
 	if fails == 0:
-		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness, README counts)")
+		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness, README counts, build stamp)")
 	else:
 		print("CONTENT TEST: FAIL (%d)" % fails)
 	quit()
