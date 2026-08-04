@@ -314,6 +314,44 @@ func _init() -> void:
 			print("FAIL ci.yml calls the stamper %d time(s) for %d export step(s)" % [stamps, exports])
 	print("  (info: build stamp is '%s', dev=%s)" % [stamp, BuildInfo.is_dev()])
 
+	# --- the signing key can never be committed, and the ignore has to cover what the
+	# --- script actually writes ---
+	#
+	# A committed keystore is not just a leaked private key: it IS the app's identity to
+	# Android (D157), so anyone holding it could sign a package that installs over a player's
+	# copy. And it would have to be replaced, which costs every install the one forced
+	# uninstall a stable key exists to avoid. Two halves, because the pattern being present
+	# proves nothing if the script writes something it does not match.
+	var ignore := FileAccess.open("res://.gitignore", FileAccess.READ)
+	if ignore == null:
+		fails += 1; print("FAIL .gitignore is missing")
+	else:
+		var rules := ignore.get_as_text()
+		ignore.close()
+		for pattern in ["*.keystore", "*.jks"]:
+			if rules.find(pattern) == -1:
+				fails += 1
+				print("FAIL .gitignore does not ignore %s — a signing key could be committed (D157)" % pattern)
+		var keygen := FileAccess.open("res://tools/make_release_key.sh", FileAccess.READ)
+		if keygen == null:
+			fails += 1; print("FAIL tools/make_release_key.sh is gone")
+		else:
+			var script := keygen.get_as_text()
+			keygen.close()
+			# The default output path, as the script spells it: `out="${1:-$PWD/<name>}"`.
+			var at := script.find("out=\"${1:-")
+			if at < 0:
+				fails += 1; print("FAIL cannot find make_release_key.sh's default output path")
+			else:
+				var line := script.substr(at, script.find("\n", at) - at)
+				var suffix_ok := false
+				for pattern in ["*.keystore", "*.jks"]:
+					if line.ends_with(pattern.substr(1) + "\"}\"") or line.contains(pattern.substr(1)):
+						suffix_ok = true
+				if not suffix_ok:
+					fails += 1
+					print("FAIL make_release_key.sh writes %s, which no .gitignore rule covers" % line)
+
 	if fails == 0:
 		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness, README counts, build stamp)")
 	else:

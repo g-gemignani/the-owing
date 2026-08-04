@@ -34,3 +34,13 @@ _repro/
 # `tools/gen_sfx.py` imports its tuning from `tools/gen_music.py`, and importing a Python
 # module writes bytecode beside it.
 tools/__pycache__/
+
+# The Android signing key, which `tools/make_release_key.sh` writes here by default.
+#
+# It must never be committed, and not only because it is a private key: it IS the app's
+# identity to Android (D157). Committed, anyone could sign a package that installs over a
+# player's copy as an update — and it would still have to be replaced, so every install
+# would need the one forced uninstall a stable key exists to avoid. It belongs in the
+# repository's secrets and in a backup that is not this checkout.
+*.keystore
+*.jks

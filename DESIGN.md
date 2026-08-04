@@ -9654,3 +9654,27 @@ Verified end to end rather than stubbed: run outside the shell it fetched OpenJD
 a real 2048-bit RSA key with a 10000-day validity, printed the certificate's SHA-256
 fingerprint and the base64 blob for the secret. `nix develop --command keytool -help` resolves
 inside the shell.
+
+### D160 — The signing key is ignored by pattern, and a test makes sure the pattern covers what the script writes
+
+`tools/make_release_key.sh` writes `the-owing-release.keystore` into the working directory by
+default, which is the repository root. `*.keystore` and `*.jks` are ignored now.
+
+Worth one entry rather than a silent line, because a committed keystore is a different animal
+from a committed secret. **It is the app's identity to Android** (D157): anyone holding it can
+sign a package that a phone accepts as an update to a player's copy. And the remedy is not
+"rotate it" — a new key is a new app, so replacing a leaked one costs every existing install
+the forced uninstall that having a stable key exists to avoid.
+
+The test in `tests/test_content.gd` has two halves on purpose. The pattern being present proves
+nothing on its own, so it also reads the script's default output path and checks that some
+ignore rule actually covers it — a rename of the output file is precisely the change that would
+leave a real key sitting in `git status` with the rule still smugly in place. Verified by
+breaking it: with `*.keystore` deleted from `.gitignore` the suite fails with the reason, and
+with a `.keystore` file in the root `git status` stays clean.
+
+**And a note on how this nearly went wrong.** While testing the failure path I reverted
+`.gitignore` with `git checkout .gitignore`, which restored it to HEAD and silently deleted the
+block added minutes earlier in the same uncommitted change. Undoing a deliberate edit to prove
+a test fails needs a copy of the file, not a checkout of it — the two operations look identical
+until the file already has work in it.
