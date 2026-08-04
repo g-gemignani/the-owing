@@ -352,6 +352,27 @@ func _init() -> void:
 					fails += 1
 					print("FAIL make_release_key.sh writes %s, which no .gitignore rule covers" % line)
 
+	# --- and the signing step has to say WHY it could not open the key ---
+	#
+	# It failed once with a message that named the wrong cause, because the password had a
+	# default (`theowing`, so a missing secret read as a wrong password) and because keytool
+	# prints its reason on stdout, which the step sent to /dev/null (D162). Both are one
+	# character of shell away from coming back, so both are pinned here.
+	var wf2 := FileAccess.open("res://.github/workflows/ci.yml", FileAccess.READ)
+	if wf2 == null:
+		fails += 1; print("FAIL .github/workflows/ci.yml is missing")
+	else:
+		var yml2 := wf2.get_as_text()
+		wf2.close()
+		# The assignment, not `${KEYSTORE_PASSWORD:-}` — the empty-guard idiom is how the step
+		# tests for the secret at all, so matching the bare prefix flags the fix as the bug.
+		if yml2.contains("pass=\"${KEYSTORE_PASSWORD:-"):
+			fails += 1
+			print("FAIL ci.yml defaults the keystore password again — a missing secret will report as a wrong one (D162)")
+		if yml2.contains("-storepass \"$pass\" -alias \"$alias\" >/dev/null"):
+			fails += 1
+			print("FAIL ci.yml drops keytool's stdout, which is where it prints why the key would not open (D162)")
+
 	if fails == 0:
 		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness, README counts, build stamp)")
 	else:

@@ -171,7 +171,7 @@ jobs:
       #
       #   ANDROID_KEYSTORE_BASE64   the keystore, base64 (`tools/make_release_key.sh` prints it)
       #   ANDROID_KEYSTORE_ALIAS    optional, defaults to `theowing`
-      #   ANDROID_KEYSTORE_PASSWORD optional, defaults to `theowing`
+      #   ANDROID_KEYSTORE_PASSWORD required alongside the keystore — never defaulted (D162)
       #
       # REPOSITORY secrets, and not environment secrets: this job declares no `environment:`,
       # so an environment secret would simply not be here and the build would fall back to a
@@ -207,16 +207,35 @@ jobs:
               exit 1
             }
             alias="${KEYSTORE_ALIAS:-theowing}"
-            pass="${KEYSTORE_PASSWORD:-theowing}"
-            # A keystore that cannot be opened must fail HERE, loudly, rather than as a
-            # Godot export that silently falls back to an unsigned package. The hint names
-            # the two ways it goes wrong in practice: the password in the Variables tab
-            # (where the workflow cannot see it, so this falls back to the default and the
-            # store refuses to open) and an alias that is not the one in the keystore.
-            keytool -list -keystore "$ks" -storepass "$pass" -alias "$alias" >/dev/null || {
-              echo "::error::Cannot open the keystore with alias '$alias'. Check ANDROID_KEYSTORE_PASSWORD is set as a SECRET (not a variable — the workflow cannot read those) and that ANDROID_KEYSTORE_ALIAS matches the key. tools/make_release_key.sh prints both."
+            # No default password when a real keystore was supplied. `theowing` was the
+            # default here once, and it turned "the password secret is missing" into "the
+            # password is wrong" — a guess that can only work by coincidence, reported as
+            # the one thing it was not (D162).
+            if [ -z "${KEYSTORE_PASSWORD:-}" ]; then
+              echo "::error::ANDROID_KEYSTORE_BASE64 is set but ANDROID_KEYSTORE_PASSWORD is empty. It has to be a REPOSITORY secret: the Variables tab is not read for it, and an Environment secret is invisible to this job, which declares no environment (D161)."
               exit 1
-            }
+            fi
+            pass="$KEYSTORE_PASSWORD"
+            echo "::add-mask::$pass"
+            # A keystore that cannot be opened must fail HERE, loudly, rather than as a
+            # Godot export that silently falls back to an unsigned package. keytool prints
+            # its reason on STDOUT, not stderr — dropping stdout to keep the key listing out
+            # of the log threw away the one line that says which cause it is, so it is
+            # captured and echoed instead (D162).
+            if ! out="$(keytool -list -keystore "$ks" -storepass "$pass" -alias "$alias" 2>&1)"; then
+              case "$out" in
+                *"password was incorrect"*)
+                  echo "::error::The keystore will not open: ANDROID_KEYSTORE_PASSWORD is not this keystore's password. Set the password tools/make_release_key.sh asked for, as a repository SECRET." ;;
+                *"does not exist"*)
+                  echo "::error::The keystore opened, but it holds no key called '$alias'. Set ANDROID_KEYSTORE_ALIAS to the alias tools/make_release_key.sh printed." ;;
+                *"keystore format"*|*"Invalid keystore"*|*EOFException*)
+                  echo "::error::ANDROID_KEYSTORE_BASE64 decoded to something that is not a keystore — most likely a truncated paste. Re-set it from 'base64 -w0 <the .keystore file>', as one line." ;;
+                *)
+                  echo "::error::Cannot open the keystore with alias '$alias'. keytool's reason is below." ;;
+              esac
+              echo "$out"
+              exit 1
+            fi
             echo "signing=stable" >> "$GITHUB_OUTPUT"
             echo "This build is signed with the repository's own key: it installs over the previous one."
           else

@@ -52,9 +52,11 @@ Five things about it are deliberate and easy to undo by accident:
   signed it, not by its version**, so two builds signed by different keys are two different
   apps claiming one package name and the installer refuses the second with *"App not
   installed"* — a message that never mentions signatures, which is why it was reported as a
-  bug in the build (D157). With `ANDROID_KEYSTORE_BASE64` set (plus the optional
-  `ANDROID_KEYSTORE_ALIAS` and `ANDROID_KEYSTORE_PASSWORD`), every build installs over the
-  last one. Without it, CI generates a fresh key per build and every install needs an
+  bug in the build (D157). With `ANDROID_KEYSTORE_BASE64` and
+  `ANDROID_KEYSTORE_PASSWORD` set (plus `ANDROID_KEYSTORE_ALIAS` if the key does not use the
+  default `theowing`), every build installs over the last one. The password has no default:
+  with a real keystore supplied, a missing one is an error rather than a guess that reports
+  itself as a wrong password (D162). Without it, CI generates a fresh key per build and every install needs an
   uninstall first — which is deliberate rather than lazy, because a fork with no secrets
   must still produce an APK, and a job that fails for a missing secret teaches people to
   ignore red builds.

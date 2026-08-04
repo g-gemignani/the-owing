@@ -9718,3 +9718,40 @@ throwaway key and a shrug. Three messages instead:
 
 A secret in the wrong place is indistinguishable from a secret that is absent. The only defence
 is that being absent says so, loudly, and names the place it should have been.
+
+### D162 — The diagnostic from D161 named the wrong cause, because the password had a default and keytool prints on stdout
+
+D161 added an error for "the keystore will not open". The first real build after it hit that
+error, and the message was no help: it listed two possible causes and the log had nothing to
+choose between them. Two separate mistakes, both in the code written to prevent exactly this.
+
+**A default password is a guess reported as a fact.** `pass="${KEYSTORE_PASSWORD:-theowing}"`
+meant a missing or misplaced password secret was not detected — it was replaced with a
+throwaway default, tried against a real keystore, and refused. The step then said the password
+was wrong. It was not wrong; it was *absent*, which is a different fix in a different tab. The
+default only ever made sense in the branch that also *generates* the key, where both ends are
+`theowing` by construction. With a real keystore supplied there is no defensible default, so
+an empty `ANDROID_KEYSTORE_PASSWORD` is now its own error, named as such.
+
+**keytool prints its reason on stdout, not stderr.** `keytool -list ... >/dev/null` was there
+to keep a certificate listing out of the log on success. On failure it also discarded the one
+line that says which cause it was:
+
+    keytool error: java.io.IOException: keystore password was incorrect
+    keytool error: java.lang.Exception: Alias <theowing> does not exist
+    keytool error: java.security.KeyStoreException: Unrecognized keystore format
+    keytool error: java.io.EOFException                      # decodes, but truncated
+
+All four go to stdout. Verified by running them, because "errors go to stderr" is the kind of
+assumption that costs a build to check. The output is captured now and echoed on failure, and
+the four messages are matched to say which secret to fix — wrong password, wrong alias, or a
+blob that decoded into something that is not a keystore.
+
+## What generalises
+
+A fallback is only honest where the thing falling back is also the thing being checked. Here
+the check was "does this key open" and the fallback silently changed one of the inputs to that
+check, so a *configuration* error was reported as a *credential* error. And a diagnostic is
+worth exactly what its output stream is worth: a message that describes causes it cannot
+distinguish is a comment, not an error. `tests/test_content.gd` now fails if either the default
+or the `>/dev/null` comes back, since both are one character of shell away.
