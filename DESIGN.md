@@ -9678,3 +9678,43 @@ with a `.keystore` file in the root `git status` stays clean.
 block added minutes earlier in the same uncommitted change. Undoing a deliberate edit to prove
 a test fails needs a copy of the file, not a checkout of it — the two operations look identical
 until the file already has work in it.
+
+### D161 — Repository secrets: not variables, because they are plaintext, and not environment secrets, because this job has no environment
+
+Asked while setting up the signing key from D157: should the three values be environment
+variables or repository variables? Neither, and the two wrong answers fail in different ways —
+which is why this is written down rather than answered once in a chat.
+
+**Not GitHub *Variables*.** `vars.*` are plaintext by design: readable in the settings UI by
+anyone who can see settings, and unmasked in logs. That is the wrong home for a private key and
+its password. It is also not what the workflow reads for them, so putting them there does not
+fail — it silently leaves `secrets.ANDROID_KEYSTORE_BASE64` empty and the build signs with a
+throwaway key, which looks like success until a phone refuses the install.
+
+**Not *environment* secrets.** They are scoped to a named environment and only exist for a job
+that declares `environment:`. `build-android` does not, so environment secrets would simply not
+be present — the same silent fallback. Environments buy deployment gates, required reviewers and
+per-target keys; a single rolling channel with a single self-signed key has no use for any of
+them, and adding an environment to reach a secret would be paying setup for nothing.
+
+**So: repository secrets**, for the two that are sensitive. The alias is a *name* rather than a
+secret, so the workflow now reads it from `secrets.ANDROID_KEYSTORE_ALIAS || vars.ANDROID_KEYSTORE_ALIAS`
+— a repository variable is a defensible place for it, and accepting both means the wrong tab is
+not a trap for the one value where the wrong tab is harmless.
+
+## The failures are now legible, which is the part that needed code
+
+Every wrong answer above lands as "the key is missing" and the old code's only response was a
+throwaway key and a shrug. Three messages instead:
+
+* no `ANDROID_KEYSTORE_BASE64` — the warning names the script that makes one AND says
+  *repository* secret, because "I set it as an environment secret" is a likely way to arrive
+  here;
+* base64 that does not decode — an error naming the exact tab, since a blob pasted with
+  newlines or a filename pasted instead of the contents both land here;
+* a keystore that will not open — an error naming the two causes, a password left in the
+  Variables tab (so the step fell back to the default and the store refused it) and an alias
+  that is not the one in the key.
+
+A secret in the wrong place is indistinguishable from a secret that is absent. The only defence
+is that being absent says so, loudly, and names the place it should have been.

@@ -10,11 +10,12 @@
 #   tools/make_release_key.sh                 # writes ./the-owing-release.keystore, prints the secret
 #   tools/make_release_key.sh /path/to/out.jks
 #
-# Then set THREE repository secrets (Settings → Secrets and variables → Actions), or use the
-# `gh` commands this prints:
+# Then set THREE repository SECRETS — Settings → Secrets and variables → Actions → the
+# **Secrets** tab, not the Variables tab, which is plaintext (D161) — or use the `gh` commands
+# this prints:
 #
 #   ANDROID_KEYSTORE_BASE64      the base64 blob below
-#   ANDROID_KEYSTORE_ALIAS       theowing
+#   ANDROID_KEYSTORE_ALIAS       theowing        (a name, not a secret: a repo variable also works)
 #   ANDROID_KEYSTORE_PASSWORD    whatever you chose
 #
 # KEEP THE FILE. It is not in the repository and it cannot be regenerated: a different key is
@@ -83,7 +84,9 @@ echo "alias:    $alias"
 keytool -list -v -keystore "$out" -storepass "$STOREPASS" -alias "$alias" \
 	| grep -i "SHA256:" || true
 echo
-echo "--- set these three secrets on the repository ---"
+echo "--- set these on the repository as SECRETS, not variables ---"
+echo "    GitHub -> Settings -> Secrets and variables -> Actions -> the 'Secrets' tab."
+echo "    The 'Variables' tab is plaintext and the workflow does not read it for these."
 echo
 if command -v gh >/dev/null 2>&1; then
 	echo "  base64 -w0 '$out' | gh secret set ANDROID_KEYSTORE_BASE64"

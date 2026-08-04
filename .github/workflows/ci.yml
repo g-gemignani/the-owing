@@ -173,6 +173,12 @@ jobs:
       #   ANDROID_KEYSTORE_ALIAS    optional, defaults to `theowing`
       #   ANDROID_KEYSTORE_PASSWORD optional, defaults to `theowing`
       #
+      # REPOSITORY secrets, and not environment secrets: this job declares no `environment:`,
+      # so an environment secret would simply not be here and the build would fall back to a
+      # throwaway key with nothing to say about it. Environments buy approval gates and
+      # per-target keys, neither of which one rolling channel with one key has any use for
+      # (D161).
+      #
       # With the secret set, every build installs over the last one. Without it the old
       # behaviour stands — a fresh self-signed key per build, installable but never
       # updatable — because a fork with no secrets must still produce an APK, and a job
@@ -184,19 +190,33 @@ jobs:
       - name: Prepare the signing key
         id: key
         env:
+          # SECRETS, not variables (D161). GitHub's `vars` are plaintext: readable in the
+          # settings UI and unmasked in logs, which is the wrong place for a private key and
+          # its password. The alias is the one value here that is not sensitive, so it is
+          # accepted from either — a repository variable is a reasonable place for a name, and
+          # somebody who puts it in the wrong tab should not get a silent fallback.
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS }}
+          KEYSTORE_ALIAS: ${{ secrets.ANDROID_KEYSTORE_ALIAS || vars.ANDROID_KEYSTORE_ALIAS }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
           ks="$RUNNER_TEMP/release.keystore"
           if [ -n "${KEYSTORE_B64:-}" ]; then
-            printf '%s' "$KEYSTORE_B64" | base64 -d > "$ks"
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$ks" || {
+              echo "::error::ANDROID_KEYSTORE_BASE64 is not valid base64. Set it as a SECRET with the one-line blob tools/make_release_key.sh prints (Settings -> Secrets and variables -> Actions -> Secrets)."
+              exit 1
+            }
             alias="${KEYSTORE_ALIAS:-theowing}"
             pass="${KEYSTORE_PASSWORD:-theowing}"
             # A keystore that cannot be opened must fail HERE, loudly, rather than as a
-            # Godot export that silently falls back to an unsigned package.
-            keytool -list -keystore "$ks" -storepass "$pass" -alias "$alias" >/dev/null
+            # Godot export that silently falls back to an unsigned package. The hint names
+            # the two ways it goes wrong in practice: the password in the Variables tab
+            # (where the workflow cannot see it, so this falls back to the default and the
+            # store refuses to open) and an alias that is not the one in the keystore.
+            keytool -list -keystore "$ks" -storepass "$pass" -alias "$alias" >/dev/null || {
+              echo "::error::Cannot open the keystore with alias '$alias'. Check ANDROID_KEYSTORE_PASSWORD is set as a SECRET (not a variable — the workflow cannot read those) and that ANDROID_KEYSTORE_ALIAS matches the key. tools/make_release_key.sh prints both."
+              exit 1
+            }
             echo "signing=stable" >> "$GITHUB_OUTPUT"
             echo "This build is signed with the repository's own key: it installs over the previous one."
           else
@@ -207,7 +227,7 @@ jobs:
             alias=theowing
             pass=theowing
             echo "signing=throwaway" >> "$GITHUB_OUTPUT"
-            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: signing with a throwaway key, so this APK cannot be installed over an earlier build. See tools/make_release_key.sh"
+            echo "::warning::No ANDROID_KEYSTORE_BASE64 secret: signing with a throwaway key, so this APK cannot be installed over an earlier build. Make one with tools/make_release_key.sh, and set it as a REPOSITORY secret — an Environment secret is invisible here because this job declares no environment, and the Variables tab is not read for these (D161)."
           fi
           echo "alias=$alias" >> "$GITHUB_OUTPUT"
           echo "::add-mask::$pass"

@@ -59,6 +59,12 @@ Five things about it are deliberate and easy to undo by accident:
   must still produce an APK, and a job that fails for a missing secret teaches people to
   ignore red builds.
 
+  They are **repository secrets** — Settings → Secrets and variables → Actions → *Secrets*.
+  Not the *Variables* tab (plaintext, and not read for these), and not *environment* secrets:
+  `build-android` declares no `environment:`, so those would be invisible to it and the build
+  would quietly fall back to a throwaway key. Environments are for approval gates and
+  per-target keys; one rolling channel with one key needs neither (D161).
+
   `tools/make_release_key.sh` creates the key and prints the three secrets to set. It needs
   `keytool`, which comes with a JDK: the dev shell carries one (`nix develop`, or `direnv
   allow`), and run outside it the script fetches one through `nix shell nixpkgs#jdk` for the
