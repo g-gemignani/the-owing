@@ -9615,3 +9615,42 @@ channel does not keep that.
 **The counter that would be worth having is not a badge.** The question behind "how many
 downloads" is "is anyone playing it", and a rolling dev channel with one known player answers
 that in person.
+
+### D159 — The signing-key script asked for a password twice and then admitted it had no JDK
+
+`tools/make_release_key.sh` shipped in D157 and failed on first use:
+
+    Keystore password (min 6 chars):
+    Again:
+    ./tools/make_release_key.sh: line 48: keytool: command not found
+
+Two separate mistakes, and the second one is the one worth remembering.
+
+**It checked its only dependency last.** The script prompted for a password, confirmed it, and
+*then* ran the one binary it exists to drive. Anything a script cannot work without belongs
+above the first prompt — the cost of getting that order wrong is small and entirely avoidable,
+and it lands on somebody who was doing what the documentation told them to.
+
+**And I had already hit this and worked around it instead of fixing it.** Writing D157 I ran
+the script here, found no `keytool`, stubbed one out to test the shell logic, and shipped. The
+stub proved the flow and hid the fact that **the machine this script is for cannot run it** —
+which is the whole point of running it. A stub is a way to test a branch you cannot reach, not
+a way to pass a check you are failing.
+
+## Fixed in the place that was actually wrong
+
+`keytool` comes with a JDK, and the dev shell had Godot and nothing else. `flake.nix` carries
+`pkgs.jdk` now, so `nix develop` (or `direnv allow`) has it — which also serves the local
+Android export BUILD.md describes, since that needs `keytool` for a debug key too.
+
+Outside the shell the script no longer just complains: if `nix` is available it re-execs itself
+through `nix shell nixpkgs#jdk`, exporting `STOREPASS` so the inner run does not prompt again,
+with a guard variable so a still-missing `keytool` cannot loop. That is the same move
+`tools/gen_music.py` documents for ffmpeg — **a tool that needs a toolchain should acquire it
+or say exactly how, and this repository already had a convention for which.** If `nix` is
+absent it prints the three ways to get a JDK and exits 127.
+
+Verified end to end rather than stubbed: run outside the shell it fetched OpenJDK 21, generated
+a real 2048-bit RSA key with a 10000-day validity, printed the certificate's SHA-256
+fingerprint and the base64 blob for the secret. `nix develop --command keytool -help` resolves
+inside the shell.

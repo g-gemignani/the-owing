@@ -15,6 +15,11 @@
         devShells.default = pkgs.mkShell {
           packages = [
             pkgs.godot          # Godot 4 editor + runtime (GDScript build)
+            # `keytool`, for the Android signing key (D157). In the shell rather than left to
+            # `nix shell` per command because two things here need it: making the release key
+            # and the local Android export BUILD.md describes, and the first run of
+            # `tools/make_release_key.sh` failed on a missing JDK (D159).
+            pkgs.jdk
           ];
 
           shellHook = ''

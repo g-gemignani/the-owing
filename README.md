@@ -142,7 +142,8 @@ Needs **Godot 4.7**. Either put it on `PATH`, or:
 GODOT=/path/to/godot ./run.sh
 ```
 
-There is a Nix flake if you want a pinned toolchain:
+There is a Nix flake if you want a pinned toolchain — Godot, plus a JDK because `keytool`
+signs the Android key:
 
 ```bash
 nix develop --command godot

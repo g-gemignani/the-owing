@@ -29,6 +29,32 @@ set -euo pipefail
 out="${1:-$PWD/the-owing-release.keystore}"
 alias="${ALIAS:-theowing}"
 
+# `keytool` ships with a JDK, and this project's dev shell had no JDK in it — so the first run
+# of this script asked for a password twice and THEN died on `keytool: command not found`
+# (D159). Checked first, and fixed rather than reported: the shell carries a JDK now, and if
+# this is run outside it, `nix shell` fetches one for the length of the command, which is the
+# same move `tools/gen_music.py` documents for ffmpeg.
+if ! command -v keytool >/dev/null 2>&1; then
+	if [ -n "${OWING_JDK_REEXEC:-}" ]; then
+		echo "keytool is still missing inside the nix shell — that should not happen" >&2
+		exit 127
+	fi
+	if command -v nix >/dev/null 2>&1; then
+		echo "no keytool here; fetching a JDK through nix for this one command..." >&2
+		# STOREPASS is exported rather than re-prompted: the inner run must not ask twice.
+		export OWING_JDK_REEXEC=1
+		exec nix shell nixpkgs#jdk --command "$0" "$@"
+	fi
+	cat >&2 <<'MISSING'
+keytool not found. It comes with a JDK. Either:
+
+  * enter this project's dev shell, which now carries one:   nix develop   (or `direnv allow`)
+  * or run this script through nix directly:                 nix shell nixpkgs#jdk --command tools/make_release_key.sh
+  * or install any JDK your distribution packages (openjdk / temurin).
+MISSING
+	exit 127
+fi
+
 if [ -e "$out" ]; then
 	echo "refusing to overwrite $out — a new key would orphan every existing install" >&2
 	exit 1

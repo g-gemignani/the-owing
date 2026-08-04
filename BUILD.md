@@ -59,8 +59,11 @@ Five things about it are deliberate and easy to undo by accident:
   must still produce an APK, and a job that fails for a missing secret teaches people to
   ignore red builds.
 
-  `tools/make_release_key.sh` creates the key and prints the three secrets to set. **Keep the
-  file**: a different key is a different app, so losing it costs everyone one more uninstall.
+  `tools/make_release_key.sh` creates the key and prints the three secrets to set. It needs
+  `keytool`, which comes with a JDK: the dev shell carries one (`nix develop`, or `direnv
+  allow`), and run outside it the script fetches one through `nix shell nixpkgs#jdk` for the
+  length of the command rather than failing — the first version checked for it *after* asking
+  for a password twice (D159). **Keep the file**: a different key is a different app, so losing it costs everyone one more uninstall.
   `version/code` is stamped from the CI run number (D156), which is the other half of what an
   update needs — a newer code AND a matching signature.
 * **`build-ios` is commented out, not deleted.** It ran for three rounds and never got
