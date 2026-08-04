@@ -238,6 +238,14 @@ func _init() -> void:
 					fails += 1
 					print("FAIL README does not say '%s' — there are %d suites now" % [
 						claim, suites])
+			# A per-release download counter cannot survive a rolling release: the release
+			# object is deleted and recreated on every green push, and the counts go with
+			# it, so the badge reads "downloads since the last commit" — usually 0, and
+			# never what a reader takes it for (D158). Deleted, and kept deleted here.
+			if text.find("img.shields.io/github/downloads") != -1:
+				fails += 1
+				print("FAIL README has a downloads badge — the release is recreated per push, so it counts nothing (D158)")
+
 			# The licence badge is a STATIC string too, and for a better reason than the
 			# suite count: the dynamic one read the licence off the GitHub API, and when
 			# that answered "repo not found" for one minute during a rename, GitHub's

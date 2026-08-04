@@ -9565,3 +9565,53 @@ a promise of "this is the last time" that turns out to be wrong is worse than th
 
 **What this does not buy.** The key is self-signed, so the app is still "unknown source" and
 still not a Play Store build. It decides only whether a phone thinks two APKs are the same app.
+
+### D158 — The downloads badge was not broken, it was being reset several times a day
+
+Reported as a broken counter: the README's downloads badge read 0 after real downloads. It was
+reading correctly. GitHub counts downloads **per release object**, and this channel deletes and
+recreates its release on every green push (D146), so each push throws the counters away with
+the release they belonged to.
+
+Measured against the live release rather than reasoned about:
+
+    tag latest | created 2026-08-03T21:01:15Z   (the run for d498caf, ~3 hours before the report)
+    target_commitish d498cafa...                (correct — because it was just recreated)
+    TheOwing-android.apk       downloads=0
+    TheOwing-linux-x86_64.zip  downloads=0
+    TheOwing-macos-universal.zip downloads=0
+    TheOwing-windows-x86_64.zip  downloads=0
+
+So the badge's honest label was never "downloads" — it was "downloads since the last commit",
+which on a repository that pushes several times a day is a slow-moving zero. **It is deleted,
+and `tests/test_content.gd` keeps it deleted**, because the next person to notice the gap in
+the badge row will re-add it for the same reason it was added the first time.
+
+This is D148's rule arriving from a different direction. There, a dynamic badge was replaced by
+a static one because a transient API failure poisons a cache indefinitely; the underlying fact
+was fine and the transport was not. Here the transport is fine and **the fact does not exist**:
+no query against this channel can answer "how many people have downloaded this", because the
+channel does not keep that.
+
+## What was considered and rejected
+
+* **Stop deleting the release and clobber the assets in place.** Counters would accumulate, and
+  the release page would then record the commit it was FIRST created from — D146 measured that
+  and it is why the delete-and-recreate exists. The API dump above shows the property being
+  protected: `target_commitish` is the commit this build actually came from. A page that names
+  the wrong commit is a worse lie than a missing badge.
+* **Accumulate the total ourselves** — read the counts before each delete, add them up, publish
+  a shields endpoint JSON. It works and it is a self-inflicted database: the number can only be
+  updated when a release is *replaced*, so downloads of the current build are invisible until it
+  is gone, which makes the badge permanently behind by one release cycle.
+* **Cut a real tag per build** (`build-<run>`), let `releases/latest/download/...` resolve to the
+  newest, and sum `downloads/:user/:repo/total` across all of them. This is the genuinely
+  correct answer: counts accumulate, every release records its own commit, and the download link
+  stays permanent. The cost is a release object per push — hundreds of them, each holding ~230 MB
+  of assets — and pruning old ones deletes their counts again, which puts the problem back. It is
+  a channel redesign rather than a badge fix, so it is written down here as the option it is and
+  left for a decision about what the channel is FOR.
+
+**The counter that would be worth having is not a badge.** The question behind "how many
+downloads" is "is anyone playing it", and a rolling dev channel with one known player answers
+that in person.

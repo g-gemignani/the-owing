@@ -3,7 +3,6 @@
 [![ci](https://github.com/g-gemignani/the-owing/actions/workflows/ci.yml/badge.svg)](https://github.com/g-gemignani/the-owing/actions/workflows/ci.yml)
 [![tests](https://img.shields.io/badge/tests-39%20suites-brightgreen)](#tests)
 [![latest build](https://img.shields.io/github/release-date-pre/g-gemignani/the-owing?label=latest%20build&color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
-[![downloads](https://img.shields.io/github/downloads-pre/g-gemignani/the-owing/latest/total?color=brightgreen&label=downloads)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
 [![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-brightgreen)](#play-it)
 [![Godot](https://img.shields.io/badge/Godot-4.7-478cbf)](https://godotengine.org)
 [![licence](https://img.shields.io/badge/licence-Apache_2.0-brightgreen)](LICENSE)
@@ -31,6 +30,13 @@ release.
 | **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (95 MB) | `xattr -dr com.apple.quarantine "The Owing.app"`, then open it |
 | **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) | `adb install`, or copy it over and allow unknown sources. **If it says "App not installed", uninstall the old copy first** — see below |
 | **iOS** | *not in the release yet* | the build exists and is currently red — see below |
+
+**There is no downloads badge, and there cannot be one.** GitHub counts downloads per
+release *object*, and this channel deletes and recreates its release on every green push — so
+the counter starts at zero several times a day and the number a badge would show is "downloads
+since the last commit", which is not a number anybody wants. Measured rather than assumed: the
+release object was three hours old and read 0 across all four assets, after real downloads
+(D158).
 
 **"App not installed" when you already have it.** Android identifies an app by the key that
 signed it, not by its version, so a build signed with a different key is a different app
