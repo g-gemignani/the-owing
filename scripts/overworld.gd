@@ -85,7 +85,9 @@ func _ready() -> void:
 	var nav2 := UI.row(col, 8)
 	# No Settings button: `UI.screen()` puts a settings control in every screen's
 	# top-right corner now, so a second door on the hub is the same door twice (D133).
-	UI.button(nav2, "How this works", func(): UI.goto(self, "res://scenes/Glossary.tscn"), 38.0)
+	# No "How this works" either, for the same reason one step further out: it is on the
+	# title screen, which is the screen a player who does not know how this works is
+	# looking at, and the hub is the screen they reach after starting a run (D164).
 	# Pushed to the far end and sized to its own text. It was a full-width bar across
 	# the bottom, which made quitting the loudest thing on the hub. It stays a button
 	# and stays unbound to Escape on purpose — `tests/playable_test.gd` lists this
@@ -167,9 +169,15 @@ func _refresh() -> void:
 	if GameState.last_haul != "":
 		told.append(GameState.last_haul)
 		GameState.last_haul = ""
-	# explain the world once, the first time it is seen
+	# Explain the world once, the first time it is seen. It used to end by naming "How
+	# this works", which was a button in the row below until that door moved to the title
+	# screen — and a hint that names a button which is not on the screen is worse than a
+	# hint that names none, so the pointer is gone rather than re-aimed (D164). Sending
+	# somebody to the title screen mid-run is not a hint, it is an errand. What stays is
+	# the rule itself, which is the one thing a player standing here has to know before
+	# choosing a door.
 	if MetaState.hint_once("overworld"):
-		told.append("Pick a region, then a dungeon. Cards found inside are only KEPT if you beat its boss. \"How this works\" explains the rest.")
+		told.append("Pick a region, then a dungeon. Cards found inside are only KEPT if you beat its boss.")
 	news.text = "    ".join(told)
 	news.visible = not told.is_empty()
 

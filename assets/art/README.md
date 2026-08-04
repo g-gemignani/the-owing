@@ -145,6 +145,19 @@ where the stamp is:
 
 Never point it at `~/Downloads` directly; it rewrites in place.
 
+**One image on its own needs the box given by hand**, because the intersection is what
+finds the stamp and one frame has nothing to intersect with. `main_menu.png` was that
+case: it predates the installers, so it sat through every batch this tool cleaned and
+kept its sparkle on the rock ledge until D163. The box is only the *search area* — the
+mask is still measured inside it, so it hugs the star rather than being the rectangle
+that was typed:
+
+    godot --headless --script tools/strip_sparkle.gd -- \
+        --file=res://assets/art/main_menu.png --box=1130,565,90,90 --dry
+
+Look at the preview before dropping `--dry`. With one frame, nothing but the eye stands
+between that box and a brazier.
+
 ## Zone art has its own prefix, and it matters
 
 `foundry` is a dungeon id AND (as `foundry_zone`) a zone. The generator names files

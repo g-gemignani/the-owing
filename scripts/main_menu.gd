@@ -49,11 +49,12 @@ func _ready() -> void:
 	# collection that survives death and a floor that walks — none of which a player
 	# can guess, and all of which they previously had to start a run to be told
 	# (D133). No Settings button: `UI.screen()` puts one in every top-right corner.
+	#
+	# This is the ONLY door to it now. The overworld had a second one, from before this
+	# existed, and two entrances to one screen from the two halves of the game is the
+	# duplication D133 removed everywhere else on that hub (D164). `glossary.gd`'s
+	# `return_to` therefore defaults here and needs no setting.
 	UI.button(col, "How this works", func():
-		# The glossary's Back went to the Overworld unconditionally, which is a screen
-		# a player arriving from here has never seen. It is a static rather than a
-		# parameter because `UI.goto` takes a path, not arguments.
-		load("res://scripts/glossary.gd").return_to = "res://scenes/MainMenu.tscn"
 		UI.goto(self, "res://scenes/Glossary.tscn"))
 	UI.spacer(col)
 	UI.button(col, "Quit", func(): get_tree().quit())

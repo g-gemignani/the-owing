@@ -27,16 +27,26 @@
 ## At 1:1, in a corner that combat dims to 0.55, they are not findable — which is the
 ## condition that matters. Judge it with the corner contact sheet, not zoomed in.
 ##
-## Two modes:
+## Three modes:
 ##
 ##   godot --headless --script tools/strip_sparkle.gd            # the installed 12
 ##   godot --headless --script tools/strip_sparkle.gd -- <dir>   # a folder of sources
+##   godot --headless --script tools/strip_sparkle.gd -- --file=<png> --box=x,y,w,h
 ##
 ## The second is for art that has NOT been installed yet, and is the one to use for a
 ## batch that will be cropped on the way in: strip in the frame the generator drew,
 ## before any geometry changes, while every image in the batch still agrees on where
-## the stamp is. Add `--dry` to either to write a mask preview and touch nothing.
+## the stamp is. Add `--dry` to any of them to write a mask preview and touch nothing.
 ## Then: godot --headless --import
+##
+## The third is for ONE image, which the intersection cannot do at all — and it is a
+## real case, not a convenience: `main_menu.png` arrived on its own, before the
+## installers existed, and kept its stamp through every batch this tool has cleaned
+## (D163). What the intersection buys is only *where* the stamp is; the box supplies
+## that by hand and everything after it is unchanged, so the mask still hugs the star
+## instead of being the rectangle that was typed. `x,y,w,h` are pixels in the image,
+## and it has to sit inside the bottom-right window below. Run `--dry` first: with one
+## frame there is nothing but the eye between a box and a brazier.
 extends SceneTree
 
 const ART := "res://assets/art/"
@@ -92,23 +102,52 @@ const MIN_FRAMES := 3
 
 var _dry := false
 var _grow_px := GROW
+## `--box`, in image pixels. Empty for the intersection modes, where nothing is given
+## by hand. Converted to window coordinates once the image size is known.
+var _box := Rect2i()
 
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	_dry = args.has("--dry")
 	var src := ""
+	var single := ""
 	for a in args:
 		var s := String(a)
 		if s.begins_with("--grow="):
 			_grow_px = maxi(0, int(s.trim_prefix("--grow=")))
+		elif s.begins_with("--file="):
+			single = s.trim_prefix("--file=")
+		elif s.begins_with("--box="):
+			var f := s.trim_prefix("--box=").split(",")
+			if f.size() != 4:
+				print("--box wants four numbers: --box=x,y,w,h in image pixels")
+				quit(2)
+				return
+			_box = Rect2i(int(f[0]), int(f[1]), int(f[2]), int(f[3]))
 		elif not s.begins_with("--"):
 			src = s
-	var paths := _source_dir(src) if src != "" else _dungeon_backdrops()
-	if paths.size() < MIN_FRAMES:
-		print("need at least %d images sharing one frame to isolate the stamp; found %d" % [
-			MIN_FRAMES, paths.size()])
-		quit(2)
-		return
+
+	var paths: Array[String] = []
+	if single != "":
+		# One image, so the box is doing the job MIN_FRAMES exists to do. Refused
+		# without one rather than falling back to "the brightest blob in the corner",
+		# which is the brazier test this tool's header says does not work.
+		if _box.size.x <= 0 or _box.size.y <= 0:
+			print("--file needs --box=x,y,w,h: with one frame there is no intersection to find the stamp with")
+			quit(2)
+			return
+		paths.append(single)
+	else:
+		if _box.size.x > 0:
+			print("--box only applies to --file; the intersection finds its own stamp")
+			quit(2)
+			return
+		paths = _source_dir(src) if src != "" else _dungeon_backdrops()
+		if paths.size() < MIN_FRAMES:
+			print("need at least %d images sharing one frame to isolate the stamp; found %d" % [
+				MIN_FRAMES, paths.size()])
+			quit(2)
+			return
 
 	var imgs: Array[Image] = []
 	var w := 0
@@ -129,6 +168,28 @@ func _init() -> void:
 		imgs.append(im)
 	print("%d images, largest %dx%d, window anchored to the bottom-right corner" % [
 		imgs.size(), w, h])
+	if imgs.is_empty():
+		print("nothing to work on")
+		quit(2)
+		return
+
+	# The hand-given box, moved into window coordinates now that the size is known, and
+	# checked to be inside the part of the window where the background estimate holds —
+	# the same BG_R margin the intersection excludes. A box that overhangs it would be
+	# clipped silently, which reads as "the tool missed half the star".
+	if _box.size.x > 0:
+		var wx0 := imgs[0].get_width() - WIN_W
+		var wy0 := imgs[0].get_height() - WIN_H
+		_box.position -= Vector2i(wx0, wy0)
+		var usable := Rect2i(BG_R, BG_R, WIN_W - 2 * BG_R, WIN_H - 2 * BG_R)
+		if not usable.encloses(_box):
+			print("--box must fall inside the %dx%d bottom-right window, %dpx in from its edges: that is x %d-%d, y %d-%d of a %dx%d image" % [
+				WIN_W, WIN_H, BG_R,
+				wx0 + usable.position.x, wx0 + usable.end.x,
+				wy0 + usable.position.y, wy0 + usable.end.y,
+				imgs[0].get_width(), imgs[0].get_height()])
+			quit(2)
+			return
 
 	var mask := _stamp_mask(imgs)
 	if mask.is_empty():
@@ -239,10 +300,13 @@ func _stamp_mask(imgs: Array[Image]) -> Array[bool]:
 		for i in lit.size():
 			if ex[i] <= LIT:
 				lit[i] = false
-	# the margin where the clipped box mean lies
+	# the margin where the clipped box mean lies, and — in single-image mode — everything
+	# outside the box, which is standing in for the intersection
 	for y in WIN_H:
 		for x in WIN_W:
 			if x < BG_R or x >= WIN_W - BG_R or y < BG_R or y >= WIN_H - BG_R:
+				lit[y * WIN_W + x] = false
+			elif _box.size.x > 0 and not _box.has_point(Vector2i(x, y)):
 				lit[y * WIN_W + x] = false
 	# One stamp, so one blob. Anything else that survived twelve images is a
 	# coincidence between two rooms, not the thing being removed.

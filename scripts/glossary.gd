@@ -48,17 +48,16 @@ extends Control
 ## status added to the fight appears here the same day, with its painting.
 const CombatScreen := preload("res://scripts/combat.gd")
 
-## Where `Back` goes. A static rather than a constant because the screen has two
-## callers now — the overworld's nav row and the main menu — and a `Back` that always
-## lands on the overworld would drop a player who came from the title screen into the
-## middle of the game. A caller that is not the overworld sets this before it
-## navigates:
+## Where `Back` goes. It stays a static, and its default is now the title screen,
+## because the title screen is the only door left: the overworld's copy of the button
+## was removed once this one existed, and a `Back` defaulting to the overworld would
+## have dropped a player who has not started a run into the middle of the game (D164).
 ##
-##     load("res://scripts/glossary.gd").return_to = "res://scenes/MainMenu.tscn"
+## A caller that is not the title screen sets this before it navigates:
+##
+##     load("res://scripts/glossary.gd").return_to = "res://scenes/Overworld.tscn"
 ##     UI.goto(self, "res://scenes/Glossary.tscn")
-##
-## Defaulted to the overworld, so the caller that has always existed needs no change.
-static var return_to := "res://scenes/Overworld.tscn"
+static var return_to := "res://scenes/MainMenu.tscn"
 
 ## Heading labels in build order, for the index. Filled by `_section()`.
 var _headings: Array[Label] = []

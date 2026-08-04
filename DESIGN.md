@@ -9755,3 +9755,69 @@ check, so a *configuration* error was reported as a *credential* error. And a di
 worth exactly what its output stream is worth: a message that describes causes it cannot
 distinguish is a comment, not an error. `tests/test_content.gd` now fails if either the default
 or the `>/dev/null` comes back, since both are one character of shell away.
+
+### D163 — The title screen kept the generator's sparkle, because one image cannot form an intersection
+
+`main_menu.png` had a four-point white star stamped on the rock ledge at the bottom
+right, 63x64 px after the halo, and it had been there since the file arrived. Reported as
+"a white blob watermark", which is exactly what it looks like on a screen with no other
+white on that side.
+
+**Why it survived.** `strip_sparkle.gd` (D83c) finds the stamp by *intersection*: the
+pixels that are brighter than their surroundings in **every** image sharing a frame. That
+is what separates the mark from a brazier, and it is why the tool refuses fewer than
+three images (D122 lowered it from four to three; two is a coincidence, one is nothing).
+`main_menu.png` is the one painting that predates the installers — it was the .jpg
+resolved by `TITLE_ART_CANDIDATES`, re-rolled to PNG in D114 — so it never travelled with
+a batch, and every pass this tool has made was over a set it was not in.
+
+**What was added, and what was NOT.** A single-image mode, `--file=<png> --box=x,y,w,h`.
+The box supplies the one thing the intersection was there for — *where* — and nothing
+else changes: the excess-over-local-mean test still decides which pixels inside the box
+are stamp, the largest-blob and grow steps still run, `MAX_PIXELS`/`MAX_SIDE` still refuse
+anything that is not a small compact blob, and `--dry` still writes the preview. So the
+mask hugs the star instead of being the rectangle that was typed, which matters here
+because the box that was typed (90x90) is more than twice the star's area and includes a
+shadow edge and a crack in the rock.
+
+The alternative was "find the brightest blob in the corner of this one image", and this
+tool's own header records that test finding a brazier in nine of twelve backdrops. A hand
+box with the automatic mask inside it is the honest split: the human supplies the judgment
+the intersection was substituting for, and the machine still measures the pixels.
+
+**The result, judged the way the tool says to judge it.** At 3x the patch is a soft smudge
+where the shadow boundary was; at 1:1 it is not findable, and the corner is under no text
+and no scrim. Captured through `tools/screenshots.gd -- MainMenu` rather than eyeballed in
+the file, because the file is not what anybody sees.
+
+### D164 — One door to How This Works, and the hint that pointed at the other one
+
+"How this works" was on the overworld's nav row (D133) and, later, on the title screen —
+the same screen reachable from two places. The title screen is the right one and the
+overworld's copy is gone. The argument is D133's own: two entrances to one screen is the
+duplication that removed the second Settings button and merged Loadouts into Collection.
+And the ordering matters — the glossary explains an escrow, a collection that survives
+death and a floor that walks, which is knowledge a player wants *before* choosing a
+dungeon, not from the hub they land on after starting a run.
+
+**Two things had to move with the button, and one of them was a bug in waiting.**
+
+* `glossary.gd`'s `return_to` defaulted to the overworld, so `Back` from the title screen
+  had to be overridden at the call site. With the overworld door gone the default was the
+  path no caller uses, and the only caller was carrying the correction. Default flipped to
+  the title screen; the override in `main_menu.gd` deleted. The static stays, because a
+  caller inside a run would still need it.
+* The overworld's first-visit hint ended with `"How this works" explains the rest` —
+  naming a button in the row directly below it. That sentence outlived the button by the
+  length of one screenshot. **A hint that names a control which is not on the screen is
+  worse than a hint that names none**, so the pointer was deleted rather than re-aimed at
+  the title screen: sending somebody out of a run to read a definition is an errand, not a
+  hint. What stays is the rule about keeping cards, which is what a player standing on that
+  screen actually has to know.
+
+What this costs, stated plainly: mid-run the glossary is now unreachable without quitting
+to the title. That is a real gap and the pause menu is where it would be closed, but the
+pause menu is not a place to add a door on the way past — it gets decided on its own.
+
+Verified by capture, not by reading the diff: `tools/screenshots.gd -- Overworld` is what
+showed the orphaned hint, one row above where the button used to be.
