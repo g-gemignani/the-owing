@@ -28,7 +28,7 @@ release.
 | **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-linux-x86_64.zip) (65 MB) | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
 | **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-windows-x86_64.zip) (74 MB) | SmartScreen warns once → *More info* → *Run anyway* |
 | **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (95 MB) | `xattr -dr com.apple.quarantine "The Owing.app"`, then open it |
-| **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) | `adb install`, or copy it over and allow unknown sources. **If it says "App not installed", uninstall the old copy first** — see below |
+| **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) (89 MB) | Android 7.0+, 32- or 64-bit. `adb install`, or copy it over and allow unknown sources. **If it says "App not installed", uninstall the old copy first** — see below |
 | **iOS** | *not in the release yet* | the build exists and is currently red — see below |
 
 **There is no downloads badge, and there cannot be one.** GitHub counts downloads per
@@ -68,6 +68,13 @@ your own Xcode account.
 
 The Android build is **untested on real hardware** — nobody has run this on a phone
 yet, and text size at phone DPI is the most likely thing to be wrong (D65).
+
+**How old a phone will take it?** Android 7.0 (2016) is the floor, and it is Godot
+4.7's floor rather than a choice here — the engine's own build pins `minSdk 24`. Above
+that line the APK is deliberately broad: it carries both 32-bit and 64-bit ARM, and it
+treats Vulkan as optional and falls back to OpenGL ES 3.0, so a phone with no Vulkan
+driver still runs it. Until build 22 the APK was 64-bit only and every 32-bit phone
+refused it with *"app not compatible"* (D170).
 
 > **Status: playable prototype, fully painted.** All 310 art files are in — 27
 > backdrops, 35 enemy plates, an illustration for every one of the 100 cards, and a

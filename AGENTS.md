@@ -364,7 +364,10 @@ effects are drawn at runtime by `scripts/fx.gd`.
 
 - **Cross-platform.** Desktop (Linux/Windows/macOS) builds here; Android and iOS stay
   *exportable* even though their toolchains cannot run here (D44). Touch is a first
-  class input — a finger has no hover, so cards read on tap (D43).
+  class input — a finger has no hover, so cards read on tap (D43). The APK reaches as
+  wide as the engine allows: Android 7.0 is Godot's own floor, and both ARM ABIs ship in
+  one package because 64-bit-only is refused by a 32-bit phone as *"app not compatible"*
+  — a message that names neither (D170).
 
 ## The engineering lessons, learned the hard way
 

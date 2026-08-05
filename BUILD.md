@@ -191,6 +191,30 @@ godot --headless --export-release "Android" "$PWD/build/android/TheOwing.apk"
 
 The preset is already in `export_presets.cfg`.
 
+**How wide the APK reaches, and why the preset says so out loud.** Android 7.0 is the
+oldest version that can run it, and that is Godot's floor rather than a choice — the
+engine's own `config.gradle` pins `minSdk 24`, so going lower means rebuilding the
+native libraries against a lower NDK API. Nothing in the pipeline can move it.
+
+What the pipeline *does* control is the ABI, and there the default was wrong. Godot
+ships all four ABIs inside the export template and copies out only the ones the preset
+asks for; asking for nothing means `arm64-v8a` alone, which a 32-bit-only phone cannot
+install at all. So the preset now names all four explicitly — both ARM ABIs on, both
+x86 off:
+
+```ini
+architectures/armeabi-v7a=true
+architectures/arm64-v8a=true
+architectures/x86=false
+architectures/x86_64=false
+```
+
+That costs 25 MB (64 MB → 89 MB). The x86 pair stays off: it is another 25 MB each and
+buys emulators, not phones. Two things check this, because the editor **rewrites**
+`export_presets.cfg` whenever the export dialog is touched and a rewrite that drops the
+keys is silent — `tests/test_content.gd` reads the preset on every PR, and CI reads the
+ABIs back out of the finished APK (D170).
+
 ### iOS
 
 **Requires macOS with Xcode.** Apple's toolchain does not run on Linux or Windows,

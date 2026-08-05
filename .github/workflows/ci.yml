@@ -277,6 +277,29 @@ jobs:
           fi
           du -h dist/TheOwing-android.apk
 
+      # The one Android failure that looks like a success: an APK that exports, signs
+      # and verifies, and that half the phones it is offered to cannot install. Android
+      # matches a package to a device by ABI, and refuses a mismatch with "app not
+      # compatible" — a message that never says the word ABI, so nobody reports it as
+      # one. That shipped for 22 builds (D170).
+      #
+      # So the ABIs are read back out of the FINISHED archive, not trusted from the
+      # preset: `export_presets.cfg` is rewritten by the editor whenever the export
+      # dialog is opened, and it is the APK that gets installed.
+      - name: Check the APK carries both ARM ABIs
+        run: |
+          set -uo pipefail
+          have=$(unzip -Z1 dist/TheOwing-android.apk 'lib/*' | cut -d/ -f2 | sort -u)
+          echo "ABIs in the APK: $(echo "$have" | tr '\n' ' ')"
+          fail=0
+          for abi in armeabi-v7a arm64-v8a; do
+            case "$have" in
+              *"$abi"*) ;;
+              *) echo "::error::the APK has no lib/$abi — those devices cannot install it"; fail=1 ;;
+            esac
+          done
+          exit $fail
+
       # apksigner writes a `.idsig` sidecar next to the APK — the v4 signature, which
       # `adb install` can use and a human downloading a file cannot. It shipped as a
       # release asset once; nothing reads it off a release page, so it goes.
@@ -473,6 +496,11 @@ jobs:
           | Windows | `TheOwing-windows-x86_64.zip` | unsigned — SmartScreen warns once: *More info* → *Run anyway* |
           | macOS | `TheOwing-macos-universal.zip` | unsigned — `xattr -dr com.apple.quarantine "The Owing.app"` before opening |
           | Android | `TheOwing-android.apk` | `adb install`, or copy it over and allow unknown sources |
+
+          The APK needs **Android 7.0 or newer** — that is Godot 4.7's own floor, not a
+          choice — and carries both 32-bit (`armeabi-v7a`) and 64-bit (`arm64-v8a`) ARM,
+          so any phone from 7.0 up can install it. It asks for OpenGL ES 3.0 and treats
+          Vulkan as optional, falling back on devices that have none.
 
           There is **no iOS build**. It is written and commented out in
           `.github/workflows/ci.yml`, because it never got past `xcodebuild`; the

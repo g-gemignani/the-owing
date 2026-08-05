@@ -185,6 +185,22 @@ func _init() -> void:
 				fails += 1
 				print("FAIL no export preset for %s — the platform would have to be set up from scratch" % nm2)
 
+		# An Android APK carries only the ABIs its preset asks for, and Godot's
+		# default asks for arm64-v8a alone — which a 32-bit-only phone cannot
+		# install AT ALL. It reports that as "app not compatible" at install time,
+		# saying nothing about ABIs, so the APK shipped arm64-only for 22 builds
+		# without anyone being told (D170). Guarded HERE rather than only in CI
+		# because the editor REWRITES this file whenever the export dialog is
+		# touched, and a rewrite that drops these keys is silent.
+		for section2 in cfg.get_sections():
+			if section2.ends_with(".options") \
+					and cfg.get_value(section2.trim_suffix(".options"), "name", "") == "Android":
+				for abi in ["armeabi-v7a", "arm64-v8a"]:
+					if not bool(cfg.get_value(section2, "architectures/" + abi, false)):
+						fails += 1
+						print("FAIL the Android preset does not build %s — every %s device would refuse to install the APK" % [
+							abi, "32-bit" if abi.begins_with("armeabi") else "64-bit"])
+
 	# arm64 targets (macOS universal, Android, iOS) refuse to export without this
 	if not bool(ProjectSettings.get_setting(
 			"rendering/textures/vram_compression/import_etc2_astc", false)):

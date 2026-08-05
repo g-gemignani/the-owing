@@ -10105,6 +10105,76 @@ real *Open all* button rather than calling the handler. The existing `Packs` row
 unopened packs, which is a real screen and cannot show this — and did not, for the whole
 life of the bug.
 
+### D170 — The APK installed on half the phones it was offered to
+
+Asked: can the pipeline build for older versions of Android too? Two different questions
+were hiding in that, and only one of them had a problem.
+
+**The OS floor is not ours to move.** The APK declares `minSdkVersion 24` — Android 7.0,
+from 2016 — because Godot 4.7's own `config.gradle` pins `minSdk: 24`. Below that line the
+native libraries would have to be rebuilt against a lower NDK API, against androidx
+dependencies that themselves require 24. Nothing in this repository can lower it, and no
+amount of CI can either. The right answer to that half is to SAY so, in the README and the
+release notes, instead of leaving people to find out at install time.
+
+**The ABI floor was ours, and it was wrong.** The published APK carried
+`lib/arm64-v8a/` and nothing else. Godot's export template ships all four ABIs — arm64-v8a,
+armeabi-v7a, x86, x86_64, verified by unzipping it — and copies out only the ones the preset
+names; the preset named none, and Godot's default for that is 64-bit ARM alone. So every
+32-bit-only phone, which is a lot of what is still running Android 7 and 8, could not
+install the game at all.
+
+It had been that way for 22 builds. What made it survive that long is the way Android reports
+it: an ABI mismatch is refused as *"app not compatible"*, a sentence that never says the word
+ABI and reads exactly like an OS-version problem. And nothing upstream of the phone
+disagreed — the export succeeded, the size floor passed, `apksigner verify` passed. The
+artifact was a valid, signed, correctly built package for a machine the downloader did not
+own.
+
+Fixed by naming all four ABIs in the preset rather than the two that changed, so the default
+can never quietly supply the answer again:
+
+```ini
+architectures/armeabi-v7a=true
+architectures/arm64-v8a=true
+architectures/x86=false
+architectures/x86_64=false
+```
+
+**One fat APK, not two thin ones.** Splitting per ABI keeps each download at 64 MB, and
+costs a second release asset plus a choice the downloader has to get right about their own
+phone's chip. A rolling prototype channel that the README links by fixed URL is the wrong
+place to make somebody guess; 89 MB that always installs beats 64 MB that installs half the
+time. The x86 pair stays off — 25 MB each, and it buys emulators rather than phones.
+
+Measured rather than estimated, by exporting it: 64 MB → 89 MB, `armeabi-v7a`'s
+`libgodot_android.so` adding 25,506,252 bytes deflated.
+
+**Two guards, because one of them cannot see the thing that breaks.** CI now reads the ABIs
+back out of the FINISHED APK — the preset is a statement of intent and the archive is what
+gets installed. But CI only runs this on main, and the failure mode here is not a bad push:
+the editor REWRITES `export_presets.cfg` whenever the export dialog is opened, and a rewrite
+that drops these keys looks like nothing. So `tests/test_content.gd` reads the preset on
+every PR as well, beside the check that every platform still has a preset at all.
+
+**Vulkan needed nothing.** Old hardware without a Vulkan driver was the other suspected
+problem and was already handled: `rendering_method.mobile=mobile` with
+`rendering/rendering_device/fallback_to_opengl3=true`, and the manifest marks both
+`android.hardware.vulkan.*` features `required=false` while requiring GLES 3.0. Checked
+before changing anything — it would have been easy to switch the mobile renderer to
+`gl_compatibility` for a problem that does not exist and lose the Vulkan path for everyone
+who has one.
+
+**How this was verified without an Android SDK.** The export was run here against a STUB
+SDK: pass-through `apksigner` and `zipalign` shims, a `platform-tools/adb` that exits 0, and
+a sandboxed `XDG_CONFIG_HOME` holding an `editor_settings-4.7.tres` that points
+`java_sdk_path` and `android_sdk_path` at them. The ABI filter runs when Godot copies
+template entries into the output archive, well before signing, so a stub is enough to reach
+it — which turns "Godot should honour this option" into an 89 MB APK with both `lib/`
+directories in it. Worth writing down: `ANDROID_HOME` alone did NOT satisfy the export here,
+contrary to what the `build-android` comment says about the CI runner; it wanted the editor
+settings.
+
 ### D171 — A new title painting, installed rather than dropped in, and one line of the bible it breaks
 
 A re-roll of the title backdrop arrived as `main_menu.jpg`, 1344x768: a hooded figure at a
