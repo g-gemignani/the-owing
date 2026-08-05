@@ -2094,8 +2094,22 @@ func _win() -> void:
 	var rbase := UITheme.reward_card_size()
 	var rw := Icons.fit_card_width(3, rbase.x,
 		get_viewport_rect().size.x - UITheme.px(40), float(UITheme.sep()))
+	# Each offer is a COLUMN: the card, and under it where that card already stands in
+	# the collection (D174). The run cost of taking one was priced below the row and the
+	# permanent side was not stated anywhere — so "is this a card I have never owned" and
+	# "is this the last copy before a level" were questions the player had to leave the
+	# fight to answer, which in practice meant not answering them.
 	for card in _roll_rewards(3):
-		UI.card_button(row, card, Vector2(rw, rbase.y), _on_reward_picked.bind(card))
+		var col := VBoxContainer.new()
+		col.add_theme_constant_override("separation", UITheme.sep(4))
+		# The card holder is SHRINK_CENTER and carries its own minimum size, so the column
+		# is exactly as wide as the card and the note under it wraps to that width.
+		col.custom_minimum_size.x = rw
+		row.add_child(col)
+		var standing := UI.collection_standing(card)
+		UI.card_button(col, card, Vector2(rw, rbase.y), _on_reward_picked.bind(card),
+			"", null, String(standing["tip"]))
+		UI.collection_line(col, standing)
 	# What taking one COSTS. Dilution is real — a bigger deck draws each card less
 	# often — but it was invisible, so "take one of three" was an automatic click
 	# rather than a decision. Skipping is a legitimate play and should read as one.
@@ -2148,7 +2162,15 @@ func _roll_rewards(n: int) -> Array[CardData]:
 			if r < 0:
 				pick = j
 				break
-		out.append((loaded[pick] as CardData).duplicate())
+		# Quoted at the level the COLLECTION already holds this card at, because that is
+		# the level it joins the run deck at (`GameState.earn_card`). The catalogue
+		# resource is the level-1 one, so a Bash fused to Lv4 was offered as "Deals 8"
+		# and then dealt 14 the moment it was taken — D50's drift, on the one surface
+		# where the player is choosing between cards on those very numbers.
+		var offer := (loaded[pick] as CardData).duplicate() as CardData
+		if MetaState.collection.has(offer.id):
+			offer.level = int(MetaState.collection[offer.id]["level"])
+		out.append(offer)
 		pool.remove_at(pick)
 	return out
 

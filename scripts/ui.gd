@@ -834,8 +834,13 @@ static func animate_level_glow(node: CanvasItem, band: String) -> void:
 	r.tween_property(node, "rotation", TAU, 52.0).from(0.0)
 
 
+## `note` is the caller's one line of context about this card — what it costs to level,
+## how many copies are in the collection — and it rides the same route `card_slot`
+## gives its own: appended to the hover and handed to the inspect overlay, so a card
+## held up at full size still says what the screen underneath it said (D174).
 static func card_button(parent: Node, card: CardData, size: Vector2,
-		on_press: Callable, label: String = "", live: CombatEngine = null) -> Button:
+		on_press: Callable, label: String = "", live: CombatEngine = null,
+		note: String = "") -> Button:
 	# A plain Control, NOT a Container. PanelContainer overrides its children's
 	# anchors and takes its own size from their minimum sizes — and a Button's
 	# minimum size grows with its wrapped description, so every card ended up a
@@ -993,7 +998,8 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# disagree about what the card is about to do
 	var live_dmg: int = live.card_damage(card) if live != null else -1
 	var live_blk: int = live.card_block(card) if live != null else -1
-	b.tooltip_text = Icons.card_tooltip(card, live_dmg, live_blk)
+	var tail := "\n\n%s" % note if note != "" else ""
+	b.tooltip_text = Icons.card_tooltip(card, live_dmg, live_blk) + tail
 	holder.add_child(b)
 
 	# NO containers inside the card. A VBox/HBox honours its children's *minimum*
@@ -1200,7 +1206,7 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		var d2: int = live2.card_damage(card) if live2 != null else -1
 		var b2: int = live2.card_block(card) if live2 != null else -1
 		desc.text = card.effect_text(d2, b2)
-		b.tooltip_text = Icons.card_tooltip(card, d2, b2)
+		b.tooltip_text = Icons.card_tooltip(card, d2, b2) + tail
 		if value_labels.size() > 0 and d2 >= 0 and headline != "":
 			var head := str(d2)
 			if card.hits > 1:
@@ -1270,7 +1276,7 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_RIGHT:
 			return
 		b.accept_event()
-		inspect_card(b, card, live))
+		inspect_card(b, card, live, note))
 	return b
 
 ## Hold ONE card up at a size you can actually read, over whatever screen you are
@@ -1513,6 +1519,140 @@ static func card_slot(parent: Node, cid: String, owned: bool, slot_width: float,
 		row.accept_event()
 		inspect_card(row, card, null, note))
 	return row
+
+## Where a card OFFERED to the player already stands in their collection: do they own
+## it at all, how many copies, and what the next level would cost and buy (D174).
+##
+## Asked for at the fight reward, which was the one place in the game that offered a
+## card while telling the player nothing about the card they were being offered. The
+## reward screen already priced the run cost of taking one — deck dilution, in turns
+## between draws — and said nothing about the permanent side, which is the half the
+## collection is actually played for: a card you have never seen is a new entry, and a
+## card you hold four of is the last copy before a level.
+##
+## Returns the two lines and the ink, rather than a widget, because the reward row and
+## the shop want the same sentence in different rectangles and because the same string
+## goes into the card's own tooltip and its inspect overlay — the face, the hover and
+## the held-up card cannot be allowed to disagree about what is in the collection.
+##
+## Three numbers decide it, and the third is the one that is easy to get wrong:
+##   * `count` — copies in the permanent collection.
+##   * `risk`  — copies taken earlier in THIS run, which are not in the collection yet
+##     and never will be if the boss wins (D20). Counted separately and named
+##     separately: folding them into the total would promise a level that dying erases.
+##   * the keep-one rule — `MetaState.fuse()` spends `fuse_copy_cost` copies and
+##     `can_fuse` refuses to spend the last one, so the copies you must OWN to buy a
+##     level is the cost plus one. Quoting the bare cost here would have the screen
+##     promise a level at four copies that the Collection screen then refuses at four.
+##
+## The cap is `MetaState.max_level` and the level is called maxed when `level_up_text`
+## comes back empty, which is exactly `collection.gd`'s own test for whether its fuse
+## buttons appear. A status-only card's `level_cap()` can be shorter than its rarity's
+## track, so the two disagree — and the screen that offers the level and the screen
+## that sells it have to agree, whichever of them is right.
+static func collection_standing(card: CardData) -> Dictionary:
+	var out := {"line": "", "tip": "", "colour": Color(0.85, 0.80, 0.62)}
+	if card == null or not MetaState.CATALOG.has(card.id):
+		return out
+	var id := card.id
+	var owned: bool = MetaState.collection.has(id)
+	var count: int = int(MetaState.collection[id]["count"]) if owned else 0
+	var level: int = int(MetaState.collection[id]["level"]) if owned else 1
+	var risk: int = GameState.escrow_cards.count(id)
+	# the collection's level, not the offer's: `level_up_text` reads the numbers off the
+	# card it is called on, and a catalogue resource is always the level-1 one
+	var probe := card.duplicate() as CardData
+	probe.level = level
+	var gain: String = probe.level_up_text(level + 1)
+	# The card's OWN cap, not its rarity's track. `Balance.max_level(rarity)` is where a
+	# rarity's levels stop; `CardData.level_cap()` is where THIS card's numbers stop
+	# improving, and for a card whose whole effect is a status or a draw the second is far
+	# lower — 25 of the 100 cards, `read_ahead` worst at 2 against a track of 100. Quoting
+	# the track would print "Lv1 of 100" over a card that is finished at 2. `maxi(level)`
+	# because a save fused past that point before anything stopped it, and "Lv12 of 8" is
+	# not an improvement on the lie it replaces.
+	var cap: int = maxi(level, mini(MetaState.max_level(id), probe.level_cap()))
+	var maxed: bool = level >= cap or gain == ""
+
+	# --- line one: what you hold ---
+	var risk_note := ""
+	if risk > 0:
+		risk_note = " · %s taken this run" % Wording.count(risk, "copy", "copies")
+	if count > 0:
+		out["line"] = "Owned x%d — Lv%d of %d%s" % [count, level, cap, risk_note]
+	elif risk > 0:
+		out["line"] = "None owned yet%s" % risk_note
+		out["colour"] = Color(1.0, 0.86, 0.45)
+	else:
+		out["line"] = "NEW — no copy in your collection"
+		out["colour"] = Color(1.0, 0.86, 0.45)
+
+	# --- line two: the next level ---
+	# `Balance`, not the `MetaState` wrappers, for ONE case: both wrappers answer with the
+	# base cost for a card that is not in the collection yet, so an unowned Abyssal Gift
+	# was quoted at 20g and would cost 52 the moment it was owned. For an owned card the
+	# two are the same call. Prices are quoted for the card, not for the entry.
+	var price: int = Balance.fuse_gold_cost(card.rarity, level)
+	var need: int = Balance.fuse_copy_cost(level) + 1   # one copy is always kept
+	var short: int = maxi(0, need - count)
+	if maxed:
+		out["line"] += "\nLv%d is its cap — spare copies buy nothing" % cap
+		out["colour"] = Color(0.66, 0.64, 0.60)
+	elif short == 0:
+		out["line"] += "\nLv%d for %dg now: %s" % [level + 1, price, gain]
+		out["colour"] = Color(0.62, 0.88, 0.66)
+	else:
+		# "this one" only when a single copy stands between the player and the level:
+		# that is the case where taking the card IS the level, and it is the reason this
+		# widget exists rather than a count in a corner.
+		out["line"] += "\n%s + %dg → Lv%d: %s%s" % [
+			Wording.count(short, "more copy", "more copies") if count > 0
+				else Wording.count(short, "copy", "copies"),
+			price, level + 1, gain, "  (this one)" if short == 1 else ""]
+
+	# --- the hover: the rule behind the two lines ---
+	var lines: Array[String] = []
+	if count > 0:
+		# "every one of them" is the point, not filler: a level belongs to the card in the
+		# collection, not to a copy, so owning nine means nine at that level.
+		lines.append("You own %s of %s, %s at Lv%d of %d." % [
+			Wording.count(count, "copy", "copies"), card.name,
+			"every one of them" if count > 1 else "held", level, cap])
+	else:
+		lines.append("%s is not in your collection." % card.name)
+	if maxed:
+		lines.append("It is as high as it goes; further copies are only spares.")
+	else:
+		lines.append(("Levels are bought with copies of the same card: Lv%d costs %d " +
+			"copies and %dg, and one copy is always kept — so it takes %d in the " +
+			"collection, and you have %d.") % [level + 1, need - 1, price, need, count])
+		lines.append("That level would buy: %s." % gain)
+		lines.append("Fusing itself happens on the Collection screen, between runs.")
+	if risk > 0:
+		lines.append("The %s taken this run count only once this dungeon's boss falls." %
+			Wording.count(risk, "copy", "copies"))
+	out["tip"] = "\n".join(lines)
+	return out
+
+## `collection_standing` as a label, sized to sit under the card it is about.
+##
+## Centred and wrapped, because it lives under a card and the card is the column: a
+## left-aligned two-line note under a 172px card reads as a caption for the card to its
+## right. The size is a fraction of the body font rather than a constant — this is a
+## footnote to a face that already carries the loud numbers, and it has to stay a
+## footnote when the theme scales.
+static func collection_line(parent: Node, standing: Dictionary) -> Label:
+	var l := Label.new()
+	l.text = String(standing.get("line", ""))
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	l.add_theme_font_size_override("font_size", maxi(9, int(round(UITheme.font() * 0.82))))
+	l.add_theme_color_override("font_color", standing.get("colour", Color(0.85, 0.80, 0.62)))
+	parent.add_child(l)
+	var tip := String(standing.get("tip", ""))
+	if tip != "":
+		hoverable(l, tip)
+	return l
 
 ## True where there is a touchscreen and no mouse: phones and tablets.
 static func touch_ui() -> bool:

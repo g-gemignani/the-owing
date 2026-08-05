@@ -46,7 +46,7 @@ Two-tier state makes this work:
 
 100 cards · 35 enemy archetypes (all painted) · 12 bosses (one named per dungeon) · 30 relics ·
 10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 24 sound
-effects · 5 score tracks · 40 test suites. All content is `.tres` data plus one catalogue
+effects · 5 score tracks · 41 test suites. All content is `.tres` data plus one catalogue
 line; adding more is a data task, not a code task.
 
 **Art: 310 files wanted, 310 present, 0 to provide — the list is closed.** It was
@@ -354,7 +354,9 @@ effects are drawn at runtime by `scripts/fx.gd`.
   taxes the fresh save that cannot afford to fuse at all.
 
 - **The player is never lied to and never stuck.** Telegraphs match what resolves.
-  Card faces show the *current* numbers, not the level-1 text (D50). Every screen
+  Card faces show the *current* numbers, not the level-1 text (D50) — and a card being
+  OFFERED states where it already stands in the player's collection: copies held, the
+  level they are held at, and what the next one costs and buys (D174). Every screen
   offers something to press, and every encounter can be left (D47). No fusion or death
   can strand the collection below a legal deck (D12).
 
@@ -863,7 +865,7 @@ resources/   all content as .tres: cards, enemies, relics, powers, events, dunge
 scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      pixel/ (CC0 Kenney), art/ (painted + generated), audio/ (all ours: 5 loops,
              24 effects, one instrument in tools/audio_voices.py)
-tests/       40 suites + run.sh; export.sh and export_ready.sh need templates
+tests/       41 suites + run.sh; export.sh and export_ready.sh need templates
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
              screenshots.gd (renders every screen to PNG — drive it under
              `Xvfb -screen 0 1280x720x24`, NOT on the desktop, or a 16:10 monitor
