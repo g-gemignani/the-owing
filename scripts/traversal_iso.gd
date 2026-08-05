@@ -24,10 +24,12 @@
 ## * **A dungeon is several floors, descended one way.** Smaller floors, more of them,
 ##   the boss on the last. The budget is SPLIT across them, so this changes a
 ##   dungeon's shape and never its cost.
-## * **What you walk to is a chest.** A treasure tile is one of D84's chests, with its
-##   own tier, its own lock and the run's own keys — so covering ground pays without this
-##   model needing a lock of its own. It had one for a while (a sealed dead-end room) and
-##   D86 removed it: two locks and two key currencies for one idea.
+## * **What you walk to is a chest, and what opens it is also on the floor.** A treasure
+##   tile is one of D84's chests, with its own tier and its own lock; the keys that open
+##   the locked ones lie on the floors as well, placed as far from everything else as the
+##   floor allows (D167). So covering ground pays without this model needing a lock of its
+##   own. It had one for a while (a sealed dead-end room) and D86 removed it: two locks and
+##   two key currencies for one idea.
 ##
 ## There is no torch. There was, until D77: a step allowance with an HP overdraft fee
 ## which never changed what the player could see, and which charged them for the one
@@ -54,6 +56,12 @@ extends Traversal
 const WALL := -2    ## not a floor tile: solid rock
 const EMPTY := -1   ## walkable ground with nothing on it
 const STAIR := -3   ## the way down to the next floor (never on the last one)
+## A key lying on the ground, picked up by walking onto it (D167).
+##
+## Terrain rather than an encounter, and that is what keeps the budget honest: it is
+## negative, so it is outside `content` and outside `quota`, and a floor that scatters
+## three of them still costs what its difficulty says it costs.
+const KEY := -4
 
 ## Grid steps, and the screen direction each one reads as once the floor is drawn
 ## at an angle. The arrows are the projected directions, not compass ones: a floor
@@ -126,6 +134,17 @@ var floors: int = 1
 var depth: int = 0
 var plan: Array = []
 var roam: Array = []
+## Keys to scatter on each floor, decided with the rest of the dungeon (D167). Sized
+## from how many of this dungeon's chests will be LOCKED, and dealt to the floors that
+## hold chests, so the key to a lock is always somewhere on the same floor as it —
+## a floor is re-walkable and a floor you have left is not.
+var keyplan: Array = []
+
+## Did the step just taken pick a key up off the floor? Read by the view immediately
+## after `select()` and never saved: the model has no run resources to add it to (D13),
+## so the pickup is REPORTED here exactly as an ambush's HP price is reported on the
+## encounter, and whoever owns the keys does the adding.
+var picked_key: bool = false
 
 ## Things walking the floor. Each is
 ## {"cell": int, "type": Enc, "awake": bool, "design": int, "south": bool}.
@@ -185,8 +204,43 @@ func generate(p_dungeon) -> void:
 		roam[i % floors] = int(roam[i % floors]) + 1
 	# +1 for the boss, which sits on the last floor and is not in `budget`
 	quota = budget.size() + roaming + 1
+	_plan_keys(diff)
 
 	_build_floor(0)
+
+## Decide how many keys each floor scatters, once, with the rest of the dungeon.
+##
+## The count is DERIVED from how many chests this dungeon holds and how often a chest at
+## this depth comes out locked (`Balance.iso_keys_for`), never authored per dungeon: a
+## locked chest with no key anywhere is a dead end the player cannot read as one, and a
+## key per chest makes the lock a formality. That the odds table which decides the locks
+## is also the one that sizes the keys is the point — change one and the other follows.
+##
+## Dealt to the floors that actually hold a chest, because a floor is only re-walkable
+## while you are on it: a key one floor below the chest it opens is a key that arrives
+## too late, and the descent is one-way.
+func _plan_keys(diff: int) -> void:
+	keyplan = []
+	for f in floors:
+		keyplan.append(0)
+	var chests := 0
+	for f in plan:
+		for e in f:
+			if int(e) == Enc.TREASURE:
+				chests += 1
+	var want := Balance.iso_keys_for(chests, diff)
+	if want <= 0:
+		return
+	var where: Array = []
+	for f in floors:
+		for e in plan[f]:
+			if int(e) == Enc.TREASURE:
+				where.append(f)
+				break
+	if where.is_empty():
+		return   # no chests, so nothing a key could open
+	for k in want:
+		keyplan[int(where[k % where.size()])] += 1
 
 ## Lay out one floor and stand the player at its entrance. Called by `generate` for
 ## floor 0 and by `select` on every descent, which is why every per-floor field is
@@ -270,6 +324,9 @@ func _build_floor(d: int) -> void:
 	_place_spread(mine, carved, [pos, exit_cell])
 	_spawn(int(roam[depth]), carved, dist)
 	_cast_fights()
+	# Keys go down LAST, so they take the ground nothing else wanted — which is the
+	# whole mechanic: a key is somewhere you would not otherwise have walked.
+	_place_keys(int(keyplan[depth]) if depth < keyplan.size() else 0, carved)
 
 	content = 0
 	for i in enc.size():
@@ -442,6 +499,58 @@ func _place_spread(mine: Array, carved: Array, occupied: Array) -> void:
 		if pick < 0:
 			break   # cannot happen while the floor fits its share; see test_traversal
 		enc[pick] = int(e)
+		anchors.append(pick)
+
+## Scatter this floor's keys, as far from everything already on it as the floor allows.
+##
+## The same spread `_place_spread` uses, and deliberately the LAST thing placed, so a key
+## lands in the ground the encounters left over — a dead-end cell, the far corner of a
+## chamber nothing else is in. That is what makes fetching one cost turns, which on this
+## floor is the only currency there is (the wanderers step whenever you do).
+##
+## Bare ground only, and never a tile a wanderer is standing on: two things on one tile is
+## a picture the view cannot draw, the same rule `_spawn` follows.
+##
+## And a CHAMBER, preferring one over a corridor by more than distance can outweigh. This
+## is the second rule of the floor read forwards (`_reveal_around`): a room is revealed
+## whole the moment you set foot in it, and a corridor shows you two tiles. So a key in a
+## room is a decision — you walk in, you see it across the floor, you decide whether the
+## turns are worth it — and the same key in a blind dead-end is a tile the player never
+## learns exists. The far corner of a hall is the shape this wants; the end of a passage
+## nobody has a reason to enter is not.
+func _place_keys(count: int, carved: Array) -> void:
+	if count <= 0:
+		return
+	var taken := {}
+	for m in mons:
+		taken[int(m["cell"])] = true
+	# Everything already placed is an anchor to get away from — the entrance, the way on,
+	# every encounter, and every wanderer.
+	var anchors: Array = [pos]
+	for i in enc.size():
+		var e := int(enc[i])
+		if e >= 0 or e == STAIR:
+			anchors.append(i)
+	for c in taken:
+		anchors.append(int(c))
+	for k in count:
+		var gap := _dist_to_any(anchors)
+		var pick := -1
+		var pick_score := -1
+		for c in carved:
+			var i := int(c)
+			if int(enc[i]) != EMPTY or taken.has(i):
+				continue
+			# A chamber tile beats every corridor tile outright, however far away the
+			# corridor is: the grid is 12x12, so one floor's worth of distance cannot
+			# reach the bonus.
+			var score: int = int(gap[i]) + (1000 if int(room_of[i]) >= 0 else 0)
+			if score > pick_score:
+				pick_score = score
+				pick = i
+		if pick < 0:
+			return   # a floor with no bare ground left; the chest simply stays shut
+		enc[pick] = KEY
 		anchors.append(pick)
 
 ## Decide WHICH enemy every fight on this floor is, now rather than when it starts.
@@ -853,6 +962,11 @@ func _compute_options() -> Array:
 		var rank := 1                          # a step across open ground
 		if e >= 0 and e != Enc.BOSS:
 			rank = 0                           # something to do
+		elif e == KEY:
+			# A key underfoot is something to do, so it leads the list — but it is NOT
+			# counted as unresolved business below, which is what keeps the stairs where
+			# they are and the measured walk where D79 pinned it. Ranked, not required.
+			rank = 0
 		elif _is_exit(n):
 			rank = 0 if others == 0 else 2     # the way on: last, until it is all there is
 		var away: int = int(goal[n])
@@ -924,6 +1038,8 @@ func _describe(n: int) -> String:
 	match e:
 		STAIR:
 			return "Stairs down"
+		KEY:
+			return "A key"
 	if e >= 0:
 		return String(Balance.NODE_LABEL.get(e, "?"))
 	if not bool(seen[n]):
@@ -942,6 +1058,7 @@ func _describe(n: int) -> String:
 func select(i: int) -> Dictionary:
 	var opts := options()
 	_invalidate()
+	picked_key = false
 	if i < 0 or i >= opts.size():
 		return {}
 	var o: Dictionary = opts[i]
@@ -959,6 +1076,13 @@ func select(i: int) -> Dictionary:
 	steps += 1
 	floor_steps += 1
 	walked[pos] = true
+
+	# A key is picked up by standing on it, and the tile is bare ground afterwards. The
+	# turn still happens in full below — the floor moves, and a wanderer can catch you on
+	# the tile you bent down in.
+	if was == KEY:
+		enc[pos] = EMPTY
+		picked_key = true
 
 	# Slipping past: you take the tile and the fight does not happen. The HP price is
 	# reported on the option and paid by whoever owns the HP (D13), exactly as the deck
@@ -1067,7 +1191,8 @@ func _save() -> Dictionary:
 		"rooms": rooms, "quota": quota, "steps": steps, "floor_steps": floor_steps,
 		"avoided": avoided, "dodgeable": dodgeable,
 		"done": done, "mons": mons, "enemy_of": enemy_of,
-		"floors": floors, "depth": depth, "plan": plan, "roam": roam}
+		"floors": floors, "depth": depth, "plan": plan, "roam": roam,
+		"keyplan": keyplan}
 
 func _load(d: Dictionary) -> void:
 	w = int(d.get("w", Balance.ISO_GRID))
@@ -1110,6 +1235,14 @@ func _load(d: Dictionary) -> void:
 		roam.append(int(r))
 	while roam.size() < floors:
 		roam.append(0)
+	# A save written before keys were on the floor has no `keyplan`, and zeroes are the
+	# right answer for it: the floors it already laid out have no keys on them either, so
+	# a resumed run is short of keys rather than restored into a floor it never had.
+	keyplan = []
+	for k in d.get("keyplan", []):
+		keyplan.append(maxi(0, int(k)))
+	while keyplan.size() < floors:
+		keyplan.append(0)
 	mons = []
 	for m in d.get("mons", []):
 		var md: Dictionary = m

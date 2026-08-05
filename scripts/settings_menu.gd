@@ -60,6 +60,31 @@ func _build() -> void:
 	col.add_child(nums)
 
 	UI.divider(col)
+	UI.label(col, "Controls")
+	# Three states, not a checkbox: see `SettingsState.Pad`. The current reading of
+	# Automatic is spelled out beside it, because "Automatic" alone leaves the player
+	# guessing which way it went on their own machine.
+	var pad_row := UI.row(col, 10)
+	var pad_lbl := Label.new()
+	pad_lbl.text = "Dungeon movement pad"
+	pad_lbl.custom_minimum_size.x = UITheme.px(300)
+	pad_row.add_child(pad_lbl)
+	var pad := OptionButton.new()
+	for i in SettingsState.PAD_NAMES.size():
+		pad.add_item(String(SettingsState.PAD_NAMES[i]), i)
+	pad.select(SettingsState.pad_mode)
+	pad.item_selected.connect(func(i: int):
+		SettingsState.pad_mode = i
+		Audio.play("ui_select")
+		SettingsState.save_settings()
+		_build())
+	pad_row.add_child(pad)
+	var pad_now := Label.new()
+	pad_now.text = "   shown" if UI.pad_visible() else "   hidden — W A S D, or click a tile"
+	pad_now.add_theme_color_override("font_color", Color(0.70, 0.72, 0.82))
+	pad_row.add_child(pad_now)
+
+	UI.divider(col)
 	UI.label(col, "Combat effects")
 	# The toggle is the accessibility answer and the slider is a pace preference; see
 	# the two of them in settings_state.gd for why one control could not be both.

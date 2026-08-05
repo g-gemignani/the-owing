@@ -60,7 +60,10 @@ func _open() -> void:
 				UI.label(body, "Locked. You have a key, and spend it.")
 			else:
 				opened = false
-				UI.label(body, "Locked, and you have no key. It stays shut.")
+				# Says where a key comes from, because this screen is where the player
+				# finds out they needed one and the answer is a place, not a chance:
+				# keys lie on the floors of the dungeon (D167).
+				UI.label(body, "Locked, and you have no key. It stays shut. Keys lie on the dungeon's own floors — off the path, where nothing else is.")
 		Balance.CHEST_LOCK_VAULT:
 			var cond: String = Balance.VAULTS[randi() % Balance.VAULTS.size()]
 			var demand := UI.label(body, "A vault: it %s." % Balance.vault_text(cond, build_id))
@@ -89,9 +92,6 @@ func _open() -> void:
 			row.add_theme_color_override("font_color",
 				_tier_colour(String(p.get("tier", Balance.PACK_WORN))))
 		UI.label(body, "Sealed. They leave with you, if you do.")
-		if randi() % 100 < Balance.KEY_CHEST_CHANCE:
-			GameState.keys += 1
-			UI.label(body, "   A key, too.")
 	else:
 		UI.label(body, "Whatever was inside stays inside.")
 

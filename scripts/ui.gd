@@ -1518,6 +1518,19 @@ static func card_slot(parent: Node, cid: String, owned: bool, slot_width: float,
 static func touch_ui() -> bool:
 	return DisplayServer.is_touchscreen_available() and not OS.has_feature("pc")
 
+## Does the crawl draw its on-screen movement pad here (D168)?
+##
+## Lives beside `touch_ui()` rather than in `SettingsState` because that is where the
+## platform test is, and the whole of AUTO is that test. One function, so the crawl asks
+## instead of deciding and a second definition of "is this a phone" cannot appear.
+static func pad_visible() -> bool:
+	match SettingsState.pad_mode:
+		SettingsState.Pad.ALWAYS:
+			return true
+		SettingsState.Pad.NEVER:
+			return false
+	return touch_ui()
+
 ## The card currently held open by a tap, so tapping a different one closes it.
 static var _previewed: Button = null
 

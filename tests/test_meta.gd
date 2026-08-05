@@ -155,14 +155,32 @@ func _init() -> void:
 			fails += 1; print("FAIL two vault conditions read identically: %s" % t2)
 		seen_txt[t2] = true
 
-	# --- keys are found, never sold ---------------------------------------------
+	# --- keys are found on the floor, never sold and never dripped --------------
 	# the rope rule (D21), for the same reason: a purchasable key turns every locked
-	# chest into a gold check, and a gold check is a delay rather than a decision
-	for kc in [Balance.KEY_CHEST_CHANCE, Balance.KEY_FIGHT_CHANCE, Balance.KEY_ELITE_CHANCE]:
-		if kc < 0 or kc > 100:
-			fails += 1; print("FAIL a key chance is not a percentage")
-	if Balance.KEY_ELITE_CHANCE <= Balance.KEY_FIGHT_CHANCE:
-		fails += 1; print("FAIL an elite is no better than a normal fight for keys")
+	# chest into a gold check, and a gold check is a delay rather than a decision. D167
+	# took the other three sources away too — a chest, a fight and an elite each rolled
+	# for one — because a key that arrives while you play is not a key you went and got.
+	# What is asserted here is the shape that replaced them: enough keys that a locked
+	# chest is answerable, never so many that the lock is a formality.
+	for chests in [0, 1, 3, 6]:
+		for dd3 in [1, 6, 12]:
+			var n := Balance.iso_keys_for(chests, dd3)
+			if chests == 0 and n != 0:
+				fails += 1; print("FAIL a dungeon with no chest scatters %d keys" % n)
+			if chests > 0 and (n < 1 or n > chests):
+				fails += 1; print("FAIL %d chests at depth %d gives %d keys — a key per chest makes the lock a formality, none makes it a wall" % [
+					chests, dd3, n])
+	# deeper dungeons lock more of their chests, so they must scatter more keys
+	if Balance.iso_keys_for(6, 12) <= Balance.iso_keys_for(6, 1):
+		fails += 1; print("FAIL depth locks more chests but does not put more keys on the floors")
+	# and the only place they come from is the floor
+	for src in ["res://scripts/chest_screen.gd", "res://scripts/combat.gd"]:
+		var sf := FileAccess.open(src, FileAccess.READ)
+		if sf != null:
+			var body := sf.get_as_text()
+			sf.close()
+			if body.find("GameState.keys +") != -1:
+				fails += 1; print("FAIL %s hands out a key — the dungeon floor is the one source (D167)" % src)
 
 	# --- a dungeon's affinity is derived from its own pool, never authored -------
 	for did2 in Balance.DUNGEONS:

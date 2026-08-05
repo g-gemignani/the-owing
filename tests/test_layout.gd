@@ -127,10 +127,12 @@ func _init() -> void:
 	# one quarter of the floor is unreachable by keyboard and nothing says why. Add a
 	# fifth entry to `TraversalIso.DIRS` and this is what notices.
 	var bound := {}
+	var iso_src_body := ""
 	var iso_src := FileAccess.open("res://scripts/iso_run.gd", FileAccess.READ)
 	if iso_src != null:
 		var body := iso_src.get_as_text()
 		iso_src.close()
+		iso_src_body = body
 		# read the MOVE_KEYS block out of source, for the same reason every other
 		# constant here is read out of source: loading a UI script pulls in autoloads
 		# that a --script run has not registered, and that hangs rather than fails
@@ -149,10 +151,44 @@ func _init() -> void:
 	var dir_keys := _list_len("res://scripts/iso_run.gd", "const DIR_KEY")
 	if dir_keys != TraversalIso.DIRS.size():
 		fails += 1
-		print("FAIL DIR_KEY names %d directions and there are %d — a move button will show the wrong letter or crash" % [
+		print("FAIL DIR_KEY names %d directions and there are %d — the legend will show the wrong letter or crash" % [
 			dir_keys, TraversalIso.DIRS.size()])
-	print("  (info: iso binds %d of %d directions to keys, %d letters on the buttons)" % [
-		bound.size(), TraversalIso.DIRS.size(), dir_keys])
+
+	# --- ...and a key on the pad that walks it (D168) ---
+	#
+	# The same silent failure one input away. There are no move buttons any more: a phone
+	# has the pad and nothing else, so a direction missing from PAD_CELL is a quarter of the
+	# floor that cannot be reached AT ALL on the machine the pad exists for. Two keys landing
+	# on one cell of the 3x3 is the other half — one would be drawn on top of the other.
+	var cells := {}
+	if iso_src_body != "":
+		var pad_block := iso_src_body.substr(iso_src_body.find("const PAD_CELL"))
+		# from INSIDE the braces: the declaration itself contains `:=`, so a split on ":"
+		# over the whole line finds the assignment before it finds the first entry
+		pad_block = pad_block.substr(pad_block.find("{") + 1)
+		pad_block = pad_block.substr(0, pad_block.find("}"))
+		for part in pad_block.split(","):
+			var kv: String = String(part).split("#")[0].strip_edges()
+			if not kv.contains(":") or not kv.split(":")[0].strip_edges().is_valid_int():
+				continue
+			cells[int(kv.split(":")[0].strip_edges())] = int(kv.split(":")[1].strip_edges())
+	var used := {}
+	for d in TraversalIso.DIRS.size():
+		if not cells.has(d):
+			fails += 1
+			print("FAIL iso direction %s (%s) has no pad key — on a touchscreen it cannot be walked at all" % [
+				d, TraversalIso.DIR_ARROW[d]])
+			continue
+		var at: int = int(cells[d])
+		if at < 0 or at > 8:
+			fails += 1
+			print("FAIL iso direction %s sits at pad cell %d, outside the 3x3" % [d, at])
+		if used.has(at):
+			fails += 1
+			print("FAIL pad cell %d holds two directions — one is drawn over the other" % at)
+		used[at] = true
+	print("  (info: iso binds %d of %d directions to keys, %d letters in the legend, %d on the pad)" % [
+		bound.size(), TraversalIso.DIRS.size(), dir_keys, cells.size()])
 
 	# --- every traversal must offer something pressable at every step ---
 	# (a state with no options and no completion is a soft dead end)

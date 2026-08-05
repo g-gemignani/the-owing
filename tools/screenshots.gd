@@ -53,6 +53,17 @@ const SHOTS := [
 	# had one iso row, three of the four floors had never been photographed at all and
 	# a fault in any of them was invisible to the harness (D122). The dungeons named
 	# are one per terrain, and the terrain, not the dungeon, is what is being looked at.
+	# The walked floor WITH the movement pad up (D168). The pad is drawn where there is a
+	# touchscreen and no mouse, which no capture machine is — so without a row that forces
+	# it on, the one control a phone has to walk with would never be photographed at all,
+	# which is the blind spot the three iso terrains taught (D122).
+	["IsoRunPad", "res://scenes/IsoRun.tscn", "iso_pad"],
+	# A key on the ground beside her (D167). It is DRAWN, like the stair and for the same
+	# reason — no art pack has a key in it — so a capture is the only way to know whether
+	# the shape reads as an object lying on stone or as a scratch on the floor. The row
+	# plants one, because a walk of fourteen steps has no reason to pass a tile that was
+	# placed as far from everything as the floor allows.
+	["IsoRunKey", "res://scenes/IsoRun.tscn", "iso_key"],
 	["IsoEarth", "res://scenes/IsoRun.tscn", "iso_walked", "", "warrens"],
 	["IsoMoss", "res://scenes/IsoRun.tscn", "iso_walked", "", "fungal_deep"],
 	["IsoSand", "res://scenes/IsoRun.tscn", "iso_walked", "", "drowned_market"],
@@ -94,6 +105,11 @@ const SHOTS := [
 	["Builds", "res://scenes/Builds.tscn", "meta+partial"],
 	["Relics", "res://scenes/Relics.tscn", ""],
 	["Packs", "res://scenes/Packs.tscn", "packs"],
+	# The same screen with a haul opened all at once, which is the state that overflowed it
+	# (D169): eight packs is 24 cards, six rows of them, and they used to grow past the
+	# bottom of the window taking the Back button with them. A capture of three packs
+	# unopened cannot show that, and did not.
+	["PacksOpened", "res://scenes/Packs.tscn", "packs+haul", "opened"],
 	["Powers", "res://scenes/Powers.tscn", ""],
 	["Glossary", "res://scenes/Glossary.tscn", ""],
 	# Settings was missing from this table until D123 went looking for it. Nothing was
@@ -160,6 +176,15 @@ func _pose(inst: Node, what: String) -> void:
 			return
 		sc.scroll_vertical = int(sc.get_v_scroll_bar().max_value)
 		return
+	# Pressed, not called: the point of the row is the state the screen puts itself in when
+	# the player uses it, so the pose goes through the same button and the same handler.
+	if what == "opened":
+		var btn := _button_starting(inst, "Open all")
+		if btn == null:
+			print("POSE MISS opened — no bulk-open button on screen")
+			return
+		btn.pressed.emit()
+		return
 	var cards := _card_holders(inst)
 	if cards.is_empty():
 		print("POSE MISS ", what, " — no card on screen")
@@ -177,6 +202,15 @@ func _pose(inst: Node, what: String) -> void:
 			var card := load(MetaState.CATALOG.get(id, "")) as CardData
 			if card != null:
 				UI.inspect_card(holder, card, inst.eng if "eng" in inst else null)
+
+func _button_starting(n: Node, prefix: String) -> Button:
+	if n is Button and String((n as Button).text).begins_with(prefix):
+		return n as Button
+	for c in n.get_children():
+		var found := _button_starting(c, prefix)
+		if found != null:
+			return found
+	return null
 
 func _first_scroll(n: Node) -> ScrollContainer:
 	if n is ScrollContainer:
@@ -252,6 +286,9 @@ func _run_state() -> Array[CardData]:
 
 func _setup(need: String, dungeon: String = "") -> void:
 	GameState.reset_run_progress()
+	# The pad is a setting, and a setting one row changes is a setting every row after it
+	# inherits — the same shared-process trap the collection has below.
+	SettingsState.pad_mode = SettingsState.Pad.AUTO
 	# Undo whatever the previous row did to the collection, because the rows share one
 	# process and one save: a thinned collection left behind would photograph every
 	# later screen half-empty and nothing would say so (D166).
@@ -330,7 +367,12 @@ func _setup(need: String, dungeon: String = "") -> void:
 			GameState.pending = {"type": GameState.NodeType.TREASURE, "row": 1, "col": 0, "cleared": false}
 			# a key in hand, so the sealed-chest branch can actually be photographed
 			GameState.keys = 2
-		"iso_walked", "iso_resumed":
+		"iso_pad", "iso_key", "iso_walked", "iso_resumed":
+			# Forced ON for this row only, and reset at the top of every `_setup`, so the
+			# rows after it photograph the desktop screen again. Not saved: `pad_mode` is
+			# only persisted by `save_settings`, which the harness never calls.
+			if need == "iso_pad":
+				SettingsState.pad_mode = SettingsState.Pad.ALWAYS
 			# Walk the floor before the screen is built, resolving whatever is stepped
 			# on so the walk keeps going. Uses the model's own first option, which is
 			# the one that gets on with the floor, so the capture shows a plausible
@@ -342,6 +384,17 @@ func _setup(need: String, dungeon: String = "") -> void:
 				if not tv.select(0).is_empty():
 					tv.clear_pending()
 			GameState.pending = {}
+			# One key on a tile she can reach, planted after the walk so it is on ground
+			# that is already lit. `_invalidate` because the option list is memoised and
+			# was built before this edit — without it the pad would tint for the floor as
+			# it was a step ago.
+			if need == "iso_key" and tv != null:
+				for o in tv.options():
+					var c: int = int(o["cell"])
+					if int(tv.enc[c]) == TraversalIso.EMPTY:
+						tv.enc[c] = TraversalIso.KEY
+						tv._invalidate()
+						break
 			# Then throw that away and rebuild it from a save, through real
 			# `JSON.stringify`/`parse_string` — not a `duplicate()` of the dictionary,
 			# because the whole class of fault this row exists for is a type that
@@ -350,7 +403,7 @@ func _setup(need: String, dungeon: String = "") -> void:
 				var blob = JSON.parse_string(JSON.stringify(GameState.run_to_dict()))
 				if not GameState.run_from_dict(blob):
 					push_error("screenshots: the run would not resume from its own save")
-		"packs":
+		"packs", "packs+haul":
 			# Packs renders an empty state with nothing sealed, which is a real screen
 			# but not the one worth looking at. Give it one of each kind.
 			MetaState.add_pack(Balance.PACK_BOSS, Balance.DUNGEONS[0],
@@ -359,6 +412,13 @@ func _setup(need: String, dungeon: String = "") -> void:
 				Balance.PACK_SEALED, "fortress")
 			MetaState.add_pack(Balance.PACK_TREASURE, Balance.DUNGEONS[0],
 				Balance.PACK_WORN, "swarm")
+			# A HAUL, for the row that photographs the overflow: five more gilded packs is
+			# the most cards this screen can be asked to reveal at once, which is the state
+			# that used to push its own Back button off the bottom edge (D169).
+			if flags.has("haul"):
+				for i in 5:
+					MetaState.add_pack(Balance.PACK_BOSS, Balance.DUNGEONS[0],
+						Balance.PACK_GILDED, "poison")
 		"defeat":
 			# Defeat renders "Nothing to report." on an empty dictionary, which is
 			# correct behaviour and a useless capture. Give it a real death.

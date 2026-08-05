@@ -27,6 +27,8 @@ The loop:
 3. **Run** — crawl the dungeon: a painted isometric building of rooms and corridors over
    several floors, explored a tile at a time, with things walking it that take a step
    whenever you do. Fight, shop, rest, hit events and crack chests, down to a named boss.
+   A locked chest wants a key, and the keys are lying on the floors — off the route, in the
+   far corner of some room you had no other reason to cross (D167).
    (Three older traversal models — a node graph, a card draw, a dice board — lost to it in
    D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
 4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
@@ -146,7 +148,9 @@ effects are drawn at runtime by `scripts/fx.gd`.
 - **Walking is bought, not granted.** `ISO_MOVES_PER_ENCOUNTER_MAX` is a ratio, so the
   way to make a dungeon bigger is to give it more to walk toward — chests took the iso
   floor from 78 tiles to 130 and the measured walk *fell* from 7.1 to 6.8 (D84). Adding
-  tiles alone would have failed the suite, and deserved to.
+  tiles alone would have failed the suite, and deserved to. Keys on the floor cost 0.1 of
+  the same ratio (6.9 → 7.0 of a 7.5 ceiling, D167), which is what a detour that is worth
+  taking is supposed to cost.
 
 - **A spatial model must not bury the card game.** An encounter count can be perfect while
   the player spends sixty moves between fights, and no other assertion in the suite can
@@ -219,9 +223,17 @@ effects are drawn at runtime by `scripts/fx.gd`.
 
 - **A convention nobody can derive should be displayed, not documented.** The iso grid's
   four directions project to the four screen *diagonals*, so no key walks straight up and
-  the choice of which diagonal W means is a genuine coin-flip. It is settled by putting
-  the key letter on the move button next to its arrow (D87). Reach for this whenever the
-  answer is arbitrary but the player still has to know it.
+  the choice of which diagonal W means is a genuine coin-flip. It is settled by showing the
+  letter beside the arrow it walks (D87) — on the move buttons until D168 deleted them, and
+  since then on the pad's keys and in the keyboard legend under the floor. When the control
+  that was carrying such a display goes, the display moves; it does not go with it.
+
+- **A control the player aims at must not move under their finger.** The crawl offered one
+  move button per exit, rebuilt every step, so its count and its order changed between the
+  decision and the press (D168). Movement is four directions that are always the same four
+  — a fixed pad whose keys grey out says which are rock; a row that appears and disappears
+  cannot. Ask of any generated control: does the thing in this position mean the same thing
+  it meant a moment ago?
 
 - **A model's skip is part of its price.** Three traversal models were quietly discounting
   their own budgets — measured fights actually *met* against a budget of 13.2: graph 4.5–5.1

@@ -186,6 +186,13 @@ func _the_floor(list: Node) -> void:
 			roundi(Balance.ISO_AMBUSH_PCT)], "hp")
 	_entry(body, "Lingering", ("Past %d steps on one floor, everything left on it knows where you "
 		+ "are. Greed is timed.") % Balance.ISO_LINGER)
+	# The one rule on this screen that is a PLACE rather than a number. It belongs here
+	# because the alternative is finding it out at a chest that has already stayed shut,
+	# and because "keys are somewhere" is the whole of D167.
+	_entry(body, "Chests and keys", ("A chest wants nothing, a key, or something proved about your "
+		+ "run. The keys are on the floors: one lies in some room of a floor that holds a chest, "
+		+ "placed away from everything you had a reason to walk to. You start every dungeon with "
+		+ "none, and nothing else in the game hands you one."), "chest")
 
 ## Last, and deliberately so. Everything in here is genre grammar — the words Block and
 ## Energy and Vulnerable mean here what they mean everywhere — so what this section is

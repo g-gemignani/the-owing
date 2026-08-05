@@ -510,6 +510,108 @@ func _init() -> void:
 				did, first, int(bar)])
 		print("  (info: %-16s %d dodges, %d HP total = %.0f%% of a %d HP bar, first %d)" % [
 			did, dodgeable, total, 100.0 * float(total) / bar, int(bar), first])
+	# --- keys lie on the floor, and walking onto one takes it (D167) -----------
+	#
+	# Three separate things, and every one of them fails silently. A key that is never
+	# PLACED leaves the sealed chests of the whole game unopenable and nothing says so; a
+	# key that is placed and never CLEARED off its tile can be walked over for as many as
+	# the player has patience for; and `picked_key` is the only channel the model has for
+	# reporting a pickup, so if it is not set the view adds nothing and the key vanishes.
+	# The one thing that cannot be asserted here is the view's half — see D167 for why the
+	# addition lives there (a traversal never touches run resources).
+	# Deliberately NOT asserted through the greedy walker every other block here uses.
+	# Keys sit off the route on purpose, and a walker that takes the first option beelines
+	# for the work and then the stair — three of the twelve dungeons finished without ever
+	# standing next to one, which is the mechanic behaving correctly and would have read as
+	# a broken placement. So this walks TOWARD a key on purpose, which is also the only way
+	# to prove the detour is walkable at all.
+	var key_floors := 0
+	var key_total := 0
+	for did5 in Balance.DUNGEONS:
+		var kt := TraversalIso.new()
+		kt.generate(Balance.dungeon(did5))
+		var want := 0
+		for n in kt.keyplan:
+			want += int(n)
+		if want <= 0:
+			fails += 1
+			print("FAIL %s holds chests and scatters no key at all" % did5)
+			continue
+		key_total += want
+		for f in kt.floors:
+			if int(kt.keyplan[f]) <= 0:
+				continue
+			key_floors += 1
+			# Lay that floor out directly. Descending to it would need a walk per floor and
+			# would test the walker rather than the placement.
+			kt._build_floor(f)
+			var keys: Array = []
+			for i in kt.enc.size():
+				if int(kt.enc[i]) == TraversalIso.KEY:
+					keys.append(i)
+			if keys.size() != int(kt.keyplan[f]):
+				fails += 1
+				print("FAIL %s floor %d: %d keys planned, %d on the floor" % [
+					did5, f + 1, int(kt.keyplan[f]), keys.size()])
+			for kc in keys:
+				# In a chamber, or the player is never shown it: a room is revealed whole
+				# on entry and a corridor two tiles at a time (D167).
+				if int(kt.room_of[int(kc)]) < 0:
+					fails += 1
+					print("FAIL %s floor %d: a key is down a corridor, where nothing reveals it" % [
+						did5, f + 1])
+			# ...and it has to be reachable, walking the distance field down to zero.
+			var goal: int = int(keys[0])
+			var walked_to := false
+			var ksteps := 0
+			while ksteps < 200:
+				ksteps += 1
+				var field := kt._dist_from(kt.pos)
+				if int(field[goal]) < 0:
+					fails += 1
+					print("FAIL %s floor %d: the key is walled off from the entrance" % [
+						did5, f + 1])
+					break
+				var kopts := kt.options()
+				if kopts.is_empty():
+					break
+				var pick := -1
+				var best := int(field[goal])
+				for oi2 in kopts.size():
+					if String(kopts[oi2].get("action", "")) == "avoid":
+						continue
+					var to := int(kopts[oi2]["cell"])
+					var d5 := int(kt._dist_from(to)[goal])
+					if d5 >= 0 and d5 < best:
+						best = d5
+						pick = oi2
+				if pick < 0:
+					break
+				var target: int = int(kopts[pick]["cell"])
+				var was_key: bool = int(kt.enc[target]) == TraversalIso.KEY
+				var got := kt.select(pick)
+				if was_key:
+					if not kt.picked_key:
+						fails += 1
+						print("FAIL %s: stepped onto a key and the model reported nothing" % did5)
+					if int(kt.enc[target]) == TraversalIso.KEY:
+						fails += 1
+						print("FAIL %s: the key is still on the tile it was taken from" % did5)
+					walked_to = true
+				elif kt.picked_key:
+					fails += 1
+					print("FAIL %s: a step onto bare ground reported a key" % did5)
+				if not got.is_empty():
+					kt.clear_pending()
+				if walked_to:
+					break
+			if not walked_to:
+				fails += 1
+				print("FAIL %s floor %d: could not walk to a key in %d steps" % [
+					did5, f + 1, ksteps])
+	print("  (info: %d keys across %d floors of %d dungeons)" % [
+		key_total, key_floors, Balance.DUNGEONS.size()])
+
 	# and depth must matter, or a flat price gets cheaper the deeper you go
 	if Balance.avoid_cost(8, 0, 3) <= Balance.avoid_cost(1, 0, 3):
 		fails += 1

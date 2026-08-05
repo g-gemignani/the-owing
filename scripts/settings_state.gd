@@ -56,6 +56,24 @@ var effect_speed: int = 100
 const EFFECT_SPEED_MIN := 50
 const EFFECT_SPEED_MAX := 200
 
+# --- the crawl's movement pad (D168) -------------------------------------------
+
+## Whether the dungeon draws an on-screen direction pad.
+##
+## Three states rather than a checkbox, because the honest default is neither on nor off:
+## a phone has no keyboard and MUST have the pad, a desktop has WASD and is better without
+## it, and `UI.touch_ui()` already knows which machine this is. So AUTO is the shipped
+## value and the other two exist for the cases the platform test cannot see — a desktop
+## played with a touchscreen, a tablet with a keyboard attached, and anyone who simply
+## wants the floor uncovered.
+## What AUTO resolves to lives in `UI.pad_visible()`, next to the platform test it
+## depends on — this script holds the player's choice and nothing else, because it is an
+## autoload and a compile-time reference out of one is what makes a script unloadable in
+## the headless `--script` runs the test suite is made of.
+enum Pad {AUTO, ALWAYS, NEVER}
+var pad_mode: int = Pad.AUTO
+const PAD_NAMES := ["Automatic", "Always", "Never"]
+
 func _ready() -> void:
 	load_settings()
 	apply()
@@ -82,6 +100,7 @@ func save_settings() -> void:
 			"sfx_volume": sfx_volume,
 			"fullscreen": fullscreen, "show_numbers": show_numbers,
 			"effects_enabled": effects_enabled, "effect_speed": effect_speed,
+			"pad_mode": pad_mode,
 		}))
 		f.close()
 
@@ -108,3 +127,4 @@ func load_settings() -> void:
 	effects_enabled = bool(d.get("effects_enabled", effects_enabled))
 	effect_speed = clampi(int(d.get("effect_speed", effect_speed)),
 		EFFECT_SPEED_MIN, EFFECT_SPEED_MAX)
+	pad_mode = clampi(int(d.get("pad_mode", pad_mode)), 0, PAD_NAMES.size() - 1)

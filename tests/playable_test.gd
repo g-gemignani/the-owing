@@ -50,6 +50,7 @@ func _ready() -> void:
 	await _the_fight_shows_its_state()
 	await _dying_is_reported()
 	await _the_fight_reacts()
+	await _a_key_is_taken_off_the_floor()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -638,6 +639,59 @@ func _controls(n: Node) -> Array[Control]:
 # --- helpers -----------------------------------------------------------------
 
 ## A legal run, ready to play: a real deck, a real map, a real power.
+## --- 11. a key on the floor becomes a key in hand ---------------------------
+##
+## The handoff no unit test can see (D167). The traversal is pure logic and owns no run
+## resources, so it CLEARS the tile and sets a flag; the view is what adds to
+## `GameState.keys`. Either half can be correct while the pair does nothing — a flag set
+## and never read loses the key silently, and the only symptom is a locked chest the player
+## cannot open for reasons they will never find out.
+##
+## Pressed through the PAD, not by calling the handler, so this covers the other half of
+## D168 at the same time: the pad is the only control a phone has, and a pad key wired to
+## nothing looks exactly like a wall.
+func _a_key_is_taken_off_the_floor() -> void:
+	_start_a_run("crypt")
+	var was_mode: int = SettingsState.pad_mode
+	SettingsState.pad_mode = SettingsState.Pad.ALWAYS
+	var tv = GameState.traversal
+	GameState.keys = 0
+	# Plant one on a tile she can step onto, whichever way that is.
+	var dir := -1
+	for o in tv.options():
+		if int(tv.enc[int(o["cell"])]) == TraversalIso.EMPTY:
+			tv.enc[int(o["cell"])] = TraversalIso.KEY
+			tv._invalidate()
+			dir = int(o["dir"])
+			break
+	if dir < 0:
+		_fails += 1; print("FAIL nowhere to plant a key beside the entrance")
+		SettingsState.pad_mode = was_mode
+		return
+
+	var inst = (load("res://scenes/IsoRun.tscn") as PackedScene).instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var arrow: String = TraversalIso.DIR_ARROW[dir]
+	var pressed := false
+	for b in _buttons(inst):
+		if b.text == arrow and not b.disabled:
+			b.button_down.emit()
+			pressed = true
+			break
+	if not pressed:
+		_fails += 1
+		print("FAIL the pad has no enabled %s key for a step that is open" % arrow)
+	await get_tree().process_frame
+	if GameState.keys != 1:
+		_fails += 1
+		print("FAIL walked onto a key and hold %d — the floor reported it and nothing took it" % GameState.keys)
+	inst.queue_free()
+	await get_tree().process_frame
+	SettingsState.pad_mode = was_mode
+
 func _start_a_run(dungeon_id: String) -> void:
 	MetaState.new_save()
 	GameState.reset_run_progress()

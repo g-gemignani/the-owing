@@ -1070,9 +1070,33 @@ static func chest_lock(tier: String) -> String:
 ## Keys are found, never bought — the same rule ropes follow, and for the same
 ## reason: a purchasable key turns every locked chest into a gold check, and a gold
 ## check is not a decision, it is a delay.
-const KEY_CHEST_CHANCE := 45
-const KEY_FIGHT_CHANCE := 22
-const KEY_ELITE_CHANCE := 60
+##
+## They are also found in exactly ONE place: lying on the dungeon floor, where you have to
+## walk to them (D167). They used to drip out of chests (45%), fights (22%) and elites
+## (60%), and three passive sources add up to a currency that accumulates while you play
+## rather than one you go and get — the first locked chest of a run was opened with a key
+## the previous chest handed over, which is a lock that only ever asks whether you have
+## been here long enough.
+##
+## How many a dungeon scatters, given how many chests it holds and how deep it is.
+##
+## DERIVED from the odds that decide the locks (`pack_tier_odds`), not authored: the
+## number of keys on the floors tracks the number of chests that will come out LOCKED, so
+## the lock stays a real question at every depth. One is the floor — a dungeon with a chest
+## in it always has a key somewhere — and the count never exceeds the chests, because a
+## spare key is a key that meant nothing.
+static func iso_keys_for(chests: int, dungeon: int) -> int:
+	if chests <= 0:
+		return 0
+	var odds := pack_tier_odds(PACK_TREASURE, dungeon)
+	var total := 0
+	for wt in odds:
+		total += maxi(0, int(wt))
+	if total <= 0:
+		return 1
+	# index 1 is PACK_SEALED, the one tier whose lock is a key (CHEST_LOCK)
+	var locked := float(chests) * float(maxi(0, int(odds[1]))) / float(total)
+	return clampi(int(round(locked)), 1, chests)
 
 # --- vault conditions --------------------------------------------------------
 #

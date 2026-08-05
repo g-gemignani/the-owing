@@ -118,11 +118,27 @@ var stand := {}
 ## where she is looking, and a resumed run starts her facing down-right, toward the
 ## player and toward the side the eye reads first.
 var face_step := Vector2i(1, 0)
-## Move buttons are a row of short labels, not reward-card slabs: at card size a
-## three-word label sat in the middle of an empty panel and read as a broken
-## screen (it did, in the first capture of this view). Widened from 190 to pay for
-## the key letter each one now carries.
-const MOVE_BUTTON := Vector2(212.0, 46.0)
+## One key of the movement pad, and the pad's inset from the corner of the floor window
+## (D168).
+##
+## The pad replaced a ROW of move buttons — one per exit, relabelled and rebuilt on every
+## step, so their count and their order changed underneath the finger about to press one.
+## That row is what a spatial model should never have had: walking is not a menu of
+## choices, it is four directions that are always the same four, and the only thing that
+## varies is which of them is rock. So the pad has a fixed size in a fixed place and its
+## keys grey out instead of vanishing.
+##
+## It is drawn INSIDE the floor window rather than under it. The column is full — the
+## layout test allows the floor 400px of a 720px frame and the header, the two text lines
+## and the footer own the rest — and a pad tall enough for a thumb does not fit in the 46px
+## the old row used. Over the floor it costs nothing, and it is where a phone's thumb
+## already is.
+const PAD_KEY := Vector2(88.0, 66.0)
+const PAD_INSET := 18.0
+## A contextual button under the floor: the offers that are NOT movement (slipping past a
+## fight). Kept as buttons on every platform on purpose — a price you pay in HP is a
+## decision and belongs in words, where the pad only says which way.
+const ACT_BUTTON := Vector2(300.0, 46.0)
 
 ## Movement keys, bound SCREEN-relative (D87).
 ##
@@ -144,8 +160,20 @@ const MOVE_KEYS := {
 	KEY_S: 2, KEY_DOWN: 2,      # ↙
 	KEY_A: 1, KEY_LEFT: 1,      # ↖
 }
-## The letter shown on each direction's button, indexed like `TraversalIso.DIRS`.
+## The letter bound to each direction, indexed like `TraversalIso.DIRS`. Shown on the
+## keyboard legend under the floor, and in each pad key's tooltip.
 const DIR_KEY := ["D", "A", "S", "W"]
+## Where each direction sits on the pad, as a cell of a 3x3 grid — the shape of a
+## handheld's cross, with the middle empty.
+##
+## Cross positions, not the four diagonals of the projection they actually walk. The
+## diagonal layout was the geometrically honest one and it was tried first: it puts each
+## key exactly where its arrow points, and it also puts two keys under the thumb at once,
+## because a diamond of four buttons has no gap between adjacent pairs. A cross is the
+## shape every player already has a thumb habit for, and the mismatch it leaves — up walks
+## you up-and-right — is settled the way D87 settled it for the keyboard: the key carries
+## the arrow of where it actually goes, so it is read rather than inferred.
+const PAD_CELL := {3: 1, 0: 5, 2: 7, 1: 3}   # dir -> index into the 3x3 grid
 
 ## How long one step takes to walk, in seconds.
 ##
@@ -193,7 +221,16 @@ var ropes_label: Label
 var log_label: Label      ## what just happened
 var hint_label: Label     ## what the floor is asking for now
 var floor_view: Control
-var moves_box: HBoxContainer
+var acts_box: HBoxContainer   ## the offers that are not movement
+var legend_label: Label       ## the key mapping, where there is a keyboard to use it
+var pad: GridContainer        ## the movement pad, over the floor
+## dir -> its key on the pad, so `_refresh` can grey one out without rebuilding the pad.
+## The pad is the one part of this screen that is built ONCE: a control that is freed and
+## remade every turn is a control that can move under a finger already on its way down.
+var pad_keys: Dictionary = {}
+## The pad key being held right now, or -1. Hold-to-walk works off the pad exactly as it
+## does off the keyboard — `_process` reads this the same way it reads a held key.
+var pad_dir: int = -1
 
 ## Header ink. The tiers differ by SIZE and by colour, not by position alone, so the
 ## reading order survives a row wrapping.
@@ -347,10 +384,30 @@ func _build_ui() -> void:
 	floor_view.gui_input.connect(_on_floor_input)
 	root.add_child(floor_view)
 
-	moves_box = HBoxContainer.new()
-	moves_box.alignment = BoxContainer.ALIGNMENT_CENTER
-	moves_box.add_theme_constant_override("separation", UITheme.sep(10))
-	root.add_child(moves_box)
+	_build_pad()
+
+	# The mapping, for the machines that walk with keys. It is a STATIC line, which is the
+	# whole difference from the row of move buttons it replaces: it says what the four keys
+	# do and never changes, where the buttons said what was adjacent and changed every step.
+	# Hidden when the pad is up, because then it is teaching a keyboard that is not there.
+	legend_label = Label.new()
+	legend_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	legend_label.add_theme_color_override("font_color", FLOOR_INK)
+	# Read in the order the hand sits, W A S D, not in the order `TraversalIso.DIRS`
+	# happens to be declared in: the legend is for the player, and "D A S W" is a list of
+	# four letters where "W A S D" is a shape they already know.
+	var legend: Array[String] = []
+	for letter in ["W", "A", "S", "D"]:
+		var d: int = DIR_KEY.find(letter)
+		if d >= 0:
+			legend.append("%s %s" % [letter, TraversalIso.DIR_ARROW[d]])
+	legend_label.text = "%s     or click a lit tile" % "    ".join(legend)
+	root.add_child(legend_label)
+
+	acts_box = HBoxContainer.new()
+	acts_box.alignment = BoxContainer.ALIGNMENT_CENTER
+	acts_box.add_theme_constant_override("separation", UITheme.sep(10))
+	root.add_child(acts_box)
 
 	var spacer_bot := Control.new()
 	spacer_bot.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -375,6 +432,75 @@ func _build_ui() -> void:
 	# same Callable on the button and on Escape, so the two cannot drift apart
 	var menu := UI.exit_button(foot, "Menu", func(): UI.goto(self, "res://scenes/PauseMenu.tscn"))
 	menu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+## The movement pad: four keys in a cross, in the bottom-left corner of the floor window,
+## built once and never rebuilt (D168).
+##
+## Bottom-LEFT because that is where a pad goes on the machine this exists for, and because
+## the floor is scrolled to keep the player at the middle of the window — the corner is the
+## part of the view with the least in it. Anchored to the corner rather than laid out in the
+## column, so it costs the floor no height at all.
+##
+## Only added to the tree when it is going to be shown. A hidden pad is a cheap thing to
+## carry, but it is also four buttons sitting over the floor that swallow clicks meant for
+## the tiles underneath them, and `visible = false` is a promise the next edit can break by
+## accident.
+func _build_pad() -> void:
+	pad_keys = {}
+	if not UI.pad_visible():
+		return
+	pad = GridContainer.new()
+	pad.columns = 3
+	pad.add_theme_constant_override("h_separation", UITheme.sep(6))
+	pad.add_theme_constant_override("v_separation", UITheme.sep(6))
+	# Only the four keys take a press. The grid and its five empty cells are 260x200 of
+	# floor otherwise gone deaf, and clicking a lit tile is a way to move on this screen
+	# too — the pad must not quietly delete it from its own corner.
+	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# The pad's own size is what the anchors position, so it is measured before it is
+	# placed: three keys and two gaps each way.
+	var key := Vector2(UITheme.px(PAD_KEY.x), UITheme.px(PAD_KEY.y))
+	var span := Vector2(key.x * 3.0 + float(UITheme.sep(6)) * 2.0,
+		key.y * 3.0 + float(UITheme.sep(6)) * 2.0)
+	var by_cell := {}
+	for d in PAD_CELL:
+		by_cell[int(PAD_CELL[d])] = int(d)
+	for c in 9:
+		if not by_cell.has(c):
+			# the four corners and the middle: spacers, so the cross keeps its shape
+			var gap := Control.new()
+			gap.custom_minimum_size = key
+			gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			pad.add_child(gap)
+			continue
+		var d: int = int(by_cell[c])
+		var b := Button.new()
+		UITheme.style_button(b, true)
+		b.custom_minimum_size = key
+		b.text = TraversalIso.DIR_ARROW[d]
+		b.add_theme_font_size_override("font_size", UITheme.title_font())
+		# Never takes focus: a pad key that keeps focus would then answer to Enter and
+		# Space as well, which on this screen means walking without meaning to.
+		b.focus_mode = Control.FOCUS_NONE
+		# Held, not clicked. `pressed` fires on release, and hold-to-walk needs to know the
+		# finger is still down — so the step is taken on the way DOWN and `pad_dir` is what
+		# `_process` reads to roll into the next one.
+		b.button_down.connect(func():
+			pad_dir = d
+			_step_dir(d))
+		b.button_up.connect(func():
+			if pad_dir == d:
+				pad_dir = -1)
+		UI.hoverable(b, "%s   (or the %s key). Hold to keep walking." % [
+			TraversalIso.DIR_ARROW[d], DIR_KEY[d]])
+		pad.add_child(b)
+		pad_keys[d] = b
+	floor_view.add_child(pad)
+	pad.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+	pad.offset_left = UITheme.px(PAD_INSET)
+	pad.offset_top = -span.y - UITheme.px(PAD_INSET)
+	pad.offset_right = pad.offset_left + span.x
+	pad.offset_bottom = -UITheme.px(PAD_INSET)
 
 ## The at-risk frame in one of its two states. Local to this screen rather than in
 ## UITheme: it is one HUD element with a lit and an unlit face, not a style the rest
@@ -571,6 +697,9 @@ func _draw_floor() -> void:
 			if e2 == TraversalIso.STAIR:
 				_draw_stair(c2, t)
 				continue
+			if e2 == TraversalIso.KEY:
+				_draw_key(c2, t)
+				continue
 			# the furniture and the things that wait for you
 			if e2 >= 0:
 				var role := _role_of(e2)
@@ -671,6 +800,37 @@ func _draw_stair(centre: Vector2, t: Vector2) -> void:
 			Color(v, v, v * 1.3))
 	floor_view.draw_polyline(mouth + PackedVector2Array([mouth[0]]),
 		Color(0.96, 0.82, 0.42, 0.95), UITheme.px(3.0))
+
+## A key lying on the ground: a shaft with a bow at one end and two teeth at the other,
+## on a patch of ground it has caught the light of.
+##
+## Drawn rather than a sprite, like the stair and for the same reason — there is no key in
+## any art pack — and it has the stair's problem in reverse. The stair must be the loudest
+## thing on the floor because it is what the floor is a search FOR; a key is small, and a
+## small dark object on dark stone is nothing. So the shape sits inside a lit patch: the
+## glow says "there is something here" from across a room, and the silhouette says what.
+## It is deliberately NOT drawn at sprite height — a key stands on nothing, and lifting it
+## to eye level would read as a floating icon rather than as an object on the ground.
+func _draw_key(centre: Vector2, t: Vector2) -> void:
+	_ground_ring(centre, t, 0.24, Color(1.0, 0.86, 0.42, 0.42))
+	floor_view.draw_colored_polygon(_diamond(centre, t * 0.34),
+		Color(1.0, 0.84, 0.40, 0.20))
+	var gold := Color(1.0, 0.88, 0.52)
+	# Along the tile's long axis, so it lies on the diamond rather than across it.
+	var half := t.x * 0.16
+	var lift := -t.y * 0.06
+	var a := centre + Vector2(-half, lift + t.y * 0.05)
+	var b := centre + Vector2(half, lift - t.y * 0.05)
+	floor_view.draw_line(a, b, gold, UITheme.px(3.0))
+	# the bow: a ring at the near end, which is what makes the shape read as a key
+	var bow := a + (a - b).normalized() * t.x * 0.045
+	floor_view.draw_arc(bow, t.x * 0.05, 0.0, TAU, 14, gold, UITheme.px(2.5))
+	# two teeth off the far end, at right angles to the shaft
+	var along := (b - a).normalized()
+	var side := Vector2(-along.y, along.x) * t.y * 0.11
+	for f in [0.62, 0.86]:
+		var root: Vector2 = a + (b - a) * float(f)
+		floor_view.draw_line(root, root + side, gold, UITheme.px(2.5))
 
 ## One ground diamond, with the stone material projected onto it.
 ##
@@ -882,10 +1042,15 @@ func _begin_walk(tv: TraversalIso, from_cell: int, from_depth: int,
 				- _to_plate(int(c) % g.x, int(int(c) / g.x))
 			break
 
-## The direction of a movement key being held right now, or -1. Insertion order
-## decides ties, so W/Up wins over the rest — arbitrary, and only reachable by
-## holding two directions at once.
+## The direction being held right now, or -1 — a pad key under a finger or a movement key
+## under a hand, which hold-to-walk cannot tell apart and should not.
+##
+## The pad wins, because it can only be held deliberately. Among the keys, insertion order
+## decides ties, so W/Up wins over the rest — arbitrary, and only reachable by holding two
+## directions at once.
 func _dir_held() -> int:
+	if pad_dir >= 0:
+		return pad_dir
 	for k in MOVE_KEYS:
 		if Input.is_key_pressed(k):
 			return int(MOVE_KEYS[k])
@@ -963,7 +1128,7 @@ func _phrases(line: String) -> PackedStringArray:
 
 ## Lay `parts` out along one header row, reusing the Labels already in it.
 ##
-## A pool rather than the free-and-rebuild `moves_box` uses: the header
+## A pool rather than the free-and-rebuild `acts_box` uses: the header
 ## is rewritten on every step, and a step is a TURN, so freeing Labels leaves a frame in
 ## which the container has both the old set and the new one — a flicker on the one line
 ## the player reads constantly. Extra Labels are hidden, and a hidden child is not laid
@@ -1040,32 +1205,65 @@ func _refresh() -> void:
 		cam = _camera_for(_eye_plate(tv))
 		floor_view.queue_redraw()
 
-	for c in moves_box.get_children():
-		c.queue_free()
 	var opts := tv.options()
+	# What each direction is: the first option that walks that way, which is the walk
+	# itself — a slip past is ranked below everything and is never the first (D88).
+	var by_dir := {}
+	for i in opts.size():
+		var d: int = int(opts[i]["dir"])
+		if not by_dir.has(d) and String(opts[i].get("action", "")) != "avoid":
+			by_dir[d] = i
+	# The way on, adjacent: the boss on the last floor, a stair on every other. Both,
+	# because the test was `type == BOSS` alone and a stair's `type` is the STAIR terrain
+	# value, never a node type — so "Stairs down, right there" was a line the game could
+	# not print, on every floor but the last (D168).
 	var stair_found := false
 	for i in opts.size():
-		var o: Dictionary = opts[i]
-		var d: int = int(o["dir"])
-		var b := Button.new()
-		var label: String = o["label"]
-		b.custom_minimum_size = Vector2(UITheme.px(MOVE_BUTTON.x), UITheme.px(MOVE_BUTTON.y))
-		if int(o["type"]) == GameState.NodeType.BOSS:
+		var cell: int = int(opts[i]["cell"])
+		if int(opts[i]["type"]) == GameState.NodeType.BOSS \
+				or tv.cell(cell % tv.grid().x, int(cell / tv.grid().x)) == TraversalIso.STAIR:
 			stair_found = true
-			# the finale is named before it is entered, on every model (D41)
-			var boss := Balance.boss_of(GameState.dungeon_id)
-			if boss != null:
-				label = "%s  BOSS: %s" % [TraversalIso.DIR_ARROW[d], boss.name]
-				UI.hoverable(b, "%s\n%s" % [
-					boss.name, Balance.boss_warning(GameState.dungeon_id)])
-		# The key letter sits on the button rather than in a legend, because the
-		# keyboard mapping is a 45-degree rotation nobody can infer (D87) — this is
-		# where it gets taught, in the two steps it takes to read one.
-		b.text = "%s %s" % [DIR_KEY[d], label]
-		if int(o["type"]) != GameState.NodeType.BOSS:
-			UI.hoverable(b, "Or press %s. Hold it to keep walking." % DIR_KEY[d])
-		b.pressed.connect(_on_pick.bind(i))
-		moves_box.add_child(b)
+
+	# The pad greys out rather than shrinking: a direction with rock in it is a key you
+	# can see and cannot press, which is a fact about the floor. A row of buttons that
+	# came and went could not say that — it just had one fewer button.
+	for d in pad_keys:
+		var b := pad_keys[d] as Button
+		var walkable: bool = by_dir.has(int(d))
+		b.disabled = not walkable
+		# A held key that greys out mid-hold never emits `button_up`, so hold-to-walk would
+		# keep asking for a direction that is now rock. Released here instead.
+		if not walkable and pad_dir == int(d):
+			pad_dir = -1
+		# Lit when there is something that way worth the step, so the pad carries the
+		# reading the labels used to: an encounter, a chest, a key, the way down.
+		var notable: bool = walkable and int(opts[int(by_dir[int(d)])]["type"]) >= 0
+		if walkable and not notable:
+			var cell: int = int(opts[int(by_dir[int(d)])]["cell"])
+			notable = tv.cell(cell % tv.grid().x, int(cell / tv.grid().x)) \
+				in [TraversalIso.STAIR, TraversalIso.KEY]
+		b.add_theme_color_override("font_color", COL_REACH if notable else STAT_INK)
+
+	# Everything on offer that is NOT a direction. One kind so far: paying HP to squeeze
+	# past a fight instead of having it. These keep their words because the price is the
+	# whole decision, and they sit UNDER the floor where a decision is read, not on the pad
+	# where the thumb is.
+	for c in acts_box.get_children():
+		c.queue_free()
+	for i in opts.size():
+		if String(opts[i].get("action", "")) != "avoid":
+			continue
+		var act := Button.new()
+		UITheme.style_button(act)
+		act.custom_minimum_size = Vector2(UITheme.px(ACT_BUTTON.x), UITheme.px(ACT_BUTTON.y))
+		act.text = String(opts[i]["label"])
+		act.focus_mode = Control.FOCUS_NONE
+		act.pressed.connect(_on_pick.bind(i))
+		UI.hoverable(act, "Take the tile without the fight. The price rises with each one.")
+		acts_box.add_child(act)
+
+	# The legend teaches the keyboard, so it goes where the pad is not.
+	legend_label.visible = pad == null
 
 	# The hint is the state of the floor, most urgent first. Something in sight outranks
 	# the way down: the stairs will still be there in three turns and the thing walking
@@ -1080,6 +1278,14 @@ func _refresh() -> void:
 	elif stair_found:
 		hint = "The way down is right there. Anything you leave up here, you leave behind." if last \
 			else "Stairs down, right there. This floor keeps whatever you do not take now."
+		# The finale is NAMED before it is entered, on every model (D41). That used to be the
+		# job of the move button standing in for the boss tile; the pad has no words on it, so
+		# the naming moved here — which is also the line the player is already reading.
+		if last:
+			var boss := Balance.boss_of(GameState.dungeon_id)
+			if boss != null:
+				hint = "%s is through there. %s  Anything you leave up here, you leave behind." % [
+					boss.name, Balance.boss_warning(GameState.dungeon_id)]
 	elif tv.mons.size() > 0:
 		hint = "Something else is walking this floor. You cannot hear it from here."
 	elif not last:
@@ -1123,7 +1329,15 @@ func _on_pick(i: int) -> void:
 		# picking up a key both come back as {} — they are handled inside the model so
 		# that RunFlow never has to learn a node type that is not an encounter — so this
 		# is the only place they can be reported to the player at all.
-		if tv.depth != from_floor:
+		#
+		# The key is also PAID here. The model is pure logic and owns no run resources
+		# (D13), so it reports the pickup on itself and this is the one line that adds it,
+		# exactly as an ambush's HP price is reported there and charged here.
+		if tv.picked_key:
+			GameState.keys += 1
+			Audio.play("treasure")
+			log_label.text = "A key, down here where nothing else is. You take it."
+		elif tv.depth != from_floor:
 			log_label.text = "You take the stairs down to floor %d." % (tv.depth + 1)
 		elif not was_seen:
 			log_label.text = "You press on into the dark."
@@ -1133,8 +1347,10 @@ func _on_pick(i: int) -> void:
 		# on the same floor, with nothing NEW in sight. Anything else earns a stop: the
 		# player who walked into a corridor and found something there has a decision in
 		# front of them, and continuing to walk through it because a key is still down
-		# is the one way this feature could cost them a run.
-		walk_more = tv.depth == from_floor and tv.threats().size() <= from_threats.size()
+		# is the one way this feature could cost them a run. Picking something up is one
+		# of those stops — a thing that happened deserves the beat it takes to read.
+		walk_more = tv.depth == from_floor and not tv.picked_key \
+			and tv.threats().size() <= from_threats.size()
 		_begin_walk(tv, from_cell, from_floor, from_threats)
 		GameState.autosave()
 		_refresh()

@@ -24,14 +24,32 @@ const OPEN_W := 140.0
 var list_box: VBoxContainer
 var result_box: VBoxContainer
 var info_label: Label
+## The one scroll both halves live in, so the cards can be reached (D169).
+var scroll_box: ScrollContainer
 
 func _ready() -> void:
 	var col := UI.screen(self, "Packs", "", "table")
 	info_label = UI.label(col, "")
-	list_box = UI.scroll(col)
+	# The list scrolled and the reveal did NOT, and the reveal is the half that has no
+	# bound on its height: eight packs opened at once is 24 cards, six rows of them, and
+	# they were laid out in the fixed column below the scroll. So they grew downwards past
+	# the bottom of the window, taking Back with them — the screen could be neither read
+	# nor left, and the only way out was Escape, which is not written anywhere on it.
+	#
+	# One scroll around BOTH, rather than a second scroll under the first: two scrolling
+	# regions splitting one column means the list gets a few packs' worth of room and the
+	# cards get the rest, whichever the player is actually looking at. This way the page is
+	# the packs and their reveal in reading order, and Back stays pinned below it.
+	var inner := UI.scroll(col)
+	scroll_box = inner.get_parent() as ScrollContainer
+	list_box = VBoxContainer.new()
+	list_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	list_box.add_theme_constant_override("separation", UITheme.sep(6))
+	inner.add_child(list_box)
 	result_box = VBoxContainer.new()
+	result_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	result_box.add_theme_constant_override("separation", UITheme.sep(6))
-	col.add_child(result_box)
+	inner.add_child(result_box)
 	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
 	_refresh()
 
@@ -161,3 +179,10 @@ func _show(gold: int, cards: Array, what: String) -> void:
 			if MetaState.collection.has(String(cards[i])) else 1
 		UI.card_button(row, shown, size, Callable())
 	_refresh()
+	# Scrolled to, not left for the player to find. The reveal is the point of the screen
+	# and it is now BELOW the list that produced it, so on a full page the cards would
+	# otherwise land off the bottom edge and the press would look like it did nothing.
+	# Deferred because the rows were built this frame and a container has no size until it
+	# has been laid out — asking now scrolls to a rectangle of height zero.
+	if scroll_box != null:
+		scroll_box.call_deferred("ensure_control_visible", head)

@@ -9950,3 +9950,157 @@ cursor changes, because an affordance nobody is told about is not one.
 Also fixed, being one line and on the screen: "1 card that turn up anywhere in their
 zone". The verb now agrees with the count, so the one grammatical error on that screen
 is no longer the one waiting at the end of every errand.
+
+### D167 — A key is somewhere, not a chance
+
+Reported: *"key counts in dungeon should always start from 0, we should search the dungeon
+to obtain them to open chests. Currently, opening chests gives keys that are just
+accumulated."*
+
+The first half was already true — `reset_run_progress` zeroes `keys`, and there is one
+dungeon per run — which is what makes the second half the whole of the report. Keys had
+**three** sources and every one of them was passive: a chest that opened rolled 45% for a
+key, a fight 22%, an elite 60%. So the first locked chest of a run was opened with a key
+the *previous* chest had handed over, and the lock was not asking anything about how the
+player had played the floor. It was asking whether they had been down here long enough.
+
+**A lock should ask for something that is somewhere.** Keys now come off the dungeon floor
+and from nowhere else: `TraversalIso.KEY`, a tile you pick up by standing on it.
+
+Four decisions inside that, each of which had a wrong answer available:
+
+* **Terrain, not an encounter.** `KEY` is negative, like `WALL` and `STAIR`, so it is
+  outside `content` and outside `quota`. A floor scattering three of them still costs what
+  its difficulty says (D14), and `progress()` does not stall on a key left behind.
+* **The count is derived from the odds that decide the locks.** `Balance.iso_keys_for`
+  reads the sealed weight out of `pack_tier_odds` — the same table `chest_lock` resolves
+  through — times the dungeon's chest count, clamped to at least one and never more than
+  the chests. At depth 1 that is 1 key for 5 chests, at depth 12 it is 3, because that is
+  how the lock rate moves. Authoring a per-dungeon number instead is the D34 trap: it
+  would silently stop matching the locks the first time the odds moved.
+* **Dealt to the floors that hold chests.** The descent is one-way. A key one floor below
+  the chest it opens is a key that arrives too late, and the player cannot be told why.
+* **Placed last, farthest from everything — but in a chamber.** The spread is
+  `_place_spread`'s, run after the encounters and the wanderers, so a key takes the ground
+  nothing else wanted. The chamber preference is the floor's second rule read forwards: a
+  room is revealed whole on entry and a corridor shows two tiles ahead, so the far corner
+  of a hall is a decision you can see and the end of a blind passage is a tile the player
+  never learns exists. Chambers beat corridors by 1000, which one 12x12 floor's worth of
+  distance cannot reach.
+
+The model reports the pickup and does not pay it — `picked_key`, read by the view on the
+step it happened, exactly as an ambush reports an HP price the caller charges (D13). The
+one line that adds to `GameState.keys` is in `iso_run.gd`, and `tests/playable_test.gd`
+presses the pad and checks the number, because a flag set and never read loses the key in
+silence.
+
+Measured: **21 keys across 21 floors of the 12 dungeons**, and moves per encounter
+**6.9 → 7.0** against the 7.5 ceiling. That is the pillar working rather than a cost —
+walking is bought, and a key is one more thing to walk toward.
+
+**A greedy walker is the wrong instrument here, and finding that out is the useful part.**
+The first version of the test walked every dungeon taking option 0 and asserted a key was
+met; three of the twelve finished without ever standing next to one. That is the mechanic
+behaving exactly as designed — keys sit off the route, the route is what a first-option
+walker takes — and as an assertion it would have read as broken placement. The test walks
+the distance field *toward* a key instead, which is also the only way to prove the detour
+is walkable at all.
+
+The chest screen says where they are now, on the line where the player finds out they
+needed one: *"Keys lie on the dungeon's own floors — off the path, where nothing else
+is."* A key is drawn rather than sprited, like the stair and for the same reason (no art
+pack has one), and it has the stair's problem inverted: the stair must be the loudest thing
+on the floor, and a key is a small dark object on dark stone. So it is a silhouette — bow,
+shaft, two teeth — inside a lit patch: the glow says something is there from across a
+room, the shape says what.
+
+### D168 — Four directions that are always there, and a legend where the buttons were
+
+Reported: *"I would like to have a game boy like pad for movements instead of the changing
+appearing buttons in dungeons. We could show the buttons on android, on a computer the
+buttons can be completely removed."*
+
+The row was one button per exit, freed and rebuilt on every step, each labelled with what
+was that way. **Walking is not a menu.** It is four directions that are always the same
+four, and the only thing that varies is which of them is rock — but the row varied in
+*count* and in *order*, so the button under a finger already on its way down was a
+different button by the time it landed. That is a control that cannot be learned.
+
+So: a pad of four keys, fixed size, fixed place, built ONCE, greying out instead of
+vanishing. A direction with rock in it is now a key you can see and cannot press, which is
+a fact about the floor that the disappearing row could not state.
+
+**Cross, not diamond, and the diamond was tried first.** The grid's four directions project
+to the four screen diagonals (D87), so the honest layout is a diamond of four keys placed
+where their arrows point. It also puts two keys under one thumb, because a diamond has no
+gap between adjacent pairs. A cross is the shape every player already has a thumb habit
+for, and the mismatch it leaves — up walks you up-and-right — is settled the way D87
+settled it for the keyboard: **the key carries the arrow of where it actually goes**, so it
+is read in the first two steps rather than inferred.
+
+**It is drawn over the floor, not under it.** `tests/test_layout.gd` allows the floor 400px
+of a 720px frame and 260px of chrome for everything else; the old row fitted in 46px of that
+and a pad tall enough for a thumb is two rows of 66. Inside the floor window it costs
+nothing, and the bottom-left corner is both where a pad belongs and the part of a
+camera-centred view with the least in it.
+
+On a machine with a keyboard the pad is gone entirely, and what replaces it is a **static
+legend**: `W ↗   A ↖   S ↙   D ↘     or click a lit tile`. This is the same principle the
+move buttons were carrying — a convention nobody can derive should be displayed, not
+documented — so the display had to move, not be dropped. The letters are read in WASD
+order, not in the order `TraversalIso.DIRS` happens to declare, because "D A S W" is four
+letters and "W A S D" is a shape.
+
+Two things the buttons were carrying that the pad cannot:
+
+* **The boss's name.** A finale is named before it is entered, on every model (D41), and
+  the boss tile's button was where the crawl did it. It is in the hint line now, with the
+  boss warning — the line the player is already reading, and the one place on the screen
+  that is about the state of the floor.
+* **Slipping past a fight.** That is not a direction, it is a price in HP, so it keeps its
+  words and its own button under the floor, on every platform. The pad says which way; a
+  decision says what it costs.
+
+Found while moving that hint: `stair_found` was `int(o["type"]) == NodeType.BOSS`, and a
+stair's `type` is the `STAIR` terrain value and never a node type — so *"Stairs down, right
+there. This floor keeps whatever you do not take now"* was a line the game could not print
+on any floor but the last. It tests both now.
+
+**The setting is three-state because the honest default is neither on nor off.** A phone has
+no keyboard and must have the pad; a desktop has WASD and is better without it;
+`UI.touch_ui()` already knows which is which, so Automatic is what ships and Always/Never
+exist for the cases the platform test cannot see — a desktop with a touchscreen, a tablet
+with a keyboard. It also makes the pad photographable: no capture machine has a
+touchscreen, so without Always the one control a phone walks with would never appear in a
+capture at all, which is D122's blind spot exactly.
+
+`tests/test_layout.gd` reads `PAD_CELL` out of source and fails if any direction has no pad
+key or if two share a cell of the 3x3 — the same silent failure as an unbound movement key,
+one input over: on the machine the pad exists for, a direction missing from it cannot be
+walked at all.
+
+### D169 — The reveal was the half that could not scroll
+
+Reported: *"when opening a lot of packs, if the cards overflow the screen, I cannot scroll
+down to see them all and exit the screen."*
+
+The pack LIST was in a `ScrollContainer` and the reveal under it was not — a plain VBox in
+the fixed column. Eight packs opened at once is 26 cards, five rows of them, and they grew
+downwards past the bottom of the window taking the Back button with them. Escape still
+worked, which is not an answer: it is written nowhere on that screen.
+
+**One scroll around both halves, not a second scroll under the first.** Two scrolling
+regions splitting one column means the list gets some fraction of the room and the cards get
+the rest, whichever of the two the player is actually looking at; and the fraction would
+have been picked here, once, for both. This way the page is the packs and their reveal in
+reading order, and Back is pinned below the scroll where a way out belongs.
+
+The reveal is also scrolled TO, deferred by a frame — the rows were built this frame and a
+container has no size until it has been laid out, so asking immediately scrolls to a
+rectangle of height zero. Without it the cards land off the bottom edge on a full page and
+pressing Open reads as having done nothing.
+
+`tools/screenshots.gd` grew a `PacksOpened` row: eight packs, and a pose that presses the
+real *Open all* button rather than calling the handler. The existing `Packs` row holds three
+unopened packs, which is a real screen and cannot show this — and did not, for the whole
+life of the bug.

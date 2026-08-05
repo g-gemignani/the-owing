@@ -2077,12 +2077,10 @@ func _win() -> void:
 		var ep: Dictionary = GameState.escrow_packs.back()
 		relic_line += "  Sealed: %s." % Balance.pack_title(
 			String(ep.get("tier", Balance.PACK_WORN)), String(ep.get("build", "")))
-	# Keys drop from fights as well as chests (D84), so a locked chest is a reason
-	# to take a fight rather than a reason to have walked somewhere else earlier.
-	var chance: int = Balance.KEY_ELITE_CHANCE if tier == Balance.Tier.ELITE else Balance.KEY_FIGHT_CHANCE
-	if randi() % 100 < chance:
-		GameState.keys += 1
-		relic_line += "  Took a key."
+	# A fight drops no key. It used to (D84: 22%, 60% off an elite), which made a locked
+	# chest a reason to take a fight — and, in practice, a reason to do nothing at all,
+	# because keys then arrived by playing rather than by going to get them. They lie on
+	# the dungeon floor now and nowhere else (D167).
 
 	var healed := "  Healed %d." % relic_heal if relic_heal > 0 else ""
 	status_label.text = "Encounter cleared. +%d gold (%d at risk).%s%s Choose a reward:" % [

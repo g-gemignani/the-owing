@@ -61,12 +61,16 @@ var escrow_packs: Array = []
 ## spent.
 var escrow_relics: Array = []  # relic ids
 
-## Keys found this run, spent on locked chests (D84).
+## Keys picked up off the dungeon floor this run, spent on locked chests (D84, D167).
 ##
 ## Run-scoped and NOT in escrow: a key is a tool for opening things here, not a
 ## reward to carry home, so dying loses it the same way it loses the floor you were
 ## standing on. Keeping keys between runs would turn the first chest of every run
 ## into a formality.
+##
+## Starts at 0 on every run and there is exactly one way to raise it: walk onto a key
+## lying on a floor (`TraversalIso.KEY`). Chests and fights used to hand them out, which
+## made this a number that went up while you played instead of one you went and got.
 var keys: int = 0
 
 ## Rolled shop inventory for the node being visited, so re-entering cannot reroll
