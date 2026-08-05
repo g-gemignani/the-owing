@@ -956,6 +956,19 @@ static func iso_roll_room_role(style: Dictionary) -> String:
 const ISO_LIGHTS_MIN := 1
 const ISO_LIGHTS_MAX := 3
 const ISO_LIGHT_RADIUS := 2
+## Walkable tiles a floor needs before it can hold another source.
+##
+## A COUNT alone is wrong and the coverage assertion caught it, on the one floor small
+## enough to show it: floor sizes run 26 to 65 tiles, and three sources at radius two lit
+## 26 of the Abyssal Stair's 34 — 76%, over the band, on a floor that is mostly corridor so
+## every source funnels down it. Density is the thing being tuned, not a number of braziers,
+## so the count is capped by area and the band is left where it is.
+const ISO_TILES_PER_LIGHT := 20
+
+## How many sources a floor of `tiles` walkable cells gets. Always at least one: a floor lit
+## by nothing sits at one flat value, which is what the light field exists to end.
+static func iso_lights_for(tiles: int) -> int:
+	return clampi(int(tiles / ISO_TILES_PER_LIGHT), 1, ISO_LIGHTS_MAX)
 
 ## One oversized feature per floor, and its job is ORIENTATION (D177). "I came in past the
 ## big shaft" is a sentence a place produces and a board does not — and a floor whose

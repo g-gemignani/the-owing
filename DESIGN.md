@@ -10700,3 +10700,270 @@ a `CombatReward` row; the collision above is plainly visible in the first captur
 plainly gone in the second. Every other state of this screen had a row (D104 added the hover
 and the inspect for exactly this reason) and the busiest one it ever reaches did not — which
 is D123's blind spot in its usual shape: nothing photographs it, so nobody has looked at it.
+### D176 — The floor had two visual axes and none of them was inside a room
+
+`ISO_STYLES` × `ISO_TERRAINS` is sixteen readings out of eight constants (D82), and it was
+a real win, but all of it is variety *between* dungeons. Inside one floor every ground tile
+was the same diamond at one of three tints and every rock the same block at three more. The
+floor read as a board because nothing in it was local.
+
+Diablo's exploration feel is not continuity — that was asked for and declined in D87, for a
+reason that still holds. It is **local incident**: this room has a fallen slab, that one is
+a store with things stacked in it, that corner has a fire in it. Incident is per-tile
+decoration, and decoration is entirely compatible with a grid. So three new axes, all of
+them presentation, none of them read by `options()`, any flood, `_describe` or the budget:
+
+* **A props layer** (`TraversalIso.props`), one decoration id per cell, per TERRAIN so it
+  multiplies against terrain the way style already does. Four kinds per terrain, seven
+  drawn shapes between them.
+* **Room roles** (`room_role`), rolled at placement from the *style's own weights*, so
+  `cells` produces mostly cells and `halls` mostly halls. Role drives dressing and nothing
+  else — it must prove it is free of balance consequence before anything is ever placed by
+  it.
+* **A light field** (`lights` + a derived `_light`), which is a fix rather than an addition:
+  `TINT_WALKED`/`TINT_OPEN`/`TINT_FRONTIER` is *have I been here* doing the job of *is
+  there light here*, and one rule for both is exactly why the whole floor read at one value.
+
+The dressing pass runs LAST, after the keys, which is what lets its rule be absolute: a
+prop can never land on a tile that holds something, because by then everything that holds
+something is already there. That matters more than it sounds — the floor has spent three
+decisions teaching the player that what is drawn on a tile is what they get (the creature
+in D85, the chest's tier and its lock in D172), and a decoration that could be mistaken for
+any of it would undo all three at once. There is deliberately no crate in the table that
+reads as a chest.
+
+## Four things measured, and three of them were wrong first
+
+**The light field lit 91% of the ground.** Two to four sources at radius three, swept over
+33 floors, left almost nothing dark. That is not a light field, it is a brighter flat rule —
+the thing being fixed, in warmer paint. One to three at radius two gives 30%.
+`tests/test_traversal.gd` now asserts the band from *both* sides: a floor with no lit tile
+has lost the feature, and a floor lit past 75% never had it. The first version only checked
+that something was lit, which the 91% build passed.
+
+**Shading per tile put the grid back.** A capture of the Warrens showed it plainly: light
+falls off in whole steps, so every tile came out a different flat value and the hairline
+lattice D87 deleted the per-tile outlines to remove was back, drawn in illumination instead
+of in lines. The fix is to shade per CORNER — each corner being the light averaged over the
+four tiles that meet at it — so two neighbours agree on the pair of colours along their
+shared edge. `draw_polygon` takes a colour per vertex, so this costs nothing.
+
+**Pale props read as paper.** The pile went from 0.62 to 1.10 of the floor's tint, and next
+to the hero in the Warrens capture it was the brightest thing in the frame: a stack of white
+sheets on a dark floor, reading as an object you might be able to pick up. Every value in
+the table stays *below* the ground it lies on now. A prop is read by its shape, and the
+shape only reads if it is not competing with the hero and the chest.
+
+**And the light count had to become a DENSITY.** The coverage band caught its own tuning a
+second time, on the one floor small enough to show it: floor sizes run 26 to 65 tiles, and
+three sources at radius two lit 26 of the Abyssal Stair's 34 — 76%, over the band, on a floor
+that is mostly corridor so every source funnels along it. It failed one run in several, which
+is what an unseeded generator does with an assertion that is nearly right. The count is capped
+by area now (`ISO_TILES_PER_LIGHT`) and the band stayed where it was, because the band was not
+the thing that was wrong.
+
+**And they were too sparse.** A fifteen-tile view of the Maw held one prop. Rates up about
+half again — but the SPREAD between the roles is what does the work, not their size: a store
+at three times a gallery is the reading, and all of them being large is the flat floor again
+with clutter on it.
+
+## Drawn, not painted — a deliberate departure from the plan
+
+The plan routed the props and the landmarks through `tools/art_manifest.gd`, a regenerated
+`ART_ASSETS.md`, and Gemini-in-the-browser for the painted half. They are drawn in code
+instead, and `ART_ASSETS.md` stays closed at 310/310/0.
+
+The precedent is already in the file and it is not a shortcut: the stairs, the key and the
+chest's pool of light are all drawn, for the reason stated there — there is no stair or key
+in any art pack. These are the same class of subject. D89's finding was precise about which
+half of the divide code wins: seamless materials came out *better* computed and procedural
+creatures came out as coffins with antennae. Ground clutter at 116×58 is nearer a material
+than a creature, and a sixteen-file shopping list for marks the player reads at a glance
+would have opened a closed list to buy something the drawing already does. What this
+forgoes is the one thing a painted prop would have added — silhouette — and nothing in the
+table wants one, because anything with a silhouette is what the player must not mistake it
+for.
+
+## What it cost the walk: nothing
+
+Measured with the drift rule of D177 switched off, so this entry is about the dressing
+alone: **6.989 moves per encounter over six runs, against a baseline of 6.990 over eleven.**
+The noise floor of that instrument is 0.34 (range 6.849–7.186 at HEAD), which is why both
+numbers are means of several runs rather than readings. Props, roles, lights, the rubble
+machinery and `_ensure_connected` are all free.
+
+### D177 — A dungeon's floors were all the same place
+
+Every floor of a dungeon shared one style and one terrain, so descending changed the layout
+and nothing else: floor 3 of the Ossuary was floor 1 of the Ossuary with different rooms in
+it. Going *somewhere* is what the third and fourth floor of a dungeon were missing.
+
+Two halves. **Three new styles** — `collapse` (rubble cutting chambers into L and U shapes),
+`ranks` (many small cells hung off one arterial corridor) and `flooded` (big chambers on the
+same spine) — and **a drift rule** that gives every dungeon a different bottom from its top.
+
+Both new knobs are *knobs*, not new numbers on the old ones, which is the lesson `fill`
+taught: `cells` and `warren` were indistinguishable side by side while they differed only by
+a tile of room width and a loop count. `rubble` takes a corner bite out of a chamber — a
+rectangle, not speckle, because scattered single tiles read as a broken floor rather than a
+collapse and fragment the room into pockets. `spine` joins the chambers to one arterial
+corridor instead of chaining them, which is a different *walk*: off a spine every room is a
+decision to leave the road and come back to it.
+
+The drift is a RULE and not twelve hand-written sequences. Twelve sequences would be twelve
+places for a table to stop indexing real things, and the variety they buy is variety nobody
+can hold in their head. One paired deeper reading per style and per terrain gives every
+dungeon the same promise out of two tables the tests can check exhaustively. The two axes
+shift at *different* depths on purpose: the surface turns one floor before the architecture
+does, so the reading is "the ground has changed" and then, a floor later, "and so has the
+building" — two events out of the same two lookups.
+
+## What broke, and what the numbers said
+
+**The new styles cost +0.11 moves per encounter.** 7.097 over eleven runs against 6.990
+over eleven — inside the 0.34 noise range of any single reading, and unmistakable once ten
+of eleven readings sat above the old mean. That is a fifth of the headroom left under the
+7.5 ceiling, spent on presentation, which is exactly what Track A must not do.
+
+**`fill` was the wrong lever and made it worse.** Raising it grows chamber area, which grows
+the floor, which is more walking: the first correction moved 7.097 to 7.066 only because a
+loop bump inside it was cancelling a fill bump. Measuring floor sizes per style settled it —
+the new styles produce *smaller* floors than the old ones (`ranks` 47 tiles against `halls`
+55), so size was never the problem. **`loops` was the lever.** A spine with no loops is a
+comb, and every spur on a comb is a there-and-back. Loops 3/3/2 on the three deep styles
+brings the walk to **6.993 over six runs** — parity.
+
+**Rubble and spines can strand a chamber.** The spanning chain could never do this, so
+nothing needed `_ensure_connected` until now: rubble cuts a room into pieces, and a spine
+reaches a room's centre without reaching a corner the rubble separated from it. It joins
+rather than fills, because filling would shrink the floor and floor size is what the pacing
+bound is measured against.
+
+**And the style gate was photographing the wrong floors.** `tools/IsoStyles.tscn` renders
+each dungeon's FIRST floor, which is the only fair comparison *between* dungeons and is now
+the wrong picture for three of the seven styles: `collapse`, `ranks` and `flooded` are only
+ever reached by descending. A gate that signs off styles it never rendered is the D86 shape.
+It renders bottom floors too, and captions every shot off the MODEL — what the floor was
+actually built as, not what a table says it should be.
+
+**The landmarks were UI markers twice.** A5's job for them is orientation: "I came in past
+the big shaft" is a sentence a place produces and a board does not. Drawn first as thin
+nested arcs, the dome came out of an Ossuary capture as a grey wireframe rainbow hanging in
+dark air beside a wall, and the bone stack as white sheets floating over a block. Both are
+FILLED now, inside the block's own footprint, in the wall's own tints and the wall's own
+light — mass in the same stone, which is what `_draw_chest_lock` got right by lighting the
+chest instead of ringing it. 33 of 33 floors get one, always in rock, always walling in at
+least two tiles of floor.
+
+### D178 — The world was a ladder, and it was not the gates that made it one
+
+`MetaState.clear_count()` is one number, and both `DungeonData.unlock_after_clears` and
+`ZoneData.unlock_after_clears` compare against it. So every gate in the game asked the same
+question and every clear was interchangeable: nothing you did was remembered except how many
+times you did it.
+
+The plan's cheapest-largest-effect move was to gate at the zone and open every door inside
+it. **It is worth exactly one dungeon.** Laid out, the Deeps already opened all three of
+theirs at 6 clears and the Barrows all three at 0; only the Slag Pits sat one clear behind
+its own region. It is still made true — every dungeon's own gate is now 0, so the zone is
+the single place a gate is stated, and `test_build.gd` asserts no dungeon restates the number
+its region already implies (two places holding one fact is D34, and this was its shape). But
+region gating is not what made the world linear.
+
+**The currency is.** So a gate now takes evidence you have been down there, and a clear is
+not the only kind: floors descended in dungeons you did *not* beat count, at a discount and
+under a cap. Three floors below the first is one clear's worth; at most three gates' worth
+in total; and only from dungeons still unbeaten, or the deep places you have already
+finished keep paying for gates you passed long ago. That gives a player who keeps dying a way
+forward that is not farming the Crypt eleven times — and because depth is earned in a
+*place*, it makes the order you take the world in a thing you choose.
+
+The cap is not a nicety. Without it a player could dive-and-die their way to the Maw with no
+clears at all, arrive at difficulty 8 with a starting collection, and D36's ceiling would
+make that a wall rather than a freedom. Three is deliberately short of the deepest gate: the
+Maw still wants five real clears, and `tests/test_meta.gd` asserts that relationship rather
+than the constant.
+
+Gate tiers are now `0:3, 2:3, 4:2, 6:3, 8:1` — four points in the campaign that offer a
+choice of door, which is what "at least three viable orders" reads as when a tier of N doors
+is N! orders on its own.
+
+## Three things this broke, all of them quiet
+
+**`dungeon_unlocked` stopped being true.** It compared against the dungeon's own gate alone,
+which was merely redundant while every dungeon carried a value; with all of them zeroed it
+returned true for the Maw on a fresh save and the only thing still holding the door was one
+comparison on the world screen. It reads `Balance.effective_gate` now, and `zone_unlocked`
+joins it, so both screens ask the same function about the same currency.
+
+**A test reported the wrong cause.** `tests/test_dungeon.gd` looked for a gated dungeon with
+`d.unlock_after_clears > 0`, found none, skipped its whole `else` branch — and the two
+assertions after it, which depended on the clears that branch would have granted, failed
+with "duplicate clear counted" and "clears not persisted". Three failures, one cause, and
+none of the three named it.
+
+**The second route did not exist until it was printed.** An alternative the player cannot
+see is not an alternative, so every sealed row on the overworld now says what depth is worth,
+how much is already in hand, and that the route has a ceiling. A route that stops working
+for reasons nobody mentioned is worse than no route.
+
+And one thing deliberately not done: **depth must not buy strength.** The permanent max-HP
+bonus stays on `clear_count()`. A gate is permission to go somewhere; HP from outside the
+deck is free power enemy scaling cannot absorb, and `tests/test_meta.gd` asserts at the
+source that `game_state.gd` never mentions the gate currency near the HP maths — the bug
+would be one identifier long and would read as a tidy-up in a diff.
+
+Save shape: `depth_records`, at version 9, with no credit granted for history the file never
+recorded. Inventing some would hand an existing player up to three gates for runs their save
+cannot show they made.
+
+### D179 — One walker was measuring one route and reporting it as the pace of the game
+
+`ISO_MOVES_PER_ENCOUNTER_MAX` is measured by a walker that takes the first ranked option, so
+it measures the REQUIRED path — which is right, and is what must not grow. It says nothing
+about a player who strips a floor, because optional business is deliberately invisible to
+that ranking: keys are *ranked, not required* (D167), which is precisely what keeps them out
+of the number.
+
+So there is a second walker, with its own figure and its own ceiling, and **it ships alone,
+with no optional content attached to it.** A baseline measured after the feature it exists to
+price has landed is not a baseline. Both walkers come out of one function, because writing
+the second separately is how two walkers drift into measuring different games and the
+difference gets read as a fact about the routes.
+
+The ceiling is DERIVED and RELATIVE. On this floor turns are the currency: a floor wakes
+every `ISO_LINGER` turns spent on it, and an optional route costing more than one extra
+waking has stopped being a choice and become a difficulty setting. Relative because an
+absolute per-floor figure would have been wrong on the day it was written — the required
+route already spends 22 to 45 turns on a floor depending on how many floors the dungeon has.
+
+## The baseline
+
+    required route   33.8 turns a floor   7.0 moves per encounter
+    optional route   36.4 turns a floor   7.6 moves per encounter
+    the difference   +2.7 turns a floor   against a budget of 22
+
+And the same two routes through the simulator, because a walker counts moves and only the
+simulator can say what those moves cost in HP and clear rate. `--explore` makes the driver
+take every optional thing before the stairs. Over eighteen cells at `--trials=40`:
+
+    stairs   mean 59.7% run completion
+    explore  mean 58.8%
+
+Level, at this trial count. Individual cells swing up to 28 points — the Ossuary 38 → 10,
+the Fungal Deep 38 → 55 — so per-cell readings here are noise and only the mean is worth
+reading; two runs of identical code already differ by a mean of 0.4 with one cell swinging 15
+(D120), and 40 trials is below the default. What the pair says is that today's only optional
+thing costs a little walking and pays back a key, netting nothing. That is the number a
+guarded pocket, a locked door or an errand will be measured against.
+
+The route is printed in the report header. A report that does not name its route is a report
+whose numbers cannot be compared with another one.
+
+## What is NOT in this batch
+
+Track B's features — doors, secret pockets, guards, tolls, errands, floor states — and
+Track C's expensive half — back doors, debts, aspects. The plan sequences them behind this
+phase for a stated reason ("nothing in a later phase starts before the earlier phase's number
+is in"), and Phase 4 is the phase whose whole job is to ship alone. The baseline above is
+what they are now waiting on rather than what they would have been bundled with.

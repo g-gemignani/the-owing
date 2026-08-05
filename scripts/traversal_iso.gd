@@ -805,8 +805,11 @@ func _dress_rate(room: int, which: String) -> float:
 ## value and that is the thing being fixed.
 func _place_lights() -> void:
 	lights = []
-	var want: int = Balance.ISO_LIGHTS_MIN \
-		+ (randi() % maxi(1, Balance.ISO_LIGHTS_MAX - Balance.ISO_LIGHTS_MIN + 1))
+	# Capped by how much floor there is to light, then rolled inside that. Area first,
+	# because a count alone put three sources on a 34-tile floor and lit 76% of it.
+	var room_for: int = Balance.iso_lights_for(tiles)
+	var want: int = mini(room_for, Balance.ISO_LIGHTS_MIN
+		+ (randi() % maxi(1, Balance.ISO_LIGHTS_MAX - Balance.ISO_LIGHTS_MIN + 1)))
 	var pool: Array = []
 	for r in room_role.size():
 		var wt: float = float((Balance.ISO_ROOM_DRESSING.get(
