@@ -102,14 +102,20 @@
 ## has one, the preload above is the whole cost of not having it, and a global class
 ## registered while five agents share the tree is a shared cache write to buy nothing.
 ##
-## Whether Builds BELONGS there is a separate question from whether it fits, and the
-## honest answer is that the report is right for a reason it did not give. It is not
-## "info" the way the glossary is — the glossary states rules that are true for every
-## save, and every line here is a fact about this one. What makes it belong is that
-## it is the only meta screen with nothing to press: no fuse, no buy, no equip, no
-## choice. A hub button leads to a place you do something; this is something you
-## read. It reads as a section of a reference screen and it does not read as a peer
-## of the Collection.
+## Whether Builds BELONGS there was a separate question from whether it fits, and the
+## answer has since changed. It was embedded because it is the only meta screen with
+## nothing to press — no fuse, no buy, no equip — so it read as a section of a
+## reference screen rather than a peer of the Collection.
+##
+## **It is a standalone screen again, reached from the Collection (D166),** and the
+## sentence that argued it in is the sentence that argues it out: *"the glossary states
+## rules that are true for every save, and every line here is a fact about this one."*
+## That is the objection a player raised about How the Owing Works — rules and personal
+## progress in one place — and it is decided by the CONTENT, not by whether the screen
+## has a button on it. Reading and doing are not the two categories that matter here;
+## true-for-everyone and true-for-this-save are. The embed point below stays, because
+## it is what makes this screen a section anywhere, and the Collection reaches it as a
+## scene.
 extends Control
 
 ## Slots per row. Four, not the three `relics_screen.gd` uses, because a slot here is
@@ -194,7 +200,15 @@ func _ready() -> void:
 	# screen and the embedded section are the same picture either way.
 	var col := UI.screen(self, "Builds", "", "ledger")
 	section(UI.scroll(col))
-	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
+	UI.exit_button(col, "Back", func(): UI.goto(self, return_to))
+
+
+## Where `Back` goes, on `glossary.gd`'s pattern and for its reason: the caller knows
+## and `UI.goto` takes a path rather than arguments. Defaulted to the Collection,
+## which is the only door (D166); it went to the Overworld when the hub had a button
+## for this screen, and that default would now land a player somewhere they did not
+## come from.
+static var return_to := "res://scenes/Collection.tscn"
 
 
 ## The whole tracker, built into `parent`. Static and free of `self` so it can be
@@ -322,7 +336,7 @@ static func _block(parent: Node, b: BuildData, owned: Array[String],
 	grid.add_theme_constant_override("v_separation", UITheme.sep(4))
 	parent.add_child(grid)
 	for cid in b.cards:
-		_slot(grid, cid, MetaState.collection.has(cid))
+		UI.card_slot(grid, cid, MetaState.collection.has(cid), SLOT_WIDTH, ICON, MISSING_DIM)
 
 
 ## Gold when finished, receded when its gate dungeons are not open yet, otherwise
@@ -373,80 +387,22 @@ static func _errand(b: BuildData, missing: Array[String]) -> String:
 	if anywhere > 0:
 		# Not "from the zone pools": `card_pool` is the name of a field, and a screen
 		# that hands the player an identifier is a screen written for its own author.
-		parts.append("%s that turn up anywhere in their zone" % Wording.count(anywhere, "card"))
+		# The verb agrees with the count. It read "1 card that turn up" for a build with
+		# one zone card left, which is the state every build passes through on its way
+		# to finished — so the one grammatical error on the screen was the one waiting
+		# at the end of every errand.
+		parts.append("%s that %s up anywhere in their zone" % [
+			Wording.count(anywhere, "card"), "turns" if anywhere == 1 else "turn"])
 	return "Still to find: %s." % "; ".join(parts)
 
 
-## One card of a build: the symbol for what it does, the name, and whether it is
-## yours. Nothing else — the grid is the SET, and the errand line above it is the
-## errand; a place label on each of sixty-nine slots was the wall of text.
-static func _slot(grid: GridContainer, cid: String, owned: bool) -> void:
-	var card: CardData = null
-	if MetaState.CATALOG.has(cid):
-		card = load(MetaState.CATALOG[cid]) as CardData
-	# A card you own is quoted at the level you own it at. The catalogue resource is
-	# the level-1 authored one, and handing it straight to `card_tooltip` would print
-	# "Deals 6 damage. Level 1 of 5." over a card the player has fused to 4 — the
-	# exact drift D50 exists to stop, and `collection.gd` duplicates for this reason.
-	# An unowned card keeps level 1, which is not a lie: that is what it arrives at.
-	if card != null and owned:
-		card = card.duplicate()
-		card.level = int(MetaState.collection[cid]["level"])
-
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.custom_minimum_size.x = UITheme.px(SLOT_WIDTH)
-	row.add_theme_constant_override("separation", UITheme.sep(8))
-	grid.add_child(row)
-
-	# `Icons.for_card`, not `Icons.card_family`. They answer different questions and
-	# the header comment above measures why the answer matters here, but the asset is
-	# the shorter argument: `card_family` names the 320x240 illustration a whole family
-	# of cards shares, and a slot in a grid of sixty-nine is 26px square — a landscape
-	# painting letterboxed into that is a smudge, where `sym_*.png` is a 64px
-	# white-on-transparent glyph drawn to be tinted and read small at the size the
-	# player is given it. `for_card` is also what `collection.gd` and
-	# `deck_builder.gd` already put beside a card name, so a card carries one symbol
-	# everywhere in the game instead of one per screen.
-	var pic := TextureRect.new()
-	pic.texture = Icons.tex(Icons.for_card(card))
-	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	pic.custom_minimum_size = Vector2.ONE * UITheme.px(ICON)
-	pic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# An unowned card's symbol recedes the same way its name does, so a slot is one
-	# decision rather than two. `modulate` is the right tool HERE and wrong on the
-	# label: this is a picture, so there is nothing behind it for translucency to
-	# read against (the D96 corollary, stated in `relics_screen.gd`).
-	if not owned:
-		pic.modulate = Color(1, 1, 1, 1.0 - MISSING_DIM)
-	row.add_child(pic)
-
-	var name_label := Label.new()
-	name_label.text = card.name if card != null else cid
-	# `clip_text` is what makes SLOT_WIDTH real: a Label reports its own text as its
-	# minimum width and grows straight past a `custom_minimum_size`, which is how
-	# three identical buttons ended up at three x positions on the Packs screen
-	# (D95). Nothing in the catalogue is long enough to clip today; the guard is for
-	# the card added tomorrow.
-	name_label.clip_text = true
-	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	var tint := Icons.rarity_colour(card.rarity if card != null else 0)
-	name_label.add_theme_color_override("font_color",
-		tint if owned else tint.darkened(MISSING_DIM))
-	row.add_child(name_label)
-
-	# The full reading of the card, on the row, so a symbol nobody recognises has an
-	# answer. Generated from the data by the one function that does it, so it cannot
-	# drift from the numbers the card face shows (D50).
-	#
-	# Shown for a card the player does NOT own, which is where this screen parts
-	# company with `relics_screen.gd` — and for that screen's own reason, landing the
-	# other way. It withholds what a relic does because a relic is a rarity-weighted
-	# roll off a boss, so knowing changes no decision you are able to make. A build
-	# card is the opposite: it is the thing you can go and get, and "is this build
-	# worth chasing" is exactly the decision this screen is for. Withholding here
-	# would be withholding the answer to the question the screen asks.
-	if card != null:
-		UI.hoverable(row, Icons.card_tooltip(card))
+## The slot widget lives in `UI.card_slot` now, because `zone_view.gd` asks the same
+## question of a dungeon's pool that this screen asks of a build's set (D166). The
+## three numbers above it — SLOT_WIDTH, ICON, MISSING_DIM — stay here, because each
+## was measured against THIS screen and handing them to the widget as defaults would
+## be one screen's measurement imposed on the next.
+##
+## What the slot shows and why it shows it for a card the player does NOT own is
+## documented on `UI.card_slot`. The short version, which is this screen's argument
+## and was written here first: withholding the reading would withhold the answer to
+## the question the screen asks.

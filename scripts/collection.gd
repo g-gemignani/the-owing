@@ -248,6 +248,25 @@ func _build_ui() -> void:
 	bottom.add_theme_constant_override("separation", UITheme.sep(10))
 	root.add_child(bottom)
 	UI.exit_button(bottom, _exit_text(), func(): UI.goto(self, _exit_to()))
+	# Builds is the other question about a collection — not "what do I hold" but "what
+	# is the pile FOR" — and it lives here because this is the screen that holds the
+	# cards it counts. It was embedded in How the Owing Works, which put one player's
+	# progress inside a screen of rules that are true for every save (D166).
+	#
+	# MANAGE only. In OUTFIT and LEDGER a deck is being arranged or dealt, and leaving
+	# by a door that is not the exit button would throw the arrangement away — the
+	# fuse controls are withheld in those modes for a version of the same reason.
+	# The fraction is on the button for `overworld.gd`'s rule: a count on a menu entry
+	# is the entry's reason to be pressed.
+	if mode == Mode.MANAGE:
+		var builds_btn := Button.new()
+		UITheme.style_button(builds_btn)
+		builds_btn.text = "Builds (%d/%d)" % [_builds_done(), Balance.BUILDS.size()]
+		builds_btn.pressed.connect(func():
+			load("res://scripts/builds_screen.gd").return_to = "res://scenes/Collection.tscn"
+			UI.goto(self, "res://scenes/Builds.tscn"))
+		UI.hoverable(builds_btn, "What each build is made of, how much of it you hold, and which dungeons still owe you the rest.")
+		bottom.add_child(builds_btn)
 	# One primary, and only where there is something for it to do. In MANAGE there is
 	# no dungeon to start, so the way out IS the primary action and a second button
 	# beside it would be two words for one press — which is the shape of the whole
@@ -279,6 +298,22 @@ func _build_ui() -> void:
 		save_btn.pressed.connect(_on_save)
 		UI.hoverable(save_btn, "Store the current selection under that name, to load again from the bar above.")
 		bottom.add_child(save_btn)
+
+## Builds whose every card is in the collection. Counted here rather than asked of
+## `builds_screen.gd`, which counts as it LAYS OUT — one pass that both sums and
+## draws, so the screen's own header cannot disagree with its rows. Exposing that
+## count would mean building the whole tracker to put a number on a button.
+func _builds_done() -> int:
+	var done := 0
+	for b in Balance.all_builds():
+		var have := true
+		for cid in b.cards:
+			if not MetaState.collection.has(cid):
+				have = false
+				break
+		if have:
+			done += 1
+	return done
 
 func _exit_text() -> String:
 	match mode:

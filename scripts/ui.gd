@@ -1415,6 +1415,105 @@ static func inspect_thumb(parent: Node, card: CardData, side: float,
 	parent.add_child(b)
 	return b
 
+## One card in a WANT-LIST: its effect symbol, its name, and whether it is yours.
+##
+## Built for `builds_screen.gd` and moved here when `zone_view.gd` wanted the same
+## row for "which of this region's cards do I still not have" (D166). One widget,
+## because the two screens are asking one question and a player should not have to
+## learn that a dim name means the same thing in both places by noticing it twice.
+##
+## The three measured numbers stay with the CALLER. `slot_width`, `icon_px` and `dim`
+## were each derived against a particular screen — the widest card name in four
+## columns of 1240px, sixty-nine symbols setting the scroll height, a contrast ratio
+## read off a specific backdrop — and a default here would be one screen's
+## measurement quietly imposed on the next. `builds_screen.gd` documents its three;
+## `zone_view.gd` documents why its are different.
+##
+## `owned` decides ink, not presence. An unowned card is SHOWN, and shown with its
+## full reading on hover: this row exists to answer "is this worth going after",
+## which cannot be answered by a blank. (That is where it parts company with
+## `relics_screen.gd`, which withholds — a relic is a roll you cannot aim at, a card
+## in a pool is a place you can walk to.)
+##
+## Hover gives the reading, a click gives the card itself, and the tooltip says so —
+## an affordance nobody is told about is not an affordance (`inspect_thumb`'s rule,
+## and the reason the cursor changes here too).
+static func card_slot(parent: Node, cid: String, owned: bool, slot_width: float,
+		icon_px: float, dim: float, note: String = "") -> HBoxContainer:
+	var card: CardData = null
+	if MetaState.CATALOG.has(cid):
+		card = load(MetaState.CATALOG[cid]) as CardData
+	# A card you own is quoted at the level you own it at. The catalogue resource is
+	# the level-1 authored one, and handing it straight to `card_tooltip` would print
+	# "Deals 6 damage. Level 1 of 5." over a card the player has fused to 4 — the
+	# exact drift D50 exists to stop. An unowned card keeps level 1, which is not a
+	# lie: that is what it arrives at.
+	if card != null and owned:
+		card = card.duplicate()
+		card.level = int(MetaState.collection[cid]["level"])
+
+	var row := HBoxContainer.new()
+	# FILL, not EXPAND_FILL. Inside a GridContainer the two look identical — every cell
+	# has the same minimum width, so a column is that width either way — and inside an
+	# HFlowContainer they are not: EXPAND makes each slot claim an equal share of the
+	# whole row, so three exclusives under a dungeon spread themselves across 1240px
+	# with the second one landing in the middle of the backdrop (D166). The slot is as
+	# wide as it was asked to be and no wider; packing is the container's business.
+	row.size_flags_horizontal = Control.SIZE_FILL
+	row.custom_minimum_size.x = UITheme.px(slot_width)
+	row.add_theme_constant_override("separation", UITheme.sep(8))
+	parent.add_child(row)
+
+	# `Icons.for_card`, not `Icons.card_family`: `card_family` names the 320x240
+	# illustration a whole family shares, and a slot is ~26px square — a landscape
+	# painting letterboxed into that is a smudge, where `sym_*.png` is a 64px glyph
+	# drawn to be tinted and read small. `for_card` is also what the collection and
+	# the deck builder put beside a card name, so a card carries one symbol
+	# everywhere in the game instead of one per screen.
+	var pic := TextureRect.new()
+	pic.texture = Icons.tex(Icons.for_card(card))
+	pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	pic.custom_minimum_size = Vector2.ONE * UITheme.px(icon_px)
+	pic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# An unowned card's symbol recedes the same way its name does, so a slot is one
+	# decision rather than two. `modulate` is the right tool HERE and wrong on the
+	# label: this is a picture, so there is nothing behind it for translucency to
+	# read against (the D96 corollary).
+	if not owned:
+		pic.modulate = Color(1, 1, 1, 1.0 - dim)
+	row.add_child(pic)
+
+	var name_label := Label.new()
+	name_label.text = card.name if card != null else cid
+	# `clip_text` is what makes `slot_width` real: a Label reports its own text as its
+	# minimum width and grows straight past a `custom_minimum_size`, which is how
+	# three identical buttons ended up at three x positions on the Packs screen (D95).
+	name_label.clip_text = true
+	name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var tint := Icons.rarity_colour(card.rarity if card != null else 0)
+	name_label.add_theme_color_override("font_color",
+		tint if owned else tint.darkened(dim))
+	row.add_child(name_label)
+
+	if card == null:
+		return row
+	# The full reading, generated from the data by the one function that does it, so
+	# it cannot drift from the numbers the card face shows (D50).
+	var tip := Icons.card_tooltip(card)
+	if note != "":
+		tip += "\n%s" % note
+	hoverable(row, "%s\nClick to see the whole card." % tip)
+	row.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	row.gui_input.connect(func(ev: InputEvent) -> void:
+		var mb := ev as InputEventMouseButton
+		if mb == null or not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		row.accept_event()
+		inspect_card(row, card, null, note))
+	return row
+
 ## True where there is a touchscreen and no mouse: phones and tablets.
 static func touch_ui() -> bool:
 	return DisplayServer.is_touchscreen_available() and not OS.has_feature("pc")

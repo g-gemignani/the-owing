@@ -373,6 +373,32 @@ func _init() -> void:
 			fails += 1
 			print("FAIL ci.yml drops keytool's stdout, which is where it prints why the key would not open (D162)")
 
+	# --- the rules screen states rules, and nothing about this save ---
+	#
+	# How the Owing Works had the Builds tracker embedded in it, so half the screen was
+	# the game and half was one player's progress, with nothing marking the join (D166).
+	# The line the screen is held to is mechanical: it may read the BALANCE (numbers that
+	# are the same for everyone — deck size, escalation, the death penalty) and it may not
+	# read `MetaState`, which is the save. Checked as text because the alternative is
+	# rendering it against two saves and diffing, and this is the property that was
+	# actually broken.
+	var gl := FileAccess.open("res://scripts/glossary.gd", FileAccess.READ)
+	if gl == null:
+		fails += 1; print("FAIL scripts/glossary.gd is missing")
+	else:
+		var src2 := gl.get_as_text()
+		gl.close()
+		for banned in ["MetaState.", "GameState.", "builds_screen.gd"]:
+			# Comments explain WHY the screen may not do this, so only real code counts.
+			for line2 in src2.split("\n"):
+				var code := line2.strip_edges()
+				if code.begins_with("#") or not code.contains(banned):
+					continue
+				fails += 1
+				print("FAIL glossary.gd reads %s — the rules screen must say nothing about one save (D166): %s" % [
+					banned, code])
+				break
+
 	if fails == 0:
 		print("CONTENT TEST: PASS (catalogues, ids, references, art capacity, enum pins, baseline, export readiness, README counts, build stamp)")
 	else:

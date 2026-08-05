@@ -89,12 +89,13 @@ func _ready() -> void:
 	_lede(list)
 	_at_risk(list)
 	_what_you_keep(list)
-	# Builds sits INSIDE "what you keep", not at the end, because that is where its
-	# subject sits on the unusual-to-generic run this screen is ordered by — a build is
-	# a thing the collection is for. It moved off the hub because it is the only meta
-	# screen with nothing to press: no fuse, no buy, no equip. A hub button leads
-	# somewhere you DO something; this is somewhere you read (D133).
-	preload("res://scripts/builds_screen.gd").section(list)
+	# The Builds tracker used to be embedded here, between the two sections above and
+	# below (D133). It is gone, and the rule it broke is now the rule this screen is
+	# held to: EVERY LINE ON THIS SCREEN IS TRUE OF EVERY SAVE. Builds counted what this
+	# player holds and named what they must still go and get, so a reader could not tell
+	# which half of the screen was the game and which half was their own progress
+	# (D166). It is reached from the Collection, which is where the cards it counts are.
+	# `tests/test_content.gd` fails if this screen reads MetaState again.
 	_the_floor(list)
 	_in_a_fight(list)
 	_build_index(index, scroll)
@@ -158,6 +159,11 @@ func _what_you_keep(list: Node) -> void:
 		+ "out at risk with everything else and opened on the world screen."), "chest")
 	_entry(body, "Exclusive cards", ("Some cards are in one dungeon and nowhere else. Builds are "
 		+ "deliberately scattered, so finishing one means clearing several places."), "card")
+	# A pointer, not a progress bar. Where a thing is tracked is true of every save,
+	# which is the line this screen is drawn on (D166): the counting itself belongs on
+	# the screens that hold the cards, and this one says which those are.
+	_entry(body, "Builds", ("A named set of cards that work as one deck. The Cards screen tracks how "
+		+ "much of each you hold; a region's screen marks which of its cards are still missing."), "card")
 	# "relic" and not "gold", though both resolve to the same painted coin today: the
 	# semantic name is what picks up a relic of its own the day one is painted, and a
 	# call site that asked for the coin would still be asking for the coin (D116).

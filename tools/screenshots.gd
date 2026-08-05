@@ -24,7 +24,14 @@ const OUT := "user://shots/"
 const SHOTS := [
 	["MainMenu", "res://scenes/MainMenu.tscn", ""],
 	["Overworld", "res://scenes/Overworld.tscn", ""],
-	["ZoneView", "res://scenes/ZoneView.tscn", "zone"],
+	# "meta+partial": out of a run, and missing two cards in five. This screen names
+	# what each dungeon can still hand you (D166), so photographing it with the whole
+	# catalogue owned would photograph the one state in which it has nothing to say.
+	["ZoneView", "res://scenes/ZoneView.tscn", "meta+partial"],
+	# And the same screen scrolled to its end, where the region's shared pool is drawn.
+	# One capture cannot hold both: the dungeons are 700px of it and the pool is five
+	# more rows under them.
+	["ZoneViewPool", "res://scenes/ZoneView.tscn", "meta+partial", "bottom"],
 	["DeckBuilder", "res://scenes/DeckBuilder.tscn", ""],
 	["IsoRun", "res://scenes/IsoRun.tscn", "iso"],
 	# Captured twice on purpose. The iso floor is a model about DISCOVERY, so its
@@ -77,7 +84,14 @@ const SHOTS := [
 	["Shop", "res://scenes/Shop.tscn", "shop"],
 	["Encounter", "res://scenes/Encounter.tscn", "event"],
 	["Chest", "res://scenes/Chest.tscn", "chest"],
-	["Collection", "res://scenes/Collection.tscn", ""],
+	# The HUB version, not the mid-run one. Every row here enters a dungeon before it
+	# builds the screen, so this was captured in `Mode.LEDGER` — a real screen, but not
+	# the one the world screen's Cards button opens, and the one without the Builds
+	# door on it (D166).
+	["Collection", "res://scenes/Collection.tscn", "meta"],
+	# Builds had no row at all until D166, having been reachable only as a section
+	# inside the glossary. An absent row looks exactly like a passing one (D123).
+	["Builds", "res://scenes/Builds.tscn", "meta+partial"],
 	["Relics", "res://scenes/Relics.tscn", ""],
 	["Packs", "res://scenes/Packs.tscn", "packs"],
 	["Powers", "res://scenes/Powers.tscn", ""],
@@ -134,6 +148,18 @@ func _ready() -> void:
 ## card's own inspector call — rather than posing the nodes by hand, because a
 ## capture of a pose no player can produce is worse than no capture.
 func _pose(inst: Node, what: String) -> void:
+	# Scrolled to the end, for a screen whose subject is below the fold. The region
+	# panel sits under the dungeons on purpose — this screen's job is choosing a door
+	# (D166) — which also means the default capture of it is a capture of the part that
+	# did not change. Driven through the real ScrollContainer, so a panel that fails to
+	# build shows up here as an empty frame rather than as a picture of the top.
+	if what == "bottom":
+		var sc := _first_scroll(inst)
+		if sc == null:
+			print("POSE MISS bottom — no ScrollContainer on screen")
+			return
+		sc.scroll_vertical = int(sc.get_v_scroll_bar().max_value)
+		return
 	var cards := _card_holders(inst)
 	if cards.is_empty():
 		print("POSE MISS ", what, " — no card on screen")
@@ -152,6 +178,15 @@ func _pose(inst: Node, what: String) -> void:
 			if card != null:
 				UI.inspect_card(holder, card, inst.eng if "eng" in inst else null)
 
+func _first_scroll(n: Node) -> ScrollContainer:
+	if n is ScrollContainer:
+		return n as ScrollContainer
+	for c in n.get_children():
+		var found := _first_scroll(c)
+		if found != null:
+			return found
+	return null
+
 func _card_holders(n: Node) -> Array[Control]:
 	var out: Array[Control] = []
 	if n is Control and (n as Control).has_meta("card_id"):
@@ -167,6 +202,27 @@ func _card_holders(n: Node) -> Array[Control]:
 ## the workaround for it rather than a law of nature. Owning one prefix is cheaper
 ## than remembering a rule.
 const SANDBOX := "t_shots_"
+
+## Every card, one copy at least — the state `_ready` sets up, restored before each
+## row in case the last one thinned it.
+func _restock() -> void:
+	for cid in MetaState.CATALOG:
+		if not MetaState.collection.has(cid):
+			MetaState.add_card(cid)
+
+## Two cards in five, removed. Deterministic and spread through the catalogue, not
+## sampled: a capture that changes between two runs of identical code cannot be
+## compared with the last one, which is the whole use these pictures are put to.
+## Iteration order over `CATALOG` is the dictionary's insertion order and stable, and
+## the fraction is chosen to leave every screen showing BOTH states — a want-list with
+## one gap in it photographs as well as a full one, i.e. not at all.
+func _thin() -> void:
+	var i := 0
+	for cid in MetaState.CATALOG:
+		if i % 5 < 2:
+			MetaState.collection.erase(cid)
+		i += 1
+	MetaState.mark_meta_dirty()
 
 func _purge() -> void:
 	var d := DirAccess.open("user://")
@@ -196,6 +252,10 @@ func _run_state() -> Array[CardData]:
 
 func _setup(need: String, dungeon: String = "") -> void:
 	GameState.reset_run_progress()
+	# Undo whatever the previous row did to the collection, because the rows share one
+	# process and one save: a thinned collection left behind would photograph every
+	# later screen half-empty and nothing would say so (D166).
+	_restock()
 	var did: String = Balance.DUNGEONS[0]
 	match need:
 		# deepest dungeon, or the capture only ever shows worn chests: a vault
@@ -210,6 +270,26 @@ func _setup(need: String, dungeon: String = "") -> void:
 			push_error("screenshots: '%s' is not a dungeon id" % dungeon)
 			return
 		did = dungeon
+	# A screen whose subject is what you have NOT got has to be photographed without
+	# some of it. The harness hands every capture all hundred cards, which is the right
+	# default for the screens that list what you hold — and the least informative
+	# possible state for the region panel, the builds tracker and anything else that
+	# draws a want-list: every slot lit, no dim one anywhere, so the half of the widget
+	# that does the work never appears in a capture (D123's blind spot, one screen over).
+	# Needs COMBINE with `+`, because these two are orthogonal to each other and to the
+	# single-purpose keys below: "photograph this out of a run" and "photograph this
+	# without half the collection" are both true of the region screen at once.
+	var flags := need.split("+")
+	if flags.has("partial"):
+		_thin()
+	# Out of a run, and therefore not through `enter_dungeon`. `in_run()` is
+	# `traversal != null`, so entering one here would photograph `collection.gd` in its
+	# LEDGER mode — a real screen, but not the one reached from the hub, and the one
+	# without the Builds button on it. Returns before the traversal is built.
+	if flags.has("meta"):
+		var mz := Balance.zone_of(did)
+		GameState.current_zone = mz.id if mz != null else Balance.ZONES[0]
+		return
 	GameState.select_dungeon(did)
 	GameState.enter_dungeon(_run_state())
 
