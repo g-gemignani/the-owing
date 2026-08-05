@@ -666,19 +666,48 @@ static func iso_floors_for(difficulty: int) -> int:
 ##           reads, so 0.9 is a honeycomb of cells and 0.5 is tunnels with the odd chamber
 ##   align — snap chamber origins to this lattice. Regularity is a signature no amount of
 ##           size variation gives you: burial cells are cut in ranks, a warren is not
+##   roles — weights over ISO_ROOM_ROLES for the chambers this style places (D176). What
+##           a style is called should be what most of its rooms ARE, so `cells` is mostly
+##           cells and `halls` mostly halls; the minority entries are what stop a floor
+##           from being six copies of one room.
 const ISO_STYLES := {
 	# a honeycomb of small cells cut in ranks, barely linked — you go back the way you came
 	"cells": {"rooms": [5, 9], "w": [2, 2], "h": [2, 2], "loops": 0,
-		"fill": 0.90, "align": 3},
+		"fill": 0.90, "align": 3,
+		"roles": {"cell": 6, "store": 2, "shrine": 1, "sump": 1}},
 	# long thin galleries: few rooms, but each one is a walk in itself
 	"galleries": {"rooms": [2, 5], "w": [2, 2], "h": [4, 6], "loops": 1,
-		"fill": 0.80, "align": 0},
+		"fill": 0.80, "align": 0,
+		"roles": {"gallery": 6, "hall": 2, "store": 1, "shrine": 1}},
 	# tunnels that double back, with small chambers hung off them
 	"warren": {"rooms": [3, 6], "w": [2, 3], "h": [2, 3], "loops": 3,
-		"fill": 0.45, "align": 0},
+		"fill": 0.45, "align": 0,
+		"roles": {"cell": 3, "store": 3, "sump": 3, "shrine": 1}},
 	# few big open halls, so a wanderer is visible across one long before it arrives
 	"halls": {"rooms": [2, 4], "w": [3, 5], "h": [3, 4], "loops": 1,
-		"fill": 0.85, "align": 0},
+		"fill": 0.85, "align": 0,
+		"roles": {"hall": 6, "gallery": 2, "sump": 1, "shrine": 1}},
+	# --- the deep readings (D177): where a dungeon's own style ends up ------------
+	#
+	# Each of these is a NEW KNOB rather than new numbers on the old ones, because that is
+	# the lesson `fill` taught: `cells` and `warren` were indistinguishable side by side
+	# while they differed only by a tile of room width and a loop count. Two knobs, and
+	# both of them change the shape of the walk and not just the shape of a room.
+	#
+	# rooms with the roof in them: rubble cuts a rectangle into an L or a U, so a chamber
+	# has corners you cannot see into from its door
+	"collapse": {"rooms": [3, 6], "w": [3, 4], "h": [3, 4], "loops": 3,
+		"fill": 0.88, "align": 0, "rubble": 0.22,
+		"roles": {"sump": 4, "cell": 3, "gallery": 2, "store": 1}},
+	# many small cells hung off ONE arterial corridor: a spine is a different walk from a
+	# chain, because every room is a spur and every spur is a decision to leave the road
+	"ranks": {"rooms": [5, 8], "w": [2, 2], "h": [2, 3], "loops": 3,
+		"fill": 0.86, "align": 2, "spine": true,
+		"roles": {"cell": 7, "store": 2, "shrine": 1}},
+	# big chambers on the same spine: you come back along the road you left
+	"flooded": {"rooms": [3, 5], "w": [3, 4], "h": [3, 4], "loops": 2,
+		"fill": 0.88, "align": 0, "spine": true,
+		"roles": {"sump": 4, "hall": 3, "gallery": 2, "shrine": 1}},
 }
 const ISO_STYLE_DEFAULT := "warren"
 const ISO_STYLE_OF := {
@@ -688,9 +717,18 @@ const ISO_STYLE_OF := {
 	"drowned_market": "halls", "abyssal_stair": "galleries", "the_maw": "cells",
 }
 
-static func iso_style(dungeon_id: String) -> Dictionary:
+## Which architecture a dungeon is cut in, BY NAME. Split out from `iso_style` because
+## the floor now records the name it was built from and saves it: the props and the
+## dressing are picked from it, and a floor that re-derived its own style on load would be
+## free to come back dressed as something else.
+static func iso_style_name(dungeon_id: String, depth: int = 0, floors: int = 1) -> String:
 	var name: String = String(ISO_STYLE_OF.get(dungeon_id, ISO_STYLE_DEFAULT))
-	return ISO_STYLES.get(name, ISO_STYLES[ISO_STYLE_DEFAULT])
+	if iso_style_drifts(depth, floors):
+		name = String(ISO_STYLE_DEEP.get(name, name))
+	return name if ISO_STYLES.has(name) else ISO_STYLE_DEFAULT
+
+static func iso_style(dungeon_id: String, depth: int = 0, floors: int = 1) -> Dictionary:
+	return ISO_STYLES[iso_style_name(dungeon_id, depth, floors)]
 
 ## Surface, per dungeon — and deliberately a SEPARATE axis from architecture. Style says
 ## what shape the place is; terrain says what it is made of. Keeping them apart is what
@@ -716,8 +754,227 @@ const ISO_TERRAIN_OF := {
 	"sunken_vault": "sand", "drowned_market": "sand",
 }
 
-static func iso_terrain(dungeon_id: String) -> String:
-	return String(ISO_TERRAIN_OF.get(dungeon_id, ISO_TERRAIN_DEFAULT))
+# --- a dungeon's floors need not all be the same place (D177) ------------------
+#
+# Every floor of a dungeon shared one style and one terrain, so descending changed the
+# layout and nothing else: floor 3 of the Ossuary was floor 1 of the Ossuary with
+# different rooms in it. Going *somewhere* is what the third and fourth floor of a
+# dungeon were missing.
+#
+# Done as a DRIFT RULE rather than a per-dungeon sequence, and that is the whole design
+# decision here. Twelve hand-written sequences would be twelve places for the tables to
+# stop indexing real things, and the variety they buy is variety nobody can hold in their
+# head; one paired "deeper" reading per style and per terrain gives every dungeon the same
+# promise — the bottom of a place is not the top of it — out of two tables the tests can
+# check exhaustively.
+#
+# The two axes shift at DIFFERENT depths, on purpose. The surface changes one floor before
+# the architecture does, so the reading is "the ground has changed" and then, a floor
+# later, "and so has the building" — two events rather than one, out of the same two
+# lookups. A two-floor dungeon gets both at once, which is all a two-floor dungeon has
+# room for.
+const ISO_STYLE_DEEP := {
+	# cut cells give way to cells the roof came into
+	"cells": "collapse",
+	# a gallery ends where the gallery fell in
+	"galleries": "collapse",
+	# a warren narrows into ranks of the same thing
+	"warren": "ranks",
+	# halls end at the one that took the water
+	"halls": "flooded",
+	# and the deep styles have their own bottoms, so a dungeon deep enough to use one
+	# twice does not simply repeat it
+	"collapse": "flooded",
+	"ranks": "collapse",
+	"flooded": "collapse",
+}
+const ISO_TERRAIN_DEEP := {
+	"stone": "earth",   # worked stone gives out into what it was cut through
+	"earth": "stone",   # a tunnel breaks into something built
+	"moss": "earth",    # the growth stops where the light does
+	"sand": "moss",     # silt gives way to what grew in the wet
+}
+
+## True on the floors that use the DEEP style — the bottom one.
+static func iso_style_drifts(depth: int, floors: int) -> bool:
+	return floors > 1 and depth >= floors - 1
+
+## True on the floors that use the DEEP terrain — the bottom one, and the one above it in
+## anything with three floors or more, so the surface turns before the architecture does.
+static func iso_terrain_drifts(depth: int, floors: int) -> bool:
+	if floors <= 1:
+		return false
+	return depth >= floors - (2 if floors >= 3 else 1)
+
+static func iso_terrain(dungeon_id: String, depth: int = 0, floors: int = 1) -> String:
+	var base: String = String(ISO_TERRAIN_OF.get(dungeon_id, ISO_TERRAIN_DEFAULT))
+	if iso_terrain_drifts(depth, floors):
+		base = String(ISO_TERRAIN_DEEP.get(base, base))
+	return base if base in ISO_TERRAINS else ISO_TERRAIN_DEFAULT
+
+# --- what makes one ROOM unlike the next, inside one floor (D176) --------------
+#
+# Style and terrain are per DUNGEON, so before this the variety was entirely between
+# places: sixteen readings across twelve dungeons, and inside any one floor every
+# ground tile was the same diamond at one of three tints and every rock the same block.
+# The floor read as a board because nothing in it was local. What Diablo's exploration
+# feel actually comes from is *incident* — this room has a fallen slab, that one is a
+# store with crates stacked in it, that corner has a brazier in it — and incident is
+# per-tile decoration, which a discrete grid supports perfectly well (D87 is not
+# reopened: the simulation is unchanged, this is all presentation).
+#
+# Three axes, and they multiply against the two that already existed:
+#
+#   role  — what a chamber was FOR. Picked from the STYLE's own weights, so a crypt of
+#           burial cells produces mostly cells and a foundry mostly halls. It drives
+#           dressing and NOTHING else, deliberately: role has to prove it is free of
+#           balance consequence before anything is ever placed by it.
+#   prop  — a decoration id per cell, purely cosmetic, per TERRAIN so it multiplies the
+#           way terrain already does rather than folding into style.
+#   light — a few sources per floor, replacing the flat rule where explored-state was
+#           doing the job of illumination.
+
+## What a chamber was for. Six because that is how many distinct dressings the drawing
+## can actually tell apart at this tile size; the names are the register of
+## `resources/events/` rather than another game's nouns (D98/D127).
+const ISO_ROOM_ROLES := ["cell", "hall", "gallery", "store", "sump", "shrine"]
+const ISO_ROOM_ROLE_DEFAULT := "cell"
+
+## How a role dresses itself: what fraction of its tiles carry ground clutter, what
+## fraction of the rock around it carries wall dressing, and how much it wants a light.
+##
+## `light` is a WEIGHT, not a probability — the floor places a fixed few sources and
+## these decide which chambers get them, so a shrine outbids a hall and a cell never
+## wins. A sump is dark on purpose: the one role whose reading is "the light did not
+## reach here" cannot also be the room with a brazier in it.
+## Raised about half again on a real capture (D176): at the first rates a 15-tile view of
+## the Maw held one prop, and one mark in a frame is not local incident, it is a blemish.
+## What keeps the numbers honest is the SPREAD between them rather than their size — a store
+## at three times a gallery is the reading, and both being large would make every room busy,
+## which is the flat floor again with clutter on it.
+const ISO_ROOM_DRESSING := {
+	"cell":    {"ground": 0.20, "wall": 0.24, "light": 0.0},
+	"hall":    {"ground": 0.13, "wall": 0.10, "light": 1.0},
+	"gallery": {"ground": 0.12, "wall": 0.30, "light": 0.4},
+	"store":   {"ground": 0.44, "wall": 0.12, "light": 0.3},
+	"sump":    {"ground": 0.38, "wall": 0.08, "light": 0.0},
+	"shrine":  {"ground": 0.22, "wall": 0.18, "light": 2.4},
+}
+## Corridors have no role — they are dug, not placed — so they dress at one low rate.
+## Low because a passage is where the contrast comes from: a corridor with as much in it
+## as a store is a floor with no store in it.
+const ISO_PROP_CORRIDOR := 0.10
+
+## What lies about on each surface. One list per terrain, four entries each, so the
+## multiply against style stays honest — and `on` decides whether a prop is ground
+## clutter or wall dressing, because a prop must NEVER change walkability. If it looks
+## blocking it is on rock, not on floor.
+##
+## `shape` is the drawing; `name` is what it is. The names are not shown to the player
+## and are not meant to be: a prop that carried information the player could act on
+## would be the D85 lie one noun over — the floor teaches "the thing on the tile is what
+## you get", so nothing decorative may resemble interactive art. That is why there is no
+## crate that looks like a chest and no figure that looks like a fight in this table.
+const ISO_PROPS := {
+	"stone": [
+		{"name": "cracked flags", "shape": "cracks", "on": "ground"},
+		{"name": "a fallen slab", "shape": "slab", "on": "ground"},
+		{"name": "stacked bone", "shape": "pile", "on": "ground"},
+		{"name": "an iron ring", "shape": "ring", "on": "wall"},
+	],
+	"earth": [
+		{"name": "spoil", "shape": "pile", "on": "ground"},
+		{"name": "scree", "shape": "scatter", "on": "ground"},
+		{"name": "a dropped beam", "shape": "slab", "on": "ground"},
+		{"name": "roots", "shape": "growth", "on": "wall"},
+	],
+	"moss": [
+		{"name": "a growth patch", "shape": "growth", "on": "ground"},
+		{"name": "fungal clusters", "shape": "pile", "on": "ground"},
+		{"name": "wet flags", "shape": "cracks", "on": "ground"},
+		{"name": "hanging matter", "shape": "growth", "on": "wall"},
+	],
+	"sand": [
+		{"name": "a silt drift", "shape": "drift", "on": "ground"},
+		{"name": "dry weed", "shape": "growth", "on": "ground"},
+		{"name": "tidewrack", "shape": "scatter", "on": "ground"},
+		{"name": "a crusted ring", "shape": "ring", "on": "wall"},
+	],
+}
+## Every `shape` any prop names. `iso_run.gd` has one drawing per entry and
+## `tests/test_traversal.gd` asserts the table names nothing the view cannot draw —
+## a prop with an unknown shape is an invisible prop, which is exactly the kind of
+## content that goes missing without failing (D86's shape).
+const ISO_PROP_SHAPES := ["cracks", "slab", "pile", "ring", "growth", "drift", "scatter"]
+
+static func iso_props(terrain: String) -> Array:
+	return ISO_PROPS.get(terrain, ISO_PROPS[ISO_TERRAIN_DEFAULT])
+
+## Roll a chamber's role off a style's own weights. A style with no `roles` entry gets
+## the default rather than a crash, and the default is `cell` because it is the role
+## whose dressing is quietest — an unlisted style should look plain, not look wrong.
+static func iso_roll_room_role(style: Dictionary) -> String:
+	var weights: Dictionary = style.get("roles", {})
+	var total := 0
+	for r in weights:
+		if r in ISO_ROOM_ROLES:
+			total += maxi(0, int(weights[r]))
+	if total <= 0:
+		return ISO_ROOM_ROLE_DEFAULT
+	var roll := randi() % total
+	# Iterated over ISO_ROOM_ROLES rather than over the weights dictionary, so the
+	# order is the constant's and not a dictionary's insertion order — the same reason
+	# D22 wants option order to be a function of state alone.
+	for r in ISO_ROOM_ROLES:
+		var wt: int = maxi(0, int(weights.get(r, 0)))
+		if wt <= 0:
+			continue
+		if roll < wt:
+			return r
+		roll -= wt
+	return ISO_ROOM_ROLE_DEFAULT
+
+## Lights per floor, and how far one reaches.
+##
+## This is the single biggest change to how the screen reads, and it is a fix rather than
+## an addition: the floor was lit by `TINT_WALKED` / `TINT_OPEN` / `TINT_FRONTIER`, which
+## is *have I been here* doing the job of *is there light here*. One rule for both is why
+## the whole floor read at one value. State stays — it is the map of your own route, and a
+## model about coverage needs it — but it is a small modulation now, and the light field
+## carries the range.
+##
+## One to three at radius two, and these numbers were MEASURED rather than picked, because
+## the first guess (two to four at radius three) lit 91% of the ground across a 33-floor
+## sweep. That is not a light field, it is a brighter flat rule — the exact thing being
+## fixed, in warmer paint. `tests/test_traversal.gd` asserts the coverage band from both
+## sides now: a floor with no lit tile has lost the feature, and a floor where everything is
+## lit never had it.
+##
+## The floor of one rather than two is deliberate as well. A dungeon floor that happens to
+## have nothing burning on it is what makes the lit ones read as lit, and the same argument
+## the plan makes about a floor with no secret on it applies to a floor with no fire.
+const ISO_LIGHTS_MIN := 1
+const ISO_LIGHTS_MAX := 3
+const ISO_LIGHT_RADIUS := 2
+
+## One oversized feature per floor, and its job is ORIENTATION (D177). "I came in past the
+## big shaft" is a sentence a place produces and a board does not — and a floor whose
+## camera shows a third of it at a time needs something to steer by that is not the map.
+##
+## It stands in ROCK, never on floor, so it costs nothing to walk and cannot be confused
+## with anything interactive: the same rule the props follow, for the same reason. Which
+## also means the drawing is a rock block with something done to it, which is why there are
+## four and not forty — each one has to read at a glance from across a dark room.
+const ISO_LANDMARKS := ["shaft", "dome", "stair", "stack"]
+## What each one is, for the docs and for anyone reading a save. Not shown to the player:
+## a landmark that named itself in the log would be the game telling you what you are
+## looking at, which is the opposite of learning a place.
+const ISO_LANDMARK_NAME := {
+	"shaft": "a shaft with daylight a long way up it",
+	"dome": "a dome that came down",
+	"stair": "a stair going nowhere",
+	"stack": "bone stacked to the roof",
+}
 
 ## Which enemies a dungeon can field at a tier, bosses excluded — the same pool
 ## `CombatEngine._spawn_enemies` rolls from, in one place so the two cannot disagree.
@@ -840,6 +1097,23 @@ const ISO_AMBUSH_MIN_HP := 3
 
 static func iso_ambush_cost(max_hp: int) -> int:
 	return maxi(ISO_AMBUSH_MIN_HP, int(round(float(maxi(1, max_hp)) * ISO_AMBUSH_PCT / 100.0)))
+
+## How much MORE of a floor's turns the optional route may spend than the required one
+## (D179), expressed in rouses rather than in turns — because turns are what the floor
+## charges and `ISO_LINGER` is the price list.
+##
+## The plan asked for the completionist ceiling to be *derived, not picked*, and this is the
+## derivation: a floor wakes up every `ISO_LINGER` turns you spend on it, and an optional
+## route that costs more than one extra waking has stopped being a choice and become a
+## difficulty setting. It is RELATIVE to the required path deliberately. An absolute
+## per-floor number would have been wrong on the day it was written — the greedy route
+## already spends 22 to 45 turns on a floor depending on how many floors the dungeon has —
+## and it would go stale the first time floor sizes moved.
+const ISO_COMPLETIONIST_ROUSES := 1
+
+## Turns per floor the optional route may add on top of the required one.
+static func iso_optional_turn_budget() -> int:
+	return ISO_LINGER * ISO_COMPLETIONIST_ROUSES
 
 static func iso_wanderers_for(combats: int) -> int:
 	if combats <= 0:
@@ -1239,6 +1513,65 @@ static func boss_warning(dungeon_id: String) -> String:
 
 static func final_dungeon() -> String:
 	return DUNGEONS[DUNGEONS.size() - 1]
+
+# --- more than one way to earn a gate (D178) -----------------------------------
+#
+# The world was a ladder, and it was a ladder because of ONE number. Both
+# `DungeonData.unlock_after_clears` and `ZoneData.unlock_after_clears` compare against
+# `MetaState.clear_count()`, so every gate in the game asked the same question and every
+# clear was interchangeable: nothing you did was remembered except how many times you did it.
+#
+# Two changes, and the small one turned out to be nearly done already. **Gating at the zone
+# and opening every door inside it** (the plan's cheapest-largest-effect move) is worth
+# exactly one dungeon here: the Deeps already opened all three of theirs at 6 clears and the
+# Barrows all three at 0, and only the Slag Pits sat one clear behind its own region. It is
+# still made true — a region opening as a region is a rule worth being able to state — but it
+# is not what made the world linear.
+#
+# What made it linear is the currency. So: **a gate takes evidence you have been down there,
+# and a clear is not the only kind.** Floors descended in dungeons you did NOT beat count,
+# at a discount, which gives a player who keeps dying a way forward that is not farming the
+# Crypt eleven times — and, because depth is earned in a *place*, it makes the order you
+# take the world in a thing you can choose.
+#
+# Three constraints, all of them from the plan's C7 and D36:
+#
+# * **Discounted, so a clear is still the better answer.** Three floors of somewhere you
+#   died is one clear's worth of evidence, and a dungeon is two to four floors, so a full
+#   dive that ends badly is worth about a third of finishing one.
+# * **Capped, so it cannot replace clears.** Without a ceiling a player could dive and die
+#   their way to the Maw with no clears at all, arrive at difficulty 8 with a starting
+#   collection, and D36's ceiling would make that a wall rather than a freedom. Three is
+#   deliberately less than the deepest gate: the Maw still wants five real clears.
+# * **Only from dungeons you have not cleared.** Otherwise the deep dungeons you have
+#   already beaten keep paying for gates you passed long ago, which is not a second route,
+#   it is a bonus.
+const GATE_DEPTH_FLOORS_PER_CREDIT := 3
+const GATE_DEPTH_CREDIT_MAX := 3
+
+## Gate credit earned by going deep without coming back, from `MetaState.depth_records`
+## (dungeon id -> deepest floor NUMBER reached, 1-based).
+##
+## Counts floors BEYOND the first, because arriving on floor 1 is entering the door, not
+## evidence of anything — every run does it, so counting it would hand every player a
+## credit per dungeon for turning up.
+static func depth_credit(depth_records: Dictionary, cleared: Array) -> int:
+	return mini(GATE_DEPTH_CREDIT_MAX,
+		depth_credit_floors(depth_records, cleared) / GATE_DEPTH_FLOORS_PER_CREDIT)
+
+## The raw floors behind that credit, for the screens that have to SHOW the second route —
+## an alternative the player cannot see does not exist as far as they are concerned.
+##
+## `depth_credit` is derived FROM this rather than repeating the sum: two places counting the
+## same thing is D34, and the shape it would take here is a screen promising a credit the
+## gate does not grant.
+static func depth_credit_floors(depth_records: Dictionary, cleared: Array) -> int:
+	var floors := 0
+	for did in depth_records:
+		if String(did) in cleared or not (String(did) in DUNGEONS):
+			continue
+		floors += maxi(0, int(depth_records[did]) - 1)
+	return floors
 
 static func effective_gate(dungeon_id: String) -> int:
 	var d := dungeon(dungeon_id)

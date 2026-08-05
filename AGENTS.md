@@ -21,15 +21,20 @@ A **deckbuilding roguelike with a persistent RPG meta layer**, built in Godot 4.
 
 The loop:
 
-1. **Overworld** — pick a zone, then a dungeon. Difficulty is a *choice*, shown up
-   front, with the boss named before you commit.
+1. **Overworld** — pick a zone, then a dungeon. A region opens as a region, so there are
+   usually three doors rather than one, and a gate takes depth in places that beat you as
+   well as clears (D178). Difficulty is a *choice*, shown up front, with the boss named
+   before you commit.
 2. **Deck builder** — assemble a run deck from your owned cards and equip one Power.
 3. **Run** — crawl the dungeon: a painted isometric building of rooms and corridors over
    several floors, explored a tile at a time, with things walking it that take a step
    whenever you do. Fight, shop, rest, hit events and crack chests, down to a named boss.
    A locked chest wants a key, and the keys are lying on the floors — off the route, in the
    far corner of some room you had no other reason to cross (D167). Which chest wants one is
-   readable from the doorway: a chest stands in the light of its own tier (D172).
+   readable from the doorway: a chest stands in the light of its own tier (D172). The floor
+   is dressed as a place rather than a board — props, chamber roles and a few sources of
+   light per floor — and a dungeon's bottom is not its top: the surface changes as you
+   descend, and then the architecture does (D176, D177).
    (Three older traversal models — a node graph, a card draw, a dice board — lost to it in
    D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
 4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
@@ -45,7 +50,8 @@ Two-tier state makes this work:
 ## Content at a glance
 
 100 cards · 35 enemy archetypes (all painted) · 12 bosses (one named per dungeon) · 30 relics ·
-10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model · 24 sound
+10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model ·
+7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks · 24 sound
 effects · 5 score tracks · 41 test suites. All content is `.tres` data plus one catalogue
 line; adding more is a data task, not a code task.
 
@@ -327,12 +333,51 @@ effects are drawn at runtime by `scripts/fx.gd`.
 
 - **Variety inside a model has to be shown, not asserted.** Two dungeons on the same
   traversal model can pass every count and still be the same place. Architecture and
-  surface are therefore *separate* axes (`ISO_STYLES` × `ISO_TERRAINS`, sixteen readings
-  out of eight constants), both bounded by tests that check the tables index real things
-  and that at least three of each are in use — and both judged by rendering floors side by
-  side with `tools/IsoStyles.tscn`. That render is what caught two of four styles being
-  indistinguishable, and the knob that fixed it (room-versus-corridor ratio) was the one
-  that had been hardcoded (D82).
+  surface are therefore *separate* axes (`ISO_STYLES` × `ISO_TERRAINS`), both bounded by
+  tests that check the tables index real things and that at least three of each are in use
+  — and both judged by rendering floors side by side with `tools/IsoStyles.tscn`. That
+  render is what caught two of four styles being indistinguishable, and the knob that fixed
+  it (room-versus-corridor ratio) was the one that had been hardcoded (D82). **Every axis
+  since has needed a new knob rather than new numbers on the old ones**: `rubble` and
+  `spine` are what tell the three deep styles apart (D177), and both change the *walk*
+  rather than the shape of a room.
+
+  Between dungeons was never the hard half, though. **Inside one floor everything was
+  identical** — every ground tile the same diamond at one of three tints — so three more
+  axes are local: per-terrain **props**, per-style **room roles**, and a **light field**
+  split out from explored-state, which had been doing illumination's job and is the whole
+  reason the screen read at one value (D176). A dungeon's floors also stop being the same
+  place: a drift rule gives every dungeon a different bottom from its top, with the surface
+  turning one floor before the architecture does (D177). All of it is presentation, none of
+  it is read by `options()` or any flood, and the walk measured 6.99 before and after.
+
+  Three of those took a *capture* to get right, not an assertion (D89's rule holding again):
+  the first light tuning lit 91% of the ground, shading light per tile put back the very grid
+  D87 deleted, and props drawn paler than the floor read as sheets of paper. **Assert the
+  band from both sides** — the light check now fails a floor that is fully lit as well as one
+  that is dark, because the 91% build passed a check that only asked whether anything was lit.
+
+- **Every gate should not ask the same question.** One scalar (`clear_count()`) fed both the
+  dungeon and the zone gate, so every clear was interchangeable and nothing you did was
+  remembered except how many times you did it. A gate now takes **depth in dungeons that beat
+  you** as well as clears, discounted and capped (D178) — which is a way forward for a player
+  who keeps dying that is not farming the first dungeon eleven times. Two rules make that
+  safe: the cap is short of the deepest gate, so clears still matter and nobody walks a
+  starting collection into difficulty 8 (D36's ceiling would make that a wall, not a
+  freedom); and **a gate is permission, never strength** — the permanent max-HP bonus stays
+  on clears, or the second route is free power from outside the deck. A gate is also stated
+  in exactly one place, the zone, and an alternative route the player cannot see does not
+  exist as far as they are concerned, so every sealed row prints it.
+
+- **The walker that measures the pace only measures the REQUIRED route.** It takes the first
+  ranked option, and optional business is deliberately invisible to that ranking — keys are
+  ranked, not required (D167). So there is a second walker for the player who strips a floor,
+  with its own figure and a ceiling *derived* from `ISO_LINGER` (an optional route costing
+  more than one extra waking of the floor has become a difficulty setting, not a choice), plus
+  a `--explore` route policy in the simulator, because a walker counts moves and only the
+  simulator can price them in HP. **It shipped alone, before any optional content existed**
+  (D179): a baseline measured after the feature it exists to price has landed is not a
+  baseline. Today it reads +2.7 turns a floor against a budget of 22, and level on clear rate.
 
 - **There are two reward channels, and only one of them can be given away freely.** A
   card that joins the run deck is a *decision* — it can dilute the draw it was meant to

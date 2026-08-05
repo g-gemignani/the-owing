@@ -104,6 +104,40 @@ var enemy_of: Dictionary = {}
 ## the player could not have seen from the doorway — and since D167 the answer to a key lock
 ## is a detour, which is a decision that has to be available BEFORE the turn is spent.
 var chest_of: Dictionary = {}
+## w*h: 0 for a bare cell, else 1 + an index into this floor's terrain prop list (D176).
+##
+## PURELY COSMETIC, and that is a rule and not a description. A prop never occupies a tile
+## that holds an encounter, a key, the way on or the entrance; it never changes
+## walkability; and nothing in `options()`, `_describe` or any flood reads it. The floor
+## has spent three decisions teaching the player that what is drawn on a tile is what they
+## get — the creature (D85), the chest's tier (D172) — and a decoration that could be
+## mistaken for any of that would undo all three at once. What is in the table is ground
+## clutter, wall dressing and light; there is deliberately no crate that reads as a chest.
+##
+## Generated with the floor and saved with it, so a resumed run is the same room. Packed
+## for the same reason `enc` is: the view indexes it per tile per frame.
+var props := PackedInt32Array()
+## One role per chamber, indexed like `room_of` — what that room WAS (D176). Rolled from
+## the style's own weights at placement, and read only by the dressing: role is not a
+## placement hint for anything, because it has to prove it is free of balance consequence
+## before an encounter is ever put anywhere by it.
+var room_role: Array = []
+## A few sources of light per floor, each {"cell": int, "warm": bool}. Warm ones are fire
+## and stand in a room; cold ones come from above and stand where the roof failed.
+##
+## Placed by the model rather than derived by the view because they are part of the floor:
+## a resumed run has to be the same room in the same light, and a view that rolled its own
+## would relight the floor on every refresh.
+var lights: Array = []
+## The cell holding this floor's landmark, or -1, and which of `Balance.ISO_LANDMARKS` it
+## is (D177). Rock, always — see `_place_landmark`.
+var landmark: int = -1
+var landmark_kind: int = 0
+## Which terrain and which architecture THIS floor came out as. Recorded rather than
+## re-derived: since D177 they vary by depth inside one dungeon, and the view, the props
+## and a restored save must all agree on one answer. A second derivation is the D34 trap.
+var terrain: String = Balance.ISO_TERRAIN_DEFAULT
+var style_name: String = Balance.ISO_STYLE_DEFAULT
 var pos: int = 0        ## cell the player stands in
 var tiles: int = 0      ## walkable tiles on THIS floor
 var content: int = 0    ## encounters on this floor's tiles, its stair included
@@ -262,7 +296,11 @@ func _build_floor(d: int) -> void:
 	mons = []
 	enemy_of = {}
 	chest_of = {}
+	room_role = []
+	lights = []
 	var n_cells := w * h
+	props.resize(n_cells)
+	props.fill(0)
 	enc.resize(n_cells)
 	enc.fill(WALL)
 	seen.resize(n_cells)
@@ -272,10 +310,16 @@ func _build_floor(d: int) -> void:
 	room_of.resize(n_cells)
 	room_of.fill(-1)
 
-	var style := Balance.iso_style(String(dungeon.id) if dungeon != null else "")
+	# What this floor is cut in and made of, decided ONCE and kept, because a dungeon's
+	# floors differ from each other since D177 and everything downstream — the props, the
+	# view's surface art, a resumed save — has to read the same answer.
+	var did := String(dungeon.id) if dungeon != null else ""
+	style_name = Balance.iso_style_name(did, depth, floors)
+	terrain = Balance.iso_terrain(did, depth, floors)
+	var style: Dictionary = Balance.ISO_STYLES[style_name]
 	var rects := _place_rooms(style, Balance.iso_tiles_per_floor(floors))
 	rooms = rects.size()
-	_connect(rects, int(style["loops"]))
+	_connect(rects, style)
 	var carved: Array = []
 	for i in enc.size():
 		if int(enc[i]) != WALL:
@@ -338,6 +382,10 @@ func _build_floor(d: int) -> void:
 	# Keys go down LAST, so they take the ground nothing else wanted — which is the
 	# whole mechanic: a key is somewhere you would not otherwise have walked.
 	_place_keys(int(keyplan[depth]) if depth < keyplan.size() else 0, carved)
+	# ...and the dressing goes down after even the keys, which is what lets its own rule
+	# be absolute: nothing decorative can land on a tile that holds something, because by
+	# now everything that holds something is already there (D176).
+	_dress_floor(carved, dist)
 
 	content = 0
 	for i in enc.size():
@@ -372,7 +420,14 @@ func _place_rooms(style: Dictionary, target: int) -> Array:
 	# thing the eye reads first. The corridors are dug afterwards so their length cannot be
 	# known here; a low `fill` therefore means fewer chambers spread over the same plate,
 	# which is exactly what makes a warren corridor-heavy.
-	var room_area: int = int(round(float(target) * float(style.get("fill", 0.75))))
+	var rubble: float = clampf(float(style.get("rubble", 0.0)), 0.0, 0.5)
+	# Grossed UP by whatever the rubble is going to take back out again (D177), so a
+	# collapsed floor is the same SIZE as an intact one. Without this a style that eats a
+	# fifth of its own chamber area produces a floor a fifth smaller, and floor size is
+	# the thing `ISO_MOVES_PER_ENCOUNTER_MAX` is measured against — a purely visual knob
+	# would have quietly moved the pacing of every dungeon's bottom floor.
+	var room_area: int = int(round(float(target) * float(style.get("fill", 0.75))
+		/ maxf(0.5, 1.0 - rubble)))
 	var align: int = int(style.get("align", 0))
 	var area := 0
 	var out: Array = []
@@ -416,6 +471,7 @@ func _place_rooms(style: Dictionary, target: int) -> Array:
 	if out.size() < 2:
 		out.append(Rect2i(1, int(h / 2) - 1, 3, 2))
 		out.append(Rect2i(w - 5, int(h / 2) - 1, 3, 2))
+	room_role = []
 	for i in out.size():
 		var r: Rect2i = out[i]
 		for yy in range(r.position.y, r.end.y):
@@ -423,7 +479,51 @@ func _place_rooms(style: Dictionary, target: int) -> Array:
 				var c: int = yy * w + xx
 				enc[c] = EMPTY
 				room_of[c] = i
+		# What this chamber WAS, rolled from the style's own weights (D176). Assigned at
+		# placement rather than afterwards so it is a property of the room and not of
+		# whatever ended up standing in it.
+		room_role.append(Balance.iso_roll_room_role(style))
+		if rubble > 0.0:
+			_rubble(r, rubble)
 	return out
+
+## Put the roof back in one corner of a chamber, turning a rectangle into an L or a U.
+##
+## A CORNER BITE and not speckle, deliberately. Scattering single tiles of rock through a
+## room reads as a broken floor rather than as a collapse, and it fragments the chamber
+## into pockets the digger then has to find its way back into. One rectangle out of one
+## corner gives the shape the style is named for and leaves the rest of the room in one
+## piece — the corner you cannot see into from the door is the whole point.
+##
+## The centre is never taken: `_connect` digs to it, and while `_dig` would simply re-open
+## the tile, a room whose middle is rock is a room whose corridor arrives in its wall.
+func _rubble(r: Rect2i, frac: float) -> void:
+	if r.size.x < 2 or r.size.y < 2:
+		return
+	# Not every room, or "collapsed" stops being a reading and becomes the floor plan.
+	if randi() % 4 == 0:
+		return
+	var want: int = maxi(1, int(round(float(r.size.x * r.size.y) * frac)))
+	# The bite is as square as the room allows, so it eats a corner rather than shaving
+	# a side off — a one-tile strip off an edge is invisible at this tile size.
+	var bw: int = clampi(int(ceil(sqrt(float(want)))), 1, r.size.x - 1)
+	var bh: int = clampi(int(ceil(float(want) / float(bw))), 1, r.size.y - 1)
+	var corner := randi() % 4
+	var ox: int = r.position.x if corner % 2 == 0 else r.end.x - bw
+	var oy: int = r.position.y if corner < 2 else r.end.y - bh
+	var mid := _centre(r)
+	for yy in range(oy, oy + bh):
+		for xx in range(ox, ox + bw):
+			if xx == mid.x and yy == mid.y:
+				continue
+			if xx < 0 or yy < 0 or xx >= w or yy >= h:
+				continue
+			var c: int = yy * w + xx
+			enc[c] = WALL
+			# ...and it stops belonging to the room, or the reveal would open a room
+			# whole including the rock in it and `room_cells` would hand the view tiles
+			# that are not floor.
+			room_of[c] = -1
 
 ## True if `a` grown by one tile overlaps `b` — i.e. the two rooms would touch or
 ## merge. Written out rather than using Rect2i.intersects on a grown rect, because
@@ -437,16 +537,87 @@ func _too_close(a: Rect2i, b: Rect2i) -> bool:
 ## `loops` extra links. The loop count is what makes a style feel different to walk —
 ## zero is a tree where every dead end costs a double walk, three is somewhere you can
 ## come round behind a thing that is chasing you.
-func _connect(rects: Array, loops: int) -> void:
+## A style with `spine` set is joined the other way (D177): one arterial corridor across
+## the plate, and every chamber a spur off it. That is a different WALK, not a different
+## room — on a chain every room leads to the next, so the floor is a rope you pull along;
+## off a spine every room is a decision to leave the road and come back to it. It is also
+## what makes `ranks` read as ranks: ten small cells in a chain is a warren, and ten small
+## cells hung off one corridor is a barracks.
+func _connect(rects: Array, style: Dictionary) -> void:
 	if rects.size() < 2:
 		return
-	for i in range(1, rects.size()):
-		_dig(_centre(rects[i - 1]), _centre(rects[i]))
+	var loops: int = int(style.get("loops", 0))
+	if bool(style.get("spine", false)):
+		# Along the plate's long axis, one tile off the middle so it is not a mirror line —
+		# a corridor exactly down the centre of a square plate makes both halves the same
+		# picture. On a square grid the axis is chosen per floor, so a spine dungeon is not
+		# combed one way for its whole depth.
+		var across: bool = randi() % 2 == 0
+		var lane: int = int(h / 2) + (randi() % 3) - 1 if across else int(w / 2) + (randi() % 3) - 1
+		lane = clampi(lane, 1, (h if across else w) - 2)
+		var a0 := Vector2i(1, lane) if across else Vector2i(lane, 1)
+		var a1 := Vector2i(w - 2, lane) if across else Vector2i(lane, h - 2)
+		_dig(a0, a1)
+		for r in rects:
+			var mid := _centre(r)
+			_dig(mid, Vector2i(mid.x, lane) if across else Vector2i(lane, mid.y))
+	else:
+		for i in range(1, rects.size()):
+			_dig(_centre(rects[i - 1]), _centre(rects[i]))
 	for l in loops:
 		var a: int = randi() % rects.size()
 		var b: int = randi() % rects.size()
 		if a != b:
 			_dig(_centre(rects[a]), _centre(rects[b]))
+	_ensure_connected()
+
+## Dig whatever the passes above left stranded back onto the floor.
+##
+## The spanning chain could never strand anything, so nothing needed this until two styles
+## arrived that can (D177): rubble cuts a chamber into pieces, and a spine reaches a room's
+## centre without reaching a corner the rubble separated from it. `tests/test_traversal.gd`
+## asserts every carved tile is reachable from the entrance, so the failure mode is a red
+## test rather than an unfinishable floor — but the honest fix is to join the floor up, not
+## to stop making shapes that can come apart.
+##
+## Joins rather than deletes, deliberately. Filling a stranded pocket back in would be
+## cheaper and would shrink the floor, and floor size is what the pacing bound is measured
+## against.
+func _ensure_connected() -> void:
+	var guard := 0
+	while guard < 8:
+		guard += 1
+		var start := -1
+		for i in enc.size():
+			if int(enc[i]) != WALL:
+				start = i
+				break
+		if start < 0:
+			return
+		var reach := _dist_from(start)
+		var orphan := -1
+		for i in enc.size():
+			if int(enc[i]) != WALL and int(reach[i]) < 0:
+				orphan = i
+				break
+		if orphan < 0:
+			return
+		# Straight at the nearest tile of the main body. `_dig` only turns rock into floor,
+		# so this cannot cut through a chamber's `room_of` and cannot delete anything.
+		var best := -1
+		var best_d := 1 << 30
+		var ox: int = orphan % w
+		var oy: int = int(orphan / w)
+		for i in enc.size():
+			if int(reach[i]) < 0:
+				continue
+			var d: int = absi(i % w - ox) + absi(int(i / w) - oy)
+			if d < best_d:
+				best_d = d
+				best = i
+		if best < 0:
+			return
+		_dig(Vector2i(ox, oy), Vector2i(best % w, int(best / w)))
 
 func _centre(r: Rect2i) -> Vector2i:
 	return Vector2i(r.position.x + int(r.size.x / 2), r.position.y + int(r.size.y / 2))
@@ -563,6 +734,218 @@ func _place_keys(count: int, carved: Array) -> void:
 			return   # a floor with no bare ground left; the chest simply stays shut
 		enc[pick] = KEY
 		anchors.append(pick)
+
+# --- the dressing: everything on the floor that is only there to be looked at -----
+#
+# One pass, called last, and everything in it obeys the same two rules: it never lands on a
+# tile that holds something, and nothing anywhere else in this file reads it. That is what
+# makes Track A free of balance consequence by construction rather than by assertion —
+# `options()`, every flood, `_describe` and the budget are all written before this runs and
+# none of them looks at `props`, `room_role`, `lights` or `landmark`.
+
+## Clutter the floor, light it, and give it one thing worth remembering (D176, D177).
+func _dress_floor(carved: Array, dist_from_entry: PackedInt32Array) -> void:
+	var kinds: Array = Balance.iso_props(terrain)
+	var ground: Array = []
+	var wall: Array = []
+	for k in kinds.size():
+		if String((kinds[k] as Dictionary).get("on", "ground")) == "wall":
+			wall.append(k)
+		else:
+			ground.append(k)
+
+	# Ground clutter, on bare floor only. The entrance is exempt: the first thing the
+	# player ever sees on a floor is the tile they are standing on, and it should be the
+	# one tile with nothing on it.
+	for c in carved:
+		var i := int(c)
+		if int(enc[i]) != EMPTY or i == pos or ground.is_empty():
+			continue
+		if randf() >= _dress_rate(int(room_of[i]), "ground"):
+			continue
+		props[i] = 1 + int(ground[randi() % ground.size()])
+
+	# Wall dressing, on the rock that walls a chamber in. Rock away from known ground is
+	# never drawn at all (see `_walls_known_ground` in the view), so dressing it would be
+	# work nobody sees; the rate is taken from the room the rock adjoins, which is what
+	# makes a gallery's walls busy and a hall's plain.
+	if not wall.is_empty():
+		for i in enc.size():
+			if int(enc[i]) != WALL:
+				continue
+			var beside := -2
+			for n in _neighbours(i):
+				if int(enc[n]) != WALL:
+					beside = int(room_of[n])
+					break
+			if beside == -2:
+				continue    # rock in the middle of rock
+			if randf() >= _dress_rate(beside, "wall"):
+				continue
+			props[i] = 1 + int(wall[randi() % wall.size()])
+
+	_place_lights()
+	_build_light()
+	_place_landmark(dist_from_entry)
+
+## How densely a tile dresses itself, from the role of the room it belongs to — or the one
+## flat corridor rate for a tile that belongs to none.
+func _dress_rate(room: int, which: String) -> float:
+	if room < 0 or room >= room_role.size():
+		return Balance.ISO_PROP_CORRIDOR
+	var d: Dictionary = Balance.ISO_ROOM_DRESSING.get(String(room_role[room]), {})
+	return float(d.get(which, Balance.ISO_PROP_CORRIDOR))
+
+## Put the floor's few lights in the rooms that want one.
+##
+## Weighted by role and taken WITHOUT replacement, so two braziers never end up in the same
+## chamber — the axis this exists for is "some of the floor is lit and some is not", and two
+## sources in one room spends both on the same reading. A floor whose rooms all weigh zero
+## still gets one, at the entrance, because a floor with no light at all sits at one flat
+## value and that is the thing being fixed.
+func _place_lights() -> void:
+	lights = []
+	var want: int = Balance.ISO_LIGHTS_MIN \
+		+ (randi() % maxi(1, Balance.ISO_LIGHTS_MAX - Balance.ISO_LIGHTS_MIN + 1))
+	var pool: Array = []
+	for r in room_role.size():
+		var wt: float = float((Balance.ISO_ROOM_DRESSING.get(
+			String(room_role[r]), {}) as Dictionary).get("light", 0.0))
+		if wt > 0.0:
+			pool.append({"room": r, "weight": wt})
+	while lights.size() < want and not pool.is_empty():
+		var total := 0.0
+		for p in pool:
+			total += float(p["weight"])
+		var roll := randf() * total
+		var take := 0
+		for k in pool.size():
+			roll -= float((pool[k] as Dictionary)["weight"])
+			if roll <= 0.0:
+				take = k
+				break
+		var room: int = int((pool[take] as Dictionary)["room"])
+		pool.remove_at(take)
+		var cell := _light_seat(room)
+		if cell < 0:
+			continue
+		# Fire in a room somebody used, daylight where the roof failed. Two hues rather
+		# than one because a floor lit entirely from braziers is a floor at one colour
+		# temperature, which is the flat reading again in warmer paint.
+		var role := String(room_role[room])
+		lights.append({"cell": cell, "warm": role != "sump" and role != "gallery"})
+	if lights.is_empty():
+		lights.append({"cell": pos, "warm": true})
+
+## Where in a chamber a light stands: as near its middle as a bare tile allows, so the
+## pool of light is the room's and not a corner's.
+func _light_seat(room: int) -> int:
+	var cells := room_cells(room)
+	if cells.is_empty():
+		return -1
+	var cx := 0.0
+	var cy := 0.0
+	for c in cells:
+		cx += float(int(c) % w)
+		cy += float(int(int(c) / w))
+	cx /= float(cells.size())
+	cy /= float(cells.size())
+	var best := -1
+	var best_d := 1.0e9
+	for c in cells:
+		var i := int(c)
+		if int(enc[i]) != EMPTY or i == pos:
+			continue
+		var dx := float(i % w) - cx
+		var dy := float(int(i / w)) - cy
+		var d := dx * dx + dy * dy
+		if d < best_d:
+			best_d = d
+			best = i
+	return best
+
+## The light field: how lit every tile is, and by what colour. Derived from `lights`, so it
+## is rebuilt rather than saved — a cache in a save file is a second copy of a fact that can
+## disagree with the first, which is the reason `_room_cells` is not saved either.
+##
+## Four floods at most, once per floor build. Entrance selection already runs about forty
+## (D99), so this is inside the noise of what generation costs; `tools/bench_iso.gd` is the
+## instrument if that ever stops being true (R15).
+func _build_light() -> void:
+	var n := enc.size()
+	_light = PackedFloat32Array()
+	_light.resize(n)
+	_light.fill(0.0)
+	_light_hue = PackedFloat32Array()
+	_light_hue.resize(n)
+	_light_hue.fill(0.0)
+	for l in lights:
+		var src := int((l as Dictionary).get("cell", -1))
+		if src < 0 or src >= n or int(enc[src]) == WALL:
+			continue
+		var hue: float = 1.0 if bool((l as Dictionary).get("warm", true)) else -1.0
+		var field := _dist_from(src)
+		for i in n:
+			var d := int(field[i])
+			if d < 0 or d > Balance.ISO_LIGHT_RADIUS:
+				continue
+			var v: float = 1.0 - float(d) / float(Balance.ISO_LIGHT_RADIUS + 1)
+			if v > _light[i]:
+				_light[i] = v
+				_light_hue[i] = hue
+	# Rock takes the light of the brightest floor tile beside it. A flood only walks
+	# walkable ground, so without this a brazier would light the room and leave the wall it
+	# stands against black — which reads as a hole rather than as masonry.
+	var lit_rock := PackedFloat32Array()
+	lit_rock.resize(n)
+	var hue_rock := PackedFloat32Array()
+	hue_rock.resize(n)
+	for i in n:
+		if int(enc[i]) != WALL:
+			continue
+		for nb in _neighbours(i):
+			if int(enc[nb]) != WALL and _light[nb] > lit_rock[i]:
+				lit_rock[i] = _light[nb]
+				hue_rock[i] = _light_hue[nb]
+	for i in n:
+		if int(enc[i]) == WALL and lit_rock[i] > 0.0:
+			_light[i] = lit_rock[i]
+			_light_hue[i] = hue_rock[i]
+
+## The one oversized thing per floor, standing in the rock (D177).
+##
+## Placed on the rock tile that walls in the most known-able ground, and among ties the one
+## FURTHEST from the entrance — so it is a thing you walk toward and then past, which is
+## what makes it usable as a bearing. Never adjacent to the entrance itself, for the same
+## reason: a landmark you can see from the door tells you nothing about where you have got
+## to.
+func _place_landmark(dist_from_entry: PackedInt32Array) -> void:
+	landmark = -1
+	if dist_from_entry.size() != enc.size():
+		return
+	var best_score := -1
+	var best_far := -1
+	for i in enc.size():
+		if int(enc[i]) != WALL:
+			continue
+		var touch := 0
+		var far := -1
+		for n in _neighbours(i):
+			if int(enc[n]) == WALL:
+				continue
+			touch += 1
+			far = maxi(far, int(dist_from_entry[n]))
+		if touch < 2 or far < 3:
+			continue
+		if touch > best_score or (touch == best_score and far > best_far):
+			best_score = touch
+			best_far = far
+			landmark = i
+	# Which one it is varies with depth, so descending a dungeon does not walk past the
+	# same statue four times. Derived rather than rolled: it is the one piece of the
+	# dressing a player might navigate by, and a floor that came back from a save with a
+	# different landmark on it would have moved their bearing.
+	landmark_kind = (depth + maxi(0, landmark)) % Balance.ISO_LANDMARKS.size()
 
 ## Decide WHICH enemy every fight on this floor is, now rather than when it starts.
 ##
@@ -825,6 +1208,13 @@ func _dist_to_unresolved(skip_exit: bool) -> PackedInt32Array:
 ## constant 80 times a run (D99). Not serialized: it is derived from `room_of`, and a
 ## cache in a save file is a second copy of a fact that can disagree with the first.
 var _room_cells: Array = []
+
+## How lit every cell is (0..1) and by what colour (+1 warm, -1 cold), built from `lights`
+## with the floor and thrown away with it. Derived, so not serialized — for the same reason
+## `_room_cells` is not: a cached fact in a save file is a second copy free to disagree with
+## the first.
+var _light := PackedFloat32Array()
+var _light_hue := PackedFloat32Array()
 
 ## Memo for `options()`. See the note there; `_opts_valid` is cleared by every mutator.
 var _opts_cache: Array = []
@@ -1235,7 +1625,15 @@ func _save() -> Dictionary:
 		"avoided": avoided, "dodgeable": dodgeable,
 		"done": done, "mons": mons, "enemy_of": enemy_of, "chest_of": chest_of,
 		"floors": floors, "depth": depth, "plan": plan, "roam": roam,
-		"keyplan": keyplan, "chestplan": chestplan}
+		"keyplan": keyplan, "chestplan": chestplan,
+		# The dressing (D176/D177). It is only looked at, so none of it can change what a
+		# resumed run costs — but a floor that came back dressed differently would be a
+		# different ROOM, and this is a model whose whole subject is remembering where you
+		# have been. `props` is a PackedInt32Array, which round-trips as numbers; the two
+		# byte grids above do not, which is the D140 scar.
+		"props": props, "room_role": room_role, "lights": lights,
+		"landmark": landmark, "landmark_kind": landmark_kind,
+		"terrain": terrain, "style_name": style_name}
 
 func _load(d: Dictionary) -> void:
 	w = int(d.get("w", Balance.ISO_GRID))
@@ -1335,6 +1733,47 @@ func _load(d: Dictionary) -> void:
 			chest_of[i] = Balance.roll_pack_tier(Balance.PACK_TREASURE,
 				dungeon.difficulty if dungeon != null else 1)
 
+	# --- the dressing back out of the save (D176/D177) -------------------------------
+	#
+	# A save from before any of this existed gets a bare floor rather than a redressed one,
+	# and that is the correct answer twice over: the run it belongs to was played on a bare
+	# floor, and re-rolling the dressing on load is exactly the thing `_save` writes it down
+	# to prevent. The one field that IS re-derived is the light field, because it is a
+	# function of `lights` and nothing else.
+	props = PackedInt32Array()
+	for p in d.get("props", []):
+		props.append(maxi(0, int(p)))
+	while props.size() < enc.size():
+		props.append(0)
+	room_role = []
+	for r in d.get("room_role", []):
+		room_role.append(String(r) if String(r) in Balance.ISO_ROOM_ROLES
+			else Balance.ISO_ROOM_ROLE_DEFAULT)
+	while room_role.size() < rooms:
+		room_role.append(Balance.ISO_ROOM_ROLE_DEFAULT)
+	lights = []
+	for l in d.get("lights", []):
+		var ld: Dictionary = l
+		var lc := int(ld.get("cell", -1))
+		if lc >= 0 and lc < enc.size():
+			lights.append({"cell": lc, "warm": bool(ld.get("warm", true))})
+	landmark = int(d.get("landmark", -1))
+	if landmark < 0 or landmark >= enc.size() or int(enc[landmark]) != WALL:
+		landmark = -1
+	landmark_kind = posmod(int(d.get("landmark_kind", 0)), Balance.ISO_LANDMARKS.size())
+	# Which surface and which architecture this floor was BUILT as, not what the tables say
+	# today: the drift rule is a function of depth (D177), and a save whose floor was laid
+	# out under a different table has to come back looking like the floor it was.
+	terrain = String(d.get("terrain", ""))
+	if not (terrain in Balance.ISO_TERRAINS):
+		terrain = Balance.iso_terrain(String(dungeon.id) if dungeon != null else "",
+			depth, floors)
+	style_name = String(d.get("style_name", ""))
+	if not Balance.ISO_STYLES.has(style_name):
+		style_name = Balance.iso_style_name(String(dungeon.id) if dungeon != null else "",
+			depth, floors)
+	_build_light()
+
 	# The tile you stand on is ground you have seen and stood on — that is true of every
 	# healthy save already, so this costs one idempotent reveal, and it is what a save
 	# whose flags were flattened by the D140 bug comes back on. Those saves have no
@@ -1409,6 +1848,41 @@ func chest_at(x: int, y: int) -> String:
 	if x < 0 or y < 0 or x >= w or y >= h:
 		return ""
 	return String(chest_of.get(y * w + x, ""))
+
+## Which decoration lies on this tile, as one of `Balance.ISO_PROP_SHAPES`, or "" for a bare
+## one (D176). The shape and not the whole entry: the view has one drawing per shape and
+## needs nothing else, and returning a Dictionary per tile per frame would allocate 144
+## times a redraw for a string.
+func prop_shape(x: int, y: int) -> String:
+	if x < 0 or y < 0 or x >= w or y >= h:
+		return ""
+	var p := int(props[y * w + x]) - 1
+	if p < 0:
+		return ""
+	var kinds: Array = Balance.iso_props(terrain)
+	if p >= kinds.size():
+		return ""
+	return String((kinds[p] as Dictionary).get("shape", ""))
+
+## How lit this tile is, 0 (only whatever the floor has) to 1 (a source is standing on it).
+func light(x: int, y: int) -> float:
+	if x < 0 or y < 0 or x >= w or y >= h or _light.size() != enc.size():
+		return 0.0
+	return _light[y * w + x]
+
+## What colour that light is: +1 for fire, -1 for daylight from above, 0 for neither.
+func light_hue(x: int, y: int) -> float:
+	if x < 0 or y < 0 or x >= w or y >= h or _light_hue.size() != enc.size():
+		return 0.0
+	return _light_hue[y * w + x]
+
+## What the chamber at this tile WAS, or "" for a corridor (D176). The view dresses by it;
+## nothing else reads it.
+func room_role_at(x: int, y: int) -> String:
+	var r := chamber(x, y)
+	if r < 0 or r >= room_role.size():
+		return ""
+	return String(room_role[r])
 
 ## Which chamber a tile belongs to, or -1 for a corridor. The view uses it to tell a
 ## hall from a passage.

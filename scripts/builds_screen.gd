@@ -271,7 +271,13 @@ static func _block(parent: Node, b: BuildData, owned: Array[String],
 		missing: Array[String]) -> void:
 	var complete := missing.is_empty()
 	var gate: int = Balance.clears_required_for(b)
-	var locked: bool = MetaState.clear_count() < gate
+	# Measured against `gate_credit`, not against clears (D178). The gate is what decides
+	# whether the door is open, and since a gate takes depth as well now, a build shown as
+	# locked while its dungeon is enterable would be this screen contradicting the world
+	# screen. The gate VALUE is still in clears — `clears_required_for` is a statement about
+	# how far away the card pool is, and that did not become multi-route — so what changed
+	# is only what the requirement is measured against.
+	var locked: bool = MetaState.gate_credit() < gate
 
 	# The header is a ROW and not one formatted string, because its three parts want
 	# three different treatments: the name is the display face, the fraction is the
@@ -294,7 +300,7 @@ static func _block(parent: Node, b: BuildData, owned: Array[String],
 	if complete:
 		status = "complete"
 	elif locked:
-		status = "needs %s, you have %d" % [Wording.count(gate, "clear"), MetaState.clear_count()]
+		status = "needs %s, you have %d" % [Wording.count(gate, "clear"), MetaState.gate_credit()]
 	if status != "":
 		var st := Label.new()
 		st.text = status

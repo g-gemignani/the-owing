@@ -89,21 +89,27 @@ func _init() -> void:
 	var first := Balance.dungeon(Balance.DUNGEONS[0])
 	if not m.dungeon_unlocked(first):
 		fails += 1; print("FAIL first dungeon locked on a fresh save")
+	# Against the EFFECTIVE gate, not the dungeon's own field. The gate lives on the ZONE
+	# since D178 — a region opens as a region — so `d.unlock_after_clears > 0` now matches
+	# nothing, and a test that looked there found no gated dungeon, skipped its whole else
+	# branch, and took two later assertions down with it while reporting the wrong cause.
 	var gated: DungeonData = null
+	var gate_need := 0
 	for id in Balance.DUNGEONS:
 		var d := Balance.dungeon(id)
-		if d.unlock_after_clears > 0:
+		if Balance.effective_gate(id) > 0:
 			gated = d
+			gate_need = Balance.effective_gate(id)
 			break
 	if gated == null:
 		fails += 1; print("FAIL no dungeon is gated at all")
 	else:
 		if m.dungeon_unlocked(gated):
 			fails += 1; print("FAIL gated dungeon unlocked with 0 clears")
-		for i in gated.unlock_after_clears:
+		for i in gate_need:
 			m.mark_cleared(Balance.DUNGEONS[i])
 		if not m.dungeon_unlocked(gated):
-			fails += 1; print("FAIL gated dungeon still locked after %d clears" % gated.unlock_after_clears)
+			fails += 1; print("FAIL gated dungeon still locked after %d clears" % gate_need)
 
 	# --- clears are persistent and deduplicated ---
 	var n: int = m.clear_count()

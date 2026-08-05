@@ -72,6 +72,12 @@ func _fill(z: ZoneData) -> void:
 		box.add_theme_constant_override("separation", UITheme.sep(4))
 		list.add_child(box)
 
+		# A region opens as a region (D178). Every door inside a zone is open the moment the
+		# zone is, so this tag is now the exception rather than the rule: a dungeon states a
+		# gate of its own only where it is a genuine capstone, and none of the twelve
+		# currently is. `test_build.gd` asserts no dungeon restates the gate its zone already
+		# implies — two places holding one number is D34, and its shape here would be a door
+		# that stayed shut for a reason the region screen had already contradicted.
 		var unlocked: bool = MetaState.dungeon_unlocked(d)
 		var tag := "  [cleared]" if MetaState.has_cleared(d.id) else ""
 		if not unlocked:

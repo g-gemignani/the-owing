@@ -202,7 +202,7 @@ func _refresh() -> void:
 		c.queue_free()
 
 	for z in Balance.all_zones():
-		var unlocked: bool = MetaState.clear_count() >= z.unlock_after_clears
+		var unlocked: bool = MetaState.zone_unlocked(z)
 		var cleared := 0
 		for did in z.dungeons:
 			if MetaState.has_cleared(did):
@@ -221,7 +221,7 @@ func _refresh() -> void:
 			# What is left to do, not what the total was. The absolute number made
 			# the player subtract it from a "Cleared 4/12" printed elsewhere on the
 			# same screen; this is the subtraction already done.
-			var need: int = z.unlock_after_clears - MetaState.clear_count()
+			var need: int = z.unlock_after_clears - MetaState.gate_credit()
 			title = "%s   [sealed — clear %d more dungeon%s]" % [
 				z.name, need, "" if need == 1 else "s"]
 		UI.button(box, title, (func(): _travel(z.id)) if unlocked else Callable(), 40.0)
@@ -230,6 +230,11 @@ func _refresh() -> void:
 			for line in _pool_line(z):
 				UI.label(box, line)
 		else:
+			# The OTHER route, on the row that is holding it shut (D178). A gate takes depth
+			# in dungeons that beat you as well as clears, and an alternative the player
+			# cannot see does not exist as far as they are concerned — this is the whole
+			# reason the second currency is worth having rather than just being fair.
+			UI.label(box, _route_line())
 			# A locked row recedes: four of the five are sealed on a fresh save, and
 			# at equal weight they buried the one that could be pressed.
 			#
@@ -248,6 +253,27 @@ func _refresh() -> void:
 		var gap := Control.new()
 		gap.custom_minimum_size = Vector2(0, UITheme.px(ROW_GAP))
 		list.add_child(gap)
+
+## The second way in, written on a sealed row (D178).
+##
+## Says what is being counted and how much is already in hand, because both halves are
+## needed for the sentence to be an invitation rather than a rule: "three floors is a
+## clear" tells you what to do, and "you have two" tells you it is nearly worth doing. The
+## cap is named too — a route with a ceiling nobody mentioned is a route that stops working
+## for reasons the player has to guess at.
+func _route_line() -> String:
+	var floors: int = Balance.depth_credit_floors(
+		MetaState.depth_records, MetaState.cleared_dungeons)
+	var got: int = Balance.depth_credit(MetaState.depth_records, MetaState.cleared_dungeons)
+	var per: int = Balance.GATE_DEPTH_FLOORS_PER_CREDIT
+	var line := "Or go deep and not come back: every %d floors below the first, in places you have not beaten, counts as one clear." % per
+	if got >= Balance.GATE_DEPTH_CREDIT_MAX:
+		return line + "   You have %d — as far as depth alone will take you." % got
+	if floors > 0:
+		return line + "   You have %d floor%s, worth %d; %d more for the next." % [
+			floors, "" if floors == 1 else "s", got, per - (floors % per)]
+	return line + "   At most %d of a gate, so a clear is still the better answer." % \
+		Balance.GATE_DEPTH_CREDIT_MAX
 
 ## What a zone's pool is worth to you, in the two facts that are actually true of it.
 ##

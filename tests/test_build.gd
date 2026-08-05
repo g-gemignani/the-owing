@@ -149,6 +149,44 @@ func _init() -> void:
 		if z != null and Balance.effective_gate(did) < z.unlock_after_clears:
 			fails += 1; print("FAIL effective gate below zone gate for %s" % did)
 
+	# --- a region opens as a region, and the world is not a single file (D178) ------
+	#
+	# The gate is stated in ONE place, the zone, and a dungeon carries a gate of its own only
+	# where it is a genuine capstone — meaning strictly deeper than its region's. A dungeon
+	# restating the number its zone already implies is two places holding one fact, which is
+	# D34, and the shape it took here was the Slag Pits sitting one clear behind the region
+	# whose screen had already said the region was open.
+	for did in Balance.DUNGEONS:
+		var d2 := Balance.dungeon(did)
+		var z2 := Balance.zone_of(did)
+		if d2 == null or z2 == null:
+			continue
+		if d2.unlock_after_clears > 0 and d2.unlock_after_clears <= z2.unlock_after_clears:
+			fails += 1
+			print("FAIL %s states a gate of %d that %s already implies at %d" % [
+				did, d2.unlock_after_clears, z2.id, z2.unlock_after_clears])
+	# ...and the campaign has to offer a CHOICE at several points, or the order is still the
+	# only order. Counted as gate tiers holding more than one door: the plan asked for at
+	# least three viable orders through the world, and a tier of N doors is N! orders on its
+	# own, so three such tiers is the honest reading of that.
+	var tier_size := {}
+	for did in Balance.DUNGEONS:
+		var g2: int = Balance.effective_gate(did)
+		tier_size[g2] = int(tier_size.get(g2, 0)) + 1
+	var forks := 0
+	for g3 in tier_size:
+		if int(tier_size[g3]) > 1:
+			forks += 1
+	if forks < 3:
+		fails += 1
+		print("FAIL only %d point(s) in the campaign offer a choice of door — the world is a ladder" % forks)
+	var tiers: Array = tier_size.keys()
+	tiers.sort()
+	var shape: Array = []
+	for g4 in tiers:
+		shape.append("%d:%d" % [g4, int(tier_size[g4])])
+	print("  (info: gate tiers %s — %d of them offer a choice)" % [", ".join(shape), forks])
+
 	if fails == 0:
 		print("BUILD TEST: PASS (%d builds, gated behind %d+ dungeons in %d+ zones, and properly tiered)" % [
 			builds.size(), MIN_DUNGEONS, MIN_ZONES])

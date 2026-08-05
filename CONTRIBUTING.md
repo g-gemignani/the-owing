@@ -54,6 +54,59 @@ a decision.
 4. Give it a shape and a surface — `Balance.ISO_STYLE_OF` and `Balance.ISO_TERRAIN_OF`.
    There is one traversal model (D94), so the floor is the only thing that makes a
    dungeon walk differently from its neighbour.
+5. Its gate lives on the **zone**, not here. Leave `unlock_after_clears` at 0 unless the
+   dungeon is a genuine capstone, meaning strictly deeper than its region's gate — a
+   dungeon restating the number its zone already implies is two places holding one fact,
+   and `tests/test_build.gd` fails it (D178).
+
+## A floor architecture (an iso style)
+
+One entry in `Balance.ISO_STYLES`, plus a `Balance.ISO_STYLE_DEEP` mapping saying what it
+turns into at the bottom of a dungeon, and either an `ISO_STYLE_OF` dungeon or another
+style drifting into it — `tests/test_traversal.gd` fails a style nothing ever builds.
+
+Two rules, both learned the hard way:
+
+* **Bring a KNOB, not new numbers.** Two styles differing only by a tile of room width and
+  a loop count were indistinguishable side by side (D82). `fill`, `rubble` and `spine` all
+  change what the walk *is*; room size does not.
+* **Measure the walk.** New geometry moves moves-per-encounter, which is bounded
+  (`ISO_MOVES_PER_ENCOUNTER_MAX`) and has about half a move of headroom. The three deep
+  styles cost +0.11 on their first cut and `loops` was the lever that gave it back — not
+  `fill`, which grows the floor and makes it worse (D177). The instrument's noise range is
+  0.34, so take a mean of several runs, never one reading.
+
+Then render it: `tools/IsoStyles.tscn` and a contact sheet. A style signed off from a
+description rather than a picture is how two of four came out the same.
+
+## A prop set, or a chamber role
+
+Props: an entry per terrain in `Balance.ISO_PROPS` — `name`, a `shape` from
+`ISO_PROP_SHAPES`, and `on` for whether it lies on the ground or hangs on rock. A new shape
+needs a drawing in `iso_run.gd`'s `_draw_prop` (and `_draw_wall_prop` if it hangs); a shape
+nothing draws is an invisible prop and the traversal suite fails it.
+
+Roles: an entry in `Balance.ISO_ROOM_ROLES`, a dressing line in `ISO_ROOM_DRESSING`, and a
+weight in the `roles` of every style that should produce one.
+
+Three rules:
+
+* **Nothing decorative may resemble anything interactive.** The floor's whole contract is
+  that what is drawn on a tile is what you get — the creature (D85), the chest's tier and
+  its lock (D172). There is no crate in the table that reads as a chest, on purpose.
+* **Draw it darker than the ground it lies on.** A prop is read by its shape, and pale
+  props photographed as sheets of paper competing with the hero (D176).
+* **Judge it in a real capture at 1280×720**, not from the constants. Three of the four
+  things wrong with the first version of this feature were only visible in a screenshot.
+
+## A gate route
+
+`MetaState.gate_credit()` is what every dungeon and zone gate is measured against. A new
+kind of evidence goes in there and is priced in `Balance` beside `depth_credit`. It must be
+discounted, capped short of the deepest gate, and **printed on the sealed row** — an
+alternative the player cannot see does not exist. It must not grant strength: permanent HP
+is a reward for clearing, and paying it for anything else is free power from outside the
+deck (D178).
 
 ## A power or relic
 
@@ -66,7 +119,7 @@ enemy scaling.
 ## Before you commit
 
 ```bash
-tests/run.sh                                    # 38 suites
+tests/run.sh                                    # every suite; it lists them itself
 godot --headless --script tools/sim_balance.gd  # if you touched anything tuned
 ```
 

@@ -22,6 +22,15 @@ static var ONLY := ""       ## comma-separated dungeon ids; empty = all
 static var PROFILE := ""    ## substring of a profile name, case-insensitive
 static var REPORT := true   ## --calibration-only turns the per-cell report off
 static var CAL_TRIALS := CALIBRATION_TRIALS
+## Which ROUTE through a floor the driver walks (D179). `--explore` makes it strip the floor
+## — take every optional thing before the stairs — instead of getting on with the dungeon.
+##
+## A walker counts moves; only the simulator can say what those moves cost in HP and clear
+## rate, so the two routes need to be playable HERE and not only in `tests/test_traversal.gd`.
+## The flag exists before there is much to explore on purpose: it establishes the baseline
+## gap between the two routes for the game as it stands, which is the only number a later
+## feature's effect can be measured against.
+static var EXPLORE := false
 
 static func _read_args() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -35,6 +44,10 @@ static func _read_args() -> void:
 			PROFILE = arg.substr(10).to_lower()
 		elif arg == "--calibration-only":
 			REPORT = false
+		# Walk the floor for everything on it rather than for the way down (D179). A route
+		# policy and not a narrowing: every cell is still measured, by a different player.
+		elif arg == "--explore":
+			EXPLORE = true
 
 ## Filters are ADDITIVE narrowings of the full report, never a different measurement:
 ## every cell they let through is measured exactly as it would be in a full run.
@@ -99,6 +112,14 @@ func _init() -> void:
 			print(line)
 		print("")
 	print("Target: RUN completion ~50-70%% at matched progression; <20%% when over-reaching.")
+	# Said out loud, because a report that does not name its route is a report whose numbers
+	# cannot be compared with another one (D179). Two runs of this tool differ by a mean of
+	# 0.4 points already (D120); a route change is a much larger difference wearing the same
+	# clothes, and the header is the only place that can tell them apart afterwards.
+	print("Route: %s (%s)" % [
+		"explore — takes every optional thing before the stairs" if EXPLORE
+			else "stairs — gets on with the dungeon",
+		"--explore" if EXPLORE else "pass --explore for the other one"])
 	_avoid_calibration()
 	_print_budget()
 	quit()
@@ -261,7 +282,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 				if String(o.get("action", "")) == "avoid":
 					avoidable_total += 1
 					break
-			var pick := _choose_option(opts, hp, max_hp, cost_est, mode)
+			var pick := _choose_option(opts, hp, max_hp, cost_est, mode, tv)
 			var cost := int(opts[pick].get("hp_cost", 0))
 			var was_dodge := String(opts[pick].get("action", "")) == "avoid"
 			var node := tv.select(pick)
@@ -422,6 +443,39 @@ func _sim_event(hp: int, max_hp: int, gold: int) -> Dictionary:
 ## in the D20 sense (a dominant strategy is a removed decision).
 enum Policy { SMART, ALWAYS_FACE, ALWAYS_AVOID }
 
+## The step a player stripping the floor takes, or -1 if there is nothing optional left and
+## the route question has no opinion (D179).
+##
+## Toward the nearest optional thing, and never onto the stairs while one remains: descent is
+## one-way, so a floor left behind is a floor gone, and a driver that took the stairs early
+## would be playing the required route with a few extra steps in it.
+##
+## Optional means what `tests/test_traversal.gd`'s second walker means by it — today, a key,
+## which is ranked but not required (D167). The two definitions being the same is what lets
+## the walk measurement and this report be talking about one route.
+func _explore_pick(opts: Array, tv: TraversalIso) -> int:
+	var targets: Array = []
+	for i in tv.enc.size():
+		if int(tv.enc[i]) == TraversalIso.KEY:
+			targets.append(i)
+	if targets.is_empty():
+		return -1
+	var field: PackedInt32Array = tv._dist_to_any(targets)
+	var best := -1
+	var best_d := 1 << 30
+	for i in opts.size():
+		var o: Dictionary = opts[i]
+		if String(o.get("action", "")) == "avoid":
+			continue
+		var cell := int(o["cell"])
+		if int(tv.enc[cell]) == TraversalIso.STAIR:
+			continue
+		var d := int(field[cell])
+		if d >= 0 and d < best_d:
+			best_d = d
+			best = i
+	return best
+
 ## Only dodge a fight that costs meaningfully more than the dodge: the loot, and
 ## the gold that buys healing later, is worth some HP. 1.0 would dodge on a tie.
 const FACE_BIAS := 1.35
@@ -431,8 +485,20 @@ const FACE_BIAS := 1.35
 const LETHAL_MARGIN := 1.6
 
 func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
-		mode: int = Policy.SMART) -> int:
+		mode: int = Policy.SMART, tv: TraversalIso = null) -> int:
 	var frac := float(hp) / float(maxi(1, max_hp))
+	# The route comes FIRST, before the fight-or-dodge question, because it is a different
+	# question: this decides where to walk, and everything below decides what to do about
+	# what is standing there (D179). A player stripping a floor still faces and dodges the
+	# way the policy below says — they simply do not leave until they have taken everything.
+	#
+	# `tv` is optional so the calibration probe can keep asking without one; without it the
+	# driver cannot see past its own four options and there is no detour to take, which is
+	# the honest degradation rather than a silent half-policy.
+	if EXPLORE and tv != null:
+		var detour := _explore_pick(opts, tv)
+		if detour >= 0:
+			return detour
 	# take a rest or shop if it is on offer and we are damaged
 	for i in opts.size():
 		var t := int(opts[i].get("type", 0))

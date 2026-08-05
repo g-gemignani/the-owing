@@ -191,6 +191,90 @@ func _init() -> void:
 		if not (aff in Balance.BUILDS):
 			fails += 1; print("FAIL %s has no valid pack affinity" % did2)
 
+	# --- a gate takes more than one kind of evidence (D178) ----------------------
+	#
+	# Depth in dungeons that beat you counts toward a gate, at a discount and under a cap.
+	# Every clause below is a way the second route could be wrong in a direction nobody
+	# would notice: paying for the first floor (which every run reaches), paying twice for
+	# a dungeon you went on to clear, or paying so well that clears stop mattering — which
+	# would walk a starting collection into the Maw at difficulty 8, and D36's ceiling makes
+	# that a wall rather than a freedom.
+	var mg = Meta.new()
+	mg.new_save()
+	if mg.gate_credit() != 0:
+		fails += 1; print("FAIL a fresh save already has %d gate credit" % mg.gate_credit())
+	# arriving on floor 1 is turning up, not evidence
+	mg.note_depth(Balance.DUNGEONS[0], 1)
+	if mg.gate_credit() != 0:
+		fails += 1; print("FAIL reaching floor 1 paid a gate")
+	# ...and a made-up dungeon pays nothing at all
+	mg.note_depth("no_such_place", 4)
+	if mg.depth_records.has("no_such_place"):
+		fails += 1; print("FAIL the depth log accepted a dungeon that does not exist")
+	# the log keeps the DEEPEST, so a shallower later run cannot take credit away
+	mg.note_depth(Balance.DUNGEONS[0], 3)
+	mg.note_depth(Balance.DUNGEONS[0], 2)
+	if int(mg.depth_records[Balance.DUNGEONS[0]]) != 3:
+		fails += 1; print("FAIL a shallower run overwrote a deeper one")
+	var want_credit: int = 2 / Balance.GATE_DEPTH_FLOORS_PER_CREDIT
+	if mg.gate_credit() != want_credit:
+		fails += 1
+		print("FAIL two floors below the first is worth %d, expected %d" % [
+			mg.gate_credit(), want_credit])
+	# clearing it stops it paying: a place you have beaten pays a clear, not a clear AND a
+	# discount on the next gate
+	mg.mark_cleared(Balance.DUNGEONS[0])
+	if mg.gate_credit() != 1:
+		fails += 1
+		print("FAIL a cleared dungeon still pays depth credit (%d, expected 1)" % mg.gate_credit())
+	# the cap holds however deep you go, or depth replaces clears entirely
+	for did3 in Balance.DUNGEONS:
+		mg.note_depth(did3, 9)
+	var capped: int = mg.gate_credit() - mg.clear_count()
+	if capped != Balance.GATE_DEPTH_CREDIT_MAX:
+		fails += 1
+		print("FAIL depth alone is worth %d of a gate, cap is %d" % [
+			capped, Balance.GATE_DEPTH_CREDIT_MAX])
+	# ...and the cap has to be short of the deepest gate, or the world can be opened
+	# without beating anything
+	var deepest_gate := 0
+	for did4 in Balance.DUNGEONS:
+		deepest_gate = maxi(deepest_gate, Balance.effective_gate(did4))
+	if Balance.GATE_DEPTH_CREDIT_MAX >= deepest_gate:
+		fails += 1
+		print("FAIL depth alone (%d) reaches the deepest gate (%d) — clears stop mattering" % [
+			Balance.GATE_DEPTH_CREDIT_MAX, deepest_gate])
+	# The depth log has to survive a save, or the second route resets every session. And it
+	# is filtered on the way in, so this is also the test that the filter does not eat it.
+	#
+	# `writes_disabled` is a STATIC and the pack block above turned it on to stop its own
+	# instance flushing at exit, so it has to be turned back off here — the first version of
+	# this assertion reported "the depth log's save would not load back" about a save that was
+	# never written, which is a true statement about the wrong thing.
+	Meta.writes_disabled = false
+	mg.slot = 2
+	mg.save_game()
+	var mg2 = Meta.new()
+	mg2.slot = 2
+	if not mg2.load_game():
+		fails += 1; print("FAIL the depth log's save would not load back")
+	elif mg2.depth_records != mg.depth_records:
+		fails += 1
+		print("FAIL the depth log came back as %s, was %s" % [
+			str(mg2.depth_records), str(mg.depth_records)])
+	Meta.writes_disabled = true
+	# Depth must not buy STRENGTH. A gate is permission to go somewhere; the permanent
+	# max-HP bonus is a reward for finishing, and paying it for depth would be free power
+	# from outside the deck — the one thing enemy scaling cannot absorb (the priced-power
+	# pillar). Asserted at the SOURCE, the way the key rule above is, because the bug would
+	# be one identifier long and would read as a tidy-up in a diff.
+	var gs_src := FileAccess.get_file_as_string("res://scripts/game_state.gd")
+	if gs_src.find("max_hp_for(") != -1 and gs_src.find("gate_credit") != -1:
+		fails += 1
+		print("FAIL game_state.gd mentions gate_credit near the HP maths — depth must not buy strength")
+	print("  (info: depth credit is %d of a gate at most, %d floors each, deepest gate %d)" % [
+		Balance.GATE_DEPTH_CREDIT_MAX, Balance.GATE_DEPTH_FLOORS_PER_CREDIT, deepest_gate])
+
 	if fails == 0:
 		print("META TEST: PASS (persistence + fusion + deck build + packs)")
 	else:

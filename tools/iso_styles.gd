@@ -26,6 +26,10 @@ const OUT := "user://shots/styles/"
 ## two are indistinguishable, style alone is not doing the work.
 const SUBJECTS := ["crypt", "ossuary", "warrens", "the_maw", "rot_gardens",
 	"drowned_market"]
+## The same question one floor down. Chosen so every deep style gets photographed once:
+## the crypt and the ossuary both end in `collapse` (on different terrain, which is the
+## harder half of the test again), the warrens end in `ranks`, the market ends in `flooded`.
+const DEEP_SUBJECTS := ["crypt", "ossuary", "warrens", "drowned_market"]
 ## Steps to walk before capturing. A fresh floor shows one chamber, which is the least
 ## informative picture of a dungeon there is (D77) — but the walk also has to STOP at the
 ## stairs. The first version walked a flat 22 steps and caught the Maw five tiles into its
@@ -53,6 +57,13 @@ func _ready() -> void:
 
 	for did in SUBJECTS:
 		await _capture(did)
+	# ...and the same dungeons at the BOTTOM, because a dungeon's floors stopped being the
+	# same place (D177). Floor 1 is the only fair comparison BETWEEN dungeons and it is now
+	# the wrong picture for three of the seven styles: `collapse`, `ranks` and `flooded` are
+	# only ever reached by descending, so a gate that photographs first floors would sign
+	# off three styles it never rendered.
+	for did in DEEP_SUBJECTS:
+		await _capture(did, true)
 	print("SHOTS: ", ProjectSettings.globalize_path(OUT))
 	# writes_disabled BEFORE the purge: MetaState flushes on EXIT_TREE, so a still
 	# writable one rewrites the save on the way out and the purge looks like a no-op.
@@ -75,7 +86,9 @@ func _purge() -> void:
 	for x in doomed:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path("user://" + x))
 
-func _capture(did: String) -> void:
+## `deep` photographs the dungeon's LAST floor instead of its first, which is where the
+## drift rule has put a different style and a different surface (D177).
+func _capture(did: String, deep: bool = false) -> void:
 	var dd := Balance.dungeon(did)
 	if dd == null:
 		print("MISS ", did)
@@ -95,6 +108,11 @@ func _capture(did: String) -> void:
 	# whole point: the comparison must not require editing twelve .tres files.
 	var tv := TraversalIso.new()
 	tv.generate(dd)
+	# Laid out directly rather than descended to. Walking down would need a full walk per
+	# floor and would photograph the walker rather than the floor.
+	var want_depth: int = tv.floors - 1 if deep else 0
+	if want_depth != 0:
+		tv._build_floor(want_depth)
 	GameState.traversal = tv
 	for i in WALK:
 		if tv.is_complete() or tv.options().is_empty():
@@ -107,8 +125,8 @@ func _capture(did: String) -> void:
 			break
 		if not tv.select(0).is_empty():
 			tv.clear_pending()
-		if tv.depth != 0:
-			break     # it took the stairs; floor 1 is what we came to photograph
+		if tv.depth != want_depth:
+			break     # it took the stairs; the floor we came to photograph is gone
 	GameState.pending = {}
 
 	var packed := load("res://scenes/IsoRun.tscn") as PackedScene
@@ -118,8 +136,12 @@ func _capture(did: String) -> void:
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
-	img.save_png(OUT + "%s.png" % did)
-	print("SHOT %-16s style=%-10s terrain=%s" % [
-		did, String(Balance.ISO_STYLE_OF.get(did, Balance.ISO_STYLE_DEFAULT)),
-		Balance.iso_terrain(did)])
+	img.save_png(OUT + "%s%s.png" % [did, "_deep" if deep else ""])
+	# Read off the MODEL, not off the tables: what the floor was actually built as is the
+	# only honest caption for a picture of it, and a caption re-derived from a lookup is a
+	# caption that can be wrong about its own photograph.
+	print("SHOT %-16s floor=%d/%d style=%-10s terrain=%-6s roles=%s lights=%d landmark=%s" % [
+		did, tv.depth + 1, tv.floors, tv.style_name, tv.terrain,
+		str(tv.room_role), tv.lights.size(),
+		Balance.ISO_LANDMARKS[tv.landmark_kind] if tv.landmark >= 0 else "none"])
 	inst.queue_free()

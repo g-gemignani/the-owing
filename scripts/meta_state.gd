@@ -70,7 +70,7 @@ static func delete_slot(s: int) -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 ## Bump when the save shape changes, and add a step to _migrate().
 ## Saves written before versioning existed have no "version" key and read as 0.
-const SAVE_VERSION := 8
+const SAVE_VERSION := 9
 ## The run lives in its own file beside the meta save. They change at wildly
 ## different rates — meta only when the player gains something permanent, the run
 ## on every card played — so writing them together meant rewriting the whole
@@ -341,6 +341,14 @@ var cleared_dungeons: Array = []
 ## How many times each dungeon has been cleared, for the diminishing repeat payout
 ## (D69). The set above answers "is it unlocked"; this answers "how well trodden".
 var clear_counts: Dictionary = {}
+## The deepest floor NUMBER (1-based) ever reached in each dungeon, cleared or not — the
+## second gate currency (D178).
+##
+## A separate record from `clear_counts` because it answers a different question and has to
+## survive answering it badly: how far you got in a place you did NOT beat. `Balance` filters
+## the cleared ones out when it prices the credit, so this stays a plain honest log of where
+## you have been rather than a scoreboard that has to be kept consistent with the other one.
+var depth_records: Dictionary = {}
 var highest_dungeon: int = 1
 var gold: int = 0  # persistent currency; earned in combat, partly lost on death
 
@@ -382,6 +390,7 @@ func new_save(kit: String = "blade", persist: bool = true) -> void:
 	equipped_power = "bulwark"
 	cleared_dungeons = []
 	clear_counts = {}
+	depth_records = {}
 	packs = []
 	highest_dungeon = 1
 	gold = 0
@@ -575,9 +584,48 @@ func mark_cleared(id: String) -> void:
 func clear_count() -> int:
 	return cleared_dungeons.size()
 
-## A dungeon unlocks once enough others have been cleared.
+## Log how deep a run got, whichever way it ended (D178). `floor_no` is 1-based.
+##
+## Called from `GameState.clear_run()`, which is the ONE place every run is torn down —
+## boss beaten, killed, roped out, abandoned from the pause menu, or a save that could not
+## be rebuilt. Hooking the endings individually is how a fifth ending gets added later and
+## quietly records nothing.
+func note_depth(id: String, floor_no: int) -> void:
+	if not (id in Balance.DUNGEONS) or floor_no <= 0:
+		return
+	if floor_no <= int(depth_records.get(id, 0)):
+		return
+	depth_records[id] = floor_no
+	mark_meta_dirty()
+
+## What a gate is measured against (D178): clears, plus the discounted credit for floors
+## descended in dungeons still unbeaten.
+##
+## This is the number every DUNGEON and ZONE gate compares itself to. Deliberately NOT the
+## number the powers, the builds screen's pricing or `Balance.clears_required_for` use: a
+## power is a purchase and a build's distance is a statement about the card pool, and both
+## of those mean "clears" literally. What became multi-route is permission to go somewhere.
+func gate_credit() -> int:
+	return clear_count() + Balance.depth_credit(depth_records, cleared_dungeons)
+
+## A dungeon unlocks once you have enough evidence you have been down there — clears, or
+## depth in places that beat you (D178).
+##
+## Against the EFFECTIVE gate, which is the max of the dungeon's own and its region's. It
+## used to read only the dungeon's own, which was survivable while every dungeon carried a
+## value of its own and merely redundant with the zone check the overworld did separately.
+## Once the gate moved to the zone (D178) it stopped being survivable: with every dungeon at
+## zero this function returned true for the Maw on a fresh save, and the only thing still
+## holding the door was one comparison on the world screen. One predicate, in the place that
+## owns the currency.
 func dungeon_unlocked(d: DungeonData) -> bool:
-	return d != null and clear_count() >= d.unlock_after_clears
+	return d != null and gate_credit() >= Balance.effective_gate(d.id)
+
+## The same question for a region. The overworld asks this and `zone_view` asks the one
+## above; both go through `gate_credit`, so the two screens cannot disagree about whether a
+## door is open — which they would the moment one of them counted clears.
+func zone_unlocked(z: ZoneData) -> bool:
+	return z != null and gate_credit() >= z.unlock_after_clears
 
 # --- relics (Phase 7) ---
 func has_relic(id: String) -> bool:
@@ -907,6 +955,7 @@ func _write_meta() -> void:
 		"consumables": consumables, "powers": powers, "equipped_power": equipped_power,
 		"starter_kit": starter_kit, "seen_hints": seen_hints, "ascension": ascension,
 		"cleared_dungeons": cleared_dungeons, "clear_counts": clear_counts,
+		"depth_records": depth_records,
 		"packs": packs,
 		"highest_dungeon": highest_dungeon, "gold": gold,
 	}
@@ -971,6 +1020,13 @@ func _backup_save(text: String, from_version: int) -> void:
 ## idempotent: missing keys get defaults, unknown ids are dropped on apply.
 func _migrate(data: Dictionary, from_version: int) -> Dictionary:
 	var d := data.duplicate(true)
+	if from_version < 9:
+		# v8 has no depth log, so it earns no depth credit (D178) — and that is the right
+		# answer rather than a generous one. The credit is evidence of where you have been,
+		# and a save that never recorded it has no evidence; inventing some would hand an
+		# existing player up to three gates for runs the file cannot show they made. The
+		# loader defaults the field to empty, so there is nothing to write here.
+		pass
 	if from_version < 8:
 		# v7 packs have no tier and no build (D81). Nothing to compute here: the
 		# loader normalises a missing tier to worn and rolls a build from where the
@@ -1090,6 +1146,13 @@ func _apply(parsed: Dictionary) -> void:
 	for id in parsed.get("clear_counts", {}):
 		if id in Balance.DUNGEONS:
 			clear_counts[id] = maxi(0, int(parsed["clear_counts"][id]))
+	# The depth log, filtered against the real dungeon list on the way in (D178). A record
+	# for a dungeon that no longer exists would keep paying a gate for a place nobody can
+	# go — the same reason every other id in this function is checked rather than trusted.
+	depth_records = {}
+	for id in parsed.get("depth_records", {}):
+		if id in Balance.DUNGEONS:
+			depth_records[id] = maxi(0, int(parsed["depth_records"][id]))
 
 	highest_dungeon = int(parsed.get("highest_dungeon", 1))
 	gold = maxi(0, int(parsed.get("gold", 0)))

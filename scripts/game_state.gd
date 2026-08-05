@@ -382,6 +382,22 @@ func run_from_dict(d: Dictionary) -> bool:
 	return true
 
 func clear_run() -> void:
+	# How deep this run got, logged before the run that knows it is thrown away (D178).
+	#
+	# HERE and not at the endings, because this is the one place all of them meet: boss
+	# beaten, killed, roped out, abandoned from the pause menu, and a saved run that could
+	# not be rebuilt. Hooking the endings individually is how the sixth ending gets written
+	# later and quietly records nothing — which is the same class of bug as a traversal that
+	# forgets to invalidate its memo, and just as silent, because a missing depth record does
+	# not fail, it only makes a gate look further away than it is.
+	#
+	# A traversal never touches meta state itself (D13), so the reporting is the model's and
+	# the recording is done here, exactly as an ambush's HP price is.
+	var iso := traversal as TraversalIso
+	if iso != null and dungeon_id != "":
+		var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+		if meta != null:
+			meta.note_depth(dungeon_id, iso.depth + 1)
 	traversal = null
 	dungeon_id = ""
 	combat_state = {}

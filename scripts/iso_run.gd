@@ -67,6 +67,29 @@ const TINT_WALL_L := Color(0.19, 0.19, 0.23)
 ## How solid a wall standing between the camera and the player is drawn. Low enough to
 ## see her through, high enough that the wall is still obviously there.
 const OCCLUDER_ALPHA := 0.34
+## What the LIGHT FIELD does to a tile, on top of the three tints above (D176).
+##
+## The tints were doing two jobs at once: they are the fog (have I been here) and they were
+## also the only illumination the floor had, which is why the whole screen read at one
+## value. State keeps its job — it is the map of your own route and a model about coverage
+## needs it — and light is a second multiply on top, from `TraversalIso.light`.
+##
+## The range is deliberately asymmetric. `LIGHT_LIT` is over 1.0 so a tile with a brazier on
+## it is *brighter* than walked stone rather than merely equal to it, which is what makes a
+## lit room read as lit; `LIGHT_DIM` is well short of zero because the darkest thing on this
+## screen must still be legible ground.
+const LIGHT_DIM := 0.72
+const LIGHT_LIT := 1.34
+## Fire, and daylight a long way up a shaft. The hue is applied only as strongly as the
+## light carrying it, so an unlit tile is never tinted by a source three rooms away.
+const LIGHT_WARM := Color(1.10, 1.00, 0.84)
+const LIGHT_COLD := Color(0.86, 0.95, 1.16)
+## How dark the decoration on a tile is against the ground it lies on, and how pale wall
+## dressing is against the rock face behind it (D176). Multipliers on the tile's own lit
+## tint rather than colours of their own: a prop is the same stone in shadow, and a second
+## palette here is a second palette to drift from the first.
+const PROP_DARK := 0.62
+const PROP_PALE := 1.28
 const COL_REACH := Color(0.98, 0.78, 0.35)   ## an exit you can walk through now
 const COL_YOU := Color(0.55, 0.90, 1.0)
 const COL_THREAT := Color(1.0, 0.36, 0.34)   ## something walking, while you can see it
@@ -305,16 +328,19 @@ func _load_art() -> void:
 					if flip != null:
 						art[r + FLIP] = flip
 						stand[r + FLIP] = -float(stand.get(r, 0.0))
-	# The dungeon's own surface overwrites the generic pair, so the drawing code keeps
-	# asking for "floor" and "rock" and never learns that terrain exists. A terrain with
-	# no art installed simply leaves the generic pair in place.
-	var terrain := Balance.iso_terrain(GameState.dungeon_id)
-	for pair in ["floor", "rock"]:
-		var tpath: String = "%s%s_%s.png" % [ART_DIR, pair, terrain]
-		if ResourceLoader.exists(tpath):
-			var ttex := load(tpath) as Texture2D
-			if ttex != null:
-				art[pair] = ttex
+	# EVERY terrain's surface, each under its own key, rather than the dungeon's one pair
+	# overwriting the generic one. A dungeon's floors no longer share a terrain (D177): the
+	# surface turns a floor before the architecture does, so the drawing asks the MODEL what
+	# the floor it is looking at is made of (`_surface` below) and a descent changes the
+	# ground without reloading anything. A terrain with no art installed simply has no key
+	# and falls back to the generic pair, which is what a checkout with no iso art draws.
+	for t in Balance.ISO_TERRAINS:
+		for pair in ["floor", "rock"]:
+			var tpath: String = "%s%s_%s.png" % [ART_DIR, pair, t]
+			if ResourceLoader.exists(tpath):
+				var ttex := load(tpath) as Texture2D
+				if ttex != null:
+					art["%s_%s" % [pair, t]] = ttex
 
 func _build_ui() -> void:
 	# UI.screen gives the zone backdrop, the root margin and the content column, so
@@ -670,9 +696,26 @@ func _draw_floor() -> void:
 				continue    # rock is a BLOCK, drawn in the standing pass below
 			var quad := _diamond(centre, t)
 			var tint := TINT_FRONTIER
+			var tints := PackedColorArray([tint, tint, tint, tint])
 			if seen:
+				# State per TILE, light per CORNER (D176). The state tint keeps its hard
+				# edges — it is the map of your own route and a blurred route is not one —
+				# and the light is interpolated across the diamond, which is what stops the
+				# light field from redrawing the grid D87 deleted. See `_draw_ground`.
+				#
+				# The frontier is deliberately left out of the multiply: it is the edge of
+				# what you know rather than ground you can see the light on, and it is the
+				# constant D89 warns about — 0.20 through a 0.72 floor is 0.14, which is
+				# where "nearly out" becomes "black". A constant has to survive the
+				# transform applied to it, and the cheapest way for this one to survive is
+				# not to be transformed.
 				tint = TINT_WALKED if tv.trodden(x, y) else TINT_OPEN
-			_draw_ground(quad, x, y, tint, "floor")
+				tints = _corner_tints(tv, x, y, tint)
+			_draw_ground(quad, x, y, tints, _surface(tv, "floor"))
+			# ...and whatever is lying on it. Ground clutter only, drawn UNDER everything
+			# that stands on the tile, because it is part of the floor and not a thing on it.
+			if seen:
+				_draw_prop(tv.prop_shape(x, y), centre, t, _lit(tv, x, y, tint), x, y)
 			# Only the tiles you can step into are outlined (D87). Every tile used to
 			# carry a hairline, and on a floor of seamless stone that hairline WAS the
 			# grid — the one thing left saying "this ground is made of cells" once the
@@ -705,10 +748,17 @@ func _draw_floor() -> void:
 					# standing on the wall rather than behind it — which on a floor of
 					# one-tile corridors is most of the time, because the tile in front
 					# of you is usually stone.
-					if _occludes_player(x, y, tv):
+					if i2 == tv.landmark:
+						# The one oversized thing on the floor (D177). It stands in rock, so
+						# it is drawn here, in the pass that owns height — and it is NEVER
+						# held back as an occluder, because a landmark is a bearing and a
+						# bearing you can only see at a third strength is not one. The player
+						# is drawn after this pass regardless, so she is still on top of it.
+						_draw_landmark(c2, t, x, y, tv)
+					elif _occludes_player(x, y, tv):
 						near_walls.append(Vector2i(x, y))
 					else:
-						_draw_wall(c2, t, x, y)
+						_draw_wall(c2, t, x, y, Color(1, 1, 1), tv)
 				continue
 			if not tv.lit(x, y):
 				continue
@@ -765,7 +815,7 @@ func _draw_floor() -> void:
 	for p in near_walls:
 		var pv: Vector2i = p
 		_draw_wall(_to_plate(pv.x, pv.y) + cam, t, pv.x, pv.y,
-			Color(1, 1, 1, OCCLUDER_ALPHA))
+			Color(1, 1, 1, OCCLUDER_ALPHA), tv)
 
 ## The tile's diamond, in draw order top / right / bottom / left.
 func _diamond(centre: Vector2, t: Vector2) -> PackedVector2Array:
@@ -783,14 +833,24 @@ func _diamond(centre: Vector2, t: Vector2) -> PackedVector2Array:
 ## `wash` multiplies all three faces, which is how a sealed vault is drawn: the same
 ## stone block in a warmer colour, so it reads as masonry that belongs to the dungeon
 ## rather than as a UI marker sitting on top of it.
+##
+## `tv` is what the block asks how lit it is and what is nailed to it (D176). Optional so
+## the tool renders in `tools/` can draw a bare block, and because a null model has to
+## degrade to the old flat stone rather than to no wall at all. `lift` scales the block's
+## height, which is how a landmark is drawn as the same masonry standing taller (D177).
 func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
-		wash: Color = Color(1, 1, 1)) -> void:
-	var lift := Vector2(0, -t.y * WALL_LIFT)
+		wash: Color = Color(1, 1, 1), tv: TraversalIso = null,
+		lift_mult: float = 1.0) -> void:
+	var lift := Vector2(0, -t.y * WALL_LIFT * lift_mult)
 	var top := centre + Vector2(0, -t.y * 0.5)
 	var right := centre + Vector2(t.x * 0.5, 0)
 	var bottom := centre + Vector2(0, t.y * 0.5)
 	var left := centre + Vector2(-t.x * 0.5, 0)
-	var tex: Texture2D = art.get("rock")
+	var tex: Texture2D = art.get(_surface(tv, "rock"))
+	# Rock takes the light of the brightest floor beside it (TraversalIso._build_light), so
+	# a wall beside a brazier is masonry in firelight rather than a black edge to a lit room.
+	if tv != null:
+		wash = wash * _lit(tv, x, y, Color(1, 1, 1))
 	var square := PackedVector2Array([Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
 	# left face, then right face, then the top — painter's order within one block
 	var faces := [
@@ -805,6 +865,15 @@ func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
 			floor_view.draw_colored_polygon(poly, tint * 0.5)
 		else:
 			floor_view.draw_colored_polygon(poly, tint, square, tex)
+	# Wall dressing goes on the right-hand face, which is the lit one of the two and the one
+	# a 2:1 projection gives the most area to. On the face rather than on the top, because a
+	# ring or a run of roots is a thing on a WALL — put on the top it reads as litter on a
+	# ledge the player might be able to stand on.
+	if tv != null:
+		var shape := tv.prop_shape(x, y)
+		if shape != "":
+			_draw_wall_prop(shape, centre + Vector2(t.x * 0.25, -t.y * 0.25)
+				+ lift * 0.5, t, Color(TINT_WALL_R) * wash)
 
 ## The way down: a hole, drawn as the *inverse* of a wall block — nested diamonds
 ## stepping down into the dark, with a lit lip.
@@ -922,10 +991,23 @@ func _draw_key(centre: Vector2, t: Vector2, scale: float = 1.0, alpha: float = 1
 ## Each tile is offset into the material by an irrational-ish per-cell amount so the
 ## floor does not read as wallpaper. Integer offsets would have been useless — the
 ## material is seamless, so shifting by a whole period gives the identical patch back.
-func _draw_ground(quad: PackedVector2Array, x: int, y: int, tint: Color, role: String) -> void:
+##
+## `tints` is FOUR colours, one per corner, not one for the tile — and that is what keeps
+## the light field from undoing D87 (D176). The first version multiplied one flat tint per
+## tile, and a capture of the Warrens showed why that is wrong: light falls off in whole
+## steps, so every tile came out a different flat value and the hairline grid the per-tile
+## outlines were deleted for was back, drawn in illumination instead of in lines. Shading
+## per CORNER — each corner being the light averaged over the four tiles that meet at it —
+## makes two neighbours share the pair of colours along their shared edge, so the floor is
+## continuous again and the light is a gradient across stone rather than a mosaic.
+func _draw_ground(quad: PackedVector2Array, x: int, y: int, tints: PackedColorArray,
+		role: String) -> void:
 	var tex: Texture2D = art.get(role)
 	if tex == null:
-		floor_view.draw_colored_polygon(quad, tint * 0.5)
+		var flat := PackedColorArray()
+		for c in tints:
+			flat.append(Color(c) * 0.5)
+		floor_view.draw_polygon(quad, flat)
 		return
 	var off := Vector2(
 		fposmod(float(x) * 0.37 + float(y) * 0.11, 1.0),
@@ -933,7 +1015,283 @@ func _draw_ground(quad: PackedVector2Array, x: int, y: int, tint: Color, role: S
 	var uvs := PackedVector2Array([
 		Vector2(0, 0) + off, Vector2(1, 0) + off,
 		Vector2(1, 1) + off, Vector2(0, 1) + off])
-	floor_view.draw_colored_polygon(quad, tint, uvs, tex)
+	floor_view.draw_polygon(quad, tints, uvs, tex)
+
+# --- the light, the surface, and the things lying about (D176/D177) --------------
+
+## Which surface art this FLOOR is made of. The model records what it was built as rather
+## than the view re-deriving it, because a dungeon's floors differ from each other now
+## (D177) and two derivations of one fact is the D34 trap. Falls through to the generic
+## pair for a terrain with no art installed, and for a null model.
+func _surface(tv: TraversalIso, pair: String) -> String:
+	if tv == null:
+		return pair
+	var role := "%s_%s" % [pair, tv.terrain]
+	return role if art.has(role) else pair
+
+## The four corner colours of one ground diamond: the tile's own state tint, lit by the
+## average of the light at the four tiles meeting at each corner (D176).
+##
+## `_diamond` draws top / right / bottom / left, and on a 2:1 projection those are the
+## lattice points shared with (x-1,y-1), (x+1,y-1), (x+1,y+1) and (x-1,y+1) respectively —
+## each corner belongs to four tiles, and averaging over all four is what makes two
+## neighbours agree on the pair of colours along the edge they share.
+func _corner_tints(tv: TraversalIso, x: int, y: int, base: Color) -> PackedColorArray:
+	var out := PackedColorArray()
+	for d in [Vector2i(-1, -1), Vector2i(1, -1), Vector2i(1, 1), Vector2i(-1, 1)]:
+		var sum := 0.0
+		var hue := 0.0
+		for q in [Vector2i(0, 0), Vector2i(d.x, 0), Vector2i(0, d.y), d]:
+			sum += tv.light(x + q.x, y + q.y)
+			hue += tv.light_hue(x + q.x, y + q.y)
+		out.append(_lit_by(base, sum * 0.25, hue))
+	return out
+
+## A tile's colour once the light field has had its say (D176).
+##
+## Two multiplies on the state tint, both from `TraversalIso`: how much light reaches this
+## tile, and what colour that light is. The hue is scaled by the intensity as well, so a
+## tile no source reaches is dimmer but not tinted — a floor washed warm three rooms from
+## the nearest brazier would be a floor lit by nothing, which is the flat reading again.
+func _lit(tv: TraversalIso, x: int, y: int, base: Color) -> Color:
+	if tv == null:
+		return base
+	return _lit_by(base, tv.light(x, y), tv.light_hue(x, y))
+
+## The same multiply, from an intensity and a hue the caller already has. Split out for
+## `_corner_tints`, which averages both over four tiles before applying them once.
+func _lit_by(base: Color, v: float, hue: float) -> Color:
+	v = clampf(v, 0.0, 1.0)
+	var k: float = lerpf(LIGHT_DIM, LIGHT_LIT, v)
+	var wash := Color(1, 1, 1)
+	if hue > 0.0:
+		wash = Color(1, 1, 1).lerp(LIGHT_WARM, v)
+	elif hue < 0.0:
+		wash = Color(1, 1, 1).lerp(LIGHT_COLD, v)
+	return Color(base.r * k * wash.r, base.g * k * wash.g, base.b * k * wash.b, base.a)
+
+## Ground clutter: what is lying on this tile, drawn on the diamond itself (D176).
+##
+## Drawn rather than sprited, on the precedent the stair, the key and the chest's pool of
+## light already set: there is no prop in any art pack, these are shapes rather than
+## silhouettes, and D89's finding was precise about which half of that divide code wins —
+## seamless materials came out better computed, creatures did not. Ground clutter at 116x58
+## is nearer a material than a creature. It also keeps `ART_ASSETS.md` closed at 310/310/0
+## instead of opening a sixteen-file shopping list for marks a player reads at a glance.
+##
+## Every shape is a MULTIPLY of the tile's own lit tint, never a colour of its own, so a
+## prop is in the same light as the ground it lies on and there is no second palette here to
+## drift from the first. And every one of them is deliberately unlike the interactive art:
+## nothing here is a box, a figure, or a thing standing up at sprite height, because the
+## floor's whole contract is that what stands on a tile is what you get (D85, D172).
+##
+## `x`/`y` seed the variation, the way `_draw_ground` seeds its UVs — the same shape has to
+## look slightly different on two tiles or a store of six crates reads as wallpaper.
+func _draw_prop(shape: String, centre: Vector2, t: Vector2, tint: Color,
+		x: int, y: int) -> void:
+	if shape == "":
+		return
+	var dark := Color(tint.r * PROP_DARK, tint.g * PROP_DARK, tint.b * PROP_DARK, 1.0)
+	var jit := fposmod(float(x) * 0.61 + float(y) * 0.29, 1.0) - 0.5
+	var jit2 := fposmod(float(y) * 0.53 + float(x) * 0.37, 1.0) - 0.5
+	var off := Vector2(t.x * 0.16 * jit, t.y * 0.16 * jit2)
+	match shape:
+		"cracks":
+			# Two or three hairlines along the tile's long axis. The one shape that says
+			# "this floor is old" without adding an object to it.
+			for k in 3:
+				var f: float = -0.26 + 0.26 * float(k)
+				var a := centre + off + Vector2(-t.x * 0.30, t.y * (f + 0.10 * jit))
+				var b := centre + off + Vector2(t.x * 0.28, t.y * (f - 0.08 * jit2))
+				floor_view.draw_line(a, b, Color(dark.r, dark.g, dark.b, 0.55),
+					UITheme.px(1.6))
+		"slab":
+			# A fallen slab: a small diamond lying flat, with one lifted edge so it reads as
+			# something ON the floor rather than a stain in it. The lit edge is a HAIRLINE
+			# and the face is darker than the ground — the same rule the pile learned, from
+			# the same capture, where a slab drawn pale read as a sheet of paper.
+			var quad := _diamond(centre + off + Vector2(0, t.y * 0.06), t * 0.42)
+			floor_view.draw_colored_polygon(quad, Color(dark.r, dark.g, dark.b, 0.90))
+			floor_view.draw_line(quad[3], quad[0],
+				Color(tint.r, tint.g, tint.b, 0.70), UITheme.px(1.6))
+		"pile":
+			# A heap: three small diamonds stacked back to front, each a little higher and a
+			# little paler, which at this size is what a pile of anything looks like.
+			#
+			# Every value here stays BELOW the ground it lies on, and that is the whole
+			# lesson of the first attempt. Four diamonds ending at 1.10 of the floor's tint
+			# came out, in a capture of the Warrens, as a stack of white paper lying next to
+			# the hero — brighter than anything else on the screen, hard-edged, and reading
+			# as an object the player might be able to pick up. A heap on a dark floor is
+			# dark: it is read by its SHAPE, and the shape only reads if it is not competing
+			# with the hero and the chest for the brightest thing in the frame.
+			for k in 3:
+				var s: float = 0.24 - 0.05 * float(k)
+				var up: float = -t.y * (0.01 + 0.05 * float(k))
+				var side: float = t.x * 0.08 * (jit if k % 2 == 0 else jit2)
+				var pale: float = PROP_DARK + 0.07 * float(k)
+				floor_view.draw_colored_polygon(
+					_diamond(centre + off + Vector2(side, up + t.y * 0.10), t * s),
+					Color(tint.r * pale, tint.g * pale, tint.b * pale, 0.92))
+		"growth":
+			# Patches: soft blobs pushed to the tile's edges, so growth reads as coming IN
+			# from the walls rather than as something planted in the middle of the room.
+			for k in 3:
+				var ang: float = TAU * (float(k) / 3.0 + 0.13 * jit)
+				var at := centre + Vector2(cos(ang) * t.x * 0.28, sin(ang) * t.y * 0.28)
+				floor_view.draw_circle(at, t.y * (0.12 + 0.05 * jit2),
+					Color(dark.r * 0.9, dark.g * 1.05, dark.b * 0.85, 0.62))
+		"drift":
+			# Silt: two shallow wedges lying along the tile, pale rather than dark, because
+			# what has drifted is lighter than the floor it drifted over.
+			for k in 2:
+				var pale2 := Color(tint.r * PROP_PALE, tint.g * PROP_PALE,
+					tint.b * PROP_PALE, 0.34 + 0.14 * float(k))
+				var wedge := PackedVector2Array([
+					centre + off + Vector2(-t.x * (0.34 - 0.10 * float(k)), t.y * 0.04),
+					centre + off + Vector2(0, -t.y * (0.14 - 0.05 * float(k))),
+					centre + off + Vector2(t.x * (0.30 - 0.10 * float(k)), t.y * 0.06),
+					centre + off + Vector2(0, t.y * (0.16 - 0.04 * float(k)))])
+				floor_view.draw_colored_polygon(wedge, pale2)
+		"scatter":
+			# Debris: six small marks. The quietest entry in the table on purpose — it is
+			# what a corridor gets, and a corridor with as much in it as a store is a floor
+			# with no store in it.
+			for k in 6:
+				var a2: float = TAU * (float(k) / 6.0 + 0.21 * jit2)
+				var r2: float = t.x * (0.10 + 0.16 * fposmod(float(k) * 0.37 + jit, 1.0))
+				floor_view.draw_circle(
+					centre + Vector2(cos(a2) * r2, sin(a2) * r2 * 0.5),
+					UITheme.px(1.8), Color(dark.r, dark.g, dark.b, 0.72))
+		"ring":
+			# An iron ring set in the floor. Drawn here as well as on a wall face because a
+			# terrain lists a prop as wall dressing and the ground pass never asks — the
+			# table is what decides, and a shape the drawing cannot render is an invisible
+			# prop (`tests/test_traversal.gd` asserts the table names nothing unknown).
+			_draw_prop_ring(centre + off, t * 0.5, dark)
+
+## The wall-face version of a prop: the same table, on the vertical (D176).
+##
+## A separate function rather than a flag, because a face is not a diamond — a shape drawn
+## for the ground and reused on a wall comes out lying down on it. Only the shapes that make
+## sense hanging are drawn; the rest simply do not appear on rock, which is why the props
+## table says which of the two each entry is.
+func _draw_wall_prop(shape: String, at: Vector2, t: Vector2, face: Color) -> void:
+	var pale := Color(face.r * PROP_PALE, face.g * PROP_PALE, face.b * PROP_PALE, 0.95)
+	var dark := Color(face.r * PROP_DARK, face.g * PROP_DARK, face.b * PROP_DARK, 0.85)
+	match shape:
+		"ring":
+			floor_view.draw_arc(at, t.y * 0.16, 0.0, TAU, 16, pale, UITheme.px(2.2))
+			floor_view.draw_line(at + Vector2(0, -t.y * 0.16),
+				at + Vector2(0, -t.y * 0.30), pale, UITheme.px(2.0))
+		"growth":
+			# Hanging matter: three strands off the top of the face.
+			for k in 3:
+				var sx: float = t.x * (0.10 * float(k) - 0.10)
+				floor_view.draw_line(at + Vector2(sx, -t.y * 0.34),
+					at + Vector2(sx + t.x * 0.02, t.y * (0.02 + 0.08 * float(k))),
+					Color(dark.r * 0.9, dark.g * 1.08, dark.b * 0.85, 0.70),
+					UITheme.px(2.0))
+		"cracks":
+			for k in 2:
+				floor_view.draw_line(at + Vector2(-t.x * 0.10, -t.y * (0.30 - 0.14 * float(k))),
+					at + Vector2(t.x * 0.10, t.y * (0.06 + 0.08 * float(k))),
+					Color(dark.r, dark.g, dark.b, 0.60), UITheme.px(1.6))
+		"slab", "pile", "scatter", "drift":
+			# Ground shapes, and they stay on the ground. Nothing drawn: the props table
+			# marks these `ground`, so reaching here means a floor was dressed by a table
+			# that changed under it, and a wall with a heap of bones stuck to it at
+			# eye level is a worse answer than a plain wall.
+			pass
+
+## An iron ring lying in the floor.
+func _draw_prop_ring(centre: Vector2, t: Vector2, ink: Color) -> void:
+	floor_view.draw_arc(centre, t.y * 0.30, 0.0, TAU, 16, Color(ink.r, ink.g, ink.b, 0.85),
+		UITheme.px(2.0))
+
+## The one landmark on the floor: a rock block standing much taller than its neighbours,
+## with one mark on it that says which it is (D177).
+##
+## Built out of `_draw_wall` rather than beside it, so a landmark is the same masonry in the
+## same light as the wall it stands in — a feature drawn in its own palette would read as a
+## UI marker on the floor, which is the mistake `_draw_chest_lock` avoided by lighting the
+## chest instead of ringing it.
+##
+## Four kinds and no more, because each one has to be read at a glance from the far side of
+## a dark room, and because it is drawn: there is no landmark in any art pack, and a
+## silhouette is the half of the divide code loses (D89).
+func _draw_landmark(centre: Vector2, t: Vector2, x: int, y: int, tv: TraversalIso) -> void:
+	var kind: String = String(Balance.ISO_LANDMARKS[
+		tv.landmark_kind % Balance.ISO_LANDMARKS.size()])
+	var tall := 2.1 if kind != "dome" else 1.35
+	_draw_wall(centre, t, x, y, Color(1, 1, 1), tv, tall)
+	var cap := centre + Vector2(0, -t.y * WALL_LIFT * tall)
+	var wash := _lit(tv, x, y, Color(1, 1, 1))
+	match kind:
+		"shaft":
+			# Daylight a long way up. Three nested diamonds brightening upward on the cap,
+			# and a pale column above it — the one thing on the floor that emits rather than
+			# reflects, which is what makes it visible from further than anything else.
+			for k in 3:
+				var s: float = 0.86 - 0.24 * float(k)
+				var a: float = 0.16 + 0.20 * float(k)
+				floor_view.draw_colored_polygon(_diamond(cap, t * s),
+					Color(0.86, 0.92, 1.0, a))
+			var beam := PackedVector2Array([
+				cap + Vector2(-t.x * 0.20, 0), cap + Vector2(t.x * 0.20, 0),
+				cap + Vector2(t.x * 0.09, -t.y * 1.5), cap + Vector2(-t.x * 0.09, -t.y * 1.5)])
+			floor_view.draw_colored_polygon(beam, Color(0.80, 0.88, 1.0, 0.13))
+		"dome":
+			# A dome that came down: a low mound of masonry, deliberately SHORTER than the
+			# other three, because the reading is a roof at head height rather than a tower.
+			#
+			# FILLED, and inside the block's own footprint. Drawn first as three nested arcs
+			# it came out of a capture of the Ossuary as a grey wireframe rainbow hanging in
+			# the dark air beside a wall — a UI marker on the floor, which is exactly what
+			# `_draw_chest_lock` avoided by lighting the chest instead of ringing it. A
+			# landmark has to be MASS in the same stone and the same light as the wall it
+			# stands in, or it is a decal.
+			for k in 3:
+				var r: float = t.x * (0.36 - 0.09 * float(k))
+				var seat := cap + Vector2(0, t.y * (0.06 - 0.10 * float(k)))
+				var arc := PackedVector2Array()
+				for s in 13:
+					var a3: float = PI + PI * float(s) / 12.0
+					arc.append(seat + Vector2(cos(a3) * r, sin(a3) * r * 0.5))
+				arc.append(seat + Vector2(r, 0))
+				arc.append(seat + Vector2(-r, 0))
+				var v3: float = 0.86 + 0.10 * float(k)
+				floor_view.draw_colored_polygon(arc,
+					Color(TINT_WALL_TOP.r * wash.r * v3, TINT_WALL_TOP.g * wash.g * v3,
+						TINT_WALL_TOP.b * wash.b * v3, 1.0))
+		"stair":
+			# A stair going nowhere: the way down's drawing inverted — steps RISING off the
+			# block and stopping. Deliberately the same shape as the stair, because that is
+			# the joke and because a player who reads it as a stair and walks over to it
+			# learns something about the place rather than losing a turn (it stands in rock,
+			# so there is nothing to walk onto).
+			for k in 4:
+				var up := cap + Vector2(t.x * 0.06 * float(k), -t.y * 0.15 * float(k))
+				var v5: float = 1.0 + 0.08 * float(k)
+				floor_view.draw_colored_polygon(_diamond(up, t * (0.66 - 0.12 * float(k))),
+					Color(TINT_WALL_TOP.r * wash.r * v5, TINT_WALL_TOP.g * wash.g * v5,
+						TINT_WALL_TOP.b * wash.b * v5, 1.0))
+		"stack":
+			# Bone stacked to the roof: a column of small diamonds. The tightest repetition
+			# on the floor, which is what makes it read as *counted* rather than as rubble.
+			#
+			# In the WALL's tints and not in white. At 0.72-1.02 of full white it came out of
+			# the style sheet as a stack of paper floating over a dark block — the same
+			# defect as the pile, and worse here because a landmark is the one thing on the
+			# floor a player might navigate by. Bone is pale for stone, not pale for a
+			# screen: a step above the block top is enough to read as a different material.
+			for k in 6:
+				var v4: float = 1.28 + 0.06 * float(k)
+				floor_view.draw_colored_polygon(
+					_diamond(cap + Vector2(t.x * 0.03 * (1 if k % 2 == 0 else -1),
+						-t.y * 0.12 * float(k)), t * 0.30),
+					Color(TINT_WALL_TOP.r * wash.r * v4, TINT_WALL_TOP.g * wash.g * v4,
+						TINT_WALL_TOP.b * wash.b * v4 * 0.94, 1.0))
 
 ## Which SPRITE_H entry a tile's art is sized by. The silhouette says what kind of fight
 ## it is and the size says how big a fight — so an elite swarm is spiders drawn large

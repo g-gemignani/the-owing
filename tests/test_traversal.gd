@@ -11,6 +11,11 @@ extends SceneTree
 ## whole contract below runs against it — that is the only wiring a second model needs.
 const MODELS := ["ISO"]
 
+## Most of a floor's walkable ground that may be lit before the light field has stopped
+## being an axis and become a brighter flat rule (D176). Not a design target — a ceiling on
+## a mistake that has already been made once: the first tuning lit 91%.
+const LIT_MAX := 0.75
+
 func _make(name: String) -> Traversal:
 	match name:
 		_: return TraversalIso.new()
@@ -244,6 +249,61 @@ func _init() -> void:
 			moves_total += float(moves)
 			encs_total += float(maxi(1, got))
 
+	# --- two routes, and only one of them is the required path (D179) -----------------
+	#
+	# `ISO_MOVES_PER_ENCOUNTER_MAX` measures the walk of a player who takes the first ranked
+	# option: the REQUIRED path, which must not grow. It says nothing at all about a player
+	# who strips a floor, because optional business is deliberately invisible to that
+	# ranking — keys are ranked, not required (D167), which is exactly what keeps them out
+	# of the number above.
+	#
+	# So there is a second walker, with its own reported figure and its own ceiling. It
+	# ships ALONE, before any optional content exists, so the numbers it establishes are a
+	# baseline of the game as it stands and not of a changed one — a baseline measured after
+	# the feature it is meant to price has landed is not a baseline.
+	#
+	# The ceiling is RELATIVE and derived from `ISO_LINGER`: on this floor turns are the
+	# currency, a floor wakes every `ISO_LINGER` turns spent on it, and an optional route
+	# costing more than `ISO_COMPLETIONIST_ROUSES` extra wakings has stopped being a choice
+	# and become a difficulty setting. Deliberately not an absolute per-floor figure, which
+	# would have been wrong on the day it was written: the required route already spends 22
+	# to 45 turns on a floor depending on how many floors the dungeon has.
+	var greedy := {"moves": 0.0, "encs": 0.0, "floors": 0.0}
+	var full := {"moves": 0.0, "encs": 0.0, "floors": 0.0}
+	for didw in Balance.DUNGEONS:
+		var ddw := Balance.dungeon(didw)
+		for trialw in 6:
+			for route in 2:
+				var w1 := TraversalIso.new()
+				w1.generate(ddw)
+				var got1 := _walk(w1, route == 1)
+				var into: Dictionary = full if route == 1 else greedy
+				into["moves"] = float(into["moves"]) + float(got1["moves"])
+				into["encs"] = float(into["encs"]) + float(maxi(1, int(got1["encs"])))
+				into["floors"] = float(into["floors"]) + float(maxi(1, w1.floors))
+				if not w1.is_complete():
+					fails += 1
+					print("FAIL ISO %s: the %s walker did not finish" % [
+						didw, "completionist" if route == 1 else "greedy"])
+	var greedy_per_floor := float(greedy["moves"]) / maxf(1.0, float(greedy["floors"]))
+	var full_per_floor := float(full["moves"]) / maxf(1.0, float(full["floors"]))
+	var extra := full_per_floor - greedy_per_floor
+	var budget: int = Balance.iso_optional_turn_budget()
+	if extra > float(budget):
+		fails += 1
+		print("FAIL ISO: the optional route costs %.1f extra turns a floor, budget is %d (%d rouse) — exploring is a difficulty setting, not a choice" % [
+			extra, budget, Balance.ISO_COMPLETIONIST_ROUSES])
+	# ...and it has to cost SOMETHING, or the second walker is measuring the first one and
+	# the whole instrument is a green light for anything. The one thing on the floor that is
+	# optional today is a key, and covering ground to fetch one is what it costs.
+	if extra <= 0.0:
+		fails += 1
+		print("FAIL ISO: the optional route costs nothing (%.1f turns a floor) — the second walker is not walking a second route" % extra)
+	print("  (info: ISO required route %.1f turns a floor, %.1f moves per encounter; optional route %.1f and %.1f — %+.1f turns, budget %d)" % [
+		greedy_per_floor, float(greedy["moves"]) / maxf(1.0, float(greedy["encs"])),
+		full_per_floor, float(full["moves"]) / maxf(1.0, float(full["encs"])),
+		extra, budget])
+
 	var per_enc := moves_total / maxf(1.0, encs_total)
 	if per_enc > Balance.ISO_MOVES_PER_ENCOUNTER_MAX:
 		fails += 1
@@ -327,6 +387,244 @@ func _init() -> void:
 		print("  (info: iso uses %d of %d styles and %d of %d terrains)" % [
 			styles_used.size(), Balance.ISO_STYLES.size(),
 			terrains_used.size(), Balance.ISO_TERRAINS.size()])
+	# --- the dressing: generated must equal drawn, and must never be a lie -----------
+	#
+	# D86 is the reason every clause here counts something. It asserted "a vault has exactly
+	# one way in" and "a vault has a key", both vacuously true, both green for the entire
+	# life of a feature that generated ZERO vaults. So every new placeable thing gets two
+	# assertions: the properties it must have, AND a non-zero count across a sweep — because
+	# a property nothing has is a property nothing can break.
+	#
+	# The other half is that the dressing must not be able to LIE. The floor has spent three
+	# decisions teaching the player that what is drawn on a tile is what they get — the
+	# creature (D85), the chest's tier and its lock (D172) — and a decoration sharing a tile
+	# with any of that, or sitting where the player is about to stand, would undo all three.
+	var props_seen := 0
+	var wall_props := 0
+	var roles_seen := {}
+	var lights_seen := 0
+	var landmarks_seen := 0
+	var lit_tiles := 0
+	var walk_tiles := 0
+	var floors_swept := 0
+	for did8 in Balance.DUNGEONS:
+		var dt := TraversalIso.new()
+		dt.generate(Balance.dungeon(did8))
+		for f8 in dt.floors:
+			dt._build_floor(f8)
+			floors_swept += 1
+			# every chamber has a role, and it is a role that exists
+			if dt.room_role.size() != dt.rooms:
+				fails += 1
+				print("FAIL %s floor %d: %d chambers and %d roles" % [
+					did8, f8 + 1, dt.rooms, dt.room_role.size()])
+			for r8 in dt.room_role:
+				if not Balance.ISO_ROOM_ROLES.has(String(r8)):
+					fails += 1
+					print("FAIL %s: chamber role '%s' is not a role" % [did8, r8])
+				else:
+					roles_seen[String(r8)] = true
+			if dt.props.size() != dt.enc.size():
+				fails += 1
+				print("FAIL %s floor %d: the prop grid is %d cells for a %d-cell floor" % [
+					did8, f8 + 1, dt.props.size(), dt.enc.size()])
+			for i8 in dt.enc.size():
+				var p8 := int(dt.props[i8]) - 1
+				if p8 < 0:
+					continue
+				var kinds8: Array = Balance.iso_props(dt.terrain)
+				if p8 >= kinds8.size():
+					fails += 1
+					print("FAIL %s: a prop indexes %d of %d in the %s set" % [
+						did8, p8, kinds8.size(), dt.terrain])
+					continue
+				var kind8: Dictionary = kinds8[p8]
+				# A shape the view cannot draw is an invisible prop — content that goes
+				# missing without failing, which is the D86 shape one noun over.
+				if not Balance.ISO_PROP_SHAPES.has(String(kind8.get("shape", ""))):
+					fails += 1
+					print("FAIL %s: prop '%s' wants shape '%s', which nothing draws" % [
+						did8, kind8.get("name", "?"), kind8.get("shape", "")])
+				var on_wall: bool = String(kind8.get("on", "ground")) == "wall"
+				var is_rock8: bool = int(dt.enc[i8]) == TraversalIso.WALL
+				if on_wall != is_rock8:
+					fails += 1
+					print("FAIL %s: %s dressing on %s" % [did8,
+						"wall" if on_wall else "ground", "rock" if is_rock8 else "floor"])
+				if on_wall:
+					wall_props += 1
+					continue
+				props_seen += 1
+				# The two lies. A prop on a tile that holds something is the tile telling
+				# the player two things; a prop on the entrance is the one tile a floor
+				# should open with nothing on it.
+				if int(dt.enc[i8]) != TraversalIso.EMPTY:
+					fails += 1
+					print("FAIL %s: a prop shares a tile with %d" % [did8, int(dt.enc[i8])])
+				if i8 == dt.pos:
+					fails += 1
+					print("FAIL %s: the entrance tile is dressed" % did8)
+			# lights: at least one, on walkable ground, and they actually light something
+			if dt.lights.is_empty():
+				fails += 1
+				print("FAIL %s floor %d: no light on the floor — the flat rule is back" % [
+					did8, f8 + 1])
+			for l8 in dt.lights:
+				var lc8 := int((l8 as Dictionary).get("cell", -1))
+				lights_seen += 1
+				if lc8 < 0 or lc8 >= dt.enc.size() or int(dt.enc[lc8]) == TraversalIso.WALL:
+					fails += 1
+					print("FAIL %s: a light stands in rock" % did8)
+			# WALKABLE tiles only, because rock takes the light of the floor beside it and
+			# counting it would report a floor as better lit than the player can stand in.
+			var here_lit := 0
+			for i9 in dt.enc.size():
+				if int(dt.enc[i9]) != TraversalIso.WALL \
+						and dt.light(i9 % dt.w, int(i9 / dt.w)) > 0.0:
+					here_lit += 1
+			lit_tiles += here_lit
+			walk_tiles += dt.tiles
+			if here_lit == 0:
+				fails += 1
+				print("FAIL %s floor %d: the light field is empty" % [did8, f8 + 1])
+			# ...and NOT most of it. A floor lit everywhere has no light axis, it has a
+			# brighter flat rule — which is what the first tuning of this feature actually
+			# shipped: two to four sources at radius three lit 91% of the ground and the
+			# whole point of splitting light from state was gone. The band is asserted from
+			# both sides so a radius or a source count cannot be raised until the feature
+			# stops existing again.
+			if float(here_lit) > float(dt.tiles) * LIT_MAX:
+				fails += 1
+				print("FAIL %s floor %d: %d of %d tiles lit, over the %.0f%% band" % [
+					did8, f8 + 1, here_lit, dt.tiles, 100.0 * LIT_MAX])
+			# the landmark stands in rock, walls in real ground, and is never on the floor
+			if dt.landmark >= 0:
+				landmarks_seen += 1
+				if int(dt.enc[dt.landmark]) != TraversalIso.WALL:
+					fails += 1
+					print("FAIL %s: the landmark is standing on walkable ground" % did8)
+				var touch8 := 0
+				for n8 in dt._neighbours(dt.landmark):
+					if int(dt.enc[n8]) != TraversalIso.WALL:
+						touch8 += 1
+				if touch8 < 2:
+					fails += 1
+					print("FAIL %s: the landmark walls in %d tiles — nobody will see it" % [
+						did8, touch8])
+	if props_seen == 0 or wall_props == 0:
+		fails += 1
+		print("FAIL the dressing generated %d ground props and %d wall props — D86 says count it" % [
+			props_seen, wall_props])
+	if landmarks_seen < floors_swept:
+		fails += 1
+		print("FAIL %d of %d floors got a landmark" % [landmarks_seen, floors_swept])
+	# ...and the roles have to VARY. Twelve dungeons whose every chamber came out `cell`
+	# would satisfy every clause above and be the samey failure (D81) inside one floor.
+	if roles_seen.size() < 4:
+		fails += 1
+		print("FAIL only %d of %d chamber roles ever appear" % [
+			roles_seen.size(), Balance.ISO_ROOM_ROLES.size()])
+	print("  (info: %d floors dressed: %d ground props, %d wall props, %d roles of %d, %d lights, %d landmarks, %.0f%% of walkable ground lit)" % [
+		floors_swept, props_seen, wall_props, roles_seen.size(),
+		Balance.ISO_ROOM_ROLES.size(), lights_seen, landmarks_seen,
+		100.0 * float(lit_tiles) / maxf(1.0, float(walk_tiles))])
+
+	# --- the dressing has to survive being written down (R7) -------------------------
+	#
+	# It is only looked at, so none of it can change what a resumed run costs — which is
+	# exactly why it would go unnoticed. A floor that came back dressed differently is a
+	# different ROOM, in a model whose whole subject is remembering where you have been.
+	for did9 in Balance.DUNGEONS:
+		var pre := TraversalIso.new()
+		pre.generate(Balance.dungeon(did9))
+		var was_props := Array(pre.props)
+		var was_roles: Array = pre.room_role.duplicate()
+		var was_lights: Array = pre.lights.duplicate(true)
+		var was_lm: int = pre.landmark
+		var was_terrain: String = pre.terrain
+		var was_style: String = pre.style_name
+		var blob9 = JSON.parse_string(JSON.stringify(pre.save_state()))
+		var post := TraversalIso.new()
+		post.dungeon = Balance.dungeon(did9)
+		post.load_state(blob9)
+		if Array(post.props) != was_props:
+			fails += 1
+			print("FAIL %s: the floor came back dressed differently" % did9)
+		if post.room_role != was_roles:
+			fails += 1
+			print("FAIL %s: the chamber roles did not survive the save" % did9)
+		if post.lights.size() != was_lights.size():
+			fails += 1
+			print("FAIL %s: %d lights went in and %d came back" % [
+				did9, was_lights.size(), post.lights.size()])
+		if post.landmark != was_lm:
+			fails += 1
+			print("FAIL %s: the landmark moved across a save" % did9)
+		if post.terrain != was_terrain or post.style_name != was_style:
+			fails += 1
+			print("FAIL %s: came back as %s/%s, was %s/%s" % [
+				did9, post.style_name, post.terrain, was_style, was_terrain])
+		# The light field is DERIVED, not saved — so the test that matters is that it comes
+		# back identical anyway. A cache in a save file is a second copy of a fact free to
+		# disagree with the first, which is why `_room_cells` is not saved either.
+		for i10 in pre.enc.size():
+			if absf(pre.light(i10 % pre.w, int(i10 / pre.w))
+					- post.light(i10 % post.w, int(i10 / post.w))) > 0.001:
+				fails += 1
+				print("FAIL %s: the light field came back different" % did9)
+				break
+
+	# --- the drift tables have to index real things, and be REACHED (D177) -----------
+	#
+	# Style and terrain are looked up with a silent default, so a typo does not fail — it
+	# quietly hands a floor the fallback and the variety goes missing. The same trap the
+	# per-dungeon tables are checked for, one table along, and with the extra clause that
+	# matters here: a deep style nothing ever drifts INTO is a style that ships unplayed.
+	for s10 in Balance.ISO_STYLE_DEEP:
+		if not Balance.ISO_STYLES.has(s10):
+			fails += 1
+			print("FAIL ISO: the deep table drifts FROM '%s', which is not a style" % s10)
+		if not Balance.ISO_STYLES.has(Balance.ISO_STYLE_DEEP[s10]):
+			fails += 1
+			print("FAIL ISO: %s drifts to '%s', which does not exist" % [
+				s10, Balance.ISO_STYLE_DEEP[s10]])
+	for t10 in Balance.ISO_TERRAIN_DEEP:
+		if not Balance.ISO_TERRAINS.has(t10) \
+				or not Balance.ISO_TERRAINS.has(Balance.ISO_TERRAIN_DEEP[t10]):
+			fails += 1
+			print("FAIL ISO: the deep terrain table names something that is not a terrain")
+	# Every style and every terrain must be REACHED by some dungeon at some depth. The old
+	# assertion counted `ISO_STYLE_OF` alone and read "4 of 7" the moment three styles
+	# arrived that only the drift reaches — which is a table that indexes real things and
+	# still ships three of them unplayed.
+	var reached_styles := {}
+	var reached_terrains := {}
+	var drifted := 0
+	for did10 in Balance.DUNGEONS:
+		var dd10 := Balance.dungeon(did10)
+		var fl10: int = Balance.iso_floors_for(dd10.difficulty if dd10 != null else 1)
+		var seen_pairs := {}
+		for f10 in fl10:
+			var st10 := Balance.iso_style_name(did10, f10, fl10)
+			var tr10 := Balance.iso_terrain(did10, f10, fl10)
+			reached_styles[st10] = true
+			reached_terrains[tr10] = true
+			seen_pairs["%s/%s" % [st10, tr10]] = true
+		# ...and every dungeon has to actually CHANGE as you go down it, or the drift rule
+		# is a table nobody reads.
+		if seen_pairs.size() < 2:
+			fails += 1
+			print("FAIL ISO %s: all %d floors read the same — descending goes nowhere" % [
+				did10, fl10])
+		else:
+			drifted += 1
+	if reached_styles.size() < Balance.ISO_STYLES.size():
+		fails += 1
+		print("FAIL ISO: %d of %d styles are ever built — the rest ship unplayed" % [
+			reached_styles.size(), Balance.ISO_STYLES.size()])
+	print("  (info: %d styles and %d terrains reached across depth; %d of %d dungeons change as you descend)" % [
+		reached_styles.size(), reached_terrains.size(), drifted, Balance.DUNGEONS.size()])
+
 	# Every archetype in the game has to land in a family, and the families have to be
 	# populated — a derivation that put all 35 in one bucket would give every creature the
 	# same silhouette while passing every assertion above, which is the whole thing this
@@ -678,6 +976,71 @@ func _init() -> void:
 	else:
 		print("TRAVERSAL TEST: FAIL (%d)" % fails)
 	quit()
+
+## Walk a whole dungeon and report what it cost (D179).
+##
+## Two policies out of one function on purpose. Writing the second walker separately is how
+## the two drift into measuring different games — a difference in the guard, in what counts
+## as an encounter, or in whether `clear_pending` is called would show up as a difference in
+## the numbers and be read as a fact about the routes.
+##
+## `completionist` takes every OPTIONAL thing on the floor before it will use the stairs.
+## Today that set is exactly the keys: they are ranked but not counted as unresolved
+## business, which is what keeps them out of the required path's measurement and is
+## therefore precisely what the second route is for. Anything Track B adds joins this
+## function's `_optional_cells` and nothing else changes.
+func _walk(iso: TraversalIso, completionist: bool) -> Dictionary:
+	var moves := 0
+	var encs := 0
+	while not iso.is_complete() and moves < 600:
+		var opts := iso.options()
+		if opts.is_empty():
+			break
+		var pick := 0
+		if completionist:
+			pick = _completionist_pick(iso, opts)
+		moves += 1
+		if not iso.select(pick).is_empty():
+			encs += 1
+			iso.clear_pending()
+	return {"moves": moves, "encs": encs}
+
+## Which step a player stripping the floor takes: toward the nearest optional thing while
+## any is left, and the model's own first suggestion once none is.
+##
+## Never a slip past — declining a fight is a different decision and it belongs to the
+## dodge calibration, not to the route measurement. And never the way on while optional
+## business remains: descent is one-way, so a floor left behind is a floor gone, and a
+## walker that took the stairs early would be measuring the required path with extra steps.
+func _completionist_pick(iso: TraversalIso, opts: Array) -> int:
+	var targets := _optional_cells(iso)
+	if targets.is_empty():
+		return 0
+	var field: PackedInt32Array = iso._dist_to_any(targets)
+	var best := -1
+	var best_d := 1 << 30
+	for i in opts.size():
+		var o: Dictionary = opts[i]
+		if String(o.get("action", "")) == "avoid":
+			continue
+		var cell := int(o["cell"])
+		if int(iso.enc[cell]) == TraversalIso.STAIR:
+			continue
+		var d := int(field[cell])
+		if d >= 0 and d < best_d:
+			best_d = d
+			best = i
+	return best if best >= 0 else 0
+
+## Everything on this floor a player may take and the required path does not ask them to.
+## One list, so the second walker and anything that later prices it agree on what "optional"
+## means — two definitions of that is how a route measurement stops measuring the route.
+func _optional_cells(iso: TraversalIso) -> Array:
+	var out: Array = []
+	for i in iso.enc.size():
+		if int(iso.enc[i]) == TraversalIso.KEY:
+			out.append(i)
+	return out
 
 ## How many of `want` are in `row`. One line, and it exists because the same count is
 ## needed twice in the assertion that uses it and an inline loop in a print argument is
