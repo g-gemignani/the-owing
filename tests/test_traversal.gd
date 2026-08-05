@@ -270,6 +270,7 @@ func _init() -> void:
 	# to 45 turns on a floor depending on how many floors the dungeon has.
 	var greedy := {"moves": 0.0, "encs": 0.0, "floors": 0.0}
 	var full := {"moves": 0.0, "encs": 0.0, "floors": 0.0}
+	var stranded_total := 0
 	for didw in Balance.DUNGEONS:
 		var ddw := Balance.dungeon(didw)
 		for trialw in 6:
@@ -281,6 +282,7 @@ func _init() -> void:
 				into["moves"] = float(into["moves"]) + float(got1["moves"])
 				into["encs"] = float(into["encs"]) + float(maxi(1, int(got1["encs"])))
 				into["floors"] = float(into["floors"]) + float(maxi(1, w1.floors))
+				stranded_total += int(got1.get("stranded", 0))
 				if not w1.is_complete():
 					fails += 1
 					print("FAIL ISO %s: the %s walker did not finish" % [
@@ -299,10 +301,10 @@ func _init() -> void:
 	if extra <= 0.0:
 		fails += 1
 		print("FAIL ISO: the optional route costs nothing (%.1f turns a floor) — the second walker is not walking a second route" % extra)
-	print("  (info: ISO required route %.1f turns a floor, %.1f moves per encounter; optional route %.1f and %.1f — %+.1f turns, budget %d)" % [
+	print("  (info: ISO required route %.1f turns a floor, %.1f moves per encounter; optional route %.1f and %.1f — %+.1f turns, budget %d; %d optional destination(s) dropped as unreachable)" % [
 		greedy_per_floor, float(greedy["moves"]) / maxf(1.0, float(greedy["encs"])),
 		full_per_floor, float(full["moves"]) / maxf(1.0, float(full["encs"])),
-		extra, budget])
+		extra, budget, stranded_total])
 
 	var per_enc := moves_total / maxf(1.0, encs_total)
 	if per_enc > Balance.ISO_MOVES_PER_ENCOUNTER_MAX:
@@ -528,6 +530,360 @@ func _init() -> void:
 		floors_swept, props_seen, wall_props, roles_seen.size(),
 		Balance.ISO_ROOM_ROLES.size(), lights_seen, landmarks_seen,
 		100.0 * float(lit_tiles) / maxf(1.0, float(walk_tiles))])
+
+	# --- secret pockets: generated equals opened, and a pocket is a DEAD END (D182) ---
+	#
+	# D86 is the whole reason this block counts things. It asserted "a vault has exactly one
+	# way in" and "a vault has a key" — both vacuously true, both green for the entire life
+	# of a feature that generated ZERO vaults. So every clause here comes with a non-zero
+	# sweep beside it, and the two properties that matter are checked the expensive way:
+	#
+	#   * **exactly one way in**, taken from the geometry rather than from the generator's
+	#     intent — the mouth is the only cell of a pocket that touches walkable ground;
+	#   * **connectivity is identical sealed and open**, which is the assertion that keeps a
+	#     pocket from being a SHORTCUT. D88's lesson is that a skip is a difficulty change no
+	#     budget assertion can see, so this is the one that lets the feature ship at all.
+	var pockets_seen := 0
+	var pocket_floors := 0
+	var prize_kinds := {}
+	var pocket_tiles := 0
+	for didp in Balance.DUNGEONS:
+		var pt := TraversalIso.new()
+		pt.generate(Balance.dungeon(didp))
+		for fp in pt.floors:
+			pt._build_floor(fp)
+			pocket_floors += 1
+			# planned equals placed, on every floor. The generator can run out of dead rock
+			# to cut into, so a floor may place FEWER than it planned — but never more, and
+			# the sweep below is what proves the shortfall is not total.
+			var planned: int = (pt.pocketplan[fp] as Array).size() if fp < pt.pocketplan.size() else 0
+			if pt.pockets.size() > planned:
+				fails += 1
+				print("FAIL %s floor %d: %d pockets placed against %d planned" % [
+					didp, fp + 1, pt.pockets.size(), planned])
+			# connectivity, sealed: every walkable tile reachable from the entrance, and no
+			# pocket cell walkable at all
+			var sealed_reach := pt._dist_from(pt.pos)
+			var sealed_walkable := 0
+			for i in pt.enc.size():
+				if int(pt.enc[i]) != TraversalIso.WALL:
+					sealed_walkable += 1
+					if int(sealed_reach[i]) < 0:
+						fails += 1
+						print("FAIL %s floor %d: a tile is walled off with the pockets sealed" % [
+							didp, fp + 1])
+			for kp in pt.pockets.size():
+				var pk: Dictionary = pt.pockets[kp]
+				pockets_seen += 1
+				prize_kinds[String(pk["prize"])] = true
+				var cellsp: Array = pk["cells"]
+				pocket_tiles += cellsp.size()
+				if cellsp.size() < Balance.POCKET_TILES_MIN \
+						or cellsp.size() > Balance.POCKET_TILES_MAX:
+					fails += 1
+					print("FAIL %s: a pocket is %d tiles, the band is %d-%d" % [
+						didp, cellsp.size(), Balance.POCKET_TILES_MIN,
+						Balance.POCKET_TILES_MAX])
+				if not (int(pk["mouth"]) in cellsp):
+					fails += 1
+					print("FAIL %s: a pocket's mouth is not one of its own cells" % didp)
+				# sealed means SEALED: every cell is rock until it is pushed
+				for c in cellsp:
+					if int(pt.enc[int(c)]) != TraversalIso.WALL:
+						fails += 1
+						print("FAIL %s: a sealed pocket has walkable ground in it" % didp)
+				# EXACTLY ONE WAY IN, read off the geometry: only the mouth may touch
+				# walkable ground, and it may touch exactly one tile of it.
+				for c in cellsp:
+					var ci := int(c)
+					var touches := 0
+					for n in pt._neighbours(ci):
+						if int(pt.enc[n]) != TraversalIso.WALL and not (n in cellsp):
+							touches += 1
+					if ci == int(pk["mouth"]):
+						if touches != 1:
+							fails += 1
+							print("FAIL %s: a pocket's mouth touches %d tiles, not 1 — that is a route, not a dead end" % [
+								didp, touches])
+						# ...and the one tile it touches must be one the player can REACH and
+						# stand on without taking the stairs. A mark you can only get to by
+						# descending is a mark nobody can push, and it generated twice: once
+						# with the stair as the approach itself, once with the stair as the
+						# only route to the approach (the way on is the furthest *chamber*
+						# tile, so a corridor dead end can lie beyond it). Both were found by
+						# the completionist walker pacing between two tiles for ever.
+						var standable := pt._dist_from_avoiding_exit(pt.pos)
+						var ok := false
+						for n2 in pt._neighbours(ci):
+							if int(pt.enc[n2]) != TraversalIso.WALL and not (n2 in cellsp) \
+									and not pt._is_exit(n2) and int(standable[n2]) >= 0:
+								ok = true
+						if not ok:
+							fails += 1
+							print("FAIL %s: a pocket cannot be reached without taking the stairs — it can never be opened" % didp)
+					elif touches != 0:
+						fails += 1
+						print("FAIL %s: a pocket cell behind the mouth touches walkable ground — a second door" % didp)
+			# ...and now open every one of them and check the floor did not change shape.
+			# Same walkable count plus the pockets' own tiles, same reachability, and the
+			# distance from the entrance to the way on IDENTICAL — which is the clause that
+			# says no pocket shortened the route to anything.
+			var exit_cell := -1
+			for i in pt.enc.size():
+				if pt._is_exit(i):
+					exit_cell = i
+			var was_dist: int = int(sealed_reach[exit_cell]) if exit_cell >= 0 else -1
+			var added := 0
+			for kp2 in pt.pockets.size():
+				added += (pt.pockets[kp2]["cells"] as Array).size()
+				pt._open_pocket(kp2)
+			var open_reach := pt._dist_from(pt.pos)
+			var open_walkable := 0
+			for i in pt.enc.size():
+				if int(pt.enc[i]) != TraversalIso.WALL:
+					open_walkable += 1
+					if int(open_reach[i]) < 0:
+						fails += 1
+						print("FAIL %s floor %d: a tile is walled off with the pockets open" % [
+							didp, fp + 1])
+			if open_walkable != sealed_walkable + added:
+				fails += 1
+				print("FAIL %s floor %d: %d walkable sealed + %d pocket tiles != %d open" % [
+					didp, fp + 1, sealed_walkable, added, open_walkable])
+			if exit_cell >= 0 and int(open_reach[exit_cell]) != was_dist:
+				fails += 1
+				print("FAIL %s floor %d: the way on is %d steps away with the pockets open and %d with them sealed — a pocket is a SHORTCUT" % [
+					didp, fp + 1, int(open_reach[exit_cell]), was_dist])
+	if pockets_seen == 0:
+		fails += 1
+		print("FAIL the generator produced NO pockets across %d floors — D86's exact shape" % pocket_floors)
+	if prize_kinds.size() < 3:
+		fails += 1
+		print("FAIL only %d kind(s) of prize ever appear behind a wall" % prize_kinds.size())
+	print("  (info: %d pockets over %d floors, %.1f tiles each, prizes %s)" % [
+		pockets_seen, pocket_floors, float(pocket_tiles) / maxf(1.0, float(pockets_seen)),
+		str(prize_kinds.keys())])
+
+	# --- the guard is extra attrition and must stay OUTSIDE every price (D183) ---------
+	#
+	# A guarded pocket is the only thing in the game that can make a run harder than its
+	# difficulty rating, so it is the one that needs the most checking. Four separate ways it
+	# could be wrong, and every one of them would leave the whole suite green:
+	#
+	#   * the per-run CAP could be a per-floor roll in disguise, and a lucky sequence would
+	#     add five voluntary elites to a dungeon that promised none;
+	#   * a guard could land in `dodgeable`, and `Balance.avoid_cost` solves the whole slip
+	#     ladder from that count — so every slip in the dungeon would be re-priced by
+	#     accident (D99's exact failure: a price and a count deriving from different places,
+	#     green for two years);
+	#   * a slip could be OFFERED inside a pocket, which prices a decline that should be free;
+	#   * the guard could be cast from the wrong pool, or not cast at all, and the silhouette
+	#     the player wagered against would not be the creature they met (D85).
+	var guards_seen := 0
+	var guarded_pockets := 0
+	var pockets_total := 0
+	for didg in Balance.DUNGEONS:
+		var gt := TraversalIso.new()
+		gt.generate(Balance.dungeon(didg))
+		# The cap, asserted rather than assumed, and read off the PLAN because that is where
+		# it is enforced — a per-floor roll would satisfy any per-floor check.
+		if gt.planned_guards() > Balance.POCKET_GUARDS_PER_RUN:
+			fails += 1
+			print("FAIL %s: %d guards planned, the cap is %d" % [
+				didg, gt.planned_guards(), Balance.POCKET_GUARDS_PER_RUN])
+		guards_seen += gt.planned_guards()
+		var elite_pool: Array = Balance.roster_pool(Balance.dungeon(didg), Balance.Tier.ELITE)
+		for fg in gt.floors:
+			gt._build_floor(fg)
+			# `dodgeable` is a DUNGEON-wide count taken from the budget. Cross-checked here
+			# against the tiles actually laid down outside the pockets, which is the check
+			# D99 did not have: the count and the things it counts must be the same set.
+			var mandatory_fights := 0
+			for i in gt.enc.size():
+				var eg := int(gt.enc[i])
+				if (eg == Traversal.Enc.COMBAT or eg == Traversal.Enc.ELITE) \
+						and not gt._in_pocket(i):
+					mandatory_fights += 1
+			pockets_total += gt.pockets.size()
+			for kg in gt.pockets.size():
+				var pg: Dictionary = gt.pockets[kg]
+				if String(pg.get("guard", "")) == "":
+					continue
+				guarded_pockets += 1
+				# cast from the pool combat would have used, and never a boss
+				if not elite_pool.has(String(pg["guard"])):
+					fails += 1
+					print("FAIL %s: a guard is cast '%s', which is not in the elite pool" % [
+						didg, pg["guard"]])
+				if Balance.ROSTER[Balance.Tier.BOSS].has(String(pg["guard"])):
+					fails += 1
+					print("FAIL %s: a BOSS is standing in a pocket" % didg)
+				# a guard needs somewhere to stand that is not the prize's tile
+				if (pg["cells"] as Array).size() < 2:
+					fails += 1
+					print("FAIL %s: a one-tile pocket was given a guard — it has no between" % didg)
+			# Opening every pocket must not change what the dungeon REQUIRES. A guard that
+			# quietly displaced a mandatory elite would make the dungeon cheaper for the
+			# player who never explores, which is R1 broken from the other direction.
+			for kg2 in gt.pockets.size():
+				gt._open_pocket(kg2)
+			var after_fights := 0
+			var guards_on_floor := 0
+			for i in gt.enc.size():
+				var eg2 := int(gt.enc[i])
+				if eg2 != Traversal.Enc.COMBAT and eg2 != Traversal.Enc.ELITE:
+					continue
+				if gt._in_pocket(i):
+					guards_on_floor += 1
+					# ...and every guard tile has its creature, moved across from the pocket
+					if String(gt.enemy_of.get(i, "")) == "":
+						fails += 1
+						print("FAIL %s: a guard reached the floor with no creature cast" % didg)
+				else:
+					after_fights += 1
+			if after_fights != mandatory_fights:
+				fails += 1
+				print("FAIL %s floor %d: %d mandatory fights sealed, %d open — a guard displaced one" % [
+					didg, fg + 1, mandatory_fights, after_fights])
+			# No slip is ever offered for a guard. Walked over the whole floor rather than
+			# sampled: `_compute_options` adds one for EVERY adjacent fight, so suppressing it
+			# is a deliberate act and a deliberate act is a thing that can be undone.
+			if guards_on_floor > 0:
+				for i in gt.enc.size():
+					if int(gt.enc[i]) == TraversalIso.WALL:
+						continue
+					gt.pos = i
+					gt._invalidate()
+					for o in gt.options():
+						if String(o.get("action", "")) != "avoid":
+							continue
+						if gt._in_pocket(int(o["cell"])):
+							fails += 1
+							print("FAIL %s: a slip is offered against a guard — a decline that should be free is priced" % didg)
+	if guards_seen == 0:
+		fails += 1
+		print("FAIL no pocket in any dungeon was ever given a guard")
+	print("  (info: %d guards planned across %d dungeons, %d of %d placed pockets guarded, cap %d)" % [
+		guards_seen, Balance.DUNGEONS.size(), guarded_pockets, pockets_total,
+		Balance.POCKET_GUARDS_PER_RUN])
+	# ...and not ALL of them. An unguarded pocket has to stay common enough that a mark reads
+	# as an invitation rather than a warning.
+	if pockets_total > 0 and guarded_pockets == pockets_total:
+		fails += 1
+		print("FAIL every pocket is guarded — a mark is a warning, not an invitation")
+
+	# --- nothing a run NEEDS is ever behind a wall (D182) -----------------------------
+	#
+	# If a run can be blocked, gated or softlocked by an unfound pocket it is not a secret,
+	# it is a defect — and the generator must not be able to produce the case, which is a
+	# stronger claim than `test_softlock.gd` catching it afterwards. Walked with the greedy
+	# policy, which never pushes: every dungeon must finish, and the encounter count must be
+	# the one the dungeon asked for, with every pocket still sealed.
+	for didn in Balance.DUNGEONS:
+		var nt := TraversalIso.new()
+		nt.generate(Balance.dungeon(didn))
+		var nsteps := 0
+		var pushed_any := false
+		while not nt.is_complete() and nsteps < 600:
+			var nopts := nt.options()
+			if nopts.is_empty():
+				break
+			nsteps += 1
+			var npick := 0
+			for oi in nopts.size():
+				if String(nopts[oi].get("action", "")) == "push":
+					pushed_any = true
+				if not nopts[oi].has("hp_cost") and String(nopts[oi].get("action", "")) != "push":
+					npick = oi
+					break
+			if not nt.select(npick).is_empty():
+				nt.clear_pending()
+		if not nt.is_complete():
+			fails += 1
+			print("FAIL %s: could not be finished without pushing a single wall" % didn)
+		if nt.cleared < nt.quota - 1:
+			fails += 1
+			print("FAIL %s: finished with %d of %d cleared and no pocket opened — something required is behind a wall" % [
+				didn, nt.cleared, nt.quota])
+		# ...and a pocket left sealed must not be counted as business owed. `progress()`
+		# clamps at 1.0, so an over-count is invisible; an under-count would read as a
+		# dungeon nobody can finish.
+		if nt.progress() < 0.999 and nt.is_complete():
+			fails += 1
+			print("FAIL %s: complete at %.2f progress — the sealed pockets are being counted against the player" % [
+				didn, nt.progress()])
+		if pushed_any:
+			print("  (info: %s offered a push on the required path and the walker declined it)" % didn)
+
+	# --- errands: they must ask for MORE, and never be unsettleable (D184) ------------
+	#
+	# The dangerous half of this feature is not the reward, it is the CONDITION. The obvious
+	# errands all pay a player for declining budgeted content — leave the chests alone, reach
+	# the stairs in twenty turns, take no damage — and every one of those is a skip, which
+	# D88 says is a difficulty change no budget assertion can see. So the shipped set is
+	# checked against that directly: every condition must be settleable by a walker that
+	# takes EVERYTHING, and none may be settleable by one that takes less.
+	var errands_seen := {}
+	var errand_floors := 0
+	var errand_settled := 0
+	for dide in Balance.DUNGEONS:
+		var et := TraversalIso.new()
+		et.generate(Balance.dungeon(dide))
+		for fe in et.floors:
+			if fe < et.errandplan.size() and String(et.errandplan[fe]) != "":
+				errands_seen[String(et.errandplan[fe])] = true
+			et._build_floor(fe)
+			if et.errand == "":
+				continue
+			errand_floors += 1
+			# it must say something, or the status line prints an empty phrase
+			if et.errand_line() == "":
+				fails += 1
+				print("FAIL %s: an errand with no words on it" % dide)
+			# ...and it must be settleable on the floor that set it. `pushed` on a floor with
+			# no pocket, or `thorough` on a floor with no chest, is not a hard errand, it is
+			# an ordinance nobody can discharge.
+			if et.errand == Balance.ERRAND_PUSHED and et.pockets.is_empty():
+				fails += 1
+				print("FAIL %s floor %d: asked for a pocket on a floor that has none" % [
+					dide, fe + 1])
+			if et.errand == Balance.ERRAND_THOROUGH and et.errand_chests == 0:
+				fails += 1
+				print("FAIL %s floor %d: asked for every lid on a floor with no lids" % [
+					dide, fe + 1])
+			# A walker that takes everything settles it; the state it reads is the state the
+			# model already keeps.
+			et.errand_seen = false
+			et.errand_pushed = not et.pockets.is_empty()
+			et.errand_chests = 0
+			if not et._errand_met():
+				fails += 1
+				print("FAIL %s: '%s' cannot be settled by a player who does everything" % [
+					dide, et.errand])
+			else:
+				errand_settled += 1
+			# ...and a player who does NOTHING must not settle it, or it is a payout for
+			# turning up. `unseen` is the exception and deliberately so: it is settled by not
+			# being caught, which is care rather than avoidance, and the ambush it dodges is
+			# a price that already exists.
+			et.errand_pushed = false
+			et.errand_chests = 1
+			et.errand_seen = true
+			if et._errand_met():
+				fails += 1
+				print("FAIL %s: '%s' settles itself for a player who does nothing" % [
+					dide, et.errand])
+	if errands_seen.size() < Balance.ERRANDS.size():
+		fails += 1
+		print("FAIL only %d of %d errands are ever handed out" % [
+			errands_seen.size(), Balance.ERRANDS.size()])
+	# ...and not every floor, or an ordinance is a checklist entry rather than something a
+	# place sometimes asks of you.
+	if errand_floors >= 33:
+		fails += 1
+		print("FAIL every floor carries an errand")
+	print("  (info: %d of 33 floors carry an errand, %d kinds, all settleable, %d gold at d1)" % [
+		errand_floors, errands_seen.size(), Balance.errand_gold(1)])
 
 	# --- the dressing has to survive being written down (R7) -------------------------
 	#
@@ -992,18 +1348,39 @@ func _init() -> void:
 func _walk(iso: TraversalIso, completionist: bool) -> Dictionary:
 	var moves := 0
 	var encs := 0
+	# Optional destinations the walker has stood on and been unable to act on.
+	#
+	# This is a runaway guard with a real subject rather than a fudge. Standing on a target
+	# that nothing consumes is the D74 deadlock's whole shape — the field says "here", here
+	# achieves nothing, and the ranking bounces the walker between two tiles for ever. It bit
+	# once for a genuine generator defect (a mouth whose only approach was the stair, now
+	# impossible), and a driver that can hang on the next one is a driver that reports a
+	# feature as broken pacing. A target that could not be acted on when reached is dropped
+	# for the rest of the floor, and the count is reported so a silent blacklist cannot hide
+	# a second defect.
+	var dead_ends := {}
+	var stranded := 0
+	var floor_now := iso.depth
 	while not iso.is_complete() and moves < 600:
 		var opts := iso.options()
 		if opts.is_empty():
 			break
 		var pick := 0
 		if completionist:
-			pick = _completionist_pick(iso, opts)
+			var here := iso.pos
+			var was_target: bool = here in _optional_cells(iso)
+			pick = _completionist_pick(iso, opts, dead_ends)
+			if was_target and String(opts[pick].get("action", "")) != "push":
+				dead_ends[here] = true
+				stranded += 1
 		moves += 1
 		if not iso.select(pick).is_empty():
 			encs += 1
 			iso.clear_pending()
-	return {"moves": moves, "encs": encs}
+		if iso.depth != floor_now:
+			floor_now = iso.depth
+			dead_ends = {}      # a new floor, and none of the old marks are on it
+	return {"moves": moves, "encs": encs, "stranded": stranded}
 
 ## Which step a player stripping the floor takes: toward the nearest optional thing while
 ## any is left, and the model's own first suggestion once none is.
@@ -1012,11 +1389,28 @@ func _walk(iso: TraversalIso, completionist: bool) -> Dictionary:
 ## dodge calibration, not to the route measurement. And never the way on while optional
 ## business remains: descent is one-way, so a floor left behind is a floor gone, and a
 ## walker that took the stairs early would be measuring the required path with extra steps.
-func _completionist_pick(iso: TraversalIso, opts: Array) -> int:
-	var targets := _optional_cells(iso)
+func _completionist_pick(iso: TraversalIso, opts: Array, dead_ends: Dictionary = {}) -> int:
+	# A wall you are already standing next to is the cheapest optional thing there is, so it
+	# is taken before anything is walked toward. It also has to be taken EXPLICITLY: a push
+	# is ranked below the stairs on purpose (D182), so a walker that only ever sorted by the
+	# model's own order would never push at all and would silently be the greedy walker
+	# again — which is the shape of D124, an instrument whose policy cannot hold the thing
+	# being measured.
+	for i in opts.size():
+		if String(opts[i].get("action", "")) == "push":
+			return i
+	var targets: Array = []
+	for t in _optional_cells(iso):
+		if not dead_ends.has(int(t)):
+			targets.append(int(t))
 	if targets.is_empty():
 		return 0
-	var field: PackedInt32Array = iso._dist_to_any(targets)
+	# Routed the way the PLAYER can route, which means the way on is a wall to this flood.
+	# `_dist_to_any` walks every walkable tile, so its shortest path to something beyond the
+	# stairs runs *through* the stairs — a route the walker then refuses to take, one step at
+	# a time, for ever. The oscillation is the D74 deadlock again and the cause is again a
+	# field that promises a route the mover cannot use.
+	var field := _dist_to_any_walkable(iso, targets)
 	var best := -1
 	var best_d := 1 << 30
 	for i in opts.size():
@@ -1024,13 +1418,43 @@ func _completionist_pick(iso: TraversalIso, opts: Array) -> int:
 		if String(o.get("action", "")) == "avoid":
 			continue
 		var cell := int(o["cell"])
-		if int(iso.enc[cell]) == TraversalIso.STAIR:
+		if iso._is_exit(cell):
 			continue
 		var d := int(field[cell])
 		if d >= 0 and d < best_d:
 			best_d = d
 			best = i
 	return best if best >= 0 else 0
+
+## Steps from every tile to the nearest of `sources`, treating the way on as solid.
+##
+## A local flood rather than `TraversalIso._dist_to_any`, because what differs is the walker's
+## POLICY — it will not step onto a stair while it still wants something on this floor — and a
+## policy does not belong in the model. Descent is one-way, so for this walker the stair is a
+## wall like any other.
+func _dist_to_any_walkable(iso: TraversalIso, sources: Array) -> PackedInt32Array:
+	var n := iso.enc.size()
+	var dist := PackedInt32Array()
+	dist.resize(n)
+	dist.fill(-1)
+	var queue: Array = []
+	for s in sources:
+		var i := int(s)
+		if i >= 0 and i < n and int(iso.enc[i]) != TraversalIso.WALL and dist[i] < 0 \
+				and not iso._is_exit(i):
+			dist[i] = 0
+			queue.append(i)
+	var head := 0
+	while head < queue.size():
+		var cur := int(queue[head])
+		head += 1
+		for raw in iso._neighbours(cur):
+			var nb := int(raw)
+			if int(iso.enc[nb]) == TraversalIso.WALL or dist[nb] >= 0 or iso._is_exit(nb):
+				continue
+			dist[nb] = dist[cur] + 1
+			queue.append(nb)
+	return dist
 
 ## Everything on this floor a player may take and the required path does not ask them to.
 ## One list, so the second walker and anything that later prices it agree on what "optional"
@@ -1040,6 +1464,22 @@ func _optional_cells(iso: TraversalIso) -> Array:
 	for i in iso.enc.size():
 		if int(iso.enc[i]) == TraversalIso.KEY:
 			out.append(i)
+		# Anything sitting in a pocket the walker has already opened (D182). It is invisible
+		# to the model's own field on purpose — `_dist_to_unresolved` does not seed from a
+		# pocket, which is what keeps the required path unchanged — so the optional route has
+		# to seed from it here or the walker would open a pocket and walk away from it.
+		elif int(iso.enc[i]) >= 0 and iso._in_pocket(i):
+			out.append(i)
+	# ...and the FLOOR BESIDE an unopened mouth, not the mouth itself: a mouth is rock, and
+	# a flood over walkable tiles cannot route to it. Standing next to it is what makes the
+	# push available.
+	for p in iso.pockets:
+		var pd: Dictionary = p
+		if bool(pd["open"]):
+			continue
+		for n in iso._neighbours(int(pd["mouth"])):
+			if int(iso.enc[n]) != TraversalIso.WALL:
+				out.append(n)
 	return out
 
 ## How many of `want` are in `row`. One line, and it exists because the same count is

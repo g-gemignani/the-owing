@@ -99,6 +99,26 @@ Three rules:
 * **Judge it in a real capture at 1280×720**, not from the constants. Three of the four
   things wrong with the first version of this feature were only visible in a screenshot.
 
+## A pocket prize, or an errand
+
+Prizes: an id in `Balance.POCKET_PRIZES`, a weight beside it in `POCKET_PRIZE_WEIGHTS`, and a
+branch in `TraversalIso._open_pocket` that puts it on the far cell. Then **measure the pack
+channel**: `godot --headless --script tools/pack_income.gd -- --packs=N`, where N is 2 plus
+what a full sweep can now find. A large jump is a reason to lower the tier or the count, not a
+success — the first weights took the channel up 36% and were cut (D182).
+
+Errands: an id in `Balance.ERRANDS`, its words in `ERRAND_TEXT`, and a clause in
+`TraversalIso._errand_met`. Three rules, all test-enforced:
+
+* **It must ask for MORE.** Anything paying for declining budgeted content is a skip, and a
+  skip is a difficulty change no budget assertion can see (D88, D184).
+* **It must read state the model already keeps.** A condition needing new bookkeeping is the
+  wrong condition — bookkeeping kept for one feature goes stale the first time another moves.
+* **It must be settleable on the floor that set it**, or it is not a hard errand, it is a lie.
+
+Both channels pay in gold or packs, never in run-deck cards (dilution, D80/D81) and never in
+relics or HP (free strength from outside the deck).
+
 ## A gate route
 
 `MetaState.gate_credit()` is what every dungeon and zone gate is measured against. A new

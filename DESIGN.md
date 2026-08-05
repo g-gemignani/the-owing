@@ -10987,3 +10987,177 @@ not hints, and a foreground at the wrong size is cropped rather than scaled. Plu
 icon exists and is a square whole-number multiple of 48. All three gates were checked by
 breaking them: blanking the monochrome key, blanking `config/icon` and pointing the 192 key at
 the 48px file each produce their own line.
+
+### D182 — There was one thing to do in a dungeon, and a secret has to be a dead end to be safe
+
+The dungeon offered exactly one verb: walk to the boss. Everything else on the floor was
+budgeted content standing on the way there. This is the first thing on a floor that is
+genuinely optional, and almost every decision in it is about keeping it that way.
+
+**Scope, decided before anything was built: a pocket is a sealed dead end with a reward in
+it, never a route.** One mouth, no way through, nothing on the other side. That restriction
+is what lets the feature ship at all. A shortcut secret would let a player reach the stairs
+past content, and D88's lesson is that a skip is a difficulty change *no budget assertion
+can see* — the encounter count stays perfect while the dungeon quietly costs less than its
+rating says. A pocket with one door has nothing to skip.
+
+How one is found is telegraph-then-confirm. The floor shows a mark on a wall, visible only
+from an **adjacent** tile, and pushing opens it. Two alternatives were rejected on the way:
+a per-step chance to find one, and a search action costing a turn on any tile. Both charge
+for walking, which is the one thing this model exists to sell (D77), and the second makes
+optimal play "search all 130 tiles", which is a chore with a dice roll in it. Visibility
+from one tile away means finding pockets is *covering ground*, and the skill is noticing —
+which improves with play rather than with a wiki.
+
+Everything else follows from "optional means invisible to the required path":
+
+* `_dist_to_unresolved` does not seed from a pocket and the unresolved count does not
+  include one, so the greedy walker cannot see a pocket and the stairs are never held back
+  by one. **These are the two lines that keep `ISO_MOVES_PER_ENCOUNTER_MAX` measuring the
+  route it says it measures.**
+* A pocket's contents do not count toward `cleared`, because they were never in `quota`.
+  Without that a pocket chest would push `progress()` past what the floor owed — invisibly,
+  since it clamps at 1.0.
+* Pocket tiles are cut from the rock left over after the floor is built, not from
+  `ISO_TILES_PER_DUNGEON`. Coming out of that figure would silently shrink every room in
+  the game.
+
+## Three defects, all found by the walkers and none by reading
+
+**A pocket you could only reach by taking the stairs.** The generator picked any rock cell
+with one walkable neighbour; sometimes that neighbour was the stair. A step onto a stair
+descends, so the push is never offered — the floor generated a mark nobody in the world
+could touch. Then the general case: the way on is placed on the furthest *chamber* tile, so
+a corridor dead end can lie **beyond** it, and a pocket there is unreachable for the same
+reason. Both showed up as the completionist walker pacing between two tiles for ever. That
+is the D74 deadlock for a fourth time and the cause is the same every time: **something
+unreachable was seeded as a destination.** The rule is now stated once, as a flood that
+treats the way on as solid, and the generator and the test both ask it.
+
+**A rank that was safe against the tiers and not against their values.** The push was
+ordered between the stairs and the slip, at 2.5M. But a step whose goal is unreachable
+scores `1 × 1000000 + 9999 × 1000` — so on any tile whose route to the remaining work ran
+through the way on, the push outranked *every step*, and the contract walker (which presses
+the first option with no price on it) started pushing walls and then paced for ever once
+they were all open. It is dead last now, at 20M. **A rank has to be safe against the largest
+value the tiers below it can reach, not against their nominal order.**
+
+**The reward was too good, and only `pack_income` said so.** At the first weights a run that
+found every pocket added 3.1 packs to the two it already pays, and the pack channel went
+**21.0 → 28.5 card copies a run, 36%**. Free reward at that scale changes how fast the
+collection grows, which changes everything downstream of it. The plan's instruction is to
+treat a large jump as a reason to lower the tier or the count, not as a success, so the
+chest weight came down from 5 to 3: the ceiling is now +2.3 packs and 26.0, a 24% rise for a
+player who finds everything *and* beats every vault. Trimming further would make the chest
+prize meaningless, which is the other way to break a feature.
+
+## What is not here
+
+**Locked doors.** The plan puts them in this phase, reusing the key system exactly. They are
+not built, and the reason is worth writing down rather than working around: a locked mouth
+has to know how many keys the player holds, and that count is run state a traversal may not
+touch (D13). Making it honest means either duplicating the count inside the model — the D34
+trap — or threading it through the `Traversal` seam for one feature. Both are worse than a
+mark. The vault D86 actually wanted is delivered anyway: a sealed pocket with a Gilded chest
+in it is a locked room with a prize behind it, and a Gilded asks the *run* to prove something
+rather than asking for an item, so it needs no second key currency.
+
+**Sites on the open floor.** B4's optional-event channel is here only as a pocket prize
+(`site` places an EVENT). An event standing in an open room needs its own placement pass and
+its own answer to "is this in the budget", and that is a separate decision.
+
+### D183 — The guard, which is the only thing in the game that can make a run harder than its rating
+
+A pocket should usually be defended: something is in there with the prize, and it is an
+elite. That is what makes finding one an event rather than a pickup, and what stops the
+reward from being free.
+
+It is also the mirror of the slip-past. The crawl already prices a voluntary *reduction* in
+attrition (`avoid_cost`, D99); a guarded pocket is a voluntary *increase*. Both are
+legitimate for the same reason — the budget assertion is about what the dungeon *requires* —
+and both are illegitimate the moment the player is not choosing. So all three conditions are
+load-bearing and all three are asserted:
+
+* **Seen before committed.** The guard is revealed with the pocket, drawn as the silhouette
+  of the creature actually cast for it (R8/D85), and the fight starts only when you walk in.
+  An ambush for pushing a wall is a trap, and a trap turns exploring from a decision into a
+  punishment.
+* **Declinable at zero cost.** Turning round is free. There is deliberately **no slip option
+  inside a pocket** — `_compute_options` generates one for every adjacent fight, so this is
+  a suppression rather than an omission. It makes no sense in a dead end, and it would be
+  priced from `dodgeable`, a count the guard is not in.
+* **Capped per run**, at three, enforced where the whole dungeon is in view. A per-floor
+  roll of "two thirds guarded" is a dungeon that sometimes holds five voluntary elites while
+  every budget assertion stays green.
+
+`dodgeable` is the one that would have gone wrong quietly. `Balance.avoid_cost` solves the
+entire slip ladder from that count (D99's fix), so a voluntary elite landing in it would
+re-price every slip in the dungeon by accident. Guards are not in `budget`, which is where
+the count comes from — but "not in budget" is an argument, not a check, so the test counts
+the fight tiles outside the pockets and compares them with `dodgeable`. That is exactly the
+shape D99 lacked: a price and a count deriving from different places, green for two years.
+
+## The three-policy report
+
+The simulator grew a third route, because two cannot price this. Without a driver willing to
+fight the guards the tool cannot play the feature and would report a confident nothing about
+it — D124 exactly. Eighteen cells, forty trials, one tree:
+
+    stairs           82.0%   get on with the dungeon
+    explore          84.1%   push every wall, decline every guard
+    explore + fight  81.3%   push every wall and take on what is standing there
+
+Read as a set, that is the answer the design wanted. Exploring and declining is worth about
+two points — a small gain, not "mandatory content wearing a costume", which is what a large
+one would have meant. Fighting the guards gives back nearly three, landing slightly *below*
+running for the stairs. So the wager costs clear rate now and pays in packs, which are meta
+income and cannot touch the run they were found in (D80). Neither dominant nor catastrophic;
+the player is buying collection with survival.
+
+Two cautions on those numbers. Forty trials is below the default and D120's noise floor is a
+mean of 0.4 with single cells swinging 15, so **only the ordering is reliable, not the
+magnitudes.** And a correction to D179: its sim figures (59.7 / 58.8) were measured on a
+working tree carrying another agent's uncommitted enemy-scaling change, which depresses clear
+rate across the board. The *comparison* it drew stands; the absolute numbers do not, and the
+three above — taken on one clean tree — are the ones to compare against.
+
+Measured guard rate: 66% of eligible pockets roll a guard, but a one-tile pocket has no
+"between" for one to stand in and the per-run cap binds, so what actually ships is nearer
+40% of placed pockets. That is the right side of the line the plan drew — an unguarded
+pocket has to stay common enough that a mark reads as an invitation rather than a warning.
+
+### D184 — An errand has to ask for MORE, or it is a difficulty dial wearing a quest marker
+
+A floor-scoped ordinance, judged the moment the stairs are taken: the cheapest way to make
+one floor feel unlike the last, because it changes *how you walk* without changing what is
+on the floor. It also fits the game's own subject — the title is a debt and an errand is a
+small one.
+
+The dangerous half is not the reward, it is the condition, and the obvious errands are all
+wrong in the same direction. "Leave the chests alone." "Reach the stairs in twenty turns."
+"Take no damage." Every one of those **pays a player for declining budgeted content**, which
+is a skip, which is a difficulty change no budget assertion can see (D88). An errand that
+paid for self-denial would have been a difficulty dial with a quest marker on it, and the
+suite would have stayed green while the dungeon got cheaper.
+
+So the shipped three all ask for more, and are things a careful player was going to do
+anyway, paid for doing them well: open every chest on the floor, descend without being
+caught in the open, open a pocket. The test asserts the direction rather than trusting it —
+each condition must be settleable by a walker that takes everything, and none may be
+settleable by one that takes nothing.
+
+Three smaller rules, each of which would otherwise be a lie the player could not check: an
+errand is only handed to a floor that can discharge it (never "find the pocket" on a floor
+with none, never "every lid" on a floor with no chests); only about half of floors carry one,
+because an ordinance on every floor is a checklist; and the status line says what is asked
+and **never whether it is currently met**, because an errand that ticks itself green as you
+walk is a thing you are filling in rather than a thing you are doing.
+
+Reward is gold — the pack/gold channel the plan reserves for optional content. A run-deck
+card would re-open the dilution question D80/D81 closed; a relic would be free strength from
+outside the deck. Failing one costs nothing: an errand is never a run-ender, so there is no
+version of it that can end a run badly.
+
+**Tolls (B3) are not built.** They need a catalogue of question kinds over floor state plus a
+screen to ask on, and the plan is explicit that Phase 6's two halves land one at a time, each
+with its own measurement. This is the first of the two.

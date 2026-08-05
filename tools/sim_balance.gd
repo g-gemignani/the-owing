@@ -22,15 +22,21 @@ static var ONLY := ""       ## comma-separated dungeon ids; empty = all
 static var PROFILE := ""    ## substring of a profile name, case-insensitive
 static var REPORT := true   ## --calibration-only turns the per-cell report off
 static var CAL_TRIALS := CALIBRATION_TRIALS
-## Which ROUTE through a floor the driver walks (D179). `--explore` makes it strip the floor
-## — take every optional thing before the stairs — instead of getting on with the dungeon.
+## Which ROUTE through a floor the driver walks (D179, D183).
 ##
 ## A walker counts moves; only the simulator can say what those moves cost in HP and clear
-## rate, so the two routes need to be playable HERE and not only in `tests/test_traversal.gd`.
-## The flag exists before there is much to explore on purpose: it establishes the baseline
-## gap between the two routes for the game as it stands, which is the only number a later
-## feature's effect can be measured against.
-static var EXPLORE := false
+## rate, so the routes have to be playable HERE and not only in `tests/test_traversal.gd`.
+##
+## THREE of them, not two, and the third is the whole reason the guarded pocket can be priced
+## at all (D183). Without it the sim cannot play the feature and would report a confident
+## nothing about it, which is D124 exactly — an instrument whose policy could not hold the
+## thing being measured. The three together are what say whether the wager is priced: if
+## fighting every guard beats running for the stairs on clear rate, the reward is too high or
+## the elites too soft; if it is catastrophic, nobody will push a wall twice.
+const ROUTE_STAIRS := 0    ## get on with the dungeon
+const ROUTE_EXPLORE := 1   ## push every wall, but decline every guard
+const ROUTE_GUARDS := 2    ## push every wall and fight what is standing there
+static var ROUTE := ROUTE_STAIRS
 
 static func _read_args() -> void:
 	for arg in OS.get_cmdline_user_args():
@@ -47,7 +53,26 @@ static func _read_args() -> void:
 		# Walk the floor for everything on it rather than for the way down (D179). A route
 		# policy and not a narrowing: every cell is still measured, by a different player.
 		elif arg == "--explore":
-			EXPLORE = true
+			ROUTE = ROUTE_EXPLORE
+		# ...and the same player, willing to fight what is standing over the prize (D183).
+		# Separate from the flag above because the two numbers only mean something as a pair:
+		# what the guards cost is the difference between them.
+		elif arg == "--explore-guards":
+			ROUTE = ROUTE_GUARDS
+
+## Which player this report measured, in words (D179, D183).
+##
+## Printed because a report that does not name its route is a report whose numbers cannot be
+## compared with another one. Two runs of this tool differ by a mean of 0.4 points already
+## (D120); a route change is a much larger difference wearing the same clothes, and the header
+## is the only place that can tell them apart afterwards.
+static func _route_line() -> String:
+	match ROUTE:
+		ROUTE_EXPLORE:
+			return "explore — pushes every wall, declines every guard (--explore)"
+		ROUTE_GUARDS:
+			return "explore and fight — pushes every wall and takes on what is standing there (--explore-guards)"
+	return "stairs — gets on with the dungeon (--explore / --explore-guards for the others)"
 
 ## Filters are ADDITIVE narrowings of the full report, never a different measurement:
 ## every cell they let through is measured exactly as it would be in a full run.
@@ -116,10 +141,7 @@ func _init() -> void:
 	# cannot be compared with another one (D179). Two runs of this tool differ by a mean of
 	# 0.4 points already (D120); a route change is a much larger difference wearing the same
 	# clothes, and the header is the only place that can tell them apart afterwards.
-	print("Route: %s (%s)" % [
-		"explore — takes every optional thing before the stairs" if EXPLORE
-			else "stairs — gets on with the dungeon",
-		"--explore" if EXPLORE else "pass --explore for the other one"])
+	print("Route: %s" % _route_line())
 	_avoid_calibration()
 	_print_budget()
 	quit()
@@ -454,13 +476,37 @@ enum Policy { SMART, ALWAYS_FACE, ALWAYS_AVOID }
 ## which is ranked but not required (D167). The two definitions being the same is what lets
 ## the walk measurement and this report be talking about one route.
 func _explore_pick(opts: Array, tv: TraversalIso) -> int:
+	# A wall already within reach is the cheapest optional thing on the floor, and it has to
+	# be taken EXPLICITLY: a push is ranked dead last on purpose (D182), so a driver that
+	# only ever trusted the model's own order would never push once and would silently be
+	# the stairs policy wearing the explore flag — D124's shape exactly.
+	for i in opts.size():
+		if String(opts[i].get("action", "")) == "push":
+			return i
 	var targets: Array = []
 	for i in tv.enc.size():
 		if int(tv.enc[i]) == TraversalIso.KEY:
 			targets.append(i)
+		elif int(tv.enc[i]) >= 0 and tv._in_pocket(i):
+			# The prize behind a wall this run has already pushed — and the ONE line that
+			# separates the two explore routes (D183). A guard is declinable at zero cost, so
+			# declining it is simply not making it a destination: the explorer looks at what is
+			# standing there, turns round, and keeps the turns they spent looking. What the
+			# guards cost is then the difference between the two reports.
+			if ROUTE == ROUTE_GUARDS or not _guard_between(tv, i):
+				targets.append(i)
+	# ...and the floor BESIDE an unopened mouth, because a mouth is rock and no flood over
+	# walkable ground can route to it. Standing there is what offers the push.
+	for p in tv.pockets:
+		var pd: Dictionary = p
+		if bool(pd["open"]):
+			continue
+		for raw in tv._neighbours(int(pd["mouth"])):
+			if int(tv.enc[int(raw)]) != TraversalIso.WALL:
+				targets.append(int(raw))
 	if targets.is_empty():
 		return -1
-	var field: PackedInt32Array = tv._dist_to_any(targets)
+	var field := _explore_field(tv, targets)
 	var best := -1
 	var best_d := 1 << 30
 	for i in opts.size():
@@ -468,13 +514,59 @@ func _explore_pick(opts: Array, tv: TraversalIso) -> int:
 		if String(o.get("action", "")) == "avoid":
 			continue
 		var cell := int(o["cell"])
-		if int(tv.enc[cell]) == TraversalIso.STAIR:
+		if tv._is_exit(cell):
 			continue
 		var d := int(field[cell])
 		if d >= 0 and d < best_d:
 			best_d = d
 			best = i
 	return best
+
+## Is something still standing in the pocket this cell belongs to?
+##
+## Asked of the POCKET rather than of the tile in front, because a pocket is a dead end: if a
+## guard is alive anywhere in it, it is between the explorer and everything deeper. Once it is
+## beaten its tile is bare ground and the prize is free, which is what makes the fight a
+## purchase rather than a toll.
+func _guard_between(tv: TraversalIso, cell: int) -> bool:
+	var k := tv._pocket_of(cell)
+	if k < 0:
+		return false
+	for c in (tv.pockets[k]["cells"] as Array):
+		if int(tv.enc[int(c)]) == Traversal.Enc.ELITE:
+			return true
+	return false
+
+## Steps to the nearest optional thing, with the way on treated as solid.
+##
+## Descent is one-way, so a route through the stairs is a route this driver cannot take —
+## and a field that offers one makes it pace between two tiles until the move guard trips,
+## which reads in the report as a dungeon nobody can finish. The same flood
+## `tests/test_traversal.gd`'s second walker uses, for the same reason; it lives in both
+## because it is a property of the POLICY, not of the model.
+func _explore_field(tv: TraversalIso, sources: Array) -> PackedInt32Array:
+	var n := tv.enc.size()
+	var dist := PackedInt32Array()
+	dist.resize(n)
+	dist.fill(-1)
+	var queue: Array = []
+	for s in sources:
+		var i := int(s)
+		if i >= 0 and i < n and int(tv.enc[i]) != TraversalIso.WALL and dist[i] < 0 \
+				and not tv._is_exit(i):
+			dist[i] = 0
+			queue.append(i)
+	var head := 0
+	while head < queue.size():
+		var cur := int(queue[head])
+		head += 1
+		for raw in tv._neighbours(cur):
+			var nb := int(raw)
+			if int(tv.enc[nb]) == TraversalIso.WALL or dist[nb] >= 0 or tv._is_exit(nb):
+				continue
+			dist[nb] = dist[cur] + 1
+			queue.append(nb)
+	return dist
 
 ## Only dodge a fight that costs meaningfully more than the dodge: the loot, and
 ## the gold that buys healing later, is worth some HP. 1.0 would dodge on a tie.
@@ -495,7 +587,7 @@ func _choose_option(opts: Array, hp: int, max_hp: int, cost_est: Dictionary,
 	# `tv` is optional so the calibration probe can keep asking without one; without it the
 	# driver cannot see past its own four options and there is no detour to take, which is
 	# the honest degradation rather than a silent half-policy.
-	if EXPLORE and tv != null:
+	if ROUTE != ROUTE_STAIRS and tv != null:
 		var detour := _explore_pick(opts, tv)
 		if detour >= 0:
 			return detour

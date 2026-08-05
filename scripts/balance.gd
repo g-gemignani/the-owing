@@ -989,6 +989,167 @@ const ISO_LANDMARK_NAME := {
 	"stack": "bone stacked to the roof",
 }
 
+# --- secret pockets: a hidden place with something in it (D182) ------------------
+#
+# The dungeon had exactly one thing to do: walk to the boss. This is the first optional
+# thing on the floor, and every constant here exists to keep it optional in the one sense
+# that matters — **it must not change what a dungeon costs.**
+#
+# The scope is decided and narrow, and the narrowness is the whole reason it can ship
+# without touching the attrition model: **a pocket is a sealed dead end with a reward in
+# it, never a route.** It never connects two parts of the floor, never offers a second way
+# out, and never shortens the way to anything. A shortcut would let a player reach the
+# stairs past content, and D88's lesson is that a skip is a difficulty change no budget
+# assertion can see. A pocket with one door has no route through it, so there is nothing
+# for it to skip.
+#
+# What it does cost is TURNS, and turns are the floor's real currency: the wanderers step
+# whenever you do, and a floor rouses at `ISO_LINGER`. So a detour is priced even though
+# no assertion in the suite is watching it — which is exactly why the second walker of
+# D179 exists and why its budget is written in rouses.
+#
+# Two things it must NOT come out of. Pocket tiles are carved from the rock LEFT OVER after
+# the floor is built, not from `ISO_TILES_PER_DUNGEON` — coming out of that figure would
+# silently shrink every room in the game. And a pocket's contents are outside `quota`, so
+# opening one cannot flatter `progress()` either.
+const POCKET_TILES_MIN := 1
+const POCKET_TILES_MAX := 4
+## How many pockets a floor gets: 0, 1 or 2, weighted. **Not one guaranteed per floor** —
+## a floor with none is what makes a mark mean something when it appears, and a mark that
+## appears every floor is a checklist entry.
+const POCKET_COUNT_WEIGHTS := [2, 6, 2]
+
+## What is behind the wall. Four kinds, and the fourth is deliberately worth nothing.
+##
+## `nothing` is not a tax and not an oversight: if every mark pays, pushing stops being a
+## discovery and becomes a vending machine. A pocket holding a room and no more is what
+## makes the paying ones land. It is the smallest weight for the same reason — pushing has
+## to stay correct on average, or the feature is content players learn to refuse.
+const POCKET_CHEST := "chest"
+const POCKET_KEY := "key"
+const POCKET_SITE := "site"
+const POCKET_NOTHING := "nothing"
+const POCKET_PRIZES := [POCKET_CHEST, POCKET_KEY, POCKET_SITE, POCKET_NOTHING]
+## Trimmed from [5, 3, 3, 2] on a `tools/pack_income.gd` reading, which is the check the plan
+## asks for and the one that has to be believed rather than celebrated. At the first weights a
+## run that found every pocket could add 3.1 packs to the 2 it already pays, and the pack
+## channel went **21.0 to 28.5 card copies a run — 36%**. Free reward at that scale changes
+## how fast the collection grows, which changes everything downstream of it; a big jump is a
+## reason to lower the tier or the count, never a success. At 3 the ceiling is +2.3 packs and
+## 26.0, a 24% rise — and it IS a ceiling: it needs a run that finds every pocket, which costs
+## about sixteen turns a floor (D179's second walker measures it), and then beats every vault,
+## which a Gilded does not grant for free. Trimming further would leave the chest prize
+## meaningless, which is the other way to break the feature.
+const POCKET_PRIZE_WEIGHTS := [3, 3, 3, 2]
+
+## A pocket's chest is always the top tier, and that is a DESIGN choice with a mechanical
+## reason behind it.
+##
+## Design: the tier ladder already exists and a Gilded is currently just a lucky roll. A
+## pocket is the natural place for one to be *earned by looking* rather than rolled.
+##
+## Mechanical: Gilded is the VAULT lock, which asks the run to prove something rather than
+## asking for an item (D84). A Sealed chest in a pocket would want a key, and there is no
+## key promised for it — `keyplan` is one key per key-locked chest on the OPEN floor (D172),
+## and a pocket cannot join that count without making an unfound pocket into a key the
+## player was owed. So the pocket's chest asks for nothing it cannot be given.
+const POCKET_CHEST_TIER := PACK_GILDED
+
+# --- the guard on the prize (D183) ----------------------------------------------
+#
+# A pocket should usually be DEFENDED. Something is in there with the reward, and it is an
+# elite: that is what makes finding one an event rather than a pickup, and what stops the
+# reward from being free.
+#
+# It is also the one thing in this whole batch that makes a run **harder than its difficulty
+# rating**, so it is the one with the most conditions attached. An optional fight on top of
+# the budget is legitimate — it is the mirror of the slip-past, which prices a voluntary
+# *reduction* in attrition — but only under all three of:
+#
+#   * **seen before committed.** The guard is revealed with the pocket, drawn as the
+#     silhouette of the creature you will actually fight, and the fight does not start until
+#     you walk into it. An ambush for pushing a wall is a trap, and a trap turns exploring
+#     from a decision into a punishment.
+#   * **declinable at zero cost.** You may turn round and leave. There is deliberately NO
+#     slip option inside a pocket: the slip exists to get *past* something, and there is
+#     nothing beyond a guard but the prize and the way back, so walking out is the decline
+#     and it is already free.
+#   * **capped per run.** Uncapped, a lucky floor sequence could add five elites to a
+#     dungeon whose rating promised none of them, while every budget assertion stayed green.
+#
+# And one thing it must never touch: `dodgeable`. `Balance.avoid_cost` solves the whole slip
+# ladder from the COUNT of dodgeable fights (D99's fix), so a voluntary elite landing in that
+# count would silently re-price every slip in the dungeon. Guards are not in `budget`, which
+# is where the count comes from, and `tests/test_traversal.gd` checks the tiles against the
+# count rather than trusting that.
+const POCKET_GUARD_PCT := 66
+## Guarded pockets a whole dungeon may hold. Three, against the two to four floors a dungeon
+## has, so a run can meet one or two and never a gauntlet.
+const POCKET_GUARDS_PER_RUN := 3
+
+## Can this prize be worth standing over? A pocket holding nothing but a room is never
+## guarded: a guard on nothing is pure punishment, and the point of the empty pocket is that
+## it costs you only the turns you spent looking.
+static func pocket_guardable(prize: String) -> bool:
+	return prize != POCKET_NOTHING
+
+# --- errands: a reason to cross a floor (D184) ----------------------------------
+#
+# A floor-scoped ordinance, judged when you take the stairs. The cheapest way to make one
+# floor feel unlike the last, because it changes *how you walk* without changing what is on
+# the floor — and it fits the game's own subject: the title is a debt and an errand is a
+# small one.
+#
+# **Every condition here asks for MORE, never less, and that is a hard rule rather than a
+# theme.** The obvious errands all pull the other way — "leave the chests alone", "reach the
+# stairs in twenty turns", "take no damage" — and every one of them pays a player for
+# declining budgeted content. That is a SKIP, and D88's whole lesson is that a skip is a
+# difficulty change no budget assertion can see: the encounter count stays perfect while the
+# dungeon quietly costs less than its rating says. An errand that pays for self-denial would
+# have been a difficulty dial wearing a quest marker.
+#
+# So the three shipped conditions are things a careful player was going to do anyway, paid
+# for doing them well:
+#
+#   thorough — open every chest on the floor. Budgeted content, taken rather than left.
+#   unseen   — descend without being caught in the open. Care, not avoidance: the ambush
+#              price already exists and this pays for not paying it.
+#   pushed   — open a pocket on this floor. Optional content, already priced in turns.
+#
+# Reward is GOLD, which is the pack/gold channel the plan reserves for optional content: a
+# run-deck card would re-open the dilution question D80/D81 closed, and a relic would be free
+# strength outside the deck. Failing one costs nothing at all — an errand is never a
+# run-ender, so there is no version of this that can end a run badly.
+const ERRAND_THOROUGH := "thorough"
+const ERRAND_UNSEEN := "unseen"
+const ERRAND_PUSHED := "pushed"
+const ERRANDS := [ERRAND_THOROUGH, ERRAND_UNSEEN, ERRAND_PUSHED]
+## What each one says, in the register of `resources/events/`: plain words, concrete nouns,
+## and never the word "quest".
+const ERRAND_TEXT := {
+	ERRAND_THOROUGH: "Leave no lid shut on this floor.",
+	ERRAND_UNSEEN: "Go down off this floor without being caught in the open.",
+	ERRAND_PUSHED: "This floor is holding something back. Find it.",
+}
+## Which floors carry one. Not every floor: an ordinance on all of them is a checklist, and
+## the point is that a floor sometimes asks something of you and sometimes does not.
+const ERRAND_PCT := 55
+## Gold for settling one, scaled by depth the way every other payout is.
+const ERRAND_GOLD := 18
+const ERRAND_GOLD_PER_DIFF := 7
+
+static func errand_gold(difficulty: int) -> int:
+	return ERRAND_GOLD + ERRAND_GOLD_PER_DIFF * maxi(0, difficulty - 1)
+
+static func errand_text(id: String) -> String:
+	return String(ERRAND_TEXT.get(id, ""))
+
+static func roll_pocket_count() -> int:
+	return weighted_pick(POCKET_COUNT_WEIGHTS)
+
+static func roll_pocket_prize() -> String:
+	return String(POCKET_PRIZES[weighted_pick(POCKET_PRIZE_WEIGHTS)])
+
 ## Which enemies a dungeon can field at a tier, bosses excluded — the same pool
 ## `CombatEngine._spawn_enemies` rolls from, in one place so the two cannot disagree.
 ##

@@ -874,6 +874,10 @@ func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
 		if shape != "":
 			_draw_wall_prop(shape, centre + Vector2(t.x * 0.25, -t.y * 0.25)
 				+ lift * 0.5, t, Color(TINT_WALL_R) * wash)
+		# ...and a mark, if this is a wall with something behind it and the player is close
+		# enough to make it out (D182).
+		if tv.mark_visible(y * tv.grid().x + x):
+			_draw_mark(centre + Vector2(t.x * 0.25, -t.y * 0.25) + lift * 0.5, t, wash)
 
 ## The way down: a hole, drawn as the *inverse* of a wall block — nested diamonds
 ## stepping down into the dark, with a lit lip.
@@ -1203,6 +1207,36 @@ func _draw_wall_prop(shape: String, at: Vector2, t: Vector2, face: Color) -> voi
 			# that changed under it, and a wall with a heap of bones stuck to it at
 			# eye level is a worse answer than a plain wall.
 			pass
+
+## The mark on a wall with something behind it (D182).
+##
+## A crack running the height of the face, with a draught of paler stone bleeding out of it —
+## a hairline would be missed and a glowing sigil would be the game pointing at the answer.
+## The reading has to be *this stone is not like the rest of it*, which is a difference in
+## texture rather than a badge, and it has to survive being seen for exactly as long as the
+## player stands beside it.
+##
+## Deliberately NOT in the reach colour or any UI ink. `COL_REACH` says "you can step here"
+## and a mark says the opposite — there is a wall here and it can be pushed. Drawn in the
+## wall's own light for the reason a landmark is (D177): a feature in its own palette reads
+## as a marker laid over the floor rather than as part of the building.
+func _draw_mark(at: Vector2, t: Vector2, wash: Color) -> void:
+	var pale := Color(TINT_WALL_TOP.r * wash.r * 1.42, TINT_WALL_TOP.g * wash.g * 1.42,
+		TINT_WALL_TOP.b * wash.b * 1.34, 0.95)
+	var dark := Color(TINT_WALL_L.r * wash.r * 0.7, TINT_WALL_L.g * wash.g * 0.7,
+		TINT_WALL_L.b * wash.b * 0.7, 0.95)
+	# The crack: three segments that do not line up, because a straight line reads as
+	# masonry and a jointed one reads as a failure in it.
+	var top := at + Vector2(-t.x * 0.02, -t.y * 0.40)
+	var mid := at + Vector2(t.x * 0.04, -t.y * 0.12)
+	var low := at + Vector2(-t.x * 0.01, t.y * 0.14)
+	floor_view.draw_line(top, mid, dark, UITheme.px(3.0))
+	floor_view.draw_line(mid, low, dark, UITheme.px(2.4))
+	# ...and the draught out of it, offset so the crack still reads as the darker of the two.
+	floor_view.draw_line(top + Vector2(t.x * 0.02, 0), mid + Vector2(t.x * 0.02, 0),
+		pale, UITheme.px(1.6))
+	floor_view.draw_line(mid + Vector2(t.x * 0.02, 0), low + Vector2(t.x * 0.02, 0),
+		pale, UITheme.px(1.4))
 
 ## An iron ring lying in the floor.
 func _draw_prop_ring(centre: Vector2, t: Vector2, ink: Color) -> void:
@@ -1627,6 +1661,13 @@ func _refresh_header(tv: TraversalIso) -> void:
 	var held := GameState.keys_phrase()
 	if held != "":
 		below.append(held)
+	# What this floor is asking of you, in the row that already carries the floor's
+	# bookkeeping rather than in new chrome (D184). It says the ordinance and never whether
+	# it is currently met: an errand that ticked itself green as you walked would turn a thing
+	# you are doing into a checklist you are filling in.
+	var asked := tv.errand_line()
+	if asked != "":
+		below.append(asked)
 	_fill_row(floor_box, below, UITheme.font(), FLOOR_INK)
 
 func _refresh() -> void:
@@ -1725,10 +1766,19 @@ func _refresh() -> void:
 	# thing adjacent to you that asks for something you may not have.
 	var near := tv.threats().size()
 	var last: bool = tv.depth == tv.floors - 1
+	## Is the player standing next to a mark nobody has pushed yet? Outranks everything except
+	## something moving, because it is the one thing on this screen that is only visible from
+	## where they are standing and is gone the moment they walk on (D182).
+	var mark_here := false
+	for o in tv.options():
+		if String(o.get("action", "")) == "push":
+			mark_here = true
 	var hint := "A room opens up as you enter it; a passage shows you nothing. The way down is somewhere on this floor."
 	if near > 0:
 		hint = "Something is moving nearby. It takes a step whenever you do." if near == 1 \
 			else "%d things are moving nearby. They take a step whenever you do." % near
+	elif mark_here:
+		hint = "The stone beside you is not like the rest of it. Push, and see."
 	elif chest_next != "":
 		# In words as well as on the tile, because the drawing says a key is wanted and
 		# only the header knows whether you are holding one (D172). This is the whole point
@@ -1744,6 +1794,15 @@ func _refresh() -> void:
 	elif stair_found:
 		hint = "The way down is right there. Anything you leave up here, you leave behind." if last \
 			else "Stairs down, right there. This floor keeps whatever you do not take now."
+		# ...and at the stairs, whether the floor still holds something (D182). Only when it
+		# is TRUE, and it says a count and never a place: descent is one-way, so a pocket you
+		# did not find is gone the moment you take these stairs, and that is the whole
+		# decision the feature exists for. Without this line a hidden system is content for
+		# players who already know it is there; with it, it is a visible choice and the skill
+		# being asked for is still noticing.
+		var left := tv.unfound_pockets()
+		if left > 0:
+			hint += "  This floor still holds something you have not found."
 		# The finale is NAMED before it is entered, on every model (D41). That used to be the
 		# job of the move button standing in for the boss tile; the pad has no words on it, so
 		# the naming moved here — which is also the line the player is already reading.
@@ -1790,7 +1849,21 @@ func _on_pick(i: int) -> void:
 	# here — the model reports a price and never touches run HP (D13), the same contract the
 	# old deck model's dodge always had. Clamped so it can never itself be lethal.
 	var slip := int(opts[i].get("hp_cost", 0)) if String(opts[i].get("action", "")) == "avoid" else 0
+	# Read BEFORE the move, because after it the option list has been rebuilt and the pocket
+	# is open (D182).
+	var pushing: bool = String(opts[i].get("action", "")) == "push"
 	var chosen := tv.select(i)
+	if pushing:
+		# The one sound in the crawl that is stone moving rather than a foot landing: `enter`
+		# is what a floor arriving sounds like, and this is a floor arriving.
+		Audio.play("enter")
+		log_label.text = "The stone gives. There is a space behind it."
+		GameState.autosave()
+		if chosen.is_empty():
+			_refresh()
+			return
+		# ...unless something caught you while your back was turned, which is what a turn
+		# spent not moving is for.
 	if slip > 0:
 		GameState.hp = maxi(1, GameState.hp - slip)
 		Audio.play("hurt")
@@ -1811,6 +1884,16 @@ func _on_pick(i: int) -> void:
 			GameState.keys += 1
 			Audio.play("treasure")
 			log_label.text = "A key, down here where nothing else is. You take it."
+		elif tv.errand_paid != "":
+			# The floor's ordinance, settled, and PAID here: the model reports and the caller
+			# pays, exactly as it does for a key (D13/D184). Gold rather than a card, because
+			# a run-deck card would re-open the dilution question D80/D81 closed and a relic
+			# would be free strength from outside the deck.
+			var owed := Balance.errand_gold(GameState.dungeon)
+			GameState.earn_gold(owed)
+			Audio.play("gold")
+			log_label.text = "Down to floor %d. The floor is settled with you: +%d gold." % [
+				tv.depth + 1, owed]
 		elif tv.depth != from_floor:
 			# The one movement in the crawl that is not a step: stone dragging and a floor
 			# arriving somewhere below. `enter` is the run-entry sound and this is the same

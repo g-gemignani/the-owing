@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D180 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D184 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -34,7 +34,10 @@ The loop:
    readable from the doorway: a chest stands in the light of its own tier (D172). The floor
    is dressed as a place rather than a board — props, chamber roles and a few sources of
    light per floor — and a dungeon's bottom is not its top: the surface changes as you
-   descend, and then the architecture does (D176, D177).
+   descend, and then the architecture does (D176, D177). Some walls are not walls: a mark you
+   can only make out from the tile beside it opens a sealed pocket with something in it, and
+   usually an elite standing over it (D182, D183). Some floors ask something of you as well
+   (D184).
    (Three older traversal models — a node graph, a card draw, a dice board — lost to it in
    D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
 4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
@@ -51,7 +54,8 @@ Two-tier state makes this work:
 
 100 cards · 35 enemy archetypes (all painted) · 12 bosses (one named per dungeon) · 30 relics ·
 10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model ·
-7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks · 24 sound
+7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
+4 pocket prizes · 3 errands · 24 sound
 effects · 5 score tracks · 41 test suites. All content is `.tres` data plus one catalogue
 line; adding more is a data task, not a code task.
 
@@ -377,7 +381,38 @@ effects are drawn at runtime by `scripts/fx.gd`.
   a `--explore` route policy in the simulator, because a walker counts moves and only the
   simulator can price them in HP. **It shipped alone, before any optional content existed**
   (D179): a baseline measured after the feature it exists to price has landed is not a
-  baseline. Today it reads +2.7 turns a floor against a budget of 22, and level on clear rate.
+  baseline. Against that baseline the pockets read +16 turns a floor, well inside the budget.
+
+- **Optional content must be invisible to the required path, and it is TWO lines that make it
+  so.** A secret pocket does not seed the field the greedy walker steers by, and does not count
+  toward the unresolved total that decides whether the stairs are offered (D182). Get either
+  wrong and `ISO_MOVES_PER_ENCOUNTER_MAX` silently starts measuring the optional route instead
+  of the required one. The same rule downstream: a pocket's contents are outside `quota`, so
+  taking one cannot flatter `progress()`; a guard is outside `dodgeable`, so it cannot re-price
+  every slip in the dungeon (D99's shape); and pocket tiles are cut from leftover rock, so they
+  cannot shrink every room in the game.
+
+- **A secret must be a DEAD END, and an errand must ask for MORE.** Both rules exist for one
+  reason: a skip is a difficulty change no budget assertion can see (D88). A shortcut secret
+  would let a player reach the stairs past content; an errand paying for "leave the chests
+  alone" or "reach the stairs in twenty turns" would pay them for declining budgeted content.
+  Either would leave the whole suite green while the dungeon got cheaper than its rating says.
+  So a pocket has exactly one mouth and the floor's connectivity is *identical* sealed and open
+  (asserted, with a non-zero generated count beside it — D86 asserted the same shape about zero
+  generated vaults), and every errand condition is checked to be settleable only by a player who
+  does more (D182, D184).
+
+- **A rank has to be safe against the largest value the tiers below it can reach.** Option order
+  is `rank * 1000000 + away * 1000 + cell`, and an unreachable goal scores `away` as 9999 — so a
+  plain step can sort at ten million. A push ordered "between the stairs and the slip" at 2.5M
+  therefore outranked every step on any tile whose route ran through the way on, and the headless
+  walkers started pushing walls (D182). Nominal tier order is not the invariant; the arithmetic is.
+
+- **Anything unreachable that is seeded as a destination deadlocks a walker.** Four times now:
+  D74 twice, then a pocket whose only approach was the stair, then a pocket lying beyond it —
+  the way on is placed on the furthest *chamber* tile, so a corridor dead end can be further
+  still. Descent is one-way, so a route through the stairs is a route nobody can take, and both
+  the generator and the walkers now ask a flood that treats the way on as solid.
 
 - **There are two reward channels, and only one of them can be given away freely.** A
   card that joins the run deck is a *decision* — it can dilute the draw it was meant to
@@ -953,7 +988,7 @@ docs/        the README's screenshots, and nothing else. Carries a .gdignore:
              tag never moves off `latest` — the README's download links are only
              stable URLs because of it (D142). actions/setup-godot/ is the shared
              cache-and-install step, and runs on both Linux and macOS
-DESIGN.md    the full reasoning, decision by decision (D1–D180)
+DESIGN.md    the full reasoning, decision by decision (D1–D184)
 ART.md       the art brief: the diagnosis, the style, the reasoning
 ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
              whether it exists yet. Never edit by hand; regenerate it.

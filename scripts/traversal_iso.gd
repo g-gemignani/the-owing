@@ -133,6 +133,40 @@ var lights: Array = []
 ## is (D177). Rock, always — see `_place_landmark`.
 var landmark: int = -1
 var landmark_kind: int = 0
+## Sealed pockets on this floor (D182), each
+## {"mouth": int, "cells": Array[int], "prize": String, "open": bool}.
+##
+## A pocket is a DEAD END and that is a rule rather than a description: `cells` are all rock
+## until it is pushed open, `mouth` is the only one of them that touches walkable ground, and
+## every other cell was grown only through rock with no walkable neighbour at all. So the
+## floor's connectivity is identical with every pocket sealed and with every pocket open —
+## which is what stops the feature from being a skip (D88), and what
+## `tests/test_traversal.gd` asserts rather than assumes (D86 asserted the same shape about
+## zero generated vaults and was green for a milestone).
+##
+## Nothing in here is ever required. `_dist_to_unresolved` does not seed from a pocket and
+## the unresolved count does not include one, so the greedy walker cannot see a pocket and
+## the required path is exactly what it was.
+var pockets: Array = []
+## This floor's errand, or "" (D184). Decided per DUNGEON at `generate()` like everything
+## else, held per floor in `errandplan`, and judged the moment the stairs are taken.
+var errand: String = ""
+## What the floor has done toward it. Two flags and a count, all of them things the model was
+## already in a position to know — the plan's rule for a debt's conditions applies here too:
+## if a condition needs new bookkeeping, it is the wrong condition.
+var errand_seen: bool = false      ## caught in the open on this floor
+var errand_chests: int = 0         ## chests still shut on this floor
+var errand_pushed: bool = false    ## a wall pushed on this floor
+## Was the errand settled by the descent just taken? Reported exactly as `picked_key` is and
+## never saved: a traversal owns no run resources (D13), so the gold is paid by whoever owns
+## the purse and this is the only channel that can tell them.
+var errand_paid: String = ""
+var errandplan: Array = []
+## What each floor's pockets hold, decided at `generate()` with everything else (D182).
+## `pocketplan[i]` is one prize string per pocket on floor i, so the count and the contents
+## of every pocket in the dungeon are decided in ONE place — D172's rule, whose scar is a
+## chest tier estimated in one place and rolled in another.
+var pocketplan: Array = []
 ## Which terrain and which architecture THIS floor came out as. Recorded rather than
 ## re-derived: since D177 they vary by depth inside one dungeon, and the view, the props
 ## and a restored save must all agree on one answer. A second derivation is the D34 trap.
@@ -253,6 +287,12 @@ func generate(p_dungeon) -> void:
 	# +1 for the boss, which sits on the last floor and is not in `budget`
 	quota = budget.size() + roaming + 1
 	_plan_chests(diff)
+	# Deliberately NOT added to `quota`. A pocket is outside what the dungeon asks of you, so
+	# counting one would make a player who finds none unable to reach 1.0 — and not counting
+	# one is what keeps "this dungeon costs what its difficulty says" true (D182).
+	_plan_pockets()
+	# After the pockets, because a floor cannot be asked to find one it does not have (D184).
+	_plan_errands()
 
 	_build_floor(0)
 
@@ -285,6 +325,63 @@ func _plan_chests(diff: int) -> void:
 			if Balance.chest_lock(tier) == Balance.CHEST_LOCK_KEY:
 				keyplan[f] += 1
 
+## Decide how many pockets each floor has and what is in each of them (D182).
+##
+## Here, at `generate()`, beside `_plan_chests`, and for the same reason: D172's scar is a
+## number estimated in one place while being rolled in another, free to disagree. One place
+## decides how many pockets a dungeon holds and what is behind every wall in it, and
+## `tests/test_traversal.gd` asserts the planned count equals the placed count on every
+## floor — which is the only version of this that cannot drift.
+## The per-run cap on guards is enforced HERE, where the whole dungeon is in view (D183). It
+## cannot be enforced per floor: three floors each rolling "two thirds guarded" independently
+## is a dungeon that sometimes holds five voluntary elites, and every budget assertion in the
+## suite would stay green while it did.
+## Which floors ask something of you (D184). Rolled with the rest of the dungeon, so a floor's
+## ordinance is a fact about the place rather than something that appears when you arrive.
+##
+## The `pushed` errand is only ever given to a floor that actually HAS a pocket. An ordinance
+## nobody can settle is not a hard errand, it is a lie, and the floor knows at planning time
+## whether it planned one — which is the whole reason `_plan_pockets` runs first.
+func _plan_errands() -> void:
+	errandplan = []
+	for f in floors:
+		if randi() % 100 >= Balance.ERRAND_PCT:
+			errandplan.append("")
+			continue
+		var pool: Array = []
+		for e in Balance.ERRANDS:
+			if String(e) == Balance.ERRAND_PUSHED \
+					and (f >= pocketplan.size() or (pocketplan[f] as Array).is_empty()):
+				continue
+			pool.append(String(e))
+		errandplan.append(String(pool[randi() % pool.size()]) if not pool.is_empty() else "")
+
+func _plan_pockets() -> void:
+	pocketplan = []
+	var guards := 0
+	for f in floors:
+		var row: Array = []
+		for k in Balance.roll_pocket_count():
+			var prize := Balance.roll_pocket_prize()
+			var guarded: bool = Balance.pocket_guardable(prize) \
+				and guards < Balance.POCKET_GUARDS_PER_RUN \
+				and randi() % 100 < Balance.POCKET_GUARD_PCT
+			if guarded:
+				guards += 1
+			row.append({"prize": prize, "guard": guarded})
+		pocketplan.append(row)
+
+## How many of this dungeon's pockets were planned with something standing in them (D183).
+## Read by `tests/test_traversal.gd` to check the cap is asserted rather than assumed, and by
+## nothing in the game: a count of guards is not a fact the player is told.
+func planned_guards() -> int:
+	var n := 0
+	for row in pocketplan:
+		for e in row:
+			if bool((e as Dictionary).get("guard", false)):
+				n += 1
+	return n
+
 ## Lay out one floor and stand the player at its entrance. Called by `generate` for
 ## floor 0 and by `select` on every descent, which is why every per-floor field is
 ## reset here rather than in `generate`.
@@ -298,6 +395,7 @@ func _build_floor(d: int) -> void:
 	chest_of = {}
 	room_role = []
 	lights = []
+	pockets = []
 	var n_cells := w * h
 	props.resize(n_cells)
 	props.fill(0)
@@ -382,7 +480,12 @@ func _build_floor(d: int) -> void:
 	# Keys go down LAST, so they take the ground nothing else wanted — which is the
 	# whole mechanic: a key is somewhere you would not otherwise have walked.
 	_place_keys(int(keyplan[depth]) if depth < keyplan.size() else 0, carved)
-	# ...and the dressing goes down after even the keys, which is what lets its own rule
+	# Pockets are cut from the rock the floor did NOT use, after everything the floor asks
+	# of you is already standing on it (D182). Late for two reasons: the tiles must not come
+	# out of the floor's own budget, and a mouth has to be chosen against the finished
+	# shape — which walls are actually walls, and how far from the entrance each one is.
+	_carve_pockets(int(pocketplan[depth].size()) if depth < pocketplan.size() else 0, dist)
+	# ...and the dressing goes down after even the pockets, which is what lets its own rule
 	# be absolute: nothing decorative can land on a tile that holds something, because by
 	# now everything that holds something is already there (D176).
 	_dress_floor(carved, dist)
@@ -391,6 +494,23 @@ func _build_floor(d: int) -> void:
 	for i in enc.size():
 		if int(enc[i]) >= 0:
 			content += 1
+
+	# This floor's ordinance, and the state it is judged on (D184). Counted off the tiles
+	# actually laid down rather than off the plan: a chest that found no ground to stand on
+	# is a chest the player cannot open, and an errand that asked for it would be unsettleable
+	# through no fault of theirs.
+	errand = String(errandplan[depth]) if depth < errandplan.size() else ""
+	errand_seen = false
+	errand_pushed = false
+	errand_chests = 0
+	for i in enc.size():
+		if int(enc[i]) == Enc.TREASURE and not _in_pocket(i):
+			errand_chests += 1
+	# ...and an errand asking for every lid on a floor with no lids is settled by turning up,
+	# which is not an errand. Dropped rather than swapped: the floors that ask are meant to be
+	# some of them, and one fewer is the honest outcome.
+	if errand == Balance.ERRAND_THOROUGH and errand_chests == 0:
+		errand = ""
 
 	walked[pos] = true
 	_reveal_around(pos)
@@ -735,6 +855,269 @@ func _place_keys(count: int, carved: Array) -> void:
 		enc[pick] = KEY
 		anchors.append(pick)
 
+# --- secret pockets (D182) ------------------------------------------------------
+
+## Cut `count` sealed pockets out of the rock this floor did not use.
+##
+## The dead-end property is built in rather than checked afterwards, and the construction is
+## the whole design:
+##
+## * the **mouth** is a rock cell with exactly ONE walkable neighbour — so there is one way
+##   in and it is the tile you pushed;
+## * every other cell is grown only through rock with **no walkable neighbour at all** — so
+##   no cell of the pocket can become a second door;
+## * pockets may not touch each other, or two would merge into a route between two mouths.
+##
+## Together those mean the floor's connectivity is *identical* sealed and open. That is what
+## keeps a pocket from being a skip, and it is asserted in `tests/test_traversal.gd` beside a
+## non-zero generated count — D86 asserted exactly this shape about zero generated vaults and
+## stayed green for a milestone.
+##
+## Mouths are ranked by distance from the entrance, furthest first, so a pocket is a detour
+## rather than something you fall into on the way past. `dist_from_entry` is the field the
+## caller already has.
+func _carve_pockets(count: int, dist_from_entry: PackedInt32Array) -> void:
+	if count <= 0 or dist_from_entry.size() != enc.size():
+		return
+	# Every rock cell that could be a mouth: exactly one walkable neighbour, off the plate
+	# edge (the view only draws rock that walls in known ground, and an edge cell has no
+	# wall drawn on its far side), and not the landmark, which is already spoken for.
+	# Where the player can get to without descending. One flood, and the reason it is needed
+	# at all is that the way on is NOT always the furthest tile — it prefers the furthest
+	# chamber tile, so a corridor dead end can lie beyond it.
+	var reach_no_exit := _dist_from_avoiding_exit(pos)
+	var cands: Array = []
+	for i in enc.size():
+		if int(enc[i]) != WALL or i == landmark:
+			continue
+		var x := i % w
+		var y := int(i / w)
+		if x < 1 or y < 1 or x >= w - 1 or y >= h - 1:
+			continue
+		var touching := 0
+		var far := -1
+		var standable := false
+		for n in _neighbours(i):
+			if int(enc[n]) != WALL:
+				touching += 1
+				far = maxi(far, int(dist_from_entry[n]))
+				# ...and the ONE tile you would have to stand on to push has to be a tile you
+				# can actually get to and stand on WITHOUT taking the stairs (D182).
+				#
+				# Two ways it can fail and both generate a mark nobody in the world can push.
+				# The approach may BE the way on — a step onto a stair descends before any
+				# push is offered. Or the only route to it may run THROUGH the way on, which
+				# happens because the stair is placed on the furthest *chamber* tile and a
+				# corridor dead end can lie beyond it.
+				#
+				# The completionist walker found both, and found them the same way: pacing
+				# between two tiles for ever, because the field said "there" and there could
+				# not be reached. That is the D74 deadlock for a fourth time, and again the
+				# cause is an unreachable destination being seeded as a goal.
+				if not _is_exit(n) and int(reach_no_exit[n]) >= 0:
+					standable = true
+		if touching == 1 and far >= 0 and standable:
+			cands.append({"cell": i, "far": far})
+	# Furthest from the entrance first, ties by cell so a floor stays a function of its seed.
+	cands.sort_custom(func(a, b):
+		if int(a["far"]) != int(b["far"]):
+			return int(a["far"]) > int(b["far"])
+		return int(a["cell"]) < int(b["cell"]))
+	var taken := {}
+	var prizes: Array = (pocketplan[depth] as Array).duplicate()
+	for c in cands:
+		if pockets.size() >= count:
+			break
+		var mouth := int(c["cell"])
+		if _pocket_touches(mouth, taken):
+			continue
+		var want: int = Balance.POCKET_TILES_MIN \
+			+ (randi() % maxi(1, Balance.POCKET_TILES_MAX - Balance.POCKET_TILES_MIN + 1))
+		var cells := _grow_pocket(mouth, want, taken)
+		if cells.is_empty():
+			continue
+		for cc in cells:
+			taken[int(cc)] = true
+		var spec: Dictionary = prizes[pockets.size()] if pockets.size() < prizes.size() \
+			else {"prize": Balance.POCKET_NOTHING, "guard": false}
+		# A one-tile pocket cannot be guarded: the guard stands BETWEEN you and the prize,
+		# and one tile has no between. Dropping the guard rather than the pocket, because a
+		# pocket is worth having either way and the cap counts what was PLANNED — a floor
+		# that quietly kept a guard's allowance without placing one would make the cap read
+		# tighter than it is.
+		var guard_id := ""
+		if bool(spec.get("guard", false)) and cells.size() >= 2:
+			# Cast from exactly the pool combat would have used, at generation, so the
+			# silhouette the player looks at before committing is the creature they fight
+			# (R8/D85). Held on the pocket rather than in `enemy_of`, because the tile is
+			# still rock: it moves into `enemy_of` when the wall goes in.
+			var pool := Balance.roster_pool(dungeon, Balance.Tier.ELITE)
+			if not pool.is_empty():
+				guard_id = String(pool[randi() % pool.size()])
+		pockets.append({"mouth": mouth, "cells": cells,
+			"prize": String(spec.get("prize", Balance.POCKET_NOTHING)),
+			"guard": guard_id,
+			"open": false})
+
+## Grow a pocket back from its mouth through dead rock, up to `want` cells.
+##
+## "Dead rock" is the load-bearing phrase: a cell only joins if it has no walkable neighbour
+## and touches no other pocket. That is what makes the result a dead end without a second
+## pass to check it — a cell with a walkable neighbour would be a second door, and a cell
+## touching another pocket would join the two into a corridor between their mouths.
+func _grow_pocket(mouth: int, want: int, taken: Dictionary) -> Array:
+	var cells: Array = [mouth]
+	var frontier: Array = [mouth]
+	while cells.size() < want and not frontier.is_empty():
+		var cur := int(frontier.pop_front())
+		for raw in _neighbours(cur):
+			if cells.size() >= want:
+				break
+			var nb := int(raw)
+			if int(enc[nb]) != WALL or nb in cells or taken.has(nb) or nb == landmark:
+				continue
+			# no walkable neighbour of its own, and not beside somebody else's pocket
+			var dead := true
+			for raw2 in _neighbours(nb):
+				var nn := int(raw2)
+				if int(enc[nn]) != WALL or (taken.has(nn) and not (nn in cells)):
+					dead = false
+					break
+			if not dead:
+				continue
+			var x: int = nb % w
+			var y: int = int(nb / w)
+			if x < 1 or y < 1 or x >= w - 1 or y >= h - 1:
+				continue
+			cells.append(nb)
+			frontier.append(nb)
+	return cells
+
+## Would a pocket starting here sit against one that already exists?
+func _pocket_touches(cell: int, taken: Dictionary) -> bool:
+	if taken.has(cell):
+		return true
+	for n in _neighbours(cell):
+		if taken.has(n):
+			return true
+	return false
+
+## Which pocket a cell belongs to, or -1. The one place anything asks that question, so the
+## rules that hang off it — no slip inside a pocket, nothing in one counted against the
+## dungeon's budget — cannot be applied to two different sets of tiles.
+func _pocket_of(cell: int) -> int:
+	for k in pockets.size():
+		if cell in (pockets[k]["cells"] as Array):
+			return k
+	return -1
+
+## Is this cell inside a pocket that has been opened? What `select` asks before it decides
+## whether the thing it just resolved was part of what the dungeon asked for.
+func _in_pocket(cell: int) -> bool:
+	return _pocket_of(cell) >= 0
+
+## Push the wall in: the pocket becomes floor, whatever is in it is put there, and the whole
+## thing is revealed at once (D182).
+##
+## Revealed WHOLE deliberately. `_reveal_around` opens a chamber the moment you set foot in
+## it and gives a corridor two tiles; a pocket is exempt from both until it is pushed, and
+## then arrives complete — so opening one *feels* like a room arriving rather than like a
+## corridor being extended. It stays known for the rest of the floor.
+##
+## `tiles` grows with it, because `tiles` is what the status line's "mapped" is measured
+## against and a floor that quietly gained four tiles it does not count would read as more
+## explored than it is.
+func _open_pocket(k: int) -> void:
+	if k < 0 or k >= pockets.size():
+		return
+	var p: Dictionary = pockets[k]
+	if bool(p["open"]):
+		return
+	_invalidate()
+	p["open"] = true
+	var cells: Array = p["cells"]
+	for c in cells:
+		enc[int(c)] = EMPTY
+	tiles += cells.size()
+	# The prize goes on the cell FURTHEST from the mouth, so a pocket is walked into rather
+	# than reached into. A one-tile pocket has nowhere else to put it.
+	var seat := int(cells[cells.size() - 1])
+	# ...and the guard on the cell before it, which is what "between you and the prize" means
+	# on a grid (D183). It is revealed WITH the pocket and the fight does not start until the
+	# player walks into it: the wager is made with full information or it is not a wager.
+	var guard := String(p.get("guard", ""))
+	if guard != "" and cells.size() >= 2:
+		var post := int(cells[cells.size() - 2])
+		enc[post] = Enc.ELITE
+		enemy_of[post] = guard
+	match String(p["prize"]):
+		Balance.POCKET_CHEST:
+			enc[seat] = Enc.TREASURE
+			chest_of[seat] = Balance.POCKET_CHEST_TIER
+		Balance.POCKET_KEY:
+			enc[seat] = KEY
+		Balance.POCKET_SITE:
+			enc[seat] = Enc.EVENT
+		_:
+			pass    # a room, and a story about it. See `_describe`.
+	for c in cells:
+		seen[int(c)] = true
+	_room_cells = []
+	_build_light()
+
+## Has this floor's ordinance been settled (D184)?
+##
+## Every clause reads state the model was already keeping. That is the constraint the plan
+## puts on a debt's conditions and it applies just as hard here: a condition needing new
+## bookkeeping is the wrong condition, because bookkeeping kept only for one feature is
+## bookkeeping that goes stale the first time something else moves.
+func _errand_met() -> bool:
+	match errand:
+		Balance.ERRAND_THOROUGH:
+			return errand_chests == 0
+		Balance.ERRAND_UNSEEN:
+			return not errand_seen
+		Balance.ERRAND_PUSHED:
+			return errand_pushed
+	return false
+
+## What this floor is asking, or "" — for the status line. Says the ordinance and never
+## whether it is currently met: an errand that ticked itself green as you walked would turn
+## a thing you are doing into a checklist you are filling in.
+func errand_line() -> String:
+	return Balance.errand_text(errand) if errand != "" else ""
+
+## Pockets on this floor nobody has pushed open yet (D182).
+##
+## Exists so the view can tell the player *at the stairs* that the floor still holds
+## something, and only when it is true. Descent is one-way, so a pocket you did not find is
+## gone the moment you take the stairs — that is the whole decision the feature is for, and
+## without this line it is a decision only a player who already knows the system can make.
+## It says a count and never a place: the skill being asked for is noticing.
+func unfound_pockets() -> int:
+	var n := 0
+	for p in pockets:
+		if not bool((p as Dictionary)["open"]):
+			n += 1
+	return n
+
+## Is this cell an unopened pocket's mouth that the player can currently make out?
+##
+## Only from an ADJACENT tile, which is half the feel: finding pockets means covering ground
+## rather than reading a map, and it is a skill that improves with play instead of with a
+## wiki. Rejected on the way here: a per-step chance to find one, and a search action that
+## costs a turn on any tile — both charge for walking, which is the thing this model exists
+## to sell (D77), and the second makes optimal play "search all 130 tiles".
+func mark_visible(cell: int) -> bool:
+	for p in pockets:
+		var pd: Dictionary = p
+		if bool(pd["open"]) or int(pd["mouth"]) != cell:
+			continue
+		for n in _neighbours(cell):
+			if n == pos:
+				return true
+	return false
+
 # --- the dressing: everything on the floor that is only there to be looked at -----
 #
 # One pass, called last, and everything in it obeys the same two rules: it never lands on a
@@ -772,6 +1155,12 @@ func _dress_floor(carved: Array, dist_from_entry: PackedInt32Array) -> void:
 	if not wall.is_empty():
 		for i in enc.size():
 			if int(enc[i]) != WALL:
+				continue
+			# Never on a sealed pocket, and above all never on its mouth (D182). The mark on
+			# a mouth is the one piece of wall dressing the player is meant to ACT on, so a
+			# decorative ring hanging beside it — or worse, on it — is the D85 lie in the one
+			# place the whole feature depends on being readable at a glance.
+			if _pocket_of(i) >= 0:
 				continue
 			var beside := -2
 			for n in _neighbours(i):
@@ -1093,6 +1482,46 @@ func _dist_from(start: int) -> PackedInt32Array:
 			tail += 1
 	return dist
 
+## Steps from `start` to every tile the player can walk to WITHOUT taking the stairs.
+##
+## The way on is a one-way door, not a corridor: `select` descends the moment you step onto
+## it. So anything whose only route runs through it is unreachable in play, however connected
+## the floor looks — which matters to `_carve_pockets`, because a mark behind the stairs is a
+## mark nobody can push (D182). The same fact `_dist_to_unresolved` encodes for its own
+## field, stated once here rather than a third time inline.
+func _dist_from_avoiding_exit(start: int) -> PackedInt32Array:
+	var n_cells := enc.size()
+	var dist := PackedInt32Array()
+	dist.resize(n_cells)
+	dist.fill(-1)
+	if start < 0 or start >= n_cells or int(enc[start]) == WALL:
+		return dist
+	dist[start] = 0
+	var queue := PackedInt32Array()
+	queue.resize(n_cells)
+	queue[0] = start
+	var head := 0
+	var tail := 1
+	while head < tail:
+		var cur := queue[head]
+		head += 1
+		var d1 := dist[cur] + 1
+		var cx := cur % w
+		var cy := cur / w
+		for k in 4:
+			var step: Vector2i = DIRS[k]
+			var nx: int = cx + step.x
+			var ny: int = cy + step.y
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var nb: int = ny * w + nx
+			if int(enc[nb]) == WALL or dist[nb] >= 0 or _is_exit(nb):
+				continue
+			dist[nb] = d1
+			queue[tail] = nb
+			tail += 1
+	return dist
+
 ## Steps from every tile to the nearest of `sources`. One flood from all of them at
 ## once, which is the same answer as a BFS per source without multiplying by how many
 ## there are.
@@ -1163,6 +1592,14 @@ func _dist_to_unresolved(skip_exit: bool) -> PackedInt32Array:
 	for i in n_cells:
 		var e := int(enc[i])
 		var is_work: bool = e >= 0 and e != Enc.BOSS
+		# ...but nothing inside a pocket is work (D182). This is the single line that keeps
+		# the whole feature off the required path: the greedy walker steers by this field, so
+		# a chest in an opened pocket seeding it would make the walker fetch it, and
+		# `ISO_MOVES_PER_ENCOUNTER_MAX` — which measures the REQUIRED path — would start
+		# reporting the optional one. It is also why an opened pocket does not stop the
+		# stairs from being offered.
+		if is_work and _in_pocket(i):
+			is_work = false
 		# ...and once there is nothing else, the way on IS the work. Leaving this out was
 		# the D74 deadlock for the third time: with the floor stripped, no tile seeded the
 		# field, every option scored `away = -1`, the ordering fell back to cell index and
@@ -1376,7 +1813,11 @@ func _compute_options() -> Array:
 	var others := 0
 	for i in enc.size():
 		var e := int(enc[i])
-		if e >= 0 and e != Enc.BOSS:
+		# The same exclusion as `_dist_to_unresolved`, and it has to be the same or the two
+		# disagree about what the floor still owes: this count is what decides whether the
+		# way on is ranked last, so a chest in an opened pocket would hold the stairs back
+		# and turn optional content into a gate (D182).
+		if e >= 0 and e != Enc.BOSS and not _in_pocket(i):
 			others += 1
 	others += mons.size()   # a wanderer is unfinished business too
 	var goal := _dist_to_unresolved(others > 0)
@@ -1413,7 +1854,15 @@ func _compute_options() -> Array:
 			"order": rank * 1000000 + (away if away >= 0 else 9999) * 1000 + n,
 		})
 		# ...and, for a fight, the option of not having it. See `_slip_cost`.
-		if e == Enc.COMBAT or e == Enc.ELITE:
+		#
+		# NEVER inside a pocket (D183). This appears by default for every adjacent COMBAT or
+		# ELITE tile, so suppressing it is a deliberate act, and there are two reasons it has
+		# to be. It makes no sense in a dead end: the slip exists to get *past* something, and
+		# beyond a guard there is only the prize and the way back — walking out is the decline
+		# and it is already free. And it would be priced from `dodgeable`, which is solved for
+		# the whole ladder from a count the guard is not in (D99), so offering it here would
+		# charge the ladder's price for a rung the ladder never counted.
+		if (e == Enc.COMBAT or e == Enc.ELITE) and not _in_pocket(n):
 			var cost := _slip_cost()
 			out.append({
 				"type": e,
@@ -1429,6 +1878,40 @@ func _compute_options() -> Array:
 				# game". A player leaning on it faces everything, which is also what makes
 				# the headless walkers measure the full budget (D14).
 				"order": 3000000 + n,
+			})
+	# ...and a wall with a mark on it, which is a fifth kind of option: not a step, not a
+	# fight, and not the way on (D182).
+	#
+	# Ordered DEAD LAST, below even the slip, and the number is deliberately far above every
+	# other order this function can produce rather than merely bigger than the tiers above.
+	# The first attempt put it between the stairs and the slip at 2.5M, which is *wrong* by
+	# arithmetic nobody would spot by reading: a step whose goal is unreachable scores
+	# `1 * 1000000 + 9999 * 1000`, so on any tile whose route to the remaining work runs
+	# through the way on, the push outranked every step — and the contract walker, which
+	# presses the first option without a price on it, started pushing walls and then paced
+	# between two tiles for ever once they were all open. **A rank has to be safe against the
+	# largest value the tiers below it can reach, not against their nominal order.**
+	#
+	# Being last is also right on its own terms: the greedy walker presses index 0, so
+	# anything a push could outrank would put the optional route into the number that
+	# measures the required one.
+	for k in pockets.size():
+		var p: Dictionary = pockets[k]
+		if bool(p["open"]):
+			continue
+		var m := int(p["mouth"])
+		for d2 in DIRS.size():
+			if _step(pos, DIRS[d2]) != m:
+				continue
+			out.append({
+				"type": WALL,
+				"label": "%s  Push at the mark" % DIR_ARROW[d2],
+				"cell": m,
+				"dir": d2,
+				"resolves": false,
+				"action": "push",
+				"pocket": k,
+				"order": 20000000 + m,
 			})
 	out.sort_custom(func(a, b): return int(a["order"]) < int(b["order"]))
 	return out
@@ -1473,6 +1956,11 @@ func _describe(n: int) -> String:
 		return "%s chest" % Balance.PACK_TIER_NAME.get(String(chest_of[n]), "Worn")
 	if e >= 0:
 		return String(Balance.NODE_LABEL.get(e, "?"))
+	# Ground that was rock until you pushed at it. Named, because a pocket that reads as
+	# ordinary open floor is a pocket the player cannot tell they have already found — and
+	# on a re-walked floor that is the difference between a decision and a guess.
+	if _in_pocket(n):
+		return "Into the pocket"
 	if not bool(seen[n]):
 		return "Into the dark"
 	if bool(walked[n]):
@@ -1490,16 +1978,46 @@ func select(i: int) -> Dictionary:
 	var opts := options()
 	_invalidate()
 	picked_key = false
+	errand_paid = ""
 	if i < 0 or i >= opts.size():
 		return {}
 	var o: Dictionary = opts[i]
 	var target := int(o["cell"])
 	var was := int(enc[target])
 
+	# Pushing at a mark is a turn spent where you stand: the wall goes in, the pocket
+	# arrives, and you have not moved (D182). Walking into it is the NEXT decision, which is
+	# the point — the guard, when there is one, is looked at before it is met.
+	if String(o.get("action", "")) == "push":
+		steps += 1
+		floor_steps += 1
+		_open_pocket(int(o["pocket"]))
+		errand_pushed = true
+		# One flood, used twice, exactly as the slip does — and taken AFTER the opening, so
+		# the reveal and the wanderers both see the floor the push just made.
+		var pushed := _dist_from(pos)
+		_reveal_around(pos, pushed)
+		if floor_steps == Balance.ISO_LINGER:
+			_rouse(pos, w * h)
+		var caught_push := _floor_turn(pushed)
+		if caught_push >= 0:
+			var mp: Dictionary = mons[caught_push]
+			errand_seen = true
+			pending = {"type": int(mp["type"]), "cell": pos, "mon": caught_push,
+				"ambush": true}
+			if String(mp.get("enemy", "")) != "":
+				pending["enemy"] = String(mp["enemy"])
+			return pending
+		return {}
+
 	# The stairs are not a move across the floor, they are the end of it: descending
 	# replaces everything, so nothing below this line would mean anything.
 	if was == STAIR:
 		steps += 1
+		# The errand is settled HERE, in the last instant the floor that set it still exists
+		# (D184). Reported and not paid: a traversal owns no run resources (D13), so the gold
+		# is the view's to add, exactly as a key pickup is.
+		errand_paid = errand if _errand_met() else ""
 		_build_floor(depth + 1)
 		return {}
 
@@ -1539,6 +2057,13 @@ func select(i: int) -> Dictionary:
 
 	if int(enc[pos]) >= 0:
 		pending = {"type": int(enc[pos]), "cell": pos}
+		# Whatever is in a pocket is OUTSIDE what the dungeon asked for (D182), and the flag
+		# rides out on the encounter so `clear_pending` can decline to count it. Without it
+		# a pocket's chest would add to `cleared` against a `quota` that never included it,
+		# and `progress()` would read a floor as further along than it is — silently,
+		# because it clamps at 1.0.
+		if _in_pocket(pos):
+			pending["optional"] = true
 		# The archetype the floor has been SHOWING the player, handed on so the fight is
 		# the creature they walked up to. A tile with no cast enemy (a shop, a rest, the
 		# boss) simply omits it and the caller rolls as it always did.
@@ -1554,6 +2079,10 @@ func select(i: int) -> Dictionary:
 		# `ambush` is a PRICE, reported and not applied: a traversal never touches run
 		# resources (D13), exactly as the old deck model reported its dodge and let the
 		# caller pay. Whoever owns the HP charges Balance.iso_ambush_cost.
+		# Caught in the open, which is the one thing the `unseen` errand asks you to avoid
+		# (D184). Recorded here rather than where the HP is charged, because the model is what
+		# knows it happened and the charge is somebody else's (D13).
+		errand_seen = true
 		pending = {"type": int(m["type"]), "cell": pos, "mon": caught, "ambush": true}
 		if String(m.get("enemy", "")) != "":
 			pending["enemy"] = String(m["enemy"])
@@ -1566,6 +2095,10 @@ func clear_pending() -> void:
 		return
 	var cell: int = int(pending.get("cell", pos))
 	var kind_of := int(pending.get("type", Enc.COMBAT))
+	# A pocket's contents are not part of the dungeon's quota, so resolving one does not
+	# count toward it (D182). Everything else about it is normal: the tile clears, the fight
+	# is still loud, the chest still opens.
+	var optional := bool(pending.get("optional", false))
 	if pending.has("mon"):
 		var k := int(pending["mon"])
 		if k >= 0 and k < mons.size():
@@ -1577,7 +2110,10 @@ func clear_pending() -> void:
 		# the tile is bare ground now, so nothing stands on it and nothing is buried in it
 		enemy_of.erase(cell)
 		chest_of.erase(cell)
-	cleared += 1
+	if not optional:
+		cleared += 1
+		if kind_of == Enc.TREASURE:
+			errand_chests = maxi(0, errand_chests - 1)
 	pending = {}
 	# A fight is loud. Anything else — a shop, a rest, a chest — is not.
 	if kind_of == Enc.COMBAT or kind_of == Enc.ELITE:
@@ -1636,7 +2172,16 @@ func _save() -> Dictionary:
 		# byte grids above do not, which is the D140 scar.
 		"props": props, "room_role": room_role, "lights": lights,
 		"landmark": landmark, "landmark_kind": landmark_kind,
-		"terrain": terrain, "style_name": style_name}
+		"terrain": terrain, "style_name": style_name,
+		# Pockets are RUN state, not dressing: which walls have a mark behind them, what is
+		# behind each, and which ones you have already pushed (D182). A resumed run that
+		# re-rolled them would hand the player back a floor they had already stripped, and
+		# one that forgot which were open would seal a room they are standing in.
+		"pockets": pockets, "pocketplan": pocketplan,
+		# The errand and its progress are run state: a resumed floor has to still be owed the
+		# same thing, and has to remember that you were already caught once on it (D184).
+		"errand": errand, "errandplan": errandplan, "errand_seen": errand_seen,
+		"errand_chests": errand_chests, "errand_pushed": errand_pushed}
 
 func _load(d: Dictionary) -> void:
 	w = int(d.get("w", Balance.ISO_GRID))
@@ -1775,6 +2320,55 @@ func _load(d: Dictionary) -> void:
 	if not Balance.ISO_STYLES.has(style_name):
 		style_name = Balance.iso_style_name(String(dungeon.id) if dungeon != null else "",
 			depth, floors)
+	# Pockets back out of the save (D182). A blob from before they existed simply has none,
+	# which is the right answer: that floor was laid out without any, and its rock has
+	# nothing behind it. Every cell is checked against the grid on the way in for the reason
+	# every id in `MetaState._apply` is — a pocket indexing off the end of a smaller floor
+	# would be an option pointing at a cell that is not there.
+	pockets = []
+	for pk in d.get("pockets", []):
+		var pd: Dictionary = pk
+		var cells: Array = []
+		for c in pd.get("cells", []):
+			var ci := int(c)
+			if ci >= 0 and ci < enc.size():
+				cells.append(ci)
+		var mouth := int(pd.get("mouth", -1))
+		if cells.is_empty() or mouth < 0 or mouth >= enc.size():
+			continue
+		var prize := String(pd.get("prize", Balance.POCKET_NOTHING))
+		# The guard is an archetype id and is checked against the ROSTER on the way in, the
+		# way every other cast creature is: a save naming a creature this build no longer has
+		# would otherwise put an unfightable thing in front of the prize.
+		var guard := String(pd.get("guard", ""))
+		if guard != "" and not (guard in Balance.roster_pool(dungeon, Balance.Tier.ELITE)):
+			guard = ""
+		pockets.append({"mouth": mouth, "cells": cells,
+			"prize": prize if prize in Balance.POCKET_PRIZES else Balance.POCKET_NOTHING,
+			"guard": guard,
+			"open": bool(pd.get("open", false))})
+	errandplan = []
+	for e in d.get("errandplan", []):
+		errandplan.append(String(e) if String(e) in Balance.ERRANDS else "")
+	while errandplan.size() < floors:
+		errandplan.append("")
+	errand = String(d.get("errand", ""))
+	if not (errand in Balance.ERRANDS):
+		errand = ""
+	errand_seen = bool(d.get("errand_seen", false))
+	errand_pushed = bool(d.get("errand_pushed", false))
+	errand_chests = maxi(0, int(d.get("errand_chests", 0)))
+	pocketplan = []
+	for row in d.get("pocketplan", []):
+		var prizes: Array = []
+		for pz in row:
+			var e: Dictionary = pz
+			var pzn := String(e.get("prize", ""))
+			if pzn in Balance.POCKET_PRIZES:
+				prizes.append({"prize": pzn, "guard": bool(e.get("guard", false))})
+		pocketplan.append(prizes)
+	while pocketplan.size() < floors:
+		pocketplan.append([])
 	_build_light()
 
 	# The tile you stand on is ground you have seen and stood on — that is true of every
