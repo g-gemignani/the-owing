@@ -10175,56 +10175,68 @@ directories in it. Worth writing down: `ANDROID_HOME` alone did NOT satisfy the 
 contrary to what the `build-android` comment says about the CI runner; it wanted the editor
 settings.
 
-### D171 — A new title painting, installed rather than dropped in, and one line of the bible it breaks
+### D171 — A new title painting, and the moon that the "nothing pure white" line caught
 
-A re-roll of the title backdrop arrived as `main_menu.jpg`, 1344x768: a hooded figure at a
-cyan brazier on a cliff ledge, the black fortress small and far off across the valley, and a
-large white moon above.
+Two re-rolls of the title backdrop, both `main_menu.jpg` at 1344x768: a hooded figure at a
+cyan brazier on a cliff ledge, the black fortress small and far off across a valley of firs.
+The second one is what is on disk. The first is why there was a second, and it is the useful
+half of this entry.
 
-**It went in through `install_scene_backdrops.gd`, not by hand**, which is the route D114
+**Both went in through `install_scene_backdrops.gd`, not by hand**, which is the route D114
 built for exactly this and the first thing `assets/art/README.md` asks for. 1344x768 is 1.75
 and the game is 1.78, so a straight resize to 1280x720 stretches the figure by 2%; the
 installer crops to aspect instead, losing six rows off the top and six off the bottom. No
-letterbox was found, so nothing was stripped. `SUPERSEDES` had nothing to delete — the `.jpg`
-has been gone since D114 — and `PixelArt.title_art_path()` meant no call site moved.
+letterbox in either, so nothing was stripped. `SUPERSEDES` had nothing to delete — the `.jpg`
+has been gone since D114 — and `PixelArt.title_art_path()` meant no call site moved for either.
 
-**The watermark, which is the first thing to check on this file.** D163 had to invent a
+**No watermark, which is the first thing to check on this file.** D163 had to invent a
 single-image mode for `strip_sparkle.gd` to get the generator's four-point star off the
-previous painting. This one has none: the bottom-right 280x240 window the tool measures in is
-bare rock, a shadow and a shadow boundary at 3x, with no compact lit blob in it. Nothing to
-strip, so nothing was.
+previous painting. Neither of these has one: the bottom-right 280x240 window the tool measures
+in is bare rock, shadow and a shadow boundary at 3x, with no compact lit blob in it.
 
-**Legibility, which is the second.** `tests/MenuArtTest.tscn` measures worst-pixel contrast
-for white text across the left 40% under the 0.82 scrim and reports **6.1:1** against its 4.5
-floor. Not luck: the composition puts the subject right of centre and leaves cliff face and
-treeline under the buttons, which is what the manifest row for this file has asked for since
-it was written.
+**The palette tests this file has failed twice, re-measured against the reference attached to
+every request.** Sampling every second pixel; green is `regrade.gd`'s 70-160° band above
+s=0.18, sat-in-light and colour reach are over pixels at luminance ≥ 0.25. This method
+reproduces D134's `bg_crypt` figure (0.540 against its 0.535), which is what makes these
+numbers comparable to the ones recorded there:
 
-**The palette tests this file has failed twice, re-measured against `bg_crypt.png`** (the
-reference attached to every request), sampling every second pixel — green is `regrade.gd`'s
-70-160° band above s=0.18, sat-in-light and colour reach are over pixels at luminance ≥ 0.25:
+                    green   sat-in-light   colour reach   mean lum    >0.90
+    attempt 1        0.3%          0.407          94.9%      0.270   1.839%
+    attempt 2        0.3%          0.403          99.9%      0.229   0.002%
+    bg_crypt.png     0.0%          0.540          99.9%      0.168   0.202%
+    bg_ossuary.png   0.0%          0.330          92.1%      0.226   0.028%
 
-    main_menu.png   green 0.3%   sat-in-light 0.407   colour reach 94.9%   mean lum 0.270
-    bg_crypt.png    green 0.0%   sat-in-light 0.540   colour reach 99.9%   mean lum 0.168
+D134's pair — green under 1% AND saturation near 0.45 — holds in both, and both sit inside the
+bible's 20-35% luminance band. This is a painted violet night, not the neutral grey one that
+failed in D134 and not the green valley that failed before it.
 
-D134's pair of tests — green under 1% AND saturation near 0.45 — both hold, and mean
-luminance is inside the bible's 20-35% band. This is a painted violet night, not the neutral
-grey one that failed in D134 and not the green valley that failed before it.
+**The column that gets sat on measures 6.1:1 then 7.6:1**, from `tests/MenuArtTest.tscn`'s
+worst-pixel contrast for white text across the left 40% under the 0.82 scrim, against its 4.5
+floor. Not luck either time: the composition puts the subject right of centre and leaves cliff
+face and treeline under the buttons, which is what the manifest row has asked for since it was
+written.
 
-**What it does break: "nothing pure white".** The moon is a clipped 1.0 and **1.84% of the
-frame is over 0.90 luminance**, against 0.20% for `bg_crypt`, 0.03% for `bg_ossuary` and
-0.00% for `bg_foundry` — and against 0.029% for the painting this replaces (D122). The
-manifest row asks in as many words for "moonless, or a moon kept small and dulled: nothing in
-the frame reads as pure white", and the style preamble's VALUE line says the same. This one
-has a moon as its brightest object by a wide margin.
+**What the last column caught.** Attempt 1 had a full white moon — a clipped 1.0, brightest
+object in the frame by a wide margin, and **1.84% of the frame over 0.90 luminance** against
+0.20% for `bg_crypt` and 0.029% for the painting it replaced (D122). The manifest row asks in
+as many words for *"moonless, or a moon kept small and dulled: nothing in the frame reads as
+pure white"*, and the style preamble's VALUE line says the same. It was installed anyway and
+recorded as a breach rather than a defect, on the argument that the white landed at 62% width
+and 5% height — clear of the scrim and of every text rect — so the rule's actual purpose, a
+backdrop not bleaching the interface over it, was not violated.
 
-It was installed anyway, and the reason is where the white lands rather than how much of it
-there is. The moon sits at 62% width and 5% height — outside the scrimmed menu column,
-outside every text rect on the screen, and behind the logo plate's empty middle rather than
-under it. The rule exists so that a backdrop cannot bleach the interface drawn on top of it,
-and the measurement that speaks to that is the 6.1:1 above. Recorded here rather than fixed
-because it is a composition choice, not a defect: the file is not on `art_manifest.gd`'s
-`REDO` list, and if the bright moon is unwanted, that list is where it goes.
+Attempt 2 dulled the moon to a small crescent and that argument is moot: **0.002% over 0.90**,
+a tenth of `bg_ossuary` and a hundredth of `bg_crypt`. The brightest pixel in the painting is
+now the cyan flame at 0.905 — the one saturated light source the preamble asks for, and the
+thing that ought to be brightest. Colour reach went 94.9% → 99.9% and contrast 6.1 → 7.6:1 in
+the same step.
+
+**Worth keeping: saying the number was the whole fix.** Nothing was patched and no grade was
+applied — contrast D134, which hue-remapped the installed file in place and then said itself
+that the brief, not the grade, was the durable fix. No `REDO` line was needed either. One
+measurement, stated with the rule it broke, and the next roll came back inside the rule.
+`>0.90` as a share of the frame is the number that carries "nothing pure white"; it is in no
+test, and on this evidence it catches what mean luminance and saturation cannot.
 
 ### D172 — A lock the player can see from the doorway, and a key count that stopped guessing
 
