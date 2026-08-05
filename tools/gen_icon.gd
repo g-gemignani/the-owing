@@ -1,6 +1,6 @@
 ## The app icon: 48x48 pixel art, computed, in every size the platforms ask for.
 ##
-## Until D180 there was no icon at all — no `application/config/icon` in `project.godot` and
+## Until D181 there was no icon at all — no `application/config/icon` in `project.godot` and
 ## no `launcher_icons/*` in the Android preset — so the game shipped wearing the engine's own
 ## logo. That is the worst kind of placeholder, because it is somebody else's brand on the
 ## home screen of a phone, and nothing in a build log says so.

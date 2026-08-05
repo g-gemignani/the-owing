@@ -9,7 +9,7 @@ config/name="The Owing"
 run/main_scene="res://scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.7")
 
-; The app icon (D180). Generated pixel art: `tools/gen_icon.gd`, provenance in
+; The app icon (D181). Generated pixel art: `tools/gen_icon.gd`, provenance in
 ; `assets/art/icon/README.md`. Until this line existed the game shipped wearing the ENGINE's
 ; logo — on the Android launcher, in the window title bar, and on every platform whose
 ; exporter falls back to this setting. That is somebody else's brand on a home screen, and

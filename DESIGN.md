@@ -156,6 +156,7 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `resources/builds/*.tres` | Build archetypes (data, not code). |
 | `scripts/audio.gd` | Sound autoload: buses, the SFX reverb that follows the player, voice pool, event -> stream (D173). |
 | `scripts/iso_footing.gd` | Where an iso sprite stands and how big: the stand point measured off the art, and the rect that puts it on the tile (D149). |
+| `tools/gen_icon.gd` | The app icon: 48x48 pixel art, computed, scaled by whole numbers to every size the platforms ask for, with the Android adaptive layers (D181). |
 | `tools/audio_voices.py` | The instrument: tuning, filters, the room, and eight physically-modelled voices. Imported by BOTH audio generators, so "one instrument family" is structural (D173). |
 | `tools/gen_sfx.py` | The 24 sound effects, one voice, measured (D150, rewritten D173). |
 | `tools/rematte_iso.gd` | Re-cuts an installed iso figure whose matte ate it, from the paint still under the mask (D152). |
@@ -10881,3 +10882,108 @@ Track C's expensive half — back doors, debts, aspects. The plan sequences them
 phase for a stated reason ("nothing in a later phase starts before the earlier phase's number
 is in"), and Phase 4 is the phase whose whole job is to ship alone. The baseline above is
 what they are now waiting on rather than what they would have been bundled with.
+
+### D181 — The game was wearing the engine's logo
+
+> "I would like to have a custom and cool pixel art icon for the installer of the game
+> instead of the default Godot logo that I see now on my android."
+
+There was no icon. Not a placeholder icon — **no icon at all**: `project.godot` had no
+`application/config/icon`, and the Android preset had no `launcher_icons/*` keys, so Godot
+supplied its own logo for the launcher, the window title bar and every exporter's fallback.
+That is the same shape of defect as D170's arm64-only APK: not an error, not a warning, and
+invisible to everything except a person holding the phone. Twenty-two builds shipped with
+somebody else's brand on the home screen.
+
+## Generated, not painted, and that is a rule rather than a shortcut
+
+Every other file in `assets/art/` is painted. This one is computed, for the reason
+`tools/gen_ui_kit.gd` computes the frame kit: an illustration tool is bad at the one property
+the asset lives by. **A pixel-art icon has to sit on its grid at every size it ships in**, and
+an image model draws 48-pixel-*looking* shapes out of anti-aliased edges and several hundred
+colours. Downsampling that to a real 48×48 grid throws away the drawing and keeps the mush.
+
+So the grid is authored — 48×48, a multiple of the project's 16px pixel-art grid — and every
+shipped size is a whole-number scale of it: 192 (×4), 384 (×8), 432 (×9). The scaler is a
+block copy rather than `Image.resize`, because a block copy cannot be talked into resampling.
+
+**This is why the project icon is 384 and not the 256 `ART.md` asked for.** 256 ÷ 48 is 5.33,
+and a nearest-neighbour scale by 5.33 draws some pixels five wide and others six — the exact
+mush `default_texture_filter = NEAREST` and the whole 16px rule exist to prevent. The wish for
+a conventional size lost to the grid, and the row in ART.md now says so.
+
+## The design, and the one test every idea had to pass
+
+A gold coin with a skull struck into it, on a lit stone plate, **with a bite missing from the
+coin's rim** — something is owed and it is not whole, which is the title. Colours are the
+game's own: the plate is `boot_splash/bg_color` and the stone violet the backdrops are lit
+against, the struck bone is `UITheme.INK`, the golds are the currency the meta layer is
+denominated in. An icon in colours nothing else uses is a logo for a different game.
+
+The test every candidate had to pass is **48 pixels**. A lantern, a ledger and a hand of cards
+were all considered and all read as grey mush at launcher size. Two iterations of the coin
+failed it too, and both are worth recording because they were failures of proportion rather
+than of idea:
+
+* The first skull was 16×14 in a 28-cell coin, which left only a rim around it: the emblem
+  read as *a skull inside a broken ring*, not as a struck coin. Shrinking the skull to 14×12
+  and adding a face field between the stamp and the rim fixed it.
+* The bite was placed 15.9 cells out, beyond the coin's 14-cell radius, so it only clipped the
+  outer edge — and a nick in a rim does not read as a bite, it reads as a shading mistake. Its
+  centre now sits ON the rim and it cuts 9 cells in. The skull's nearest bone in that direction
+  is 8.1 cells out, so the two do not touch; that clearance is arithmetic, not luck.
+
+## Android wants three layers, and the mask is where this goes wrong
+
+An adaptive icon is two layers the launcher composites and then masks to whatever shape the
+phone prefers — circle, squircle, rounded square. **Only the central 66% of a 432px layer
+survives that mask.** So the emblem is drawn inside the middle 32 of the 48 cells and the plate
+is full-bleed beneath it; draw the emblem to the edges and every round-masked launcher clips
+the coin. The legacy 192px icon is composited in the generator instead, because Android before
+8.0 does none of its own.
+
+A fourth file is a monochrome layer for Android 13's themed icons, which the system tints with
+the user's wallpaper palette. Without one, a themed home screen shrinks the full-colour icon
+inside a grey blob.
+
+## The bug that would have shipped, and the reason it nearly did
+
+The monochrome layer came out **empty**, and nothing said so. Two things conspired:
+
+1. `Color.is_equal_approx` has a tolerance of 1e-5, and an RGBA8 image stores 0.84 as
+   214/255 = 0.8392. Every read-back comparison in the file silently failed, so the layer
+   classified the struck bone as metal and flattened to a featureless disc — and the coverage
+   report, which used the same comparison, claimed the emblem covered **0%** of a grid it
+   visibly covers. A measurement built on the same broken predicate as the thing it measures
+   agrees with it.
+2. A monochrome layer carries its shape in **alpha**. White-on-transparent and
+   nothing-on-transparent look identical in every image viewer, and the difference only appears
+   on a phone with themed icons switched on.
+
+One 8-bit step of slack fixed both. The generator now *measures* the flattened layer — percent
+opaque, and how many cells of the skull survive the flatten — and exits non-zero rather than
+writing a blank one, alongside a coverage floor (an emblem under 18% of the grid reads as an
+empty box at launcher size) and a metal-to-bone contrast floor of 3:1.
+
+## What was verified, and what was not
+
+* The four preset key names were read out of **this engine binary** rather than trusted from
+  memory: `strings` on `godot.linuxbsd.editor.x86_64` lists exactly
+  `launcher_icons/main_192x192` and the three `adaptive_*_432x432` keys, and the binary also
+  carries the log lines *"Processing launcher adaptive icon p_monochrome for dimension"*, so
+  all four are read by this version. `application/config/icon` likewise.
+* The export template APK ships `res/mipmap-*/icon.webp`, `icon_foreground.webp`,
+  `icon_background.webp` and `icon_monochrome.webp` plus `mipmap-anydpi-v26/themed_icon.xml` —
+  those are the Godot logo, and they are what the export replaces. That is the confirmation of
+  the diagnosis.
+* **The APK was not built here.** The local Android SDK has no `build-tools`, so `apksigner` is
+  missing and the export fails before it packages anything — the icon-processing log lines
+  cannot be observed locally. CI builds the APK; the preset half is asserted by
+  `tests/test_content.gd`, which is where D170 put the ABI guard for the same reason.
+
+The test asserts what can be asserted without an SDK: every one of the four keys is set, points
+at a file in the project, and that file is exactly the size its key names — Android's sizes are
+not hints, and a foreground at the wrong size is cropped rather than scaled. Plus the project
+icon exists and is a square whole-number multiple of 48. All three gates were checked by
+breaking them: blanking the monochrome key, blanking `config/icon` and pointing the 192 key at
+the 48px file each produce their own line.

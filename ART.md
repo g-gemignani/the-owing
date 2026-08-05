@@ -482,7 +482,7 @@ Painted objects on transparent, lit from upper-left, ink-outlined, readable at
 | `fonts/display.ttf` | — | **done** — Cinzel Bold (OFL); `UITheme.style_title` and card names |
 | `fonts/body.ttf` | — | **done** — Fira Sans Regular (OFL); the `Theme` default |
 | `ui/logo.png` | 1600×480 | the title is a plain `Label` reading `"THE OWING"`, set into the painted cartouche |
-| `icon/icon_*.png` (6) | 48×48 grid | **done (D180)** — *generated*, not painted: `tools/gen_icon.gd`. A gold coin with a skull struck into it and a bite out of its rim, authored on a 48-cell grid and scaled by whole numbers to 192 / 384 / 432 — the two Android adaptive layers, the themed layer, the legacy launcher icon and the project icon. Not 256×256, because 256 ÷ 48 is 5.33 |
+| `icon/icon_*.png` (6) | 48×48 grid | **done (D181)** — *generated*, not painted: `tools/gen_icon.gd`. A gold coin with a skull struck into it and a bite out of its rim, authored on a 48-cell grid and scaled by whole numbers to 192 / 384 / 432 — the two Android adaptive layers, the themed layer, the legacy launcher icon and the project icon. Not 256×256, because 256 ÷ 48 is 5.33 |
 | `ui/boot_splash.png` | 1280×720 | none configured |
 
 The font was the cheapest large win on this list and it is spent: two files and a

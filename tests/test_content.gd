@@ -201,7 +201,7 @@ func _init() -> void:
 						print("FAIL the Android preset does not build %s — every %s device would refuse to install the APK" % [
 							abi, "32-bit" if abi.begins_with("armeabi") else "64-bit"])
 
-				# --- the launcher icon (D180) ---
+				# --- the launcher icon (D181) ---
 				#
 				# Guarded here for the same reason as the ABIs, and it is the same failure
 				# shape: an unset icon key is not an error, it is Godot quietly shipping its
@@ -237,7 +237,7 @@ func _init() -> void:
 							key, "unloadable" if itex == null else "%dx%d" % [
 								itex.get_width(), itex.get_height()], want_px, want_px])
 
-	# The window icon and every exporter's fallback (D180). Godot's default for an unset
+	# The window icon and every exporter's fallback (D181). Godot's default for an unset
 	# `config/icon` is its own logo, which is why this is asserted rather than assumed, and
 	# the size is asserted as a whole-number multiple of the 48-cell grid the art is drawn
 	# on: a pixel-art icon scaled by 5.33 draws some pixels five wide and others six.
