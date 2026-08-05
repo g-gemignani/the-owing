@@ -10155,3 +10155,96 @@ under it. The rule exists so that a backdrop cannot bleach the interface drawn o
 and the measurement that speaks to that is the 6.1:1 above. Recorded here rather than fixed
 because it is a composition choice, not a defect: the file is not on `art_manifest.gd`'s
 `REDO` list, and if the bright moon is unwanted, that list is where it goes.
+
+### D172 — A lock the player can see from the doorway, and a key count that stopped guessing
+
+Asked, after D167 shipped: *"what happens when we do not have enough keys when opening a
+chest?"* The answer was worse than it should have been. The chest opened its screen, took
+its gold, printed *"Locked, and you have no key"*, and `_finish` cleared the node — so the
+packs were forfeit and the tile was bare ground. You could not come back with a key.
+
+That is a defensible rule and it was resting on an indefensible one: **the tier was rolled
+in `chest_screen._open`**, at the lid. A chest's tier IS its lock (`Balance.CHEST_LOCK`), so
+the lock did not exist until the player was standing in it, and every chest on the floor
+drew the same sprite. The player could not have known, could not have gone for the key
+first, and the turn was already spent. D167 made that sharper rather than causing it: once
+the answer to a lock is a detour, a lock you cannot see is a detour you cannot choose.
+
+**So the tier is cast when the floor is laid out**, which is D85's fix applied to the noun
+next door — the same argument that stopped the floor showing a creature that had nothing to
+do with the fight you got. `TraversalIso.chestplan` holds one tier per chest per floor,
+rolled in `_plan_chests` with the rest of the dungeon; `_cast_chests` pairs them to tiles as
+each floor is built; `chest_of` carries it, `pending["chest"]` hands it to the screen, and
+the screen's roll survives only as the fallback for a save that predates this.
+
+**And then the key count stopped being an estimate.** D167 sized it from the sealed weight
+in `pack_tier_odds` — correct while the tier was still rolled at the lid, and D34's
+duplicated-table trap the moment it was not: two places deciding how many locks a dungeon
+has, free to disagree. The locks are now known at generation, so `_plan_chests` counts them:
+**one key on a floor for every key-locked chest on that floor.** Which also fixes what the
+estimate could not — it was clamped to at least one and at most one per chest, so a dungeon
+that rolled no key lock still scattered a key nobody needed, and one that rolled three could
+be handed two. Measured over the twelve dungeons: **17 keys for 17 locks across 14 floors**,
+where the estimate gave 21 keys for a lock count it never counted.
+
+`tests/test_traversal.gd` asserts the invariant per FLOOR and not per dungeon, because the
+descent is one-way: a dungeon can balance overall and still be a dungeon whose lock had no
+answer. It also round-trips the cast tiers through real `JSON.stringify`/`parse_string` —
+`chest_of` is keyed by cell, JSON has no integer keys, and D140's failure mode reads
+differently here: a dictionary that looks full and answers nothing would make every chest in
+a resumed run draw and open as **Worn**, which is the one tier that unlocks itself. A sealed
+chest would have quietly become a free one.
+
+## Three tiers, one painted chest
+
+Asked while this was being built: *"can we change the color of the chest or cast a light on
+it to visually make the tiers recognizable at a glance?"* — the right question, because the
+first attempt was a thin ring on the ground and a ring under a two-tile-tall sprite is read
+after the sprite, if at all.
+
+The reading is now carried at three distances, and each was chosen for the distance it
+works at:
+
+* **A pool of light** in the tier's colour: filled diamonds at falling alpha with a hot
+  middle, which on a 2:1 projection is what light lying on a floor looks like. This is the
+  one that works from across a room.
+* **The chest lit by the same colour** (`TIER_LIGHT`, multiplied onto the sprite), which is
+  what makes the CHEST the thing you recognise rather than a marker next to it. Channels
+  above 1.0, because multiplying down only ever gives a darker version of the same object —
+  gilded burns warm and over-bright, sealed is cool and pale, and **worn goes down**, because
+  if all three are special none of them is.
+* **The key silhouette**, half size, on a key-locked chest only — and it is literally the
+  same `_draw_key` the floor uses for a key lying on it. "This wants that" is a sentence a
+  picture can say and a colour cannot.
+
+The pool is drawn from a SATURATED version of the tier ink rather than the ink itself:
+`Icons.pack_tier_colour` is a colour for text on a dark panel, and walked stone is already
+pale (`TINT_WALKED`), so sealed's parchment grey laid over it at low alpha is grey on grey.
+Squaring each channel pushes the hue off white without a second palette to drift from the
+first.
+
+Which is also why that function now exists. The tier colour was written twice — a private
+`_tier_colour` in `packs_screen.gd` and another in `chest_screen.gd` — harmless while a tier
+was only ever a word on a menu, and not harmless the moment the dungeon floor started
+drawing tiers too. Three copies of a colour that has to mean the same thing on the tile, on
+the lid and in the list is D34 with better manners.
+
+And the words: the hint line names what an adjacent chest wants, preferring the locked one
+when two are adjacent, and it is the only place that can say *"a key you do not have"* —
+the drawing knows the lock and only the header knows what you are holding. That sentence
+existing **before** the turn is spent is the whole of this entry.
+
+## Two things this cost, both worth writing down
+
+* `tools/screenshots.gd` grew a row that plants a key and one chest of each tier on the
+  nearest lit ground, because three tiers in one frame is the only way to see whether three
+  lights are actually told apart, and a walked floor has no reason to put them side by side.
+  The first version planted onto the four adjacent tiles — a corridor has two, so it
+  photographed whichever two tiers happened to fit.
+* That row also cost twenty minutes to a hang: `var near_field := tv._dist_from(...)` where
+  `tv` is untyped is a *parse* error, and **a tool whose script fails to parse does not fail,
+  it hangs** — the scene never reaches its own `quit()`, and stdout to a pipe is block
+  buffered, so there is no error to read either. `tests/test_compile.gd` covers
+  `res://tools/` for exactly this and would have named it in one second; it had simply not
+  been run since the edit. Run the compile suite after touching a tool, not only after
+  touching the game.

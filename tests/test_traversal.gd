@@ -527,17 +527,34 @@ func _init() -> void:
 	# to prove the detour is walkable at all.
 	var key_floors := 0
 	var key_total := 0
+	var lock_total := 0
 	for did5 in Balance.DUNGEONS:
 		var kt := TraversalIso.new()
 		kt.generate(Balance.dungeon(did5))
 		var want := 0
 		for n in kt.keyplan:
 			want += int(n)
-		if want <= 0:
-			fails += 1
-			print("FAIL %s holds chests and scatters no key at all" % did5)
-			continue
 		key_total += want
+		# --- one key per lock, per FLOOR (D172) ---
+		#
+		# The invariant that replaced D167's estimate. It is per floor and not per dungeon
+		# because the descent is one-way: a key on floor 2 cannot open a chest on floor 1, so
+		# a dungeon that balances overall can still be a dungeon whose lock had no answer.
+		for f in kt.floors:
+			var locks := 0
+			for tier5 in kt.chestplan[f]:
+				if Balance.chest_lock(String(tier5)) == Balance.CHEST_LOCK_KEY:
+					locks += 1
+			lock_total += locks
+			if int(kt.keyplan[f]) != locks:
+				fails += 1
+				print("FAIL %s floor %d: %d key-locked chests and %d keys — a lock with no key is a dead end, a key with no lock is litter" % [
+					did5, f + 1, locks, int(kt.keyplan[f])])
+			if kt.chestplan[f].size() != _count_of(kt.plan[f], TraversalIso.Enc.TREASURE):
+				fails += 1
+				print("FAIL %s floor %d: %d chests planned and %d tiers rolled for them" % [
+					did5, f + 1, _count_of(kt.plan[f], TraversalIso.Enc.TREASURE),
+					kt.chestplan[f].size()])
 		for f in kt.floors:
 			if int(kt.keyplan[f]) <= 0:
 				continue
@@ -602,6 +619,12 @@ func _init() -> void:
 					fails += 1
 					print("FAIL %s: a step onto bare ground reported a key" % did5)
 				if not got.is_empty():
+					# A chest reaching the screen must carry the tier the FLOOR was showing,
+					# or the lock the player walked to is not the lock they get (D172).
+					if int(got.get("type", -1)) == TraversalIso.Enc.TREASURE:
+						if not (String(got.get("chest", "")) in Balance.PACK_TIERS):
+							fails += 1
+							print("FAIL %s: a chest resolved without the tier it was drawn with" % did5)
 					kt.clear_pending()
 				if walked_to:
 					break
@@ -609,8 +632,35 @@ func _init() -> void:
 				fails += 1
 				print("FAIL %s floor %d: could not walk to a key in %d steps" % [
 					did5, f + 1, ksteps])
-	print("  (info: %d keys across %d floors of %d dungeons)" % [
-		key_total, key_floors, Balance.DUNGEONS.size()])
+	print("  (info: %d keys for %d locks across %d floors of %d dungeons)" % [
+		key_total, lock_total, key_floors, Balance.DUNGEONS.size()])
+
+	# --- a cast tier has to survive being written down (D140's lesson, D172's field) ---
+	#
+	# `chest_of` is keyed by CELL, and JSON has no integer keys: every one comes back as the
+	# string "42". Restored without the conversion it is a dictionary that looks full and
+	# answers nothing — every chest in a resumed run would draw and open as Worn, which is
+	# the tier that unlocks itself, so a sealed chest would quietly become a free one.
+	for did6 in Balance.DUNGEONS:
+		var st := TraversalIso.new()
+		st.generate(Balance.dungeon(did6))
+		var before := {}
+		for i in st.enc.size():
+			if int(st.enc[i]) == TraversalIso.Enc.TREASURE:
+				before[i] = st.chest_at(i % st.w, int(i / st.w))
+		if before.is_empty():
+			continue
+		var blob = JSON.parse_string(JSON.stringify(st.save_state()))
+		var back := TraversalIso.new()
+		back.dungeon = Balance.dungeon(did6)
+		back.load_state(blob)
+		for i in before:
+			var was := String(before[i])
+			var now := back.chest_at(int(i) % back.w, int(int(i) / back.w))
+			if was != now:
+				fails += 1
+				print("FAIL %s: a %s chest came back from the save as %s" % [
+					did6, was if was != "" else "(none)", now if now != "" else "(none)"])
 
 	# and depth must matter, or a flat price gets cheaper the deeper you go
 	if Balance.avoid_cost(8, 0, 3) <= Balance.avoid_cost(1, 0, 3):
@@ -628,3 +678,13 @@ func _init() -> void:
 	else:
 		print("TRAVERSAL TEST: FAIL (%d)" % fails)
 	quit()
+
+## How many of `want` are in `row`. One line, and it exists because the same count is
+## needed twice in the assertion that uses it and an inline loop in a print argument is
+## how the two drift apart.
+func _count_of(row: Array, want: int) -> int:
+	var n := 0
+	for e in row:
+		if int(e) == want:
+			n += 1
+	return n

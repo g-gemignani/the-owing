@@ -29,21 +29,22 @@ func _ready() -> void:
 	margin.add_child(body)
 	_open()
 
-func _tier_colour(tier: String) -> Color:
-	match tier:
-		Balance.PACK_GILDED: return Color(1.0, 0.84, 0.40)
-		Balance.PACK_SEALED: return Color(0.80, 0.86, 0.95)
-		_: return Color(0.72, 0.70, 0.66)
-
 func _open() -> void:
-	var tier := Balance.roll_pack_tier(Balance.PACK_TREASURE, GameState.dungeon)
+	# The tier the FLOOR was showing, not a fresh roll (D172). A chest's tier is its lock,
+	# and rolling it here meant the lock came into existence at the moment it was too late to
+	# do anything about — the player had already spent the turn walking in. The crawl casts it
+	# when the floor is laid out and hands it over on `pending`; the roll survives as the
+	# fallback for a chest that arrived from anywhere else, and for a save that predates this.
+	var tier := String(GameState.pending.get("chest", ""))
+	if not (tier in Balance.PACK_TIERS):
+		tier = Balance.roll_pack_tier(Balance.PACK_TREASURE, GameState.dungeon)
 	var lock := Balance.chest_lock(tier)
 	var build_id := Balance.roll_pack_build(GameState.dungeon_id)
 
 	var title := Label.new()
 	title.text = "%s Chest" % Balance.PACK_TIER_NAME.get(tier, "Worn")
 	UITheme.style_title(title)
-	title.add_theme_color_override("font_color", _tier_colour(tier))
+	title.add_theme_color_override("font_color", Icons.pack_tier_colour(tier))
 	body.add_child(title)
 
 	var gold := Balance.TREASURE_GOLD_MIN + randi() % maxi(1, Balance.TREASURE_GOLD_MAX - Balance.TREASURE_GOLD_MIN + 1)
@@ -90,7 +91,7 @@ func _open() -> void:
 					String(p.get("build", ""))),
 				Balance.pack_cards(String(p.get("tier", Balance.PACK_WORN)))])
 			row.add_theme_color_override("font_color",
-				_tier_colour(String(p.get("tier", Balance.PACK_WORN))))
+				Icons.pack_tier_colour(String(p.get("tier", Balance.PACK_WORN))))
 		UI.label(body, "Sealed. They leave with you, if you do.")
 	else:
 		UI.label(body, "Whatever was inside stays inside.")

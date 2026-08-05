@@ -364,8 +364,11 @@ func _setup(need: String, dungeon: String = "") -> void:
 		"event":
 			GameState.pending = {"type": GameState.NodeType.EVENT, "row": 1, "col": 0, "cleared": false}
 		"chest":
-			GameState.pending = {"type": GameState.NodeType.TREASURE, "row": 1, "col": 0, "cleared": false}
-			# a key in hand, so the sealed-chest branch can actually be photographed
+			# The tier comes in on `pending` now (D172), so the row names the one worth
+			# photographing rather than rolling and hoping: sealed is the locked branch, and
+			# the key in hand is what lets it be the OPENED locked branch.
+			GameState.pending = {"type": GameState.NodeType.TREASURE, "row": 1, "col": 0,
+				"cleared": false, "chest": Balance.PACK_SEALED}
 			GameState.keys = 2
 		"iso_pad", "iso_key", "iso_walked", "iso_resumed":
 			# Forced ON for this row only, and reset at the top of every `_setup`, so the
@@ -389,12 +392,35 @@ func _setup(need: String, dungeon: String = "") -> void:
 			# was built before this edit — without it the pad would tint for the floor as
 			# it was a step ago.
 			if need == "iso_key" and tv != null:
-				for o in tv.options():
-					var c: int = int(o["cell"])
-					if int(tv.enc[c]) == TraversalIso.EMPTY:
-						tv.enc[c] = TraversalIso.KEY
-						tv._invalidate()
+				# ...and one chest of each tier beside her, because the whole of D172 is that
+				# a tier is readable from the tile: three chests in one frame is the only way
+				# to see whether the three lights are actually told apart, and a walked floor
+				# has no reason to have put them next to each other.
+				# Nearest lit ground first, not the four adjacent tiles: a corridor has two
+				# neighbours and three tiers need three tiles, so pinning this to the option
+				# list would have photographed whichever two tiers happened to fit.
+				# Typed on purpose: `tv` is untyped (the autoload's field), so an inferred
+				# `:=` here is a parse error — and a tool whose script fails to parse does not
+				# fail, it HANGS, because the scene never reaches its own `quit()`.
+				var near_field: PackedInt32Array = tv._dist_from(tv.pos)
+				var spots: Array = []
+				for i in tv.enc.size():
+					var gx: int = i % tv.w
+					var gy: int = int(i / tv.w)
+					if int(tv.enc[i]) == TraversalIso.EMPTY and tv.lit(gx, gy) \
+							and int(near_field[i]) > 0:
+						spots.append(i)
+				spots.sort_custom(func(a, b): return int(near_field[a]) < int(near_field[b]))
+				var tiers: Array = Balance.PACK_TIERS.duplicate()
+				for k in spots.size():
+					if k == 0:
+						tv.enc[int(spots[k])] = TraversalIso.KEY
+					elif not tiers.is_empty():
+						tv.enc[int(spots[k])] = TraversalIso.Enc.TREASURE
+						tv.chest_of[int(spots[k])] = String(tiers.pop_front())
+					else:
 						break
+				tv._invalidate()
 			# Then throw that away and rebuild it from a save, through real
 			# `JSON.stringify`/`parse_string` — not a `duplicate()` of the dictionary,
 			# because the whole class of fault this row exists for is a type that

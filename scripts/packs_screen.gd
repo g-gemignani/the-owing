@@ -53,13 +53,6 @@ func _ready() -> void:
 	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
 	_refresh()
 
-## Gilded reads as gold, sealed as parchment, worn as the dust it is.
-func _tier_colour(tier: String) -> Color:
-	match tier:
-		Balance.PACK_GILDED: return Color(1.0, 0.84, 0.40)
-		Balance.PACK_SEALED: return Color(0.80, 0.86, 0.95)
-		_: return Color(0.72, 0.70, 0.66)
-
 func _refresh() -> void:
 	for c in list_box.get_children():
 		c.queue_free()
@@ -86,7 +79,7 @@ func _refresh() -> void:
 		# 600 fits the longest title a pack can have; the tooltip carries the rest.
 		lbl.custom_minimum_size.x = UITheme.px(TITLE_W)
 		lbl.clip_text = true
-		lbl.add_theme_color_override("font_color", _tier_colour(tier))
+		lbl.add_theme_color_override("font_color", Icons.pack_tier_colour(tier))
 		# what is inside is stated up front: a sealed pack is a promise, not a lottery
 		lbl.text = "%s   (%d cards, found in %s)" % [
 			Balance.pack_title(tier, build_id), Balance.pack_cards(tier),

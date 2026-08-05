@@ -99,6 +99,11 @@ var room_of := PackedInt32Array()
 ## enemy was rolled at combat setup, so the floor was showing the player a creature that
 ## had nothing to do with what came next (D85).
 var enemy_of: Dictionary = {}
+## cell -> pack tier, for the tiles that hold a chest. The same idea one noun over (D172):
+## a chest's tier IS its lock (`Balance.chest_lock`), so a tier decided at the lid is a lock
+## the player could not have seen from the doorway — and since D167 the answer to a key lock
+## is a detour, which is a decision that has to be available BEFORE the turn is spent.
+var chest_of: Dictionary = {}
 var pos: int = 0        ## cell the player stands in
 var tiles: int = 0      ## walkable tiles on THIS floor
 var content: int = 0    ## encounters on this floor's tiles, its stair included
@@ -134,10 +139,19 @@ var floors: int = 1
 var depth: int = 0
 var plan: Array = []
 var roam: Array = []
-## Keys to scatter on each floor, decided with the rest of the dungeon (D167). Sized
-## from how many of this dungeon's chests will be LOCKED, and dealt to the floors that
-## hold chests, so the key to a lock is always somewhere on the same floor as it —
-## a floor is re-walkable and a floor you have left is not.
+## What tier each of a floor's chests is, decided up front like everything else here:
+## `chestplan[i]` is one tier string per TREASURE in `plan[i]` (D172). Consumed by
+## `_cast_chests` when the floor is laid out.
+##
+## Up front rather than when the chest is entered, for the reason D85 cast the fights up
+## front: the floor has to be able to SHOW what is standing on it. A tier rolled at the
+## moment the lid is reached cannot be drawn on the tile you are deciding whether to walk
+## to, and a lock you cannot see is not a decision, it is a toll.
+var chestplan: Array = []
+## Keys to scatter on each floor, decided with the rest of the dungeon (D167). Exactly one
+## per key-locked chest on that floor (D172) — counted off `chestplan`, not estimated from
+## the odds that produced it — and dealt to that same floor, because a floor is re-walkable
+## and a floor you have left is not.
 var keyplan: Array = []
 
 ## Did the step just taken pick a key up off the floor? Read by the view immediately
@@ -204,43 +218,38 @@ func generate(p_dungeon) -> void:
 		roam[i % floors] = int(roam[i % floors]) + 1
 	# +1 for the boss, which sits on the last floor and is not in `budget`
 	quota = budget.size() + roaming + 1
-	_plan_keys(diff)
+	_plan_chests(diff)
 
 	_build_floor(0)
 
-## Decide how many keys each floor scatters, once, with the rest of the dungeon.
+## Roll every chest's tier, and then put exactly one key on the floor for every chest whose
+## tier is a key lock (D172).
 ##
-## The count is DERIVED from how many chests this dungeon holds and how often a chest at
-## this depth comes out locked (`Balance.iso_keys_for`), never authored per dungeon: a
-## locked chest with no key anywhere is a dead end the player cannot read as one, and a
-## key per chest makes the lock a formality. That the odds table which decides the locks
-## is also the one that sizes the keys is the point — change one and the other follows.
+## The key count is COUNTED, not estimated. D167 sized it from the sealed weight in
+## `pack_tier_odds` — the right answer while the tier was still rolled at the lid, and the
+## D34 trap the moment it stopped being: two places deciding how many locks a dungeon has,
+## free to disagree. Now the locks are known here, so the answer is the locks themselves.
 ##
-## Dealt to the floors that actually hold a chest, because a floor is only re-walkable
-## while you are on it: a key one floor below the chest it opens is a key that arrives
-## too late, and the descent is one-way.
-func _plan_keys(diff: int) -> void:
+## Which also fixes what the estimate could not. It was clamped to at least one key and at
+## most one per chest, so a dungeon that rolled no key lock still scattered a key nobody
+## needed, and one that rolled three could be handed two. Both of those are the same defect
+## from opposite sides: the player cannot tell a lock they can answer from one they cannot.
+## Every key lock on a floor now has its key on that floor, and a floor with no key lock has
+## no key on it.
+func _plan_chests(diff: int) -> void:
+	chestplan = []
 	keyplan = []
 	for f in floors:
+		chestplan.append([])
 		keyplan.append(0)
-	var chests := 0
-	for f in plan:
-		for e in f:
-			if int(e) == Enc.TREASURE:
-				chests += 1
-	var want := Balance.iso_keys_for(chests, diff)
-	if want <= 0:
-		return
-	var where: Array = []
 	for f in floors:
 		for e in plan[f]:
-			if int(e) == Enc.TREASURE:
-				where.append(f)
-				break
-	if where.is_empty():
-		return   # no chests, so nothing a key could open
-	for k in want:
-		keyplan[int(where[k % where.size()])] += 1
+			if int(e) != Enc.TREASURE:
+				continue
+			var tier := Balance.roll_pack_tier(Balance.PACK_TREASURE, diff)
+			(chestplan[f] as Array).append(tier)
+			if Balance.chest_lock(tier) == Balance.CHEST_LOCK_KEY:
+				keyplan[f] += 1
 
 ## Lay out one floor and stand the player at its entrance. Called by `generate` for
 ## floor 0 and by `select` on every descent, which is why every per-floor field is
@@ -252,6 +261,7 @@ func _build_floor(d: int) -> void:
 	_room_cells = []
 	mons = []
 	enemy_of = {}
+	chest_of = {}
 	var n_cells := w * h
 	enc.resize(n_cells)
 	enc.fill(WALL)
@@ -324,6 +334,7 @@ func _build_floor(d: int) -> void:
 	_place_spread(mine, carved, [pos, exit_cell])
 	_spawn(int(roam[depth]), carved, dist)
 	_cast_fights()
+	_cast_chests()
 	# Keys go down LAST, so they take the ground nothing else wanted — which is the
 	# whole mechanic: a key is somewhere you would not otherwise have walked.
 	_place_keys(int(keyplan[depth]) if depth < keyplan.size() else 0, carved)
@@ -574,6 +585,30 @@ func _cast_fights() -> void:
 	for m in mons:
 		if String(m.get("enemy", "")) == "" and not normal.is_empty():
 			m["enemy"] = String(normal[randi() % normal.size()])
+
+## Hand this floor's chests the tiers rolled for them in `_plan_chests`.
+##
+## Paired by cell order, which is arbitrary and does not need to be anything else: the tiers
+## for one floor all came out of the same roll, so which of two chests is the sealed one is
+## not a fact the generator has an opinion about. What matters is that the pairing is done
+## HERE and saved, so the tile keeps its tier for the life of the floor — the same reason
+## `_cast_fights` exists rather than a roll at combat setup (D85).
+##
+## A floor with more chests than the plan gave tiers to cannot happen while `_place_spread`
+## places what it is handed; the fallback rolls one rather than leaving a chest with no tier,
+## because a tierless chest reaches the screen as "Worn" and would quietly unlock itself.
+func _cast_chests() -> void:
+	var tiers: Array = (chestplan[depth] as Array).duplicate() if depth < chestplan.size() else []
+	var at := 0
+	for i in enc.size():
+		if int(enc[i]) != Enc.TREASURE:
+			continue
+		if at < tiers.size():
+			chest_of[i] = String(tiers[at])
+			at += 1
+		else:
+			chest_of[i] = Balance.roll_pack_tier(Balance.PACK_TREASURE,
+				dungeon.difficulty if dungeon != null else 1)
 
 ## Put this floor's wanderers on it, in the far half. Spawning them anywhere would
 ## sometimes drop one on the entrance, which is a fight before the first decision —
@@ -1040,6 +1075,9 @@ func _describe(n: int) -> String:
 			return "Stairs down"
 		KEY:
 			return "A key"
+	if e == Enc.TREASURE and chest_of.has(n):
+		# The tier IS the lock, so naming it names what the chest wants (D172).
+		return "%s chest" % Balance.PACK_TIER_NAME.get(String(chest_of[n]), "Worn")
 	if e >= 0:
 		return String(Balance.NODE_LABEL.get(e, "?"))
 	if not bool(seen[n]):
@@ -1113,6 +1151,10 @@ func select(i: int) -> Dictionary:
 		# boss) simply omits it and the caller rolls as it always did.
 		if enemy_of.has(pos):
 			pending["enemy"] = String(enemy_of[pos])
+		# ...and the tier the floor has been showing, for the same reason: the chest screen
+		# must open the chest the player walked to, not roll a fresh one at the lid (D172).
+		if chest_of.has(pos):
+			pending["chest"] = String(chest_of[pos])
 		return pending
 	if caught >= 0:
 		var m: Dictionary = mons[caught]
@@ -1139,8 +1181,9 @@ func clear_pending() -> void:
 		if int(enc[cell]) == Enc.BOSS:
 			done = true
 		enc[cell] = EMPTY
-		# the tile is bare ground now, so it has no enemy standing on it either
+		# the tile is bare ground now, so nothing stands on it and nothing is buried in it
 		enemy_of.erase(cell)
+		chest_of.erase(cell)
 	cleared += 1
 	pending = {}
 	# A fight is loud. Anything else — a shop, a rest, a chest — is not.
@@ -1190,9 +1233,9 @@ func _save() -> Dictionary:
 		"room_of": room_of, "pos": pos, "tiles": tiles, "content": content,
 		"rooms": rooms, "quota": quota, "steps": steps, "floor_steps": floor_steps,
 		"avoided": avoided, "dodgeable": dodgeable,
-		"done": done, "mons": mons, "enemy_of": enemy_of,
+		"done": done, "mons": mons, "enemy_of": enemy_of, "chest_of": chest_of,
 		"floors": floors, "depth": depth, "plan": plan, "roam": roam,
-		"keyplan": keyplan}
+		"keyplan": keyplan, "chestplan": chestplan}
 
 func _load(d: Dictionary) -> void:
 	w = int(d.get("w", Balance.ISO_GRID))
@@ -1243,6 +1286,18 @@ func _load(d: Dictionary) -> void:
 		keyplan.append(maxi(0, int(k)))
 	while keyplan.size() < floors:
 		keyplan.append(0)
+	# Same story one field over: a save from before the tiers were cast up front has no
+	# `chestplan`, and an empty row is what `_cast_chests` handles by rolling — which is
+	# what that save's chests were going to do at the lid anyway.
+	chestplan = []
+	for f in d.get("chestplan", []):
+		var tiers: Array = []
+		for t in f:
+			if String(t) in Balance.PACK_TIERS:
+				tiers.append(String(t))
+		chestplan.append(tiers)
+	while chestplan.size() < floors:
+		chestplan.append([])
 	mons = []
 	for m in d.get("mons", []):
 		var md: Dictionary = m
@@ -1263,6 +1318,22 @@ func _load(d: Dictionary) -> void:
 	if raw is Dictionary:
 		for k in raw:
 			enemy_of[int(String(k))] = String(raw[k])
+	# The same conversion, and the same silence without it: a chest whose tier is filed under
+	# the string "42" is a chest the floor draws as worn and the screen opens as worn, having
+	# been sealed until the run was saved.
+	chest_of = {}
+	var raw_chests = d.get("chest_of", {})
+	if raw_chests is Dictionary:
+		for k in raw_chests:
+			if String(raw_chests[k]) in Balance.PACK_TIERS:
+				chest_of[int(String(k))] = String(raw_chests[k])
+	# A chest on this floor with no tier is one from a save that predates them, or one whose
+	# tier failed to survive the blob. Cast now rather than at the lid, so the tile the player
+	# is looking at is the chest they will get.
+	for i in enc.size():
+		if int(enc[i]) == Enc.TREASURE and not chest_of.has(i):
+			chest_of[i] = Balance.roll_pack_tier(Balance.PACK_TREASURE,
+				dungeon.difficulty if dungeon != null else 1)
 
 	# The tile you stand on is ground you have seen and stood on — that is true of every
 	# healthy save already, so this costs one idempotent reveal, and it is what a save
@@ -1331,6 +1402,13 @@ func enemy_at(x: int, y: int) -> String:
 	if x < 0 or y < 0 or x >= w or y >= h:
 		return ""
 	return String(enemy_of.get(y * w + x, ""))
+
+## The tier of the chest on this tile, or "" if it holds no chest. The view draws the lock
+## from it and the hint line names it, so what a chest wants is answerable from the doorway.
+func chest_at(x: int, y: int) -> String:
+	if x < 0 or y < 0 or x >= w or y >= h:
+		return ""
+	return String(chest_of.get(y * w + x, ""))
 
 ## Which chamber a tile belongs to, or -1 for a corridor. The view uses it to tell a
 ## hall from a passage.

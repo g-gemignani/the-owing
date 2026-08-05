@@ -160,20 +160,23 @@ func _init() -> void:
 	# chest into a gold check, and a gold check is a delay rather than a decision. D167
 	# took the other three sources away too — a chest, a fight and an elite each rolled
 	# for one — because a key that arrives while you play is not a key you went and got.
-	# What is asserted here is the shape that replaced them: enough keys that a locked
-	# chest is answerable, never so many that the lock is a formality.
-	for chests in [0, 1, 3, 6]:
-		for dd3 in [1, 6, 12]:
-			var n := Balance.iso_keys_for(chests, dd3)
-			if chests == 0 and n != 0:
-				fails += 1; print("FAIL a dungeon with no chest scatters %d keys" % n)
-			if chests > 0 and (n < 1 or n > chests):
-				fails += 1; print("FAIL %d chests at depth %d gives %d keys — a key per chest makes the lock a formality, none makes it a wall" % [
-					chests, dd3, n])
-	# deeper dungeons lock more of their chests, so they must scatter more keys
-	if Balance.iso_keys_for(6, 12) <= Balance.iso_keys_for(6, 1):
-		fails += 1; print("FAIL depth locks more chests but does not put more keys on the floors")
-	# and the only place they come from is the floor
+	# How MANY is asserted in tests/test_traversal.gd, against the locks the crawl actually
+	# rolled — there is no estimate in Balance to check any more (D172). What belongs here is
+	# the rule that makes the count meaningful: exactly one tier is a key lock, so "one key
+	# per lock" is a sentence about one tier and not about a distribution.
+	var key_locks: Array = []
+	for tier3 in Balance.PACK_TIERS:
+		if Balance.chest_lock(tier3) == Balance.CHEST_LOCK_KEY:
+			key_locks.append(tier3)
+	if key_locks.size() != 1:
+		fails += 1; print("FAIL %d tiers want a key — the floor scatters one key per locked chest and cannot know which" % key_locks.size())
+	# a deeper dungeon rolls more of that tier, which is what makes depth carry more keys
+	var shallow := Balance.pack_tier_odds(Balance.PACK_TREASURE, 1)
+	var deep2 := Balance.pack_tier_odds(Balance.PACK_TREASURE, 12)
+	if float(deep2[1]) / maxf(1.0, float(deep2[0] + deep2[1] + deep2[2])) \
+			<= float(shallow[1]) / maxf(1.0, float(shallow[0] + shallow[1] + shallow[2])):
+		fails += 1; print("FAIL a chest at depth 12 is no likelier to be locked than one at depth 1")
+	# and the only place a key comes from is the floor
 	for src in ["res://scripts/chest_screen.gd", "res://scripts/combat.gd"]:
 		var sf := FileAccess.open(src, FileAccess.READ)
 		if sf != null:

@@ -70,6 +70,24 @@ const OCCLUDER_ALPHA := 0.34
 const COL_REACH := Color(0.98, 0.78, 0.35)   ## an exit you can walk through now
 const COL_YOU := Color(0.55, 0.90, 1.0)
 const COL_THREAT := Color(1.0, 0.36, 0.34)   ## something walking, while you can see it
+## What light a chest of each tier stands in — multiplied onto the sprite, so a channel over
+## 1.0 brightens (D172).
+##
+## There is ONE painted chest and three tiers, and the tier is the lock, so the tiers have to
+## be told apart at a glance from across a room. A ring on the ground was the first answer
+## and it is not enough: a thin outline under a two-tile-tall sprite is read after the sprite,
+## if at all. Lighting the object is read WITH it.
+##
+## The values are `Icons.pack_tier_colour` pushed off 1.0 rather than a second palette:
+## gilded burns warm and over-bright, sealed is cool and pale, worn is dimmed and slightly
+## drained — the same three readings the chest screen's headline and the pack list use, which
+## is the point. Worn is the one that goes DOWN, because "nothing special" has to look like
+## nothing special or all three are special.
+const TIER_LIGHT := {
+	Balance.PACK_WORN: Color(0.82, 0.80, 0.76),
+	Balance.PACK_SEALED: Color(0.92, 1.00, 1.16),
+	Balance.PACK_GILDED: Color(1.34, 1.06, 0.52),
+}
 
 ## Standing art, keyed the way `install_iso_art.gd` names it. Loaded once rather than
 ## per redraw, and every lookup tolerates a missing file: art that has not been
@@ -702,6 +720,13 @@ func _draw_floor() -> void:
 				continue
 			# the furniture and the things that wait for you
 			if e2 >= 0:
+				# A chest is lit by its own tier, and states its lock on the ground it stands
+				# on, before the step that reaches it is taken (D172). The light goes down
+				# first, under the sprite: it is a property of the chest, not a badge over it.
+				var chest_tier := ""
+				if e2 == TraversalIso.Enc.TREASURE:
+					chest_tier = tv.chest_at(x, y)
+					_draw_chest_lock(c2, t, chest_tier)
 				var role := _role_of(e2)
 				# A fight is drawn as the SILHOUETTE of the creature actually standing
 				# there, not as a generic slab per encounter tier. `_role_of` stays as the
@@ -711,7 +736,8 @@ func _draw_floor() -> void:
 				if cast != "" and art.has("mon_%s_s" % Balance.iso_family(cast)):
 					role = "mon_%s_s" % Balance.iso_family(cast)
 				if role != "":
-					_draw_standing(role, c2, t, 1.0, _size_key_for(e2))
+					_draw_standing(role, c2, t, 1.0, _size_key_for(e2),
+						TIER_LIGHT.get(chest_tier, Color(1, 1, 1)))
 			# a wanderer, only while it is actually in sight — deliberately NOT sticky
 			# like the terrain is, so the floor behind you is known ground with unknown
 			# things on it
@@ -801,6 +827,50 @@ func _draw_stair(centre: Vector2, t: Vector2) -> void:
 	floor_view.draw_polyline(mouth + PackedVector2Array([mouth[0]]),
 		Color(0.96, 0.82, 0.42, 0.95), UITheme.px(3.0))
 
+## The light a chest stands in, and what it wants, drawn on the ground under it (D172).
+##
+## The tier IS the lock (`Balance.chest_lock`), so drawing the tier draws the lock and the
+## reading comes out for free. Three things carry it, at three distances:
+##
+## * **A pool of light** in the tier's colour, which is what makes the tile findable across a
+##   room. Filled diamonds at falling alpha rather than one outline, because a hairline ring
+##   under a two-tile-tall sprite is read after the sprite if it is read at all.
+## * **The sprite lit by the same colour** (`TIER_LIGHT`, applied by the caller), which is
+##   what makes the CHEST the thing you recognise rather than a marker beside it.
+## * **The key silhouette**, at half size, for a key lock only — and it is the same drawing
+##   the floor uses for a key lying on it. That is deliberate: "this wants that" is a sentence
+##   a picture can say and a colour cannot.
+##
+## A worn chest gets the sprite's dimming and nothing on the ground. A pool of light under
+## every chest in the game would mean nothing under any of them, and "nothing here to solve"
+## is exactly what an unlocked chest should look like from a distance.
+func _draw_chest_lock(centre: Vector2, t: Vector2, tier: String) -> void:
+	if tier == "":
+		return
+	var lock := Balance.chest_lock(tier)
+	if lock == Balance.CHEST_LOCK_NONE:
+		return
+	# SATURATED, not the ink itself. `Icons.pack_tier_colour` is a colour for text on a dark
+	# panel, and walked stone is already pale (TINT_WALKED) — sealed's parchment grey laid on
+	# it at low alpha is grey on grey. Squaring each channel pushes the hue away from white
+	# without inventing a second palette to drift from the first.
+	var ink := Icons.pack_tier_colour(tier)
+	var pool := Color(minf(1.0, ink.r * ink.r * 1.2), minf(1.0, ink.g * ink.g * 1.2),
+		minf(1.0, ink.b * ink.b * 1.2))
+	# Three filled diamonds, widest and faintest first: a pool with a hot middle, which on a
+	# 2:1 projection is what light lying on a floor looks like. Drawn on the ground pass's
+	# tile, so it never covers the chest — the sprite goes down after it.
+	for step in 3:
+		var r: float = 0.92 - 0.24 * float(step)
+		var a: float = 0.14 + 0.12 * float(step)
+		floor_view.draw_colored_polygon(_diamond(centre, t * r),
+			Color(pool.r, pool.g, pool.b, a))
+	_ground_ring(centre, t, 0.44, Color(pool.r, pool.g, pool.b, 0.72))
+	if lock == Balance.CHEST_LOCK_KEY:
+		# In FRONT of the chest, on the near lip of the diamond, so the sprite's feet do
+		# not stand on it and the two shapes read as two things.
+		_draw_key(centre + Vector2(0, t.y * 0.30), t, 0.5, 0.95)
+
 ## A key lying on the ground: a shaft with a bow at one end and two teeth at the other,
 ## on a patch of ground it has caught the light of.
 ##
@@ -811,26 +881,35 @@ func _draw_stair(centre: Vector2, t: Vector2) -> void:
 ## glow says "there is something here" from across a room, and the silhouette says what.
 ## It is deliberately NOT drawn at sprite height — a key stands on nothing, and lifting it
 ## to eye level would read as a floating icon rather than as an object on the ground.
-func _draw_key(centre: Vector2, t: Vector2) -> void:
-	_ground_ring(centre, t, 0.24, Color(1.0, 0.86, 0.42, 0.42))
-	floor_view.draw_colored_polygon(_diamond(centre, t * 0.34),
-		Color(1.0, 0.84, 0.40, 0.20))
-	var gold := Color(1.0, 0.88, 0.52)
+##
+## `scale` and `alpha` exist for the one other caller: a key-locked chest draws this at half
+## size on its own tile to say what it wants (D172). Same drawing, deliberately — the mark on
+## the lock and the thing lying in the far room are the same object, and one function is what
+## keeps them looking like it. The lit patch is dropped when it is a marker: the glow's job is
+## to be noticed from across a room, and a chest has already been noticed.
+func _draw_key(centre: Vector2, t: Vector2, scale: float = 1.0, alpha: float = 1.0) -> void:
+	if scale >= 1.0:
+		_ground_ring(centre, t, 0.24, Color(1.0, 0.86, 0.42, 0.42 * alpha))
+		floor_view.draw_colored_polygon(_diamond(centre, t * 0.34),
+			Color(1.0, 0.84, 0.40, 0.20 * alpha))
+	var gold := Color(1.0, 0.88, 0.52, alpha)
+	var wide := UITheme.px(3.0) * maxf(0.6, scale)
+	var thin := UITheme.px(2.5) * maxf(0.6, scale)
 	# Along the tile's long axis, so it lies on the diamond rather than across it.
-	var half := t.x * 0.16
-	var lift := -t.y * 0.06
-	var a := centre + Vector2(-half, lift + t.y * 0.05)
-	var b := centre + Vector2(half, lift - t.y * 0.05)
-	floor_view.draw_line(a, b, gold, UITheme.px(3.0))
+	var half := t.x * 0.16 * scale
+	var lift := -t.y * 0.06 * scale
+	var a := centre + Vector2(-half, lift + t.y * 0.05 * scale)
+	var b := centre + Vector2(half, lift - t.y * 0.05 * scale)
+	floor_view.draw_line(a, b, gold, wide)
 	# the bow: a ring at the near end, which is what makes the shape read as a key
-	var bow := a + (a - b).normalized() * t.x * 0.045
-	floor_view.draw_arc(bow, t.x * 0.05, 0.0, TAU, 14, gold, UITheme.px(2.5))
+	var bow := a + (a - b).normalized() * t.x * 0.045 * scale
+	floor_view.draw_arc(bow, t.x * 0.05 * scale, 0.0, TAU, 14, gold, thin)
 	# two teeth off the far end, at right angles to the shaft
 	var along := (b - a).normalized()
-	var side := Vector2(-along.y, along.x) * t.y * 0.11
+	var side := Vector2(-along.y, along.x) * t.y * 0.11 * scale
 	for f in [0.62, 0.86]:
 		var root: Vector2 = a + (b - a) * float(f)
-		floor_view.draw_line(root, root + side, gold, UITheme.px(2.5))
+		floor_view.draw_line(root, root + side, gold, thin)
 
 ## One ground diamond, with the stone material projected onto it.
 ##
@@ -883,19 +962,24 @@ func _role_of(e: int) -> String:
 ##
 ## Falls back to the flat encounter glyph the other three traversal views use, so an
 ## uninstalled art set reads as unfinished instead of invisible.
+##
+## `tint` multiplies the art, and channels above 1.0 are how a chest is LIT rather than
+## stained (D172): one painted chest has to read as three tiers, and multiplying down only
+## ever gives a darker version of the same object. Applied to the glyph fallback too, so a
+## checkout with no iso art installed still tells the tiers apart.
 func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
-		size_key: String = "") -> void:
+		size_key: String = "", tint: Color = Color(1, 1, 1)) -> void:
 	var tex: Texture2D = art.get(role)
 	var key: String = size_key if size_key != "" else role
+	var ink := Color(tint.r, tint.g, tint.b, alpha)
 	if tex == null:
 		var glyph := Icons.for_encounter(_enc_of(role))
 		if glyph != null:
 			var s: float = minf(t.x * 0.42, t.y * 0.8)
 			floor_view.draw_texture_rect(glyph,
-				Rect2(centre - Vector2(s * 0.5, s * 0.5), Vector2(s, s)), false)
+				Rect2(centre - Vector2(s * 0.5, s * 0.5), Vector2(s, s)), false, ink)
 		return
-	floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, key, role), false,
-		Color(1, 1, 1, alpha))
+	floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, key, role), false, ink)
 
 ## Where a sprite goes if it stands at the middle of `centre`'s tile: the size table here,
 ## the geometry and the stand point in `IsoFooting`. Shared by the standing art and by the
@@ -1218,11 +1302,21 @@ func _refresh() -> void:
 	# value, never a node type — so "Stairs down, right there" was a line the game could
 	# not print, on every floor but the last (D168).
 	var stair_found := false
+	## The tier of a chest you are standing next to, or "". What it wants is readable from
+	## here now that the tier is cast when the floor is laid out (D172).
+	var chest_next := ""
 	for i in opts.size():
 		var cell: int = int(opts[i]["cell"])
 		if int(opts[i]["type"]) == GameState.NodeType.BOSS \
 				or tv.cell(cell % tv.grid().x, int(cell / tv.grid().x)) == TraversalIso.STAIR:
 			stair_found = true
+		if int(opts[i]["type"]) == GameState.NodeType.TREASURE:
+			# A LOCKED one wins if two are adjacent: the unlocked chest needs nothing said
+			# about it, and the locked one is the whole reason this line exists.
+			var here := tv.chest_at(cell % tv.grid().x, int(cell / tv.grid().x))
+			if chest_next == "" or (Balance.chest_lock(chest_next) == Balance.CHEST_LOCK_NONE
+					and Balance.chest_lock(here) != Balance.CHEST_LOCK_NONE):
+				chest_next = here
 
 	# The pad greys out rather than shrinking: a direction with rock in it is a key you
 	# can see and cannot press, which is a fact about the floor. A row of buttons that
@@ -1267,14 +1361,26 @@ func _refresh() -> void:
 
 	# The hint is the state of the floor, most urgent first. Something in sight outranks
 	# the way down: the stairs will still be there in three turns and the thing walking
-	# toward you will be somewhere else. A sealed vault comes next, because it is the one
-	# thing on the floor with no button next to it and so the one that needs explaining.
+	# toward you will be somewhere else. A locked chest comes next, because it is the one
+	# thing adjacent to you that asks for something you may not have.
 	var near := tv.threats().size()
 	var last: bool = tv.depth == tv.floors - 1
 	var hint := "A room opens up as you enter it; a passage shows you nothing. The way down is somewhere on this floor."
 	if near > 0:
 		hint = "Something is moving nearby. It takes a step whenever you do." if near == 1 \
 			else "%d things are moving nearby. They take a step whenever you do." % near
+	elif chest_next != "":
+		# In words as well as on the tile, because the drawing says a key is wanted and
+		# only the header knows whether you are holding one (D172). This is the whole point
+		# of casting the tier up front: the sentence exists BEFORE the turn is spent.
+		match Balance.chest_lock(chest_next):
+			Balance.CHEST_LOCK_KEY:
+				hint = ("A sealed chest, and it wants a key. You have one." if GameState.keys > 0
+					else "A sealed chest, and it wants a key you do not have. There is one on this floor, off the path.")
+			Balance.CHEST_LOCK_VAULT:
+				hint = "A gilded chest: a vault. It asks something of the run rather than for a key, and it reads you at the lid."
+			_:
+				hint = "A worn chest, unlocked. The lid lifts at a touch."
 	elif stair_found:
 		hint = "The way down is right there. Anything you leave up here, you leave behind." if last \
 			else "Stairs down, right there. This floor keeps whatever you do not take now."

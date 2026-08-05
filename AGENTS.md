@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D166 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D172 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -28,7 +28,8 @@ The loop:
    several floors, explored a tile at a time, with things walking it that take a step
    whenever you do. Fight, shop, rest, hit events and crack chests, down to a named boss.
    A locked chest wants a key, and the keys are lying on the floors — off the route, in the
-   far corner of some room you had no other reason to cross (D167).
+   far corner of some room you had no other reason to cross (D167). Which chest wants one is
+   readable from the doorway: a chest stands in the light of its own tier (D172).
    (Three older traversal models — a node graph, a card draw, a dice board — lost to it in
    D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
 4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
@@ -234,6 +235,21 @@ effects are drawn at runtime by `scripts/fx.gd`.
   — a fixed pad whose keys grey out says which are rock; a row that appears and disappears
   cannot. Ask of any generated control: does the thing in this position mean the same thing
   it meant a moment ago?
+
+- **A price must be visible before it is paid, which means it must exist before then.** A
+  chest's tier is its lock, and the tier was rolled on the chest SCREEN — so the lock came
+  into being one step after the only step that could have answered it, and the floor drew
+  every chest identically (D172). The fix was not a warning, it was moving the roll to
+  generation so the tile can be drawn with what it wants. Ask of any cost the player is
+  expected to plan around: does the game know it early enough to show it?
+
+- **What the rules decide, the picture has to be able to say.** One painted chest, three
+  tiers, and the tier decides the lock — so the tiers are lit differently (a pool of light on
+  the ground, the sprite tinted with channels above 1.0, and a key drawn on the lock that is
+  the same drawing as a key lying on the floor). A ring on the ground was tried first and is
+  read after the sprite, if at all. Pick the channel by the distance the reading has to work
+  at, and derive the colours from the one function that owns them (`Icons.pack_tier_colour`)
+  rather than starting a second palette.
 
 - **A model's skip is part of its price.** Three traversal models were quietly discounting
   their own budgets — measured fights actually *met* against a budget of 13.2: graph 4.5–5.1

@@ -1078,25 +1078,10 @@ static func chest_lock(tier: String) -> String:
 ## the previous chest handed over, which is a lock that only ever asks whether you have
 ## been here long enough.
 ##
-## How many a dungeon scatters, given how many chests it holds and how deep it is.
-##
-## DERIVED from the odds that decide the locks (`pack_tier_odds`), not authored: the
-## number of keys on the floors tracks the number of chests that will come out LOCKED, so
-## the lock stays a real question at every depth. One is the floor — a dungeon with a chest
-## in it always has a key somewhere — and the count never exceeds the chests, because a
-## spare key is a key that meant nothing.
-static func iso_keys_for(chests: int, dungeon: int) -> int:
-	if chests <= 0:
-		return 0
-	var odds := pack_tier_odds(PACK_TREASURE, dungeon)
-	var total := 0
-	for wt in odds:
-		total += maxi(0, int(wt))
-	if total <= 0:
-		return 1
-	# index 1 is PACK_SEALED, the one tier whose lock is a key (CHEST_LOCK)
-	var locked := float(chests) * float(maxi(0, int(odds[1]))) / float(total)
-	return clampi(int(round(locked)), 1, chests)
+## How many a dungeon scatters is not a number in this file. There was one — an estimate off
+## the sealed weight below — and D172 deleted it: the crawl rolls every chest's tier when it
+## lays the floor out, so it KNOWS how many locks it made, and one key per lock is an answer
+## no estimate can improve on. See `TraversalIso._plan_chests`.
 
 # --- vault conditions --------------------------------------------------------
 #

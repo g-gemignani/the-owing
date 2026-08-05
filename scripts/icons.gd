@@ -83,6 +83,19 @@ static func for_encounter(enc: int) -> Texture2D:
 static func rarity_colour(rarity: int) -> Color:
 	return RARITY_COLOURS[clampi(rarity, 0, RARITY_COLOURS.size() - 1)]
 
+## Colour per pack tier: gilded reads as gold, sealed as parchment, worn as the dust it is.
+##
+## One copy, because it is now read in four places and was written in two of them. The
+## Packs screen and the chest screen each had a private `_tier_colour`, which was harmless
+## while a tier was only ever a word on a menu — and stopped being the moment the dungeon
+## FLOOR started drawing the tier too (D172). Three copies of a colour that has to mean the
+## same thing on the tile, on the lid and in the list is D34 with better manners.
+static func pack_tier_colour(tier: String) -> Color:
+	match tier:
+		Balance.PACK_GILDED: return Color(1.0, 0.84, 0.40)
+		Balance.PACK_SEALED: return Color(0.80, 0.86, 0.95)
+	return Color(0.72, 0.70, 0.66)
+
 ## A card-shaped panel tinted by rarity, for use as a Button stylebox.
 ## Which family of card art this card wants.
 ##
