@@ -10104,3 +10104,54 @@ pressing Open reads as having done nothing.
 real *Open all* button rather than calling the handler. The existing `Packs` row holds three
 unopened packs, which is a real screen and cannot show this — and did not, for the whole
 life of the bug.
+
+### D171 — A new title painting, installed rather than dropped in, and one line of the bible it breaks
+
+A re-roll of the title backdrop arrived as `main_menu.jpg`, 1344x768: a hooded figure at a
+cyan brazier on a cliff ledge, the black fortress small and far off across the valley, and a
+large white moon above.
+
+**It went in through `install_scene_backdrops.gd`, not by hand**, which is the route D114
+built for exactly this and the first thing `assets/art/README.md` asks for. 1344x768 is 1.75
+and the game is 1.78, so a straight resize to 1280x720 stretches the figure by 2%; the
+installer crops to aspect instead, losing six rows off the top and six off the bottom. No
+letterbox was found, so nothing was stripped. `SUPERSEDES` had nothing to delete — the `.jpg`
+has been gone since D114 — and `PixelArt.title_art_path()` meant no call site moved.
+
+**The watermark, which is the first thing to check on this file.** D163 had to invent a
+single-image mode for `strip_sparkle.gd` to get the generator's four-point star off the
+previous painting. This one has none: the bottom-right 280x240 window the tool measures in is
+bare rock, a shadow and a shadow boundary at 3x, with no compact lit blob in it. Nothing to
+strip, so nothing was.
+
+**Legibility, which is the second.** `tests/MenuArtTest.tscn` measures worst-pixel contrast
+for white text across the left 40% under the 0.82 scrim and reports **6.1:1** against its 4.5
+floor. Not luck: the composition puts the subject right of centre and leaves cliff face and
+treeline under the buttons, which is what the manifest row for this file has asked for since
+it was written.
+
+**The palette tests this file has failed twice, re-measured against `bg_crypt.png`** (the
+reference attached to every request), sampling every second pixel — green is `regrade.gd`'s
+70-160° band above s=0.18, sat-in-light and colour reach are over pixels at luminance ≥ 0.25:
+
+    main_menu.png   green 0.3%   sat-in-light 0.407   colour reach 94.9%   mean lum 0.270
+    bg_crypt.png    green 0.0%   sat-in-light 0.540   colour reach 99.9%   mean lum 0.168
+
+D134's pair of tests — green under 1% AND saturation near 0.45 — both hold, and mean
+luminance is inside the bible's 20-35% band. This is a painted violet night, not the neutral
+grey one that failed in D134 and not the green valley that failed before it.
+
+**What it does break: "nothing pure white".** The moon is a clipped 1.0 and **1.84% of the
+frame is over 0.90 luminance**, against 0.20% for `bg_crypt`, 0.03% for `bg_ossuary` and
+0.00% for `bg_foundry` — and against 0.029% for the painting this replaces (D122). The
+manifest row asks in as many words for "moonless, or a moon kept small and dulled: nothing in
+the frame reads as pure white", and the style preamble's VALUE line says the same. This one
+has a moon as its brightest object by a wide margin.
+
+It was installed anyway, and the reason is where the white lands rather than how much of it
+there is. The moon sits at 62% width and 5% height — outside the scrimmed menu column,
+outside every text rect on the screen, and behind the logo plate's empty middle rather than
+under it. The rule exists so that a backdrop cannot bleach the interface drawn on top of it,
+and the measurement that speaks to that is the 6.1:1 above. Recorded here rather than fixed
+because it is a composition choice, not a defect: the file is not on `art_manifest.gd`'s
+`REDO` list, and if the bright moon is unwanted, that list is where it goes.
