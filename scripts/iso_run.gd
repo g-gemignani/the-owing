@@ -876,8 +876,11 @@ func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
 				+ lift * 0.5, t, Color(TINT_WALL_R) * wash)
 		# ...and a mark, if this is a wall with something behind it and the player is close
 		# enough to make it out (D182).
-		if tv.mark_visible(y * tv.grid().x + x):
+		var cell_here: int = y * tv.grid().x + x
+		if tv.mark_visible(cell_here):
 			_draw_mark(centre + Vector2(t.x * 0.25, -t.y * 0.25) + lift * 0.5, t, wash)
+		elif tv.door_visible(cell_here):
+			_draw_door(centre + Vector2(t.x * 0.25, -t.y * 0.25) + lift * 0.5, t, wash)
 
 ## The way down: a hole, drawn as the *inverse* of a wall block — nested diamonds
 ## stepping down into the dark, with a lit lip.
@@ -1237,6 +1240,33 @@ func _draw_mark(at: Vector2, t: Vector2, wash: Color) -> void:
 		pale, UITheme.px(1.6))
 	floor_view.draw_line(mid + Vector2(t.x * 0.02, 0), low + Vector2(t.x * 0.02, 0),
 		pale, UITheme.px(1.4))
+
+## A shut door in a wall face, with a keyhole in it (D185).
+##
+## Loud where the mark is quiet, and that is the difference between the two ways a pocket is
+## shut. A mark asks you to notice, so it is a crack you can only read from beside it. A door
+## asks you to bring something, so it has to be legible from across a room — otherwise the
+## decision it offers (go and get the key, or spend it on the chest you can also see) is one
+## the player never gets to make.
+##
+## Drawn in the KEY's gold rather than the wall's stone, because it is the one thing on a wall
+## that answers a question the header is also answering ("you have one" / "you do not"), and
+## the two have to look like they are about the same object — the same argument that made the
+## chest's lock draw the key silhouette (D172).
+func _draw_door(at: Vector2, t: Vector2, wash: Color) -> void:
+	var gold := Color(0.86 * wash.r, 0.72 * wash.g, 0.36 * wash.b, 0.95)
+	var dark := Color(TINT_WALL_L.r * wash.r * 0.55, TINT_WALL_L.g * wash.g * 0.55,
+		TINT_WALL_L.b * wash.b * 0.55, 0.95)
+	# The leaf: a tall panel set into the face, darker than the stone around it.
+	var leaf := PackedVector2Array([
+		at + Vector2(-t.x * 0.11, -t.y * 0.40),
+		at + Vector2(t.x * 0.11, -t.y * 0.29),
+		at + Vector2(t.x * 0.11, t.y * 0.16),
+		at + Vector2(-t.x * 0.11, t.y * 0.05)])
+	floor_view.draw_colored_polygon(leaf, dark)
+	floor_view.draw_polyline(leaf + PackedVector2Array([leaf[0]]), gold, UITheme.px(2.0))
+	# ...and the keyhole, which is the whole message.
+	floor_view.draw_circle(at + Vector2(t.x * 0.05, -t.y * 0.09), UITheme.px(2.4), gold)
 
 ## An iron ring lying in the floor.
 func _draw_prop_ring(centre: Vector2, t: Vector2, ink: Color) -> void:
@@ -1770,13 +1800,34 @@ func _refresh() -> void:
 	## something moving, because it is the one thing on this screen that is only visible from
 	## where they are standing and is gone the moment they walk on (D182).
 	var mark_here := false
+	var door_here := false
+	var asked_here := ""
 	for o in tv.options():
-		if String(o.get("action", "")) == "push":
+		if String(o.get("action", "")) == "answer":
+			# The question itself, in this floor's own voice (D186). It goes on the hint line
+			# rather than in a screen of its own because the answer is a fact about the room
+			# the player is looking at — putting it behind a modal would hide the thing being
+			# asked about.
+			asked_here = Balance.toll_text(
+				String(tv.pockets[int(o["pocket"])].get("toll", "")), tv.terrain)
+			continue
+		if String(o.get("action", "")) != "push":
+			continue
+		if bool(o.get("needs_key", false)):
+			door_here = true
+		else:
 			mark_here = true
 	var hint := "A room opens up as you enter it; a passage shows you nothing. The way down is somewhere on this floor."
 	if near > 0:
 		hint = "Something is moving nearby. It takes a step whenever you do." if near == 1 \
 			else "%d things are moving nearby. They take a step whenever you do." % near
+	elif asked_here != "":
+		hint = asked_here
+	elif door_here:
+		# The same sentence a sealed chest gets, and for the same reason (D172): the drawing
+		# says a key is wanted and only the header knows whether one is being carried.
+		hint = ("A door, and it wants a key. You have one." if GameState.keys > 0
+			else "A door, and it wants a key you do not have. There is one on this floor, off the path.")
 	elif mark_here:
 		hint = "The stone beside you is not like the rest of it. Push, and see."
 	elif chest_next != "":
@@ -1852,12 +1903,40 @@ func _on_pick(i: int) -> void:
 	# Read BEFORE the move, because after it the option list has been rebuilt and the pocket
 	# is open (D182).
 	var pushing: bool = String(opts[i].get("action", "")) == "push"
+	# A door WANTS a key and the model never checks for one: it reports the requirement and
+	# this is where it is paid, exactly as the slip's HP price is (D13/D185). Refused rather
+	# than failed silently — and refused BEFORE `select`, because the model would open the
+	# door regardless and there is no putting a pocket back.
+	if pushing and bool(opts[i].get("needs_key", false)):
+		if GameState.keys <= 0:
+			Audio.play("ui_denied")
+			log_label.text = "The door is locked, and you have no key. There is one on this floor, off the path."
+			return
+		GameState.keys -= 1
 	var chosen := tv.select(i)
-	if pushing:
+	if tv.toll_result != "":
+		# A toll is answered where you stand, and the price for missing is reported by the
+		# model and paid here (D13/D186). Clamped so it can never itself be lethal: an errand
+		# is never a run-ender and neither is a question.
+		if tv.toll_result == "right":
+			Audio.play("enter")
+			log_label.text = "Right. Whatever was holding the wall lets go of it."
+		else:
+			var wrong := Balance.toll_wrong_cost(GameState.max_hp)
+			GameState.hp = maxi(1, GameState.hp - wrong)
+			Audio.play("hurt")
+			log_label.text = "Wrong. -%d HP, and it does not ask twice." % wrong
+		GameState.autosave()
+		if chosen.is_empty():
+			_refresh()
+			return
+	elif pushing:
 		# The one sound in the crawl that is stone moving rather than a foot landing: `enter`
 		# is what a floor arriving sounds like, and this is a floor arriving.
 		Audio.play("enter")
-		log_label.text = "The stone gives. There is a space behind it."
+		log_label.text = "The lock turns, and the door goes back." \
+			if bool(opts[i].get("needs_key", false)) \
+			else "The stone gives. There is a space behind it."
 		GameState.autosave()
 		if chosen.is_empty():
 			_refresh()

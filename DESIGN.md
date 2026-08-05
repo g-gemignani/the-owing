@@ -11161,3 +11161,148 @@ version of it that can end a run badly.
 **Tolls (B3) are not built.** They need a catalogue of question kinds over floor state plus a
 screen to ask on, and the plan is explicit that Phase 6's two halves land one at a time, each
 with its own measurement. This is the first of the two.
+
+### D185 — Two more ways to shut a pocket, and a thing standing in the open
+
+D182 shipped one optional channel and left two of the plan's on the table. Both are here now,
+and both are the same idea from opposite ends: a pocket you have to *find*, and a thing you
+can *see* and may simply walk past.
+
+**A door, which wants the key the floor already scatters.** The plan's instruction was to
+reuse the key mechanic exactly and build no second one, and D34 is why — two things deriving
+"how many locks does this floor have" from different places is how the first dungeon became
+unplayable. So the floor counts its locks, chests and doors together, and puts down exactly
+that many keys. A key is a real decision now as well as a detour: it opens the sealed chest
+you can see, or the door you can see, and on a floor holding both it does not open both.
+
+Counted off the CARVED floor rather than off the plan, because carving can run out of dead
+rock. A door planned and not cut would otherwise leave a key with no lock behind it — the
+litter half of the invariant the D167 test was written to catch.
+
+A door is also *seen differently from a mark*, and that is the whole reason for having two.
+A mark asks you to **notice**: it is legible only from the tile beside it, and pushing costs a
+turn. A door asks you to **bring something**: it is visible wherever the wall is, because the
+decision it offers — go and get the key, or spend it on the chest you can also see — is one
+you can only make if you can see the door from far enough away to still be holding the key
+when you arrive.
+
+D181 said locked doors were not built because the mouth would need the key count, which is run
+state a traversal may not touch (D13). That was the right diagnosis and the wrong conclusion:
+the model does not need the count, it needs to **report the requirement**, exactly as the slip
+reports its HP price and has since the deck model. The view reads `needs_key`, spends the key,
+and only then calls `select`. What it costs is that neither headless walker models keys, so
+both decline every door — locked pockets are absent from both route numbers, and their
+generated-equals-opened is checked structurally instead of through a walk. That is a stated
+gap rather than a hidden one.
+
+**A site, which is an event standing in a room.** Not a new resource: `EventData` already has
+choices, results, deltas and `starts_fight`, so what was missing was a placement channel and a
+rule about the budget. The rule is `SITE_OFF_PATH`, and it is measured rather than eyeballed —
+a site stands at least two steps off the shortest line between the entrance and the way on,
+where "off the line" is `to_entry + to_exit − the whole route`. A site ON that line is not
+optional content, it is a budgeted encounter the budget forgot about: you would walk into it
+on the way past and it would cost a turn and a decision the dungeon never priced.
+
+## The measurement leak this opened, and how it read
+
+Optional encounters were ranked 0 — "something to do" — the same as budgeted ones. The greedy
+walker takes the first option, so it resolved every site it passed, and **the required route's
+moves-per-encounter fell from 7.1 to 6.5**: a pacing number that got *better* by having more
+content in the way of it. Two fixes, because it was wrong in two places. Optional content now
+ranks as plain ground, so the walker does not prefer it; and the walkers do not count an
+optional resolution toward the encounter denominator, because that ratio is not about them.
+Both routes came back to 7.1.
+
+There is one predicate for this now — `_is_optional` — asked by the field the greedy walker
+steers by, the count that decides whether the stairs are offered, the flag that keeps `cleared`
+honest, and the slip suppression. Two definitions of "optional" is how a feature ends up half
+in the budget, which is D34 wearing the one word this whole batch turns on.
+
+### D186 — A riddle you can memorise is furniture, so the answer is the floor
+
+The third way a pocket can be shut, and the trap is obvious and fatal: a question with a fixed
+answer is solved by the player once, or by a wiki, and is a keypress ever after. Twenty riddles
+would be twenty keypresses in a game that is replayed hundreds of times.
+
+So the answer is **derived from the floor, live, every time it is asked** — never stored on the
+pocket and never written into the save. How many ways out of the room you are standing in; how
+much of the ground around you you have already trodden; how many things are walking this floor.
+Knowing the mechanic tells you nothing about the answer, which is the one property a fixed
+riddle cannot have. Each is a question about *attention*, which is the exploration verb this
+whole track is for.
+
+It shuts a pocket rather than barring the route, and that is what keeps it free. Something
+barring the way would be an encounter the budget never paid for — mandatory content arriving
+through the back door. A toll on a pocket mouth bars only the optional thing behind it, so
+declining to answer costs exactly nothing, and answering wrong costs a percentage of the health
+bar (the D88 shape, not a flat number) and shuts the pocket for the floor. Without that second
+half the question is a delay rather than a wager: you would try each number in turn.
+
+The answers are OPTIONS rather than a screen, ordered by their value. Sorted rather than
+shuffled because a shuffle would have to shuffle the same way on a restored run (D22) and a
+per-floor seed for that is state to save and get wrong; sorting makes the right answer's
+position carry no information, which is what the shuffle was for.
+
+## Two things the assertions caught
+
+**All three kinds looked like constants.** The first check moved the player one tile on a
+*fresh* floor and asked whether the answer changed. It did not — and that was true of the
+sample and false of the game: two of the three only begin to vary once there is a route behind
+you. Sampled properly, over every position of a partly-walked floor in every dungeon, they
+produce six, three and four distinct answers. **A property checked on the wrong state reads as
+a failure of the feature rather than of the test.**
+
+**And one kind in three was never asked.** At the first rate a sweep of all twelve dungeons
+produced three or four tolls in total, so the "every question kind gets asked" assertion failed
+one run in three while the roll itself was perfectly even. Coverage is checked over the plan
+across many dungeons now, and the rate was raised so the sweep actually sees them. A kind that
+is rolled and never placed ships untested, which is D86's shape.
+
+### D187 — A place you have cleared should not be the same place
+
+Twelve dungeons, and the twelfth clear of one was the first clear with different rooms in it.
+An aspect is a named variation a dungeon reopens with once it has been beaten: the cheapest way
+to make the back half of a collection worth playing without writing a thirteenth dungeon.
+
+**Rotated by clear count, not rolled**, and **named on the row you press.** A variation you
+cannot plan around is one you can only be surprised by, and this game shows you the difficulty
+and names the boss before you commit (D41); an aspect is the same kind of fact.
+
+All three are budget-neutral *by construction*, which is what lets them ship without reopening
+the attrition model. `Waking` brings `ISO_LINGER` in — pressure out of a rule that wakes what is
+already counted rather than adding anything, which is why linger was the answer to greed in the
+first place (D77). `Lightless` cuts sight to one step, changing what you *know* about the floor
+and nothing about what is on it. `Walked` puts one more of the budget on its feet: wanderers
+come OUT of the combat budget and are never added to it (D14), so it moves a fight rather than
+making one. The test generates every dungeon in every aspect and asserts the quota is identical.
+
+And it is **priced**: +25% gold. An aspect that adds difficulty without adding reward is a tax
+on replaying, which is the opposite of what it is for.
+
+The clamp on `Walked` was wrong first and did nothing in eight of twelve dungeons. It read
+`combats - 1` unconditionally, and at the shipped mixes — three combats, two wanderers — it
+bound every time. What the floor actually needs is something *waiting* on it, and an elite never
+gets up: a dungeon fielding one can put every combat on its feet, and only a dungeon with none
+has to keep a combat back. The assertion that caught it compares the aspect against the plain
+dungeon rather than against a constant, which is why it could see a no-op at all.
+
+## Where the whole batch left the numbers
+
+    required route   34.2 turns a floor   7.1 moves per encounter   (D179 baseline: 33.8 / 7.0)
+    optional route   48.6 turns a floor   +14 turns, budget 22
+
+    stairs           83.6%   explore   85.8%   explore and fight   84.7%
+
+Eighteen cells at forty trials, one tree. The ordering is the same one D183 measured before the
+doors, sites and tolls existed: exploring is worth a couple of points, fighting the guards gives
+about half of it back. Only the ordering is reliable at that trial count (D120).
+
+## What is still not built
+
+**Barred doors** (one-way corridors), **floor-wide states** (B6), **back doors into a dungeon's
+middle** (C4) and **debts** (C5). The plan puts all four in its last phase, describes them as
+individually droppable, and gates them on the numbers staying clean. Two of them are also the
+riskiest things it proposes: a barred door makes movement asymmetric and *every flood in the
+file assumes it is not*, and a back door starts a run on floor 2, which is a floor of budget
+skipped unless the whole budget is compressed into fewer floors. Neither is a change to make
+without the room to measure it properly.

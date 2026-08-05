@@ -119,6 +119,22 @@ Errands: an id in `Balance.ERRANDS`, its words in `ERRAND_TEXT`, and a clause in
 Both channels pay in gold or packs, never in run-deck cards (dilution, D80/D81) and never in
 relics or HP (free strength from outside the deck).
 
+## A toll question, or an aspect
+
+Tolls: an id in `Balance.TOLLS`, its phrasing in `TOLL_ASK`, and a branch in
+`TraversalIso.toll_answer`. **The answer must be computed from floor state, live** — never
+stored on the pocket and never written to the save, or it is a riddle that can be memorised
+(D186). Check it is not a constant: `tests/test_traversal.gd` samples every kind at every
+position of a partly-walked floor and fails a kind that always answers the same. Sample on a
+*walked* floor; two of the three kinds are constant on a fresh one, which is a fact about the
+sample and not about the game.
+
+Aspects: an id in `Balance.ASPECTS`, a name and a line in `ASPECT_NAME`/`ASPECT_LINE`, and its
+effect wherever the floor reads the number it bends. Two rules (D187): it must be
+**budget-neutral** — the test generates every dungeon in every aspect and compares quotas — and
+it must **change something the plain dungeon does**, compared against the plain dungeon rather
+than against a constant, because that is the only version of the check that can see a no-op.
+
 ## A gate route
 
 `MetaState.gate_credit()` is what every dungeon and zone gate is measured against. A new

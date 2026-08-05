@@ -86,9 +86,19 @@ func _fill(z: ZoneData) -> void:
 		# No traversal name on the button any more. It read "isometric floor" on all
 		# twelve — a label that never varies is not information, it is furniture, and
 		# it was spending the widest line on the screen saying nothing.
-		UI.button(box, "%s   difficulty %d%s" % [d.name, d.difficulty, tag],
+		# What it is wearing this time, on the row you press (D187). Named before you commit,
+		# for the same reason the boss is (D41): a variation you cannot plan around is a
+		# variation you can only be surprised by, and this game does not do that.
+		var wears := Balance.aspect_for(MetaState.times_cleared(d.id))
+		var wears_tag := "   [%s]" % Balance.aspect_name(wears) if wears != Balance.ASPECT_NONE else ""
+		UI.button(box, "%s   difficulty %d%s%s" % [d.name, d.difficulty, wears_tag, tag],
 			(func(): _enter(d.id)) if unlocked else Callable(), 40.0)
 		UI.label(box, "    %s" % d.description)
+		if wears != Balance.ASPECT_NONE and unlocked:
+			var al := UI.label(box, "    %s: %s. It pays %d%% more for the trouble." % [
+				Balance.aspect_name(wears), Balance.aspect_line(wears),
+				Balance.ASPECT_GOLD_PCT])
+			al.add_theme_color_override("font_color", Color(0.70, 0.82, 1.0))
 		# Name the boss at the point of choosing. Knowing what waits is what turns
 		# "which dungeon" and "which deck" from guesses into plans.
 		var boss := Balance.boss_of(d.id)

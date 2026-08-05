@@ -481,7 +481,17 @@ func _explore_pick(opts: Array, tv: TraversalIso) -> int:
 	# only ever trusted the model's own order would never push once and would silently be
 	# the stairs policy wearing the explore flag — D124's shape exactly.
 	for i in opts.size():
-		if String(opts[i].get("action", "")) == "push":
+		# Never a DOOR: this driver does not model the key economy either, so unlocking one
+		# would price a route the player cannot take for free (D185).
+		if String(opts[i].get("action", "")) == "push" \
+				and not bool(opts[i].get("needs_key", false)):
+			return i
+		# A toll is answered with the right number, never guessed: the answer is a fact about
+		# the floor the driver is standing on, so a competent player has it too, and guessing
+		# would put a coin flip inside a clear-rate measurement (D186/D26).
+		if String(opts[i].get("action", "")) == "answer" \
+				and int(opts[i]["say"]) == tv.toll_answer(
+					String(tv.pockets[int(opts[i]["pocket"])].get("toll", ""))):
 			return i
 	var targets: Array = []
 	for i in tv.enc.size():
@@ -499,11 +509,15 @@ func _explore_pick(opts: Array, tv: TraversalIso) -> int:
 	# walkable ground can route to it. Standing there is what offers the push.
 	for p in tv.pockets:
 		var pd: Dictionary = p
-		if bool(pd["open"]):
+		if bool(pd["open"]) or String(pd.get("lock", "")) == Balance.POCKET_LOCK_KEY \
+				or bool(pd.get("missed", false)):
 			continue
 		for raw in tv._neighbours(int(pd["mouth"])):
 			if int(tv.enc[int(raw)]) != TraversalIso.WALL:
 				targets.append(int(raw))
+	for sc in tv.sites:
+		if int(tv.enc[int(sc)]) >= 0:
+			targets.append(int(sc))     # an optional thing standing in the open (D185)
 	if targets.is_empty():
 		return -1
 	var field := _explore_field(tv, targets)

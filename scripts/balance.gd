@@ -1093,6 +1093,69 @@ const POCKET_GUARDS_PER_RUN := 3
 static func pocket_guardable(prize: String) -> bool:
 	return prize != POCKET_NOTHING
 
+# --- aspects: a place you have cleared should not be the same place (D187) -------
+#
+# Twelve dungeons, and the twelfth clear of one is the first clear with different rooms in
+# it. An aspect is a named, visible variation a dungeon reopens with once it has been beaten:
+# the cheapest way to make the back half of a collection worth playing without writing a
+# thirteenth dungeon.
+#
+# **Rotated by clear count, not rolled.** The plan is explicit and the reason is that a
+# variation you cannot plan around is a variation you can only be surprised by — and this
+# game shows you the difficulty and names the boss before you commit (D41). You are told what
+# the Ossuary is like this time, on the row you press.
+#
+# Every aspect here is BUDGET-NEUTRAL by construction, which is what lets them ship without
+# re-opening the attrition model:
+#
+#   waking   — the floor rouses sooner. Pressure out of `ISO_LINGER`, which wakes what is
+#              already counted rather than adding anything (the same argument that made
+#              linger the answer to greed in the first place, D77).
+#   dark     — sight drops to one. It changes what you KNOW, not what is there.
+#   crowded  — one more wanderer and one fewer thing standing still. The plan's own
+#              suggestion, and it is neutral by arithmetic: wanderers come OUT of the combat
+#              budget (D14), so this moves a fight rather than adding one.
+#
+# And it is PRICED. An aspect that adds difficulty adds reward, or it is a tax on replaying —
+# which is the opposite of the point. The pay is gold, on top of the diminishing repeat payout
+# (D69), because gold is the channel optional difficulty is allowed to pay in.
+const ASPECT_NONE := ""
+const ASPECT_WAKING := "waking"
+const ASPECT_DARK := "dark"
+const ASPECT_CROWDED := "crowded"
+const ASPECTS := [ASPECT_WAKING, ASPECT_DARK, ASPECT_CROWDED]
+const ASPECT_NAME := {
+	ASPECT_WAKING: "Waking",
+	ASPECT_DARK: "Lightless",
+	ASPECT_CROWDED: "Walked",
+}
+const ASPECT_LINE := {
+	ASPECT_WAKING: "it wakes sooner than it should",
+	ASPECT_DARK: "the light is out of it; you will see one step",
+	ASPECT_CROWDED: "more of it is walking, and less of it is waiting",
+}
+## What each one does to the numbers the floor already has.
+const ASPECT_LINGER_PCT := 55     ## waking: ISO_LINGER falls to this
+const ASPECT_SIGHT := 1           ## dark: ISO_SIGHT becomes this
+const ASPECT_EXTRA_WANDERERS := 1 ## crowded: this many more, taken from the standing fights
+## Extra gold, as a percentage, for clearing a dungeon wearing one.
+const ASPECT_GOLD_PCT := 25
+
+## Which aspect a dungeon wears on its next visit, from how many times it has been beaten.
+##
+## Nothing until it has been cleared once — a first visit is the dungeon as written, and a
+## variation before the player has seen the original is a variation of nothing.
+static func aspect_for(times_cleared: int) -> String:
+	if times_cleared <= 0:
+		return ASPECT_NONE
+	return String(ASPECTS[(times_cleared - 1) % ASPECTS.size()])
+
+static func aspect_name(a: String) -> String:
+	return String(ASPECT_NAME.get(a, ""))
+
+static func aspect_line(a: String) -> String:
+	return String(ASPECT_LINE.get(a, ""))
+
 # --- errands: a reason to cross a floor (D184) ----------------------------------
 #
 # A floor-scoped ordinance, judged when you take the stairs. The cheapest way to make one
@@ -1143,6 +1206,96 @@ static func errand_gold(difficulty: int) -> int:
 
 static func errand_text(id: String) -> String:
 	return String(ERRAND_TEXT.get(id, ""))
+
+## How often a pocket is shut with a LOCK instead of hidden behind a mark (D185).
+##
+## Two ways in, and they ask for different things on purpose. A mark is *noticing*: it is only
+## legible from the tile beside it, and pushing costs a turn. A door is *bringing something*:
+## it can be seen across a room and it wants the key the floor already scatters (D167).
+##
+## Reusing that key rather than inventing a second currency is the whole of B1's instruction,
+## and D34 is why: two things deriving "how many locks does this floor have" from different
+## places is how the first dungeon became unplayable. The floor counts its locks — chests and
+## doors together — and puts down exactly that many keys. So a key is now a real decision as
+## well as a detour: it opens the sealed chest you can see, or the door you can see, and on a
+## floor holding both it does not open both.
+const POCKET_LOCK_PCT := 30
+const POCKET_LOCK_NONE := ""
+const POCKET_LOCK_KEY := "key"
+
+# --- sites: optional business standing in the open (D185) ------------------------
+#
+# A pocket is content you have to *find*. A site is content you can see and may simply walk
+# past: a thing standing in a room, off the route, that the floor never asks you to resolve.
+#
+# It is an EVENT, and deliberately not a new resource. `EventData` already has choices,
+# results, hp/gold/card/relic deltas and `starts_fight`; what was missing was a placement
+# channel and a rule about the budget, and those are both here rather than in a parallel
+# class. The rule: a site is outside `quota`, invisible to the field the greedy walker steers
+# by, and placed on ground the required path does not cross — so it costs turns and nothing
+# else, which is the only currency optional content is allowed to spend (D181).
+const SITE_PCT := 45
+## How far off the required path a site has to stand, in steps. One is not "off the path", it
+## is "on the path"; three would not fit on a 12x12 plate beside everything else.
+const SITE_OFF_PATH := 2
+
+# --- tolls: a question whose answer is the floor (D186) --------------------------
+#
+# The third way a pocket can be shut, and the trap it has to avoid is obvious and fatal: **a
+# riddle with a fixed answer is solved by the player once, or by a wiki, and is a keypress
+# ever after.** Twenty riddles would be twenty keypresses. A roguelike is replayed hundreds
+# of times, so a puzzle that can be memorised is furniture.
+#
+# So the answer is DERIVED FROM THE FLOOR, live, every time it is asked — never written down
+# and never stored on the pocket. Every kind here is a tiny function over state the model
+# already keeps, and every one is a question about *attention* rather than about knowledge:
+# how many ways out of the room you are standing in, how much of the ground around you you
+# have already trodden, how many things are walking this floor. Knowing the mechanic tells
+# you nothing about the answer, which is the property a fixed riddle cannot have.
+#
+# It shuts a POCKET rather than barring the route, and that is what keeps it free. Something
+# barring the way would be an encounter the budget never paid for — mandatory content that
+# arrived through the back door. A toll on a pocket mouth bars only the optional thing behind
+# it, so declining to answer costs exactly nothing.
+## Raised from 22 on a coverage reading: at 22 a sweep of all twelve dungeons produced three
+## or four tolls in total, and the assertion that every question kind actually gets asked
+## failed one run in three. A kind that is rolled but never placed is a kind that ships
+## untested, which is D86's shape — so the rate is the one that makes the sweep see them all.
+const TOLL_PCT := 35
+const TOLL_EXITS := "exits"
+const TOLL_PROWLING := "prowling"
+const TOLL_TRODDEN := "trodden"
+const TOLLS := [TOLL_EXITS, TOLL_PROWLING, TOLL_TRODDEN]
+## What each one asks. One phrasing per kind, spoken in a voice per terrain, so three
+## functions produce twelve readings — the shape the plan asks for, where the CONTENT is the
+## question kind and the flavour is what makes two of them not sound alike.
+const TOLL_ASK := {
+	TOLL_EXITS: "how many ways lead out of this room",
+	TOLL_PROWLING: "how many things walk this floor",
+	TOLL_TRODDEN: "how many of the four squares about you have felt your foot",
+}
+const TOLL_VOICE := {
+	"stone": "A voice out of the wall, dry as a ledger: %s?",
+	"earth": "Something under the earth asks, and does not repeat itself: %s?",
+	"moss": "The growth shifts, and the question comes through it: %s?",
+	"sand": "A whisper of silt, and a question with it: %s?",
+}
+## What a wrong answer costs, as a fraction of the health bar — the same shape
+## `ISO_AMBUSH_PCT` uses and for the same reason (D88): a flat number is a third of the
+## opening bar and a rounding error by the endgame.
+##
+## And the toll shuts for the rest of the floor when it is missed, which is the real price.
+## Without that, answering is free: you would try each option in turn and the question would
+## be a delay rather than a wager.
+const TOLL_WRONG_PCT := 5.0
+const TOLL_WRONG_MIN := 2
+
+static func toll_wrong_cost(max_hp: int) -> int:
+	return maxi(TOLL_WRONG_MIN, int(round(float(maxi(1, max_hp)) * TOLL_WRONG_PCT / 100.0)))
+
+static func toll_text(kind: String, terrain: String) -> String:
+	var voice := String(TOLL_VOICE.get(terrain, TOLL_VOICE[ISO_TERRAIN_DEFAULT]))
+	return voice % String(TOLL_ASK.get(kind, "what"))
 
 static func roll_pocket_count() -> int:
 	return weighted_pick(POCKET_COUNT_WEIGHTS)

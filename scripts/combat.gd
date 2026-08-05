@@ -2196,6 +2196,18 @@ func _on_reward_picked(card) -> void:
 		var banked := GameState.commit_escrow()
 		GameState.last_haul = "Secured %d cards, %d gold, %d relic(s) and %d pack(s)." % [
 			banked["cards"], banked["gold"], banked["relics"], banked["packs"]]
+		# An aspect that adds difficulty adds reward, or it is a tax on replaying — which is
+		# the opposite of what it is for (D187). Paid before the clear is banked, because
+		# `mark_cleared` is what rotates the dungeon onto its NEXT aspect.
+		var wore := (GameState.traversal as TraversalIso).aspect \
+			if GameState.traversal is TraversalIso else Balance.ASPECT_NONE
+		if wore != Balance.ASPECT_NONE:
+			var extra: int = int(round(float(GameState.escrow_gold)
+				* float(Balance.ASPECT_GOLD_PCT) / 100.0))
+			if extra > 0:
+				GameState.earn_gold(extra)
+				GameState.last_haul += " The %s paid %d more." % [
+					Balance.aspect_name(wore), extra]
 		MetaState.mark_cleared(GameState.dungeon_id)
 		var got := MetaState.grant_relic(Balance.Tier.BOSS)
 		if got != "":

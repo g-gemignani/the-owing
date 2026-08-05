@@ -240,8 +240,13 @@ func _init() -> void:
 					print("FAIL ISO %s: nothing to press" % did4)
 					break
 				moves += 1
-				if not iso.select(0).is_empty():
-					got += 1
+				var stepped := iso.select(0)
+				if not stepped.is_empty():
+					# Optional content is not what this ratio is about (D185): a site resolved
+					# on the way past would make the pacing look better for having more in the
+					# way of it. Same exclusion as the two-route measurement below.
+					if not bool(stepped.get("optional", false)):
+						got += 1
 					iso.clear_pending()
 			if not iso.is_complete():
 				fails += 1
@@ -772,6 +777,174 @@ func _init() -> void:
 		fails += 1
 		print("FAIL every pocket is guarded — a mark is a warning, not an invitation")
 
+	# --- doors and sites: the other two optional channels (D185) ----------------------
+	#
+	# A locked mouth reuses the key the floor already scatters, so the thing that can go wrong
+	# is arithmetic: a door with no key is a dead end the player was promised a way through,
+	# a key with no door is litter. That invariant is checked with the chests above. What is
+	# checked here is that both channels EXIST — D86's lesson is that the assertions are
+	# worthless without a count beside them — and that a site is genuinely off the route.
+	var doors_seen := 0
+	var sites_seen := 0
+	var site_floors := 0
+	var site_off_total := 0
+	for didx in Balance.DUNGEONS:
+		var xt := TraversalIso.new()
+		xt.generate(Balance.dungeon(didx))
+		for fx in xt.floors:
+			xt._build_floor(fx)
+			doors_seen += xt._locked_mouths()
+			site_floors += 1
+			for sc in xt.sites:
+				sites_seen += 1
+				var si := int(sc)
+				# a site stands in the open, on ground, in a chamber, and never on the entrance
+				if int(xt.enc[si]) < 0:
+					fails += 1
+					print("FAIL %s: a site is not standing on anything" % didx)
+				if int(xt.room_of[si]) < 0:
+					fails += 1
+					print("FAIL %s: a site is down a corridor, where nothing reveals it" % didx)
+				if si == xt.pos:
+					fails += 1
+					print("FAIL %s: a site is standing on the entrance" % didx)
+				if xt._in_pocket(si):
+					fails += 1
+					print("FAIL %s: a site is inside a pocket — that is a prize, not a site" % didx)
+				# ...and it is OFF the required route, measured rather than eyeballed
+				var exit_x := -1
+				for i in xt.enc.size():
+					if xt._is_exit(i):
+						exit_x = i
+				if exit_x >= 0:
+					var de := xt._dist_from(xt.pos)
+					var dx := xt._dist_from(exit_x)
+					var off: int = int(de[si]) + int(dx[si]) - int(de[exit_x])
+					site_off_total += off
+					if off < Balance.SITE_OFF_PATH:
+						fails += 1
+						print("FAIL %s: a site sits %d steps off the route, the floor is %d — that is ON the path" % [
+							didx, off, Balance.SITE_OFF_PATH])
+				# a site must be invisible to the required path, exactly as a pocket is
+				if not xt._is_optional(si):
+					fails += 1
+					print("FAIL %s: a site is being counted as business the dungeon asked for" % didx)
+	if doors_seen == 0:
+		fails += 1
+		print("FAIL no pocket in any dungeon is ever shut with a door")
+	if sites_seen == 0:
+		fails += 1
+		print("FAIL no site is ever placed — the channel generates nothing (D86's shape)")
+	print("  (info: %d doors and %d sites over %d floors, sites average %.1f steps off the route)" % [
+		doors_seen, sites_seen, site_floors,
+		float(site_off_total) / maxf(1.0, float(sites_seen))])
+
+	# --- a toll's answer must be the FLOOR, not a fact (D186) -------------------------
+	#
+	# The failure this feature exists to avoid is a riddle solved once and pressed ever after,
+	# so the assertion is about the answer's SOURCE rather than its value: it must be derived
+	# live, it must move when the floor moves, and the option list must never carry it in a
+	# fixed position. Plus the usual non-zero count, because a question kind that never gets
+	# asked is a question kind that ships untested (D86).
+	var tolls_seen := {}
+	var toll_mouths := 0
+	## kind -> the set of answers it has actually produced. See the constant check below.
+	var spread := {}
+	for didt in Balance.DUNGEONS:
+		var tt := TraversalIso.new()
+		tt.generate(Balance.dungeon(didt))
+		for ft in tt.floors:
+			tt._build_floor(ft)
+			for pt2 in tt.pockets:
+				var pdt: Dictionary = pt2
+				var kindt := String(pdt.get("toll", ""))
+				if kindt == "":
+					continue
+				toll_mouths += 1
+				tolls_seen[kindt] = true
+				if not Balance.TOLLS.has(kindt):
+					fails += 1
+					print("FAIL %s: a toll asks '%s', which is not a question" % [didt, kindt])
+				# it must say something, in this floor's own voice
+				if Balance.toll_text(kindt, tt.terrain) == "":
+					fails += 1
+					print("FAIL %s: a toll with no words on it" % didt)
+				# the choices must contain the answer exactly once, and be sorted — a shuffled
+				# list would have to shuffle the same way on a restored run (D22), and sorting
+				# is what makes the right answer's POSITION carry no information
+				var ans := tt.toll_answer(kindt)
+				var ch := tt.toll_choices(kindt)
+				if ch.size() < 2:
+					fails += 1
+					print("FAIL %s: a toll offers %d answers" % [didt, ch.size()])
+				var hits := 0
+				for v in ch:
+					if int(v) == ans:
+						hits += 1
+				if hits != 1:
+					fails += 1
+					print("FAIL %s: the right answer appears %d times among the choices" % [
+						didt, hits])
+				for ci in range(1, ch.size()):
+					if int(ch[ci]) <= int(ch[ci - 1]):
+						fails += 1
+						print("FAIL %s: a toll's answers are not in ascending order" % didt)
+				spread.get_or_add(kindt, {})[tt.toll_answer(kindt)] = true
+	if toll_mouths == 0:
+		fails += 1
+		print("FAIL no pocket in any dungeon is ever shut with a toll")
+	# Kind coverage is checked over the PLAN across many dungeons, not over the handful of
+	# mouths one sweep happens to carve. Placement is scarce — a floor has about one pocket,
+	# most are marks or doors — so a per-sweep check on placed tolls failed one run in three
+	# while the roll itself was perfectly even. What must be true is that every kind can be
+	# asked; how many get cut from a given dungeon is the carving's business.
+	var kinds_rolled := {}
+	for didk in Balance.DUNGEONS:
+		for tk in 8:
+			var kt2 := TraversalIso.new()
+			kt2.generate(Balance.dungeon(didk))
+			for row in kt2.pocketplan:
+				for e2 in row:
+					var kk := String((e2 as Dictionary).get("toll", ""))
+					if kk != "":
+						kinds_rolled[kk] = true
+	if kinds_rolled.size() < Balance.TOLLS.size():
+		fails += 1
+		print("FAIL only %d of %d question kinds are ever rolled" % [
+			kinds_rolled.size(), Balance.TOLLS.size()])
+	# **No question kind may be a CONSTANT.** This is the assertion the whole feature turns
+	# on: an answer that is the same wherever and whenever it is asked is a fixed riddle with
+	# extra steps, solved once by the player or once by a wiki. Sampled over every kind at
+	# every position of a partly-walked floor in every dungeon, because two of the three only
+	# start to vary once there is a route behind you — a sweep of FRESH floors reported all
+	# three as constant, which was true of the sample and false of the game.
+	for didc in Balance.DUNGEONS:
+		var ct := TraversalIso.new()
+		ct.generate(Balance.dungeon(didc))
+		for w2 in 15:
+			if ct.is_complete() or ct.options().is_empty():
+				break
+			if not ct.select(0).is_empty():
+				ct.clear_pending()
+		var keep := ct.pos
+		for i in ct.enc.size():
+			if int(ct.enc[i]) == TraversalIso.WALL:
+				continue
+			ct.pos = i
+			for kindc in Balance.TOLLS:
+				spread.get_or_add(String(kindc), {})[ct.toll_answer(String(kindc))] = true
+		ct.pos = keep
+	var flat: Array = []
+	for kindc2 in Balance.TOLLS:
+		var vals: Dictionary = spread.get(String(kindc2), {})
+		if vals.size() < 2:
+			fails += 1
+			print("FAIL '%s' always answers %s — that is a fixed riddle, not a question about the floor" % [
+				kindc2, str(vals.keys())])
+		flat.append("%s:%d" % [kindc2, vals.size()])
+	print("  (info: %d tolls over 33 floors, %d kinds, distinct answers seen %s)" % [
+		toll_mouths, tolls_seen.size(), ", ".join(flat)])
+
 	# --- nothing a run NEEDS is ever behind a wall (D182) -----------------------------
 	#
 	# If a run can be blocked, gated or softlocked by an unfound pocket it is not a secret,
@@ -884,6 +1057,69 @@ func _init() -> void:
 		print("FAIL every floor carries an errand")
 	print("  (info: %d of 33 floors carry an errand, %d kinds, all settleable, %d gold at d1)" % [
 		errand_floors, errands_seen.size(), Balance.errand_gold(1)])
+
+	# --- aspects: a place you have cleared is not the same place (D187) ---------------
+	#
+	# The property that matters is that an aspect changes how a dungeon PLAYS without changing
+	# what it costs. Every one of the three is budget-neutral by construction rather than by
+	# hope, and this is where that is checked: the encounter budget of a dungeon wearing one
+	# must be identical to the same dungeon wearing none.
+	var aspect_budget := {}
+	for dida in Balance.DUNGEONS:
+		var dda := Balance.dungeon(dida)
+		var want_q: int = Traversal.standard_encounters(dda).size() + 1
+		for asp in [Balance.ASPECT_NONE] + Balance.ASPECTS:
+			var at2 := TraversalIso.new()
+			at2.aspect = String(asp)
+			at2.generate(dda)
+			if at2.quota != want_q:
+				fails += 1
+				print("FAIL %s wearing '%s': quota %d, the dungeon budgeted %d" % [
+					dida, asp, at2.quota, want_q])
+			aspect_budget[String(asp)] = int(aspect_budget.get(String(asp), 0)) + at2.quota
+			# ...and `Walked` must actually put more of it on its feet, or the aspect is a
+			# name with nothing behind it.
+			if String(asp) == Balance.ASPECT_CROWDED:
+				var plain := TraversalIso.new()
+				plain.generate(dda)
+				var walking := 0
+				for r in at2.roam:
+					walking += int(r)
+					pass
+				var still := 0
+				for r in plain.roam:
+					still += int(r)
+				if walking <= still:
+					fails += 1
+					print("FAIL %s: 'Walked' fields %d wanderers against the plain %d" % [
+						dida, walking, still])
+	# The rotation has to reach every aspect and start at none, or a player either never sees
+	# one or never sees the dungeon as written.
+	if Balance.aspect_for(0) != Balance.ASPECT_NONE:
+		fails += 1
+		print("FAIL a dungeon wears an aspect before it has ever been cleared")
+	var rotated := {}
+	for n in 12:
+		rotated[Balance.aspect_for(n + 1)] = true
+	if rotated.size() != Balance.ASPECTS.size():
+		fails += 1
+		print("FAIL the rotation reaches %d of %d aspects" % [
+			rotated.size(), Balance.ASPECTS.size()])
+	for a2 in Balance.ASPECTS:
+		if Balance.aspect_name(String(a2)) == "" or Balance.aspect_line(String(a2)) == "":
+			fails += 1
+			print("FAIL aspect '%s' has no name or no words" % a2)
+	# ...and each one has to CHANGE something the floor does.
+	var dark := TraversalIso.new()
+	dark.aspect = Balance.ASPECT_DARK
+	if dark._sight() >= Balance.ISO_SIGHT:
+		fails += 1; print("FAIL 'Lightless' does not shorten sight")
+	var waking := TraversalIso.new()
+	waking.aspect = Balance.ASPECT_WAKING
+	if waking._linger() >= Balance.ISO_LINGER:
+		fails += 1; print("FAIL 'Waking' does not bring the rousing in")
+	print("  (info: aspects %s, budget identical in all of them, +%d%% gold)" % [
+		str(Balance.ASPECTS), Balance.ASPECT_GOLD_PCT])
 
 	# --- the dressing has to survive being written down (R7) -------------------------
 	#
@@ -1220,10 +1456,17 @@ func _init() -> void:
 			for i in kt.enc.size():
 				if int(kt.enc[i]) == TraversalIso.KEY:
 					keys.append(i)
-			if keys.size() != int(kt.keyplan[f]):
+			# One key per LOCK, and since D185 a floor has two kinds: the key-locked chests
+			# `keyplan` counts, and the doors shut over a pocket. Counted off the carved floor
+			# rather than off the plan, because carving can run out of dead rock — a door that
+			# was planned and not cut must not leave a key behind it, which is the litter half
+			# of this invariant.
+			var want_keys: int = int(kt.keyplan[f]) + kt._locked_mouths()
+			if keys.size() != want_keys:
 				fails += 1
-				print("FAIL %s floor %d: %d keys planned, %d on the floor" % [
-					did5, f + 1, int(kt.keyplan[f]), keys.size()])
+				print("FAIL %s floor %d: %d locks (%d chests + %d doors), %d keys on the floor" % [
+					did5, f + 1, want_keys, int(kt.keyplan[f]), kt._locked_mouths(),
+					keys.size()])
 			for kc in keys:
 				# In a chamber, or the player is never shown it: a room is revealed whole
 				# on entry and a corridor two tiles at a time (D167).
@@ -1370,12 +1613,20 @@ func _walk(iso: TraversalIso, completionist: bool) -> Dictionary:
 			var here := iso.pos
 			var was_target: bool = here in _optional_cells(iso)
 			pick = _completionist_pick(iso, opts, dead_ends)
-			if was_target and String(opts[pick].get("action", "")) != "push":
+			# Answering a toll is acting on the tile just as pushing is (D186); only a step
+			# that did neither means the destination could not be used.
+			var acted := String(opts[pick].get("action", "")) in ["push", "answer"]
+			if was_target and not acted:
 				dead_ends[here] = true
 				stranded += 1
 		moves += 1
-		if not iso.select(pick).is_empty():
-			encs += 1
+		var got := iso.select(pick)
+		if not got.is_empty():
+			# Optional resolutions do not count toward the encounter denominator (D185). They
+			# are not what `ISO_MOVES_PER_ENCOUNTER_MAX` is a ratio of, and counting one makes
+			# the pacing look better for having more content in the way of it.
+			if not bool(got.get("optional", false)):
+				encs += 1
 			iso.clear_pending()
 		if iso.depth != floor_now:
 			floor_now = iso.depth
@@ -1397,7 +1648,21 @@ func _completionist_pick(iso: TraversalIso, opts: Array, dead_ends: Dictionary =
 	# again — which is the shape of D124, an instrument whose policy cannot hold the thing
 	# being measured.
 	for i in opts.size():
-		if String(opts[i].get("action", "")) == "push":
+		# ...but never a DOOR. Neither walker models the key economy — keys are a run resource
+		# and a traversal owns none (D13) — so a walker that unlocked one would be measuring a
+		# route the player cannot take for free (D185). Locked pockets are therefore absent
+		# from both route numbers, and their generated-equals-opened is checked structurally
+		# instead of through a walk.
+		if String(opts[i].get("action", "")) == "push" \
+				and not bool(opts[i].get("needs_key", false)):
+			return i
+		# A toll IS answerable by this walker, and only with the right number (D186). That is
+		# not cheating: the answer is a fact about the floor the player is standing on, and a
+		# player paying attention has it too. Guessing would measure a coin flip instead of a
+		# route.
+		if String(opts[i].get("action", "")) == "answer" \
+				and int(opts[i]["say"]) == iso.toll_answer(
+					String(iso.pockets[int(opts[i]["pocket"])].get("toll", ""))):
 			return i
 	var targets: Array = []
 	for t in _optional_cells(iso):
@@ -1475,11 +1740,16 @@ func _optional_cells(iso: TraversalIso) -> Array:
 	# push available.
 	for p in iso.pockets:
 		var pd: Dictionary = p
-		if bool(pd["open"]):
-			continue
+		if bool(pd["open"]) or String(pd.get("lock", "")) == Balance.POCKET_LOCK_KEY \
+				or bool(pd.get("missed", false)):
+			continue        # a door this walker will not open, or a toll it has already lost
 		for n in iso._neighbours(int(pd["mouth"])):
 			if int(iso.enc[n]) != TraversalIso.WALL:
 				out.append(n)
+	# ...and the optional things standing in the open, which need no pushing at all (D185).
+	for sc in iso.sites:
+		if int(iso.enc[int(sc)]) >= 0:
+			out.append(int(sc))
 	return out
 
 ## How many of `want` are in `row`. One line, and it exists because the same count is

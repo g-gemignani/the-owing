@@ -479,6 +479,12 @@ func refresh_max_hp() -> void:
 func generate_map() -> void:
 	var d := dungeon_data()
 	traversal = TraversalIso.new()
+	# What the place is wearing this time (D187). Asked HERE and nowhere else: a traversal is
+	# pure logic and owns no meta state (D13), and the simulator has to be able to measure a
+	# dungeon in every aspect without pretending to have cleared it.
+	var meta_a := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+	if meta_a != null and d != null:
+		(traversal as TraversalIso).aspect = Balance.aspect_for(meta_a.times_cleared(d.id))
 	traversal.generate(d)
 
 ## Choices available right now (empty outside a run).
