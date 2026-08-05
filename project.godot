@@ -9,6 +9,17 @@ config/name="The Owing"
 run/main_scene="res://scenes/MainMenu.tscn"
 config/features=PackedStringArray("4.7")
 
+; The app icon (D180). Generated pixel art: `tools/gen_icon.gd`, provenance in
+; `assets/art/icon/README.md`. Until this line existed the game shipped wearing the ENGINE's
+; logo — on the Android launcher, in the window title bar, and on every platform whose
+; exporter falls back to this setting. That is somebody else's brand on a home screen, and
+; nothing in a build log mentions it.
+;
+; 384x384 rather than the conventional 256 because the art is a 48x48 grid and 384 is 48x8:
+; a non-integer scale of pixel art draws some pixels five wide and others six, which is what
+; `default_texture_filter = NEAREST` and the whole 16px-grid rule exist to prevent.
+config/icon="res://assets/art/icon/icon_384.png"
+
 ; What build this is, shown on the main menu and in Settings by `BuildInfo` (D156).
 ;
 ; The COMMITTED value is always the dev sentinel and `tests/test_content.gd` asserts it,

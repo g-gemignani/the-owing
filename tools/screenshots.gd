@@ -74,6 +74,7 @@ const SHOTS := [
 	# screen — which is precisely how a layout gets shipped half-checked (D104).
 	["CombatHover", "res://scenes/Combat.tscn", "combat", "hover"],
 	["CombatInspect", "res://scenes/Combat.tscn", "combat", "inspect"],
+	["CombatReward", "res://scenes/Combat.tscn", "combat", "reward"],
 	# A GROUP fight, because `_place_slots` does something to a group that it does not
 	# do to a single enemy: it shrinks the flanks (`lerpf(0.88, 1.0, ...)`) and spreads
 	# them across the full width, and the flanks are the only enemies that ever stand
@@ -175,6 +176,18 @@ func _pose(inst: Node, what: String) -> void:
 			print("POSE MISS bottom — no ScrollContainer on screen")
 			return
 		sc.scroll_vertical = int(sc.get_v_scroll_bar().max_value)
+		return
+	# The reward pick, which is the busiest state the combat screen ever reaches and had
+	# never been photographed: three cards, a note under each saying where that card stands
+	# in the collection (D174), the dilution line, the Skip, and the cleared-encounter text
+	# still on the status line at the bottom left. Every one of those is placed against a
+	# panel whose height is fixed by anchors, and D123's lesson is that a layout nothing
+	# photographs is a layout nobody has looked at.
+	if what == "reward":
+		if not inst.has_method("_win"):
+			print("POSE MISS reward — this screen has no _win()")
+			return
+		inst._win()
 		return
 	# Pressed, not called: the point of the row is the state the screen puts itself in when
 	# the player uses it, so the pose goes through the same button and the same handler.

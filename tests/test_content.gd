@@ -201,6 +201,59 @@ func _init() -> void:
 						print("FAIL the Android preset does not build %s — every %s device would refuse to install the APK" % [
 							abi, "32-bit" if abi.begins_with("armeabi") else "64-bit"])
 
+				# --- the launcher icon (D180) ---
+				#
+				# Guarded here for the same reason as the ABIs, and it is the same failure
+				# shape: an unset icon key is not an error, it is Godot quietly shipping its
+				# OWN logo onto a phone's home screen, and no build log mentions it. That is
+				# what 22 builds did. The editor also rewrites this file whenever the export
+				# dialog is touched, so a rewrite that drops these keys has to be caught by
+				# something other than looking at a launcher.
+				#
+				# Sizes are asserted because Android's names are not hints: a 432px layer is
+				# masked to its central 66%, and a foreground at the wrong size is cropped
+				# rather than scaled.
+				var icons := {
+					"launcher_icons/main_192x192": 192,
+					"launcher_icons/adaptive_foreground_432x432": 432,
+					"launcher_icons/adaptive_background_432x432": 432,
+					"launcher_icons/adaptive_monochrome_432x432": 432,
+				}
+				for key in icons:
+					var ipath: String = String(cfg.get_value(section2, key, ""))
+					if ipath.is_empty():
+						fails += 1
+						print("FAIL the Android preset sets no %s — the APK ships Godot's logo" % key)
+						continue
+					if not ResourceLoader.exists(ipath):
+						fails += 1
+						print("FAIL %s points at %s, which is not in the project" % [key, ipath])
+						continue
+					var itex := load(ipath) as Texture2D
+					var want_px: int = int(icons[key])
+					if itex == null or itex.get_width() != want_px or itex.get_height() != want_px:
+						fails += 1
+						print("FAIL %s is %s, not %dx%d" % [
+							key, "unloadable" if itex == null else "%dx%d" % [
+								itex.get_width(), itex.get_height()], want_px, want_px])
+
+	# The window icon and every exporter's fallback (D180). Godot's default for an unset
+	# `config/icon` is its own logo, which is why this is asserted rather than assumed, and
+	# the size is asserted as a whole-number multiple of the 48-cell grid the art is drawn
+	# on: a pixel-art icon scaled by 5.33 draws some pixels five wide and others six.
+	var app_icon: String = String(ProjectSettings.get_setting("application/config/icon", ""))
+	if app_icon.is_empty() or not ResourceLoader.exists(app_icon):
+		fails += 1
+		print("FAIL application/config/icon is '%s' — the game wears the engine's logo" % app_icon)
+	else:
+		var it := load(app_icon) as Texture2D
+		if it == null:
+			fails += 1; print("FAIL the app icon at %s does not load" % app_icon)
+		elif it.get_width() != it.get_height() or it.get_width() % 48 != 0:
+			fails += 1
+			print("FAIL the app icon is %dx%d — not a square whole-number scale of the 48px grid" % [
+				it.get_width(), it.get_height()])
+
 	# arm64 targets (macOS universal, Android, iOS) refuse to export without this
 	if not bool(ProjectSettings.get_setting(
 			"rendering/textures/vram_compression/import_etc2_astc", false)):

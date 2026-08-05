@@ -260,6 +260,38 @@ func _the_reward_row_carries_one_note_per_card() -> void:
 	elif notes != cards:
 		_fails += 1
 		print("FAIL %d cards offered but %d of them say where they stand" % [cards, notes])
+
+	# ...and the note has to fit in the box the reward screen was given. `reward_box` is an
+	# anchored VBox with no scroll, so anything the column cannot hold pushes the Skip
+	# button out of the panel and towards the bottom edge of the screen.
+	#
+	# Against the ANCHOR rect, not `reward_box.size`: a Control's size is never less than its
+	# content, so the box quietly GROWS past its anchors instead of clipping — which is why
+	# this check read green against `size.y` while the panel was 59px taller than its own
+	# rectangle. What overflow costs is not a clipped button but a panel that stops being
+	# one: the Skip lands below the frame, in the strip the hand vacated.
+	#
+	# MEASURED at 1280x720 (viewport height is fixed at 720 by `aspect="expand"`, so this is
+	# the number that matters): 246px of card + a 3-line note + the dilution line + Skip =
+	# 399px. The old anchors allowed 403 — four pixels — and the capture showed the Skip
+	# button sitting on the HP bar and on the "Encounter cleared" line, because the note had
+	# taken 60 of them. `reward_box` starts at 0.14 now and allows 518.
+	#
+	# The note is 3 lines because `level_up_text` names one changed number in 3,251 of the
+	# 3,758 level steps in the catalogue and two in 506; `in_and_out` at Lv50 is the only step
+	# in the game that names three, and that one wraps to a fourth line.
+	var need := 0.0
+	for child in inst.reward_box.get_children():
+		var c := child as Control
+		if c != null:
+			need += maxf(c.get_combined_minimum_size().y, c.size.y)
+	need += float(inst.reward_box.get_theme_constant("separation")) \
+		* maxf(0.0, float(inst.reward_box.get_child_count() - 1))
+	var allowed: float = (inst.reward_box.anchor_bottom - inst.reward_box.anchor_top) \
+		* inst.reward_box.get_parent_area_size().y
+	if need > allowed:
+		_fails += 1
+		print("FAIL the reward column needs %.0fpx and its anchors allow %.0f" % [need, allowed])
 	inst.queue_free()
 	await get_tree().process_frame
 

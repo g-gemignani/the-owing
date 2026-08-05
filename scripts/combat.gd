@@ -427,7 +427,15 @@ func _build_ui() -> void:
 	add_child(reward_box)
 	reward_box.anchor_left = 0.12
 	reward_box.anchor_right = 0.88
-	reward_box.anchor_top = 0.30
+	# 0.14, up from 0.30, and the number is a measurement rather than taste. The panel is
+	# top-packed and its contents grew by a line of collection note under each card (D174):
+	# 246px of card + a 3-line note + the dilution line + Skip is 399px, against the 403 the
+	# old anchors allowed — so the Skip landed on the HP bar and on the "Encounter cleared"
+	# line at the bottom left, both of which the capture shows and neither of which the box
+	# could clip, because a Control's size is never less than its content and the panel
+	# simply grew out of its own rectangle. From 0.14 the same 399px has 518 to sit in and
+	# ends 13px clear of the vitals; `tests/RewardNoteTest.tscn` fails if it stops fitting.
+	reward_box.anchor_top = 0.14
 	reward_box.anchor_bottom = 0.86
 
 	# Feedback lives above the layout and outside it: a floating number must not
