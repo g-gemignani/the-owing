@@ -45,16 +45,21 @@ func _ready() -> void:
 
 	UI.button(col, "New Game", func(): UI.goto(self, "res://scenes/SaveSlots.tscn"))
 	UI.button(col, "Load Game", func(): UI.goto(self, "res://scenes/SaveSlots.tscn"))
-	# How This Works is reachable before you have a save. It explains an escrow, a
-	# collection that survives death and a floor that walks — none of which a player
-	# can guess, and all of which they previously had to start a run to be told
-	# (D133). No Settings button: `UI.screen()` puts one in every top-right corner.
+	# Reachable before you have a save. It explains an escrow, a collection that survives
+	# death and a floor that walks — none of which a player can guess, and all of which
+	# they previously had to start a run to be told (D133). No Settings button:
+	# `UI.screen()` puts one in every top-right corner.
 	#
 	# This is the ONLY door to it now. The overworld had a second one, from before this
 	# existed, and two entrances to one screen from the two halves of the game is the
 	# duplication D133 removed everywhere else on that hub (D164). `glossary.gd`'s
 	# `return_to` therefore defaults here and needs no setting.
-	UI.button(col, "How this works", func():
+	#
+	# "How the Owing works", not "How this works": every other section title on that
+	# screen is written in the game's own voice — At Risk, What You Keep, The Floor — and
+	# the one word "this" was the label refusing to name what it was about, three
+	# centimetres under a carved plate that names it (D165).
+	UI.button(col, "How the Owing works", func():
 		UI.goto(self, "res://scenes/Glossary.tscn"))
 	UI.spacer(col)
 	UI.button(col, "Quit", func(): get_tree().quit())

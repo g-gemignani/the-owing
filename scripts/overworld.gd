@@ -62,6 +62,12 @@ func _ready() -> void:
 	list = UI.scroll(list_bay)
 	list.sort_children.connect(func(): _snap_list_to_rows.call_deferred())
 
+	# ONE row, not two. The second row existed to hold "How this works" beside the quit
+	# button; with that door gone (D164) it held a spacer and one button, so the hub
+	# ended in a short row of collections and then a nearly empty line — two baselines
+	# where the eye expects one. The three collections sit on the left of the same row
+	# and quitting stays pushed to the far right, which is the arrangement the two rows
+	# were already describing between them (D165).
 	var nav := UI.row(col, 8)
 	# A count on a menu entry is the entry's reason to be pressed — the argument that
 	# put one on Packs applies to every button here that leads to a collection with a
@@ -82,19 +88,19 @@ func _ready() -> void:
 	UI.button(nav, "Packs (%d)" % sealed if sealed > 0 else "Packs",
 		func(): UI.goto(self, "res://scenes/Packs.tscn"), 38.0)
 
-	var nav2 := UI.row(col, 8)
 	# No Settings button: `UI.screen()` puts a settings control in every screen's
 	# top-right corner now, so a second door on the hub is the same door twice (D133).
-	# No "How this works" either, for the same reason one step further out: it is on the
-	# title screen, which is the screen a player who does not know how this works is
+	# No "How the Owing works" either, for the same reason one step further out: it is on
+	# the title screen, which is the screen a player who does not know how it works is
 	# looking at, and the hub is the screen they reach after starting a run (D164).
-	# Pushed to the far end and sized to its own text. It was a full-width bar across
-	# the bottom, which made quitting the loudest thing on the hub. It stays a button
-	# and stays unbound to Escape on purpose — `tests/playable_test.gd` lists this
+	#
+	# Quitting is pushed to the far end and sized to its own text. It was a full-width bar
+	# across the bottom, which made quitting the loudest thing on the hub. It stays a
+	# button and stays unbound to Escape on purpose — `tests/playable_test.gd` lists this
 	# screen as having no key exit because leaving the world "must be deliberate",
 	# and quiet is not the same as easy to hit by accident.
-	UI.hspacer(nav2)
-	UI.button(nav2, "Save and quit to title", func():
+	UI.hspacer(nav)
+	UI.button(nav, "Save and quit to title", func():
 		MetaState.save_game()
 		UI.goto(self, "res://scenes/MainMenu.tscn"), 38.0)
 	_refresh()

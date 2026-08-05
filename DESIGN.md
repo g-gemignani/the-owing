@@ -9821,3 +9821,44 @@ pause menu is not a place to add a door on the way past — it gets decided on i
 
 Verified by capture, not by reading the diff: `tools/screenshots.gd -- Overworld` is what
 showed the orphaned hint, one row above where the button used to be.
+
+### D165 — The one heading written as interface, and the row that was left holding a spacer
+
+Two small things on the two screens D164 touched, both of them the residue of that change
+rather than new ideas.
+
+**"How this works" → "How the Owing works".** Every other heading on that screen is
+written in the game's voice — At Risk, What You Keep, The Floor, In a Fight — over a lede
+that opens *"You go down owing."* The title of the screen containing them was the one
+string on it written as interface: `this`, a pronoun with no antecedent, three centimetres
+under a carved plate that says THE OWING. The screen title and the title-screen button say
+the same words now, because they are the same door and a label that renames itself on the
+way through is a second thing to learn.
+
+What it is NOT called, and why the obvious candidates lost:
+
+* *The Terms* — the best fit for the voice, and the debt framing is exactly right: a
+  reckoning has terms, and At Risk / Dying / Quitting are literally the terms of the owing.
+  Rejected on position. On a title screen, next to Quit, "The Terms" reads as a licence
+  agreement, and the one control whose job is to help a confused player is the last place
+  to spend clarity on flavour.
+* *What you owe* — same problem, less clearly: it reads as fiction, so a first-time player
+  cannot tell it is the rules screen.
+* *Learn the rules* — clear, and in no voice at all. It would be the only line on that
+  screen that could belong to any game.
+
+Clarity outranks voice on this button specifically, because it is the one a player presses
+when they do not yet know what the words mean. Naming the game rather than "this" is the
+version that pays both.
+
+**The hub's second nav row.** It existed to hold "How this works" beside "Save and quit to
+title". With that door gone it held a spacer and one button, so the screen ended in a short
+row of three collections and then a nearly empty line — two baselines where the eye expects
+one, and the quit button floating alone at a height nothing else reached. The three
+collections and the quit button are one row now: collections left, quitting still pushed to
+the far right by the same `hspacer`. That is the arrangement the two rows were already
+describing between them; deleting the row only stopped saying it twice.
+
+**A removal leaves a shape, not a hole.** D164 took the button out and the layout stayed
+the shape that had been built around it — same class of leftover as the hint that went on
+naming it. Both were visible in a capture and neither was visible in the diff.

@@ -63,7 +63,11 @@ static var return_to := "res://scenes/MainMenu.tscn"
 var _headings: Array[Label] = []
 
 func _ready() -> void:
-	var col := UI.screen(self, "How This Works", "", "ledger")
+	# Named for its subject, like every section inside it. "How This Works" was the one
+	# heading in this screen written as interface rather than as the game — "this" naming
+	# nothing, next to At Risk, What You Keep and The Floor, and above a lede that opens
+	# "You go down owing" (D165). The title screen's button says the same words.
+	var col := UI.screen(self, "How the Owing Works", "", "ledger")
 
 	# Built empty here so it sits between the title and the list, and filled at the
 	# bottom of this function once every section exists. A section therefore cannot be
