@@ -768,6 +768,9 @@ func _draw_floor() -> void:
 			if e2 == TraversalIso.KEY:
 				_draw_key(c2, t)
 				continue
+			if e2 == TraversalIso.SHRINE:
+				_draw_shrine(c2, t)
+				continue
 			# the furniture and the things that wait for you
 			if e2 >= 0:
 				# A chest is lit by its own tier, and states its lock on the ground it stands
@@ -1267,6 +1270,30 @@ func _draw_door(at: Vector2, t: Vector2, wash: Color) -> void:
 	floor_view.draw_polyline(leaf + PackedVector2Array([leaf[0]]), gold, UITheme.px(2.0))
 	# ...and the keyhole, which is the whole message.
 	floor_view.draw_circle(at + Vector2(t.x * 0.05, -t.y * 0.09), UITheme.px(2.4), gold)
+
+## A standing stone: a slab set upright in the ground, with a worn hollow in it (D188).
+##
+## Drawn rather than sprited, on the same precedent as the stair, the key and the door — there
+## is no shrine in any art pack, and this is a shape rather than a silhouette (D89). Taller
+## than anything else the floor draws flat, because it is the one piece of terrain that is a
+## DECISION: it has to be visible from across a room or the choice it offers is one the player
+## walks past without knowing it was there.
+func _draw_shrine(centre: Vector2, t: Vector2) -> void:
+	var stone := Color(0.62, 0.60, 0.66)
+	var lit := Color(0.80, 0.78, 0.84)
+	# a shadow on the ground, so it reads as standing rather than lying
+	floor_view.draw_colored_polygon(_diamond(centre + Vector2(0, t.y * 0.06), t * 0.42),
+		Color(0.05, 0.05, 0.08, 0.45))
+	var slab := PackedVector2Array([
+		centre + Vector2(-t.x * 0.13, -t.y * 0.06),
+		centre + Vector2(-t.x * 0.10, -t.y * 0.86),
+		centre + Vector2(t.x * 0.10, -t.y * 0.80),
+		centre + Vector2(t.x * 0.13, t.y * 0.02)])
+	floor_view.draw_colored_polygon(slab, stone)
+	floor_view.draw_polyline(slab + PackedVector2Array([slab[0]]), lit, UITheme.px(2.0))
+	# the hollow: what has been worn into it by whatever has been done here before
+	floor_view.draw_circle(centre + Vector2(0, -t.y * 0.46), t.x * 0.045,
+		Color(0.18, 0.17, 0.22))
 
 ## An iron ring lying in the floor.
 func _draw_prop_ring(centre: Vector2, t: Vector2, ink: Color) -> void:
@@ -1803,6 +1830,9 @@ func _refresh() -> void:
 	var door_here := false
 	var asked_here := ""
 	for o in tv.options():
+		if String(o.get("action", "")) == "shrine":
+			asked_here = Balance.shrine_line(String(o.get("state", "")))
+			continue
 		if String(o.get("action", "")) == "answer":
 			# The question itself, in this floor's own voice (D186). It goes on the hint line
 			# rather than in a screen of its own because the answer is a fact about the room
@@ -1914,7 +1944,26 @@ func _on_pick(i: int) -> void:
 			return
 		GameState.keys -= 1
 	var chosen := tv.select(i)
-	if tv.toll_result != "":
+	if tv.shrine_paid != "":
+		# The stone takes HP now and pays gold when you leave (D188). Both reported by the
+		# model and paid here, exactly as the errand's gold and the toll's price are (D13).
+		if String(opts[i].get("action", "")) == "shrine":
+			var ask := Balance.shrine_hp_cost(GameState.max_hp)
+			GameState.hp = maxi(1, GameState.hp - ask)
+			Audio.play("buff")
+			log_label.text = "%s -%d HP, and this floor is not what it was." % [
+				Balance.aspect_name(tv.shrine_paid), ask]
+		else:
+			var owed_st := Balance.shrine_gold(GameState.dungeon)
+			GameState.earn_gold(owed_st)
+			Audio.play("gold")
+			log_label.text = "Down to floor %d. The stone settles: +%d gold." % [
+				tv.depth + 1, owed_st]
+		GameState.autosave()
+		if chosen.is_empty():
+			_refresh()
+			return
+	elif tv.toll_result != "":
 		# A toll is answered where you stand, and the price for missing is reported by the
 		# model and paid here (D13/D186). Clamped so it can never itself be lethal: an errand
 		# is never a run-ender and neither is a question.

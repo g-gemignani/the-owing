@@ -201,6 +201,8 @@ func _refresh() -> void:
 	for c in list.get_children():
 		c.queue_free()
 
+	_debt_row()
+
 	for z in Balance.all_zones():
 		var unlocked: bool = MetaState.zone_unlocked(z)
 		var cleared := 0
@@ -253,6 +255,32 @@ func _refresh() -> void:
 		var gap := Control.new()
 		gap.custom_minimum_size = Vector2(0, UITheme.px(ROW_GAP))
 		list.add_child(gap)
+
+## What you owe, or what you could take on (D191).
+##
+## At the top of the world list, because it is the thing that decides which door is next — and
+## one at a time, because a player carrying three debts has a checklist and the decision this
+## exists for is *which one*.
+func _debt_row() -> void:
+	if not MetaState.debt_taken.is_empty():
+		var owed := UI.label(list, "Owed: %s" % Balance.debt_text(
+			String(MetaState.debt_taken["kind"]), String(MetaState.debt_taken["dungeon"])))
+		owed.add_theme_color_override("font_color", Color(0.95, 0.78, 0.45))
+		UI.divider(list)
+		return
+	var offers: Array = MetaState.offer_debts()
+	if offers.is_empty():
+		return
+	UI.label(list, "Take one on, if you like. Settling it opens a door and pays for the trouble.")
+	for i in offers.size():
+		var o: Dictionary = offers[i]
+		var dd := Balance.dungeon(String(o["dungeon"]))
+		var idx := i
+		UI.button(list, "%s   (+1 toward the next gate, +%d gold)" % [
+			Balance.debt_text(String(o["kind"]), String(o["dungeon"])),
+			Balance.debt_gold(dd.difficulty if dd != null else 1)],
+			func(): MetaState.take_debt(idx); _refresh(), 36.0)
+	UI.divider(list)
 
 ## The second way in, written on a sealed row (D178).
 ##

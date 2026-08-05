@@ -62,6 +62,10 @@ const STAIR := -3   ## the way down to the next floor (never on the last one)
 ## negative, so it is outside `content` and outside `quota`, and a floor that scatters
 ## three of them still costs what its difficulty says it costs.
 const KEY := -4
+## A stone that takes something (D188). Terrain like `KEY`, and negative for the same reason:
+## it is outside `content` and outside `quota`, so a floor holding one still costs what its
+## difficulty says. Standing on it does nothing; the OPTION beside it is the decision.
+const SHRINE := -5
 
 ## Grid steps, and the screen direction each one reads as once the floor is drawn
 ## at an angle. The arrows are the projected directions, not compass ones: a floor
@@ -155,6 +159,10 @@ var errand: String = ""
 ## already in a position to know — the plan's rule for a debt's conditions applies here too:
 ## if a condition needs new bookkeeping, it is the wrong condition.
 var errand_seen: bool = false      ## caught in the open on this floor
+## ...and ever, anywhere in this dungeon (D191). A debt asks about the RUN, not the floor, and
+## `errand_seen` is reset every time you descend — so the run-scoped fact needs its own flag
+## rather than a reader remembering to check before the reset.
+var caught_ever: bool = false
 var errand_chests: int = 0         ## chests still shut on this floor
 var errand_pushed: bool = false    ## a wall pushed on this floor
 ## Was the errand settled by the descent just taken? Reported exactly as `picked_key` is and
@@ -173,6 +181,20 @@ var errandplan: Array = []
 ## dungeon in every aspect without pretending to have cleared it. `GameState.build_traversal`
 ## is the one place that asks how many times this dungeon has been beaten.
 var aspect: String = Balance.ASPECT_NONE
+## Entered by the back door (D190): the same dungeon, one floor shorter, with the whole budget
+## packed into what is left. Set by the caller before `generate()`, like `aspect`.
+var deep: bool = false
+## What THIS floor is doing, until you take the stairs (D188). "" until a stone is paid.
+##
+## Deliberately the same vocabulary as `aspect`: `_sight` and `_linger` read whichever of the
+## two is set, so a floor state costs no new machinery and inherits the budget-neutrality
+## argument the aspects already carry.
+var floor_state: String = Balance.ASPECT_NONE
+## Which stone on this floor is still unpaid, or -1.
+var shrine: int = -1
+## Was a stone paid by the step just taken (D188)? Reported and never saved, like
+## `picked_key`: the model knows what happened and the caller owns the HP and the purse.
+var shrine_paid: String = ""
 ## What each floor's pockets hold, decided at `generate()` with everything else (D182).
 ## `pocketplan[i]` is one prize string per pocket on floor i, so the count and the contents
 ## of every pocket in the dungeon are decided in ONE place — D172's rule, whose scar is a
@@ -305,6 +327,13 @@ func generate(p_dungeon) -> void:
 
 	var diff: int = dungeon.difficulty if dungeon != null else 1
 	floors = Balance.iso_floors_for(diff)
+	# The back door takes a floor off and gives nothing back (D190). The budget below is not
+	# touched, so the same encounters are dealt over fewer floors and `iso_tiles_per_floor`
+	# divides the same tile allowance fewer ways: a shorter, denser dungeon that costs exactly
+	# what its difficulty says. Never below the minimum — a one-floor dungeon has no descent,
+	# and descent is the model.
+	if deep:
+		floors = maxi(Balance.ISO_FLOORS_MIN, floors - Balance.DEEP_ENTRY_FLOORS)
 	# The budget is SPLIT across the floors, not repeated on each. Dealing it round
 	# robin after a shuffle keeps every floor mixed — dealing it in order would put
 	# all the combats on floor one and all the shops on the last.
@@ -442,6 +471,8 @@ func _build_floor(d: int) -> void:
 	lights = []
 	pockets = []
 	sites = []
+	shrine = -1
+	floor_state = Balance.ASPECT_NONE
 	var n_cells := w * h
 	props.resize(n_cells)
 	props.fill(0)
@@ -532,6 +563,7 @@ func _build_floor(d: int) -> void:
 	_carve_pockets(int(pocketplan[depth].size()) if depth < pocketplan.size() else 0, dist)
 	# ...and an optional thing or two standing in the open, off the route (D185).
 	_place_sites(carved, dist)
+	_place_shrine(carved, dist)
 	# Keys go down after the pockets, so a DOOR's key is only placed when the door was
 	# actually carved (D185). The count is chest locks plus door locks: one key per lock on
 	# the floor, which is D172's invariant with a second kind of lock in it rather than a
@@ -1278,6 +1310,66 @@ func _place_sites(carved: Array, dist_from_entry: PackedInt32Array) -> void:
 	enc[best] = Enc.EVENT
 	sites.append(best)
 
+
+##
+## Derived from the floor rather than rolled and stored, so it is the same answer every time
+## the options are rebuilt — D22 wants a restored run to present the same list, and a state
+## rolled at the moment of asking would give a different one on every refresh.
+func _shrine_offer() -> String:
+	if shrine < 0:
+		return Balance.ASPECT_NONE
+	return String(Balance.ASPECTS[(shrine + depth) % Balance.ASPECTS.size()])
+
+## Stand a stone on the floor, off the route, the way a site is (D188).
+##
+## Off the route for the same reason and by the same measure: a stone ON the line between the
+## entrance and the way on is a decision the player is walked into rather than one they went
+## to, and this one costs HP.
+func _place_shrine(carved: Array, dist_from_entry: PackedInt32Array) -> void:
+	shrine = -1
+	if randi() % 100 >= Balance.SHRINE_PCT or dist_from_entry.size() != enc.size():
+		return
+	var exit_cell := -1
+	for i in enc.size():
+		if _is_exit(i):
+			exit_cell = i
+	if exit_cell < 0:
+		return
+	var to_exit := _dist_from(exit_cell)
+	var span := int(dist_from_entry[exit_cell])
+	if span <= 0:
+		return
+	var taken := {}
+	for m in mons:
+		taken[int(m["cell"])] = true
+	var best := -1
+	var best_off := -1
+	for c in carved:
+		var i := int(c)
+		if int(enc[i]) != EMPTY or i == pos or int(room_of[i]) < 0 or taken.has(i):
+			continue
+		var de := int(dist_from_entry[i])
+		var dx := int(to_exit[i])
+		if de < 0 or dx < 0:
+			continue
+		var off := de + dx - span
+		if off < Balance.SITE_OFF_PATH:
+			continue
+		var crowded := false
+		for nb in _neighbours(i):
+			if int(enc[nb]) >= 0 or _is_exit(nb) or int(enc[nb]) == KEY:
+				crowded = true
+				break
+		if crowded:
+			continue
+		if off > best_off:
+			best_off = off
+			best = i
+	if best < 0:
+		return
+	enc[best] = SHRINE
+	shrine = best
+
 ## Pockets on this floor nobody has pushed open yet (D182).
 ##
 ## Exists so the view can tell the player *at the stairs* that the floor still holds
@@ -1695,18 +1787,20 @@ func _dist_from(start: int) -> PackedInt32Array:
 ## How far you can see down a corridor, this time (D187). `Lightless` cuts it to one step,
 ## which changes what you KNOW about the floor and nothing about what is on it.
 func _sight() -> int:
-	return Balance.ASPECT_SIGHT if aspect == Balance.ASPECT_DARK else Balance.ISO_SIGHT
+	if aspect == Balance.ASPECT_DARK or floor_state == Balance.ASPECT_DARK:
+		return Balance.ASPECT_SIGHT
+	return Balance.ISO_SIGHT
 
 ## How many turns on one floor before everything on it knows you are there (D187). `Waking`
 ## brings it in, which is pressure out of a rule that wakes what is already counted rather
 ## than adding anything to the floor.
 func _linger() -> int:
-	if aspect != Balance.ASPECT_WAKING:
+	if aspect != Balance.ASPECT_WAKING and floor_state != Balance.ASPECT_WAKING:
 		return Balance.ISO_LINGER
 	return maxi(4, int(round(float(Balance.ISO_LINGER)
 		* float(Balance.ASPECT_LINGER_PCT) / 100.0)))
 
-## Steps from `start` to every tile the player can walk to WITHOUT taking the stairs.
+
 ##
 ## The way on is a one-way door, not a corridor: `select` descends the moment you step onto
 ## it. So anything whose only route runs through it is unreachable in play, however connected
@@ -2109,6 +2203,31 @@ func _compute_options() -> Array:
 				# the headless walkers measure the full budget (D14).
 				"order": 3000000 + n,
 			})
+	# ...a stone you may put your hand on (D188). Ranked with the pushes, dead last, for the
+	# same reason: it is optional, the greedy walker presses index 0, and anything a stone
+	# could outrank would put an optional decision into the number that measures the required
+	# route.
+	if shrine >= 0 and floor_state == Balance.ASPECT_NONE:
+		# Standing ON it counts as being at it (D188). The first version only offered the
+		# option from an adjacent tile, so a player who walked onto the stone could not use
+		# it and had to step off and back — a decision made unreachable by arriving at it.
+		var reach_dirs: Array = [-1] if pos == shrine else []
+		for d3 in DIRS.size():
+			if _step(pos, DIRS[d3]) == shrine:
+				reach_dirs.append(d3)
+		for d3 in reach_dirs:
+			out.append({
+				"type": SHRINE,
+				"label": "%s  Put your hand on the stone" % (
+					DIR_ARROW[int(d3)] if int(d3) >= 0 else "  "),
+				"cell": shrine,
+				"dir": d3,
+				"resolves": false,
+				"action": "shrine",
+				"state": _shrine_offer(),
+				"order": 22000000 + shrine,
+			})
+
 	# ...and a wall with a mark on it, which is a fifth kind of option: not a step, not a
 	# fight, and not the way on (D182).
 	#
@@ -2211,6 +2330,8 @@ func _describe(n: int) -> String:
 			return "Stairs down"
 		KEY:
 			return "A key"
+		SHRINE:
+			return "A standing stone"
 	if e == Enc.TREASURE and chest_of.has(n):
 		# The tier IS the lock, so naming it names what the chest wants (D172).
 		return "%s chest" % Balance.PACK_TIER_NAME.get(String(chest_of[n]), "Worn")
@@ -2240,6 +2361,7 @@ func select(i: int) -> Dictionary:
 	picked_key = false
 	errand_paid = ""
 	toll_result = ""
+	shrine_paid = ""
 	if i < 0 or i >= opts.size():
 		return {}
 	var o: Dictionary = opts[i]
@@ -2249,6 +2371,32 @@ func select(i: int) -> Dictionary:
 	# Pushing at a mark is a turn spent where you stand: the wall goes in, the pocket
 	# arrives, and you have not moved (D182). Walking into it is the NEXT decision, which is
 	# the point — the guard, when there is one, is looked at before it is met.
+	# Putting your hand on the stone is a turn spent where you stand (D188). The floor changes
+	# for the rest of itself, the HP price is REPORTED for the caller to pay, and the gold is
+	# owed until the stairs — which is what makes it a wager rather than a purchase: you are
+	# betting that you can still get off this floor once it has changed.
+	if String(o.get("action", "")) == "shrine":
+		steps += 1
+		floor_steps += 1
+		floor_state = String(o.get("state", Balance.ASPECT_NONE))
+		shrine_paid = floor_state
+		enc[shrine] = EMPTY
+		shrine = -1
+		var lit := _dist_from(pos)
+		_reveal_around(pos, lit)
+		if floor_steps == _linger():
+			_rouse(pos, w * h)
+		var caught_st := _floor_turn(lit)
+		if caught_st >= 0:
+			var ms: Dictionary = mons[caught_st]
+			errand_seen = true
+			caught_ever = true
+			pending = {"type": int(ms["type"]), "cell": pos, "mon": caught_st, "ambush": true}
+			if String(ms.get("enemy", "")) != "":
+				pending["enemy"] = String(ms["enemy"])
+			return pending
+		return {}
+
 	# Answering a toll is a turn spent where you stand, exactly as a push is (D186). Right,
 	# and the pocket opens; wrong, and it shuts for the floor and the price is REPORTED for
 	# the caller to pay — a traversal never touches run HP (D13).
@@ -2271,6 +2419,7 @@ func select(i: int) -> Dictionary:
 		if caught_ask >= 0:
 			var ma: Dictionary = mons[caught_ask]
 			errand_seen = true
+			caught_ever = true
 			pending = {"type": int(ma["type"]), "cell": pos, "mon": caught_ask,
 				"ambush": true}
 			if String(ma.get("enemy", "")) != "":
@@ -2293,6 +2442,7 @@ func select(i: int) -> Dictionary:
 		if caught_push >= 0:
 			var mp: Dictionary = mons[caught_push]
 			errand_seen = true
+			caught_ever = true
 			pending = {"type": int(mp["type"]), "cell": pos, "mon": caught_push,
 				"ambush": true}
 			if String(mp.get("enemy", "")) != "":
@@ -2308,6 +2458,11 @@ func select(i: int) -> Dictionary:
 		# (D184). Reported and not paid: a traversal owns no run resources (D13), so the gold
 		# is the view's to add, exactly as a key pickup is.
 		errand_paid = errand if _errand_met() else ""
+		# A floor state lasts until you leave the floor, and the stone's gold is owed at the
+		# same moment (D188). Reported on the descent for the caller to pay, exactly as the
+		# errand is — and reported BEFORE `_build_floor`, which resets it.
+		shrine_paid = floor_state
+		floor_state = Balance.ASPECT_NONE
 		_build_floor(depth + 1)
 		return {}
 
@@ -2373,6 +2528,7 @@ func select(i: int) -> Dictionary:
 		# (D184). Recorded here rather than where the HP is charged, because the model is what
 		# knows it happened and the charge is somebody else's (D13).
 		errand_seen = true
+		caught_ever = true
 		pending = {"type": int(m["type"]), "cell": pos, "mon": caught, "ambush": true}
 		if String(m.get("enemy", "")) != "":
 			pending["enemy"] = String(m["enemy"])
@@ -2470,7 +2626,7 @@ func _save() -> Dictionary:
 		"pockets": pockets, "pocketplan": pocketplan, "sites": sites,
 		# The errand and its progress are run state: a resumed floor has to still be owed the
 		# same thing, and has to remember that you were already caught once on it (D184).
-		"aspect": aspect,
+		"aspect": aspect, "deep": deep, "caught_ever": caught_ever, "floor_state": floor_state, "shrine": shrine,
 		"errand": errand, "errandplan": errandplan, "errand_seen": errand_seen,
 		"errand_chests": errand_chests, "errand_pushed": errand_pushed}
 
@@ -2645,9 +2801,19 @@ func _load(d: Dictionary) -> void:
 			"open": bool(pd.get("open", false))})
 	# The aspect is part of WHICH VISIT this run is, so it is saved rather than re-derived: a
 	# clear banked mid-session would otherwise change the dungeon under a resumed run.
+	deep = bool(d.get("deep", false))
+	caught_ever = bool(d.get("caught_ever", false))
 	aspect = String(d.get("aspect", Balance.ASPECT_NONE))
 	if not (aspect in Balance.ASPECTS):
 		aspect = Balance.ASPECT_NONE
+	# A floor state is run state and outlives a quit: a player who paid a stone and saved must
+	# come back to the floor they bought, not the one they walked in on (D188).
+	floor_state = String(d.get("floor_state", Balance.ASPECT_NONE))
+	if not (floor_state in Balance.ASPECTS):
+		floor_state = Balance.ASPECT_NONE
+	shrine = int(d.get("shrine", -1))
+	if shrine < 0 or shrine >= enc.size() or int(enc[shrine]) != SHRINE:
+		shrine = -1
 	sites = []
 	for sc in d.get("sites", []):
 		var si := int(sc)

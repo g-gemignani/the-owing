@@ -135,6 +135,13 @@ effect wherever the floor reads the number it bends. Two rules (D187): it must b
 it must **change something the plain dungeon does**, compared against the plain dungeon rather
 than against a constant, because that is the only version of the check that can see a no-op.
 
+## A debt
+
+An id in `Balance.DEBTS`, its wording in `DEBT_TEXT`, and a clause in `Balance.debt_met`. Three
+rules (D191): a debt is a condition **observed** during a run and never a modifier **on** it; its
+condition must read state the run already tracks; and it may only name a dungeon the player can
+reach. It pays gate credit and gold, never cards or relics.
+
 ## A gate route
 
 `MetaState.gate_credit()` is what every dungeon and zone gate is measured against. A new

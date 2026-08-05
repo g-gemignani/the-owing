@@ -11306,3 +11306,122 @@ riskiest things it proposes: a barred door makes movement asymmetric and *every 
 file assumes it is not*, and a back door starts a run on floor 2, which is a floor of budget
 skipped unless the whole budget is compressed into fewer floors. Neither is a change to make
 without the room to measure it properly.
+
+### D188 — A stone that takes something, built out of the aspects rather than beside them
+
+The plan calls a floor-wide state the highest-variance-per-line-of-code feature in the whole
+batch and also the one most likely to blow up the simulator. Both are true, and the way through
+was to build it out of machinery that is already priced: **every state a stone can set is an
+aspect (D187), applied mid-floor by choice instead of at the door by clear count.**
+
+That is not a shortcut, it is the argument. Those three readings are already known to be
+budget-neutral, already have a test that generates every dungeon in every one of them, and
+already bend numbers the floor was reading anyway — `_sight` and `_linger` just take whichever
+of the two is set. A fourth mechanism for "the floor is different now" would be a second
+definition of one idea, which is D34.
+
+What makes it a decision is that it is bought in the currency the floor has and the budget does
+not count: HP now, against gold when you leave. And it is declinable — walking past a stone
+costs nothing, the rule every optional thing in this batch follows.
+
+**One defect worth the entry.** The option was only offered from an *adjacent* tile, so a player
+who walked onto the stone could not use it: they had to step off and back on. A decision made
+unreachable by arriving at it. Standing on it counts as being at it now.
+
+### D189 — Barred doors were built, measured and deleted
+
+One-way corridor tiles, so a loop can be come round and then lost. The plan puts them last and
+says to budget real time, because **every flood in `traversal_iso.gd` was written assuming
+movement is symmetric.** They are not in the tree. This is what happened.
+
+The feature works: a bar is a corridor tile you may only enter from one side, chosen so it lets
+you in from the side nearer the entrance, which reads as a door shutting behind you. Three
+correctness passes were needed and each was found by a walker rather than by reading:
+
+1. **Reachability is not enough.** The first check asked whether every tile was still reachable
+   from the entrance. It was — and a bar stood in front of a dead end with the player inside
+   it, holding no legal move at all. A one-way graph needs STRONG connectivity, both directions.
+2. **Nor is strong connectivity in the plain graph.** The greedy walker steers by
+   `_dist_to_unresolved`, which treats the way on as solid while anything is unresolved. A bar
+   safe in the plain graph could, together with the stairs, cut that one in two: every option
+   scored `away = -1`, the ordering fell back to cell index, and the walker paced between two
+   tiles for ever. The D74 deadlock for a fifth time, same cause every time — a field promising
+   a route the mover cannot use.
+3. **So prove the loop instead of the bar.** If the floor is connected *without the tile at
+   all*, no graph anyone floods can depend on it, whichever way it is barred. That is stronger,
+   simpler and cheaper than checking each graph separately.
+
+And with all three in, the walkers still failed about one run in six, and the optional route
+blew its ceiling at 25.3 extra turns a floor against a budget of 22. The floor was correct and
+the *walking* was not: asymmetric movement makes the ranking send a walker the long way round
+often enough to matter, and it deadlocked in cases the loop proof does not cover.
+
+**So it is deleted, and that is the plan's own instruction rather than a retreat from it.** Phase
+7 is gated on "only if the numbers stayed clean", its items are described as individually
+droppable, and the numbers did not stay clean. Shipping it would mean a player who occasionally
+cannot finish a dungeon — the walkers are the instrument that says so, and they said so.
+
+What it would need before another attempt: the option ranking rebuilt around a directed graph
+rather than patched to respect one, so `away` is a real distance in the graph the player walks
+instead of an estimate that is sometimes wrong. That is a change to the model's spine, not a
+feature, and it should be measured on its own.
+
+### D190 — The back door, which had to bring the budget with it
+
+Clearing a dungeon opens a **deep entry** into a connected one: the same place, one floor
+shorter. Structurally it is the strongest answer to "the world is a ladder", because it turns
+twelve doors into a graph with edges instead of a list with an index.
+
+It is also a direct assault on R1, and the plan offers two honest ways. This is the preferred
+one: **the deep entry keeps the whole budget, compressed into fewer floors.** The other is a
+shorter, harder run with a difficulty rating of its own, which is a new content type needing its
+own sim sweep and its own place on the curve. Compression needs neither — `quota` is identical,
+the tile allowance is per *dungeon* and simply divides fewer ways, and "difficulty 5" keeps
+meaning exactly one thing. Measured: 6.3–6.9 moves per encounter against a 7.5 ceiling, same
+quota, same encounters dealt.
+
+Connected means *in the same region*, derived rather than authored. A hand-written adjacency
+table would be a second statement of which places sit near which, and the zones already say it.
+It is opened by a NEIGHBOUR's clear and never the dungeon's own: a back door into somewhere you
+have already beaten is a replay option, and replays are what aspects are for.
+
+### D191 — Debts: pick what you owe
+
+Three offered at the hub, take one, and it names a place and a condition. This is the piece that
+makes the campaign feel *chosen* rather than walked, because the player decides which dungeon is
+next by deciding which debt to take — and of everything in the plan it is the closest fit to the
+game's own title.
+
+Two constraints, and the first is what keeps it out of the scaling model. **A debt may never be
+a card-pool or difficulty modifier on the run, only a condition observed during it.** A modifier
+would reopen every question the ratchet exists to close; an observation cannot, because the run
+is exactly the run it would have been. **And every condition must be checkable from state the
+run already tracks** — did the boss fall, how deep did it get, was it ever caught in the open.
+All three were already being written down for something else. A condition needing new
+bookkeeping is the wrong condition.
+
+It pays the **gate currency** (D178) and gold. Paying the gate is what makes it a route through
+the world rather than a side quest: a debt settled is a door opened somewhere. Three currencies
+reach a gate now — clears, depth in places that beat you, and debts — which is what C1 asked for
+when it said to replace one scalar with several so several orders are viable.
+
+Two small rules with reasons: the table is regenerated only when it is empty, never on sight,
+because a list that re-rolled every time the hub was opened would be a slot machine rather than a
+choice; and only one debt is held at a time, because a player carrying three has a checklist and
+the decision this exists for is *which one*. Offers only name dungeons the player can actually
+reach — an ordinance nobody can settle is the shape of defect this batch has already had to fix
+twice.
+
+Save shape: version 10, and an existing save earns no debt credit for contracts it cannot show
+it took.
+
+## Where the plan ends up
+
+Everything in it is built except the barred door, which was built, measured and deleted above,
+and two narrowings recorded where they were made: B4's site channel places optional events in
+open rooms but not the full sub-floor variant, and the toll's per-terrain flavour is one phrasing
+per kind spoken in a voice per terrain rather than twenty strings.
+
+    required route   34.2 turns a floor   7.1 moves per encounter   (D179 baseline 33.8 / 7.0)
+    optional route   49.0 turns a floor   +15 turns, budget 22
+    back door        6.5 moves per encounter, same quota

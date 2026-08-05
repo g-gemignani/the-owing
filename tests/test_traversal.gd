@@ -276,6 +276,7 @@ func _init() -> void:
 	var greedy := {"moves": 0.0, "encs": 0.0, "floors": 0.0}
 	var full := {"moves": 0.0, "encs": 0.0, "floors": 0.0}
 	var stranded_total := 0
+	var gaveup_total := 0
 	for didw in Balance.DUNGEONS:
 		var ddw := Balance.dungeon(didw)
 		for trialw in 6:
@@ -288,6 +289,8 @@ func _init() -> void:
 				into["encs"] = float(into["encs"]) + float(maxi(1, int(got1["encs"])))
 				into["floors"] = float(into["floors"]) + float(maxi(1, w1.floors))
 				stranded_total += int(got1.get("stranded", 0))
+				if int(got1.get("gave_up", 0)) > 0:
+					gaveup_total += 1
 				if not w1.is_complete():
 					fails += 1
 					print("FAIL ISO %s: the %s walker did not finish" % [
@@ -310,6 +313,9 @@ func _init() -> void:
 		greedy_per_floor, float(greedy["moves"]) / maxf(1.0, float(greedy["encs"])),
 		full_per_floor, float(full["moves"]) / maxf(1.0, float(full["encs"])),
 		extra, budget, stranded_total])
+	if gaveup_total > 0:
+		print("  (info: the optional route gave a floor up as a bad job in %d of %d walks)" % [
+			gaveup_total, Balance.DUNGEONS.size() * 6])
 
 	var per_enc := moves_total / maxf(1.0, encs_total)
 	if per_enc > Balance.ISO_MOVES_PER_ENCOUNTER_MAX:
@@ -1046,10 +1052,22 @@ func _init() -> void:
 				fails += 1
 				print("FAIL %s: '%s' settles itself for a player who does nothing" % [
 					dide, et.errand])
-	if errands_seen.size() < Balance.ERRANDS.size():
+	# Coverage over the PLAN across many dungeons, not over the 33 floors one sweep happens to
+	# lay out — the same correction the tolls needed (D186). `pushed` is only offered to a
+	# floor that planned a pocket and `thorough` is dropped from a floor with no chests, so a
+	# single sweep misses a kind about one run in three while the roll itself is even.
+	var errands_rolled := {}
+	for dide2 in Balance.DUNGEONS:
+		for te in 8:
+			var et2 := TraversalIso.new()
+			et2.generate(Balance.dungeon(dide2))
+			for ee in et2.errandplan:
+				if String(ee) != "":
+					errands_rolled[String(ee)] = true
+	if errands_rolled.size() < Balance.ERRANDS.size():
 		fails += 1
-		print("FAIL only %d of %d errands are ever handed out" % [
-			errands_seen.size(), Balance.ERRANDS.size()])
+		print("FAIL only %d of %d errands are ever rolled" % [
+			errands_rolled.size(), Balance.ERRANDS.size()])
 	# ...and not every floor, or an ordinance is a checklist entry rather than something a
 	# place sometimes asks of you.
 	if errand_floors >= 33:
@@ -1057,6 +1075,88 @@ func _init() -> void:
 		print("FAIL every floor carries an errand")
 	print("  (info: %d of 33 floors carry an errand, %d kinds, all settleable, %d gold at d1)" % [
 		errand_floors, errands_seen.size(), Balance.errand_gold(1)])
+
+	# --- the back door costs the same dungeon (D190) ----------------------------------
+	#
+	# This is the assertion the whole feature rests on. A deep entry starts you further down,
+	# which is a floor of budget skipped unless the budget comes with you — and D88 is the scar
+	# that says a skip is a difficulty change no budget assertion can see. So: same quota, same
+	# tile allowance, fewer floors. If any of those three drifts, "difficulty 5" has stopped
+	# meaning one thing.
+	var deep_moves := 0.0
+	var deep_encs := 0.0
+	for didd in Balance.DUNGEONS:
+		var ddd := Balance.dungeon(didd)
+		var want_qd: int = Traversal.standard_encounters(ddd).size() + 1
+		var plain := TraversalIso.new()
+		plain.generate(ddd)
+		var deep := TraversalIso.new()
+		deep.deep = true
+		deep.generate(ddd)
+		if deep.quota != plain.quota or deep.quota != want_qd:
+			fails += 1
+			print("FAIL %s by the back door: quota %d against %d — the budget did not come with you" % [
+				didd, deep.quota, plain.quota])
+		if plain.floors > Balance.ISO_FLOORS_MIN and deep.floors >= plain.floors:
+			fails += 1
+			print("FAIL %s by the back door: %d floors against %d — it is not shorter" % [
+				didd, deep.floors, plain.floors])
+		if deep.floors < Balance.ISO_FLOORS_MIN:
+			fails += 1
+			print("FAIL %s by the back door: %d floors, below the minimum" % [didd, deep.floors])
+		# ...and every encounter still gets a tile: the same mix over fewer, bigger floors.
+		var dealt := 0
+		for row in deep.plan:
+			dealt += (row as Array).size()
+		var dealt_p := 0
+		for row2 in plain.plan:
+			dealt_p += (row2 as Array).size()
+		if dealt != dealt_p:
+			fails += 1
+			print("FAIL %s by the back door: %d encounters dealt against %d" % [
+				didd, dealt, dealt_p])
+		# and it still WALKS like the same dungeon — the tile allowance is per dungeon, so
+		# fewer floors means bigger ones and the pacing ratio should not move
+		var dm := 0
+		var de2 := 0
+		while not deep.is_complete() and dm < 600:
+			if deep.options().is_empty():
+				break
+			dm += 1
+			var st := deep.select(0)
+			if not st.is_empty():
+				if not bool(st.get("optional", false)):
+					de2 += 1
+				deep.clear_pending()
+		if not deep.is_complete():
+			fails += 1
+			print("FAIL %s by the back door: did not finish" % didd)
+		deep_moves += float(dm)
+		deep_encs += float(maxi(1, de2))
+	var deep_ratio := deep_moves / maxf(1.0, deep_encs)
+	if deep_ratio > Balance.ISO_MOVES_PER_ENCOUNTER_MAX:
+		fails += 1
+		print("FAIL ISO by the back door: %.1f moves per encounter, ceiling %.1f" % [
+			deep_ratio, Balance.ISO_MOVES_PER_ENCOUNTER_MAX])
+	# The door itself: opened by a NEIGHBOUR's clear, never by the dungeon's own.
+	var first_z := Balance.DUNGEONS[0]
+	if Balance.deep_entry_open(first_z, []):
+		fails += 1
+		print("FAIL a back door is open before anything has been cleared")
+	if Balance.deep_entry_open(first_z, [first_z]):
+		fails += 1
+		print("FAIL a dungeon opens its OWN back door — that is a replay, not a route")
+	var zf := Balance.zone_of(first_z)
+	var neighbour := ""
+	for o in zf.dungeons:
+		if String(o) != first_z:
+			neighbour = String(o)
+			break
+	if neighbour != "" and not Balance.deep_entry_open(first_z, [neighbour]):
+		fails += 1
+		print("FAIL clearing a neighbour did not open the back door")
+	print("  (info: back doors walk %.1f moves per encounter, ceiling %.1f, same quota)" % [
+		deep_ratio, Balance.ISO_MOVES_PER_ENCOUNTER_MAX])
 
 	# --- aspects: a place you have cleared is not the same place (D187) ---------------
 	#
@@ -1604,24 +1704,46 @@ func _walk(iso: TraversalIso, completionist: bool) -> Dictionary:
 	var dead_ends := {}
 	var stranded := 0
 	var floor_now := iso.depth
-	while not iso.is_complete() and moves < 600:
+	## Moves since the optional route last consumed something.
+	##
+	## The per-tile blacklist above catches the common stall — standing on a destination that
+	## nothing can be done with — and it does not catch every one: with one-way doors in the
+	## floor (D189) a walker can circle a pair of destinations it can reach and never arrive
+	## at. This is the backstop, and it is a REPORTED one: the walker gives the floor up as a
+	## bad job and finishes greedily, and the count comes out in the info line, because a
+	## silent give-up would quietly turn the optional route back into the required one.
+	var since_progress := 0
+	var gave_up := 0
+	# The optional route is half again as long as the required one by construction, and it may
+	# spend up to sixty moves a floor discovering that a destination is unreachable before the
+	# backstop fires. A shared guard sized for the required walk cut it off mid-dungeon and
+	# reported that as "did not finish", which is a fact about the guard.
+	var cap: int = 1200 if completionist else 400
+	while not iso.is_complete() and moves < cap:
 		var opts := iso.options()
 		if opts.is_empty():
 			break
 		var pick := 0
-		if completionist:
+		if completionist and since_progress < 60:
 			var here := iso.pos
 			var was_target: bool = here in _optional_cells(iso)
 			pick = _completionist_pick(iso, opts, dead_ends)
+			since_progress += 1
 			# Answering a toll is acting on the tile just as pushing is (D186); only a step
 			# that did neither means the destination could not be used.
 			var acted := String(opts[pick].get("action", "")) in ["push", "answer"]
+			if acted:
+				since_progress = 0
 			if was_target and not acted:
 				dead_ends[here] = true
 				stranded += 1
+		elif completionist:
+			gave_up += 1
 		moves += 1
 		var got := iso.select(pick)
 		if not got.is_empty():
+			if bool(got.get("optional", false)):
+				since_progress = 0
 			# Optional resolutions do not count toward the encounter denominator (D185). They
 			# are not what `ISO_MOVES_PER_ENCOUNTER_MAX` is a ratio of, and counting one makes
 			# the pacing look better for having more content in the way of it.
@@ -1631,7 +1753,8 @@ func _walk(iso: TraversalIso, completionist: bool) -> Dictionary:
 		if iso.depth != floor_now:
 			floor_now = iso.depth
 			dead_ends = {}      # a new floor, and none of the old marks are on it
-	return {"moves": moves, "encs": encs, "stranded": stranded}
+			since_progress = 0
+	return {"moves": moves, "encs": encs, "stranded": stranded, "gave_up": gave_up}
 
 ## Which step a player stripping the floor takes: toward the nearest optional thing while
 ## any is left, and the model's own first suggestion once none is.

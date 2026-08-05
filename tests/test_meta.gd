@@ -275,6 +275,81 @@ func _init() -> void:
 	print("  (info: depth credit is %d of a gate at most, %d floors each, deepest gate %d)" % [
 		Balance.GATE_DEPTH_CREDIT_MAX, Balance.GATE_DEPTH_FLOORS_PER_CREDIT, deepest_gate])
 
+	# --- debts are observed, never imposed (D191) ---------------------------------
+	#
+	# The rule that keeps this out of the scaling model is that a debt is a condition OBSERVED
+	# during a run, never a modifier ON it — so the assertions are about what settles one and
+	# what it pays, and there is deliberately nothing here about the run being different.
+	Meta.writes_disabled = false
+	var md = Meta.new()
+	md.new_save()
+	for did5 in Balance.DUNGEONS:
+		md.mark_cleared(did5)      # open everything, so the offers can name anywhere
+	var offers: Array = md.offer_debts()
+	if offers.size() != Balance.DEBT_OFFERS:
+		fails += 1
+		print("FAIL the table offers %d debts, expected %d" % [
+			offers.size(), Balance.DEBT_OFFERS])
+	for o in offers:
+		var od: Dictionary = o
+		if not (String(od.get("kind", "")) in Balance.DEBTS):
+			fails += 1; print("FAIL a debt of no known kind is on the table")
+		if not (String(od.get("dungeon", "")) in Balance.DUNGEONS):
+			fails += 1; print("FAIL a debt names a place that is not a dungeon")
+		if Balance.debt_text(String(od["kind"]), String(od["dungeon"])) == "":
+			fails += 1; print("FAIL a debt with no words on it")
+	# asking again must not re-roll: a table that changed on sight is a slot machine
+	var again: Array = md.offer_debts()
+	if again != offers:
+		fails += 1; print("FAIL the debts on the table changed just for being looked at")
+	# take one, and the table clears
+	md.take_debt(0)
+	if md.debt_taken.is_empty():
+		fails += 1; print("FAIL taking a debt left nothing owed")
+	if not md.debt_offers.is_empty():
+		fails += 1; print("FAIL the table still has debts on it after one was taken")
+	md.take_debt(0)
+	if md.debt_offers.size() > 0:
+		fails += 1; print("FAIL a second debt could be taken while one was owed")
+	# ...and it settles only against the run it named
+	var took: Dictionary = md.debt_taken.duplicate()
+	var place := String(took["dungeon"])
+	var wrong := ""
+	for did6 in Balance.DUNGEONS:
+		if did6 != place:
+			wrong = did6
+			break
+	if md.settle_debt(wrong, true, 9, false) != 0:
+		fails += 1; print("FAIL a debt settled against the wrong dungeon")
+	var before_credit: int = md.debt_credits
+	var paid: int = md.settle_debt(place, true, 9, false)
+	if paid <= 0:
+		fails += 1; print("FAIL settling the debt paid nothing")
+	if md.debt_credits != before_credit + 1:
+		fails += 1; print("FAIL settling the debt paid no gate credit")
+	if not md.debt_taken.is_empty():
+		fails += 1; print("FAIL the debt is still owed after being settled")
+	if md.settle_debt(place, true, 9, false) != 0:
+		fails += 1; print("FAIL a settled debt paid twice")
+	# every kind has to be met by SOMETHING and refused by something, or it is decoration
+	for kind in Balance.DEBTS:
+		var any_yes := Balance.debt_met(String(kind), place, place, true, 9, false)
+		var any_no := Balance.debt_met(String(kind), place, place, false, 0, true)
+		if not any_yes:
+			fails += 1; print("FAIL '%s' cannot be settled by a perfect run" % kind)
+		if any_no:
+			fails += 1; print("FAIL '%s' is settled by a run that did nothing" % kind)
+	# and the credit reaches the gate, or a debt is a side quest rather than a route
+	var mgate = Meta.new()
+	mgate.new_save()
+	var base_gate: int = mgate.gate_credit()
+	mgate.debt_credits = 2
+	if mgate.gate_credit() != base_gate + 2:
+		fails += 1; print("FAIL debt credit does not reach the gate")
+	Meta.writes_disabled = true
+	print("  (info: %d debt kinds, %d offered at a time, +1 gate credit and %d gold at d1)" % [
+		Balance.DEBTS.size(), Balance.DEBT_OFFERS, Balance.debt_gold(1)])
+
 	if fails == 0:
 		print("META TEST: PASS (persistence + fusion + deck build + packs)")
 	else:

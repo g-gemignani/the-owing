@@ -106,6 +106,14 @@ func _fill(z: ZoneData) -> void:
 			var bl := UI.label(box, "    Boss: %s — %s" % [
 				boss.name, Balance.boss_warning(d.id)])
 			bl.add_theme_color_override("font_color", Color(0.95, 0.65, 0.45))
+		# The back door, when somebody else's clear in this region has opened one (D190). A
+		# second button rather than a toggle, because it is a different run: the same dungeon
+		# one floor shorter, with everything it owed you packed into what is left.
+		if unlocked and Balance.deep_entry_open(d.id, MetaState.cleared_dungeons):
+			UI.button(box, "    ...or in by the back door: %d floors, the same reckoning" % [
+				maxi(Balance.ISO_FLOORS_MIN,
+					Balance.iso_floors_for(d.difficulty) - Balance.DEEP_ENTRY_FLOORS)],
+				func(): _enter(d.id, true), 34.0)
 		_cards_here(box, d)
 		var gap := Control.new()
 		gap.custom_minimum_size = Vector2(0, UITheme.px(10))
@@ -192,8 +200,9 @@ func _indent(c: Control) -> MarginContainer:
 	pad.add_child(c)
 	return pad
 
-func _enter(id: String) -> void:
+func _enter(id: String, deep: bool = false) -> void:
 	GameState.select_dungeon(id)
+	GameState.deep_entry = deep
 	UI.goto(self, "res://scenes/DeckBuilder.tscn")
 
 func _back() -> void:

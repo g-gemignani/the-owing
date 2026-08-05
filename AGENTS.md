@@ -2,7 +2,7 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D187 — is
+breaking it. The *what* — file-by-file detail and the full decision log D1–D191 — is
 in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
 how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
 the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
@@ -21,7 +21,7 @@ A **deckbuilding roguelike with a persistent RPG meta layer**, built in Godot 4.
 
 The loop:
 
-1. **Overworld** — pick a zone, then a dungeon. A region opens as a region, so there are
+1. **Overworld** — take on a debt if you like, then pick a zone and a dungeon. A region opens as a region, so there are
    usually three doors rather than one, and a gate takes depth in places that beat you as
    well as clears (D178). Difficulty is a *choice*, shown up front, with the boss named
    before you commit.
@@ -39,7 +39,9 @@ The loop:
    usually an elite standing over it (D182, D183) — or a door that wants the key you were
    saving for a chest, or a question whose answer is the room you are standing in (D185,
    D186). Some floors ask something of you as well (D184), and a place you have already
-   beaten reopens wearing a named variation (D187).
+   beaten reopens wearing a named variation (D187), a stone on the floor will change the rest
+   of it for a price (D188), and a neighbour's clear opens a back door into somewhere one
+   floor shorter (D190).
    (Three older traversal models — a node graph, a card draw, a dice board — lost to it in
    D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
 4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
@@ -57,7 +59,8 @@ Two-tier state makes this work:
 100 cards · 35 enemy archetypes (all painted) · 12 bosses (one named per dungeon) · 30 relics ·
 10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model ·
 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
-4 pocket prizes · 3 pocket mouths · 3 toll questions · 3 errands · 3 aspects · 24 sound
+4 pocket prizes · 3 pocket mouths · 3 toll questions · 3 errands · 3 aspects ·
+3 debts · 24 sound
 effects · 5 score tracks · 41 test suites. All content is `.tres` data plus one catalogue
 line; adding more is a data task, not a code task.
 
@@ -393,6 +396,27 @@ effects are drawn at runtime by `scripts/fx.gd`.
   taking one cannot flatter `progress()`; a guard is outside `dodgeable`, so it cannot re-price
   every slip in the dungeon (D99's shape); and pocket tiles are cut from leftover rock, so they
   cannot shrink every room in the game.
+
+- **Three currencies reach a gate, and none of them is a modifier on the run.** Clears, depth in
+  places that beat you (D178), and debts taken at the hub (D191). A debt names a place and a
+  condition *observed* during the run — never a card-pool or difficulty change, which would
+  reopen every scaling question the ratchet closes — and every condition reads state the run
+  already tracks, because bookkeeping kept for one feature goes stale the first time another
+  moves. That is what C1 meant by replacing one scalar with several so several orders are viable.
+
+- **A rule that already has a price is cheaper than a new one.** A floor-wide state is an ASPECT
+  applied mid-floor by choice (D188), not a fourth mechanism for "the floor is different now";
+  a back door keeps the whole budget and divides it over fewer floors (D190), not a new content
+  type with a difficulty rating of its own. Both reuse machinery that is already measured, and
+  both are budget-neutral because the thing they reuse already was.
+
+- **When the numbers do not come clean, delete it and write down what it measured.** Barred
+  doors were built, corrected three times against the walkers, and removed: every flood in the
+  traversal assumes symmetric movement, and with all three fixes in the walkers still failed one
+  run in six and the optional route blew its ceiling (D189). Phase 7 was explicitly gated on the
+  numbers staying clean. The tree is full of features that measured badly and went — the torch
+  (D77), the continuous world (D87), the flat difficulty multiplier (D175) — and the entry that
+  records why is worth more than the feature would have been.
 
 - **A question with a fixed answer is furniture, so the answer is the floor.** A toll asks how
   many ways lead out of the room you are standing in, or how much of the ground about you you
@@ -998,7 +1022,7 @@ docs/        the README's screenshots, and nothing else. Carries a .gdignore:
              tag never moves off `latest` — the README's download links are only
              stable URLs because of it (D142). actions/setup-godot/ is the shared
              cache-and-install step, and runs on both Linux and macOS
-DESIGN.md    the full reasoning, decision by decision (D1–D187)
+DESIGN.md    the full reasoning, decision by decision (D1–D191)
 ART.md       the art brief: the diagnosis, the style, the reasoning
 ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
              whether it exists yet. Never edit by hand; regenerate it.

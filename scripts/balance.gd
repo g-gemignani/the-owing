@@ -1093,6 +1093,142 @@ const POCKET_GUARDS_PER_RUN := 3
 static func pocket_guardable(prize: String) -> bool:
 	return prize != POCKET_NOTHING
 
+# --- debts: pick what you owe (D191) ---------------------------------------------
+#
+# A hub-level contract: three offered, you take one, it names a PLACE and a CONDITION. This is
+# the piece that makes the campaign feel chosen rather than walked, because the player decides
+# which dungeon is next by deciding which debt to take — and of everything in the plan it is
+# the closest fit to the game's own title and voice.
+#
+# Two constraints, and the first is the one that keeps it out of the scaling model. **A debt
+# may never be a card-pool or difficulty MODIFIER on the run, only a condition OBSERVED during
+# it.** A modifier would reopen every scaling question the ratchet exists to close; an
+# observation cannot, because the run is exactly the run it would have been.
+#
+# And **every condition must be checkable from state the run already tracks.** If a condition
+# needs new bookkeeping it is the wrong condition — bookkeeping kept for one feature is
+# bookkeeping that goes stale the first time another one moves. The three here read: did you
+# beat it, how deep did you get, and were you ever caught in the open. All three were already
+# being written down for something else.
+#
+# It pays the GATE CURRENCY (D178) and gold. Paying the gate is what makes it a route through
+# the world rather than a side quest: a debt settled is a door opened somewhere.
+const DEBT_SETTLE := "settle"
+const DEBT_DEEP := "deep"
+const DEBT_UNSEEN := "unseen"
+const DEBTS := [DEBT_SETTLE, DEBT_DEEP, DEBT_UNSEEN]
+const DEBT_TEXT := {
+	DEBT_SETTLE: "Go to %s and finish it.",
+	DEBT_DEEP: "Go to %s and get to the bottom of it, whatever it costs you.",
+	DEBT_UNSEEN: "Go to %s and finish it without once being caught in the open.",
+}
+## How many are on the table at once. Three, because two is a coin and four is a list.
+const DEBT_OFFERS := 3
+const DEBT_GOLD := 40
+const DEBT_GOLD_PER_DIFF := 15
+
+static func debt_text(kind: String, dungeon_id: String) -> String:
+	var d := dungeon(dungeon_id)
+	return String(DEBT_TEXT.get(kind, "%s")) % (d.name if d != null else dungeon_id)
+
+static func debt_gold(difficulty: int) -> int:
+	return DEBT_GOLD + DEBT_GOLD_PER_DIFF * maxi(0, difficulty - 1)
+
+## Was this debt settled by a run that ended like this?
+##
+## Pure, and given only facts the run already had: whether the boss fell, how deep it got, and
+## whether anything ever caught it in the open. No state of its own, so there is nothing here
+## to keep in step with anything.
+static func debt_met(kind: String, dungeon_id: String, ran: String, cleared: bool,
+		deepest: int, caught: bool) -> bool:
+	if ran != dungeon_id:
+		return false
+	match kind:
+		DEBT_SETTLE:
+			return cleared
+		DEBT_DEEP:
+			var d := dungeon(dungeon_id)
+			return deepest >= iso_floors_for(d.difficulty if d != null else 1)
+		DEBT_UNSEEN:
+			return cleared and not caught
+	return false
+
+# --- back doors: the twelve dungeons as a graph, not a list (D190) ---------------
+#
+# Clearing a dungeon opens a **deep entry** into a connected one: you go in further down, and
+# the place is shorter and denser for it. Structurally this is the strongest answer to "the
+# world is a ladder", because it turns twelve doors into a graph with edges instead of a list
+# with an index.
+#
+# **It is also a direct assault on R1**, and the plan gives two honest ways to do it. This is
+# the one it prefers: the deep entry keeps the WHOLE budget, compressed into fewer floors —
+# more per floor, the same total. The other way is a shorter, harder run with a difficulty
+# rating of its own, which is a new content type needing its own sim sweep and its own place
+# on the curve. Compression needs neither, because nothing about the dungeon's cost changes:
+# `quota` is identical, the tile budget is per DUNGEON and simply divides fewer ways, and
+# "difficulty 5" keeps meaning exactly one thing.
+#
+# Connected means IN THE SAME REGION, and it is derived rather than authored. A hand-written
+# adjacency table would be a second statement of which places sit near which — the zones
+# already say that, and two tables saying one thing is D34.
+const DEEP_ENTRY_FLOORS := 1
+
+## Can this dungeon be entered by the back door — has anything else in its region been beaten?
+##
+## Deliberately not "has THIS one been beaten". A back door is a way in that somebody else's
+## clear opened; requiring the dungeon's own clear would make it a replay option, which is
+## what aspects are for (D187).
+static func deep_entry_open(dungeon_id: String, cleared: Array) -> bool:
+	var z := zone_of(dungeon_id)
+	if z == null:
+		return false
+	for other in z.dungeons:
+		if String(other) != dungeon_id and String(other) in cleared:
+			return true
+	return false
+
+# --- floor states: a stone that takes something (D188) ---------------------------
+#
+# A shrine standing on the floor that changes the whole of it until you descend. The plan
+# calls this the highest-variance-per-line-of-code feature in the whole batch and also the one
+# most likely to blow up the simulator, so it is built LAST and built out of machinery that is
+# already priced.
+#
+# Every state here is an ASPECT (D187) applied mid-floor by choice instead of at the door by
+# clear count. That is not a shortcut, it is the argument: those three readings are already
+# known to be budget-neutral, already have a test that generates every dungeon in every one of
+# them, and already bend numbers the floor was reading anyway. A fourth mechanism for "the
+# floor is different now" would be a second definition of the same idea, which is D34.
+#
+# What makes it a DECISION rather than a gift is that it is paid for in the one currency the
+# floor has that the budget does not count — HP now, against gold when you leave. And it is
+# declinable: walking past a stone costs nothing at all, which is the same rule every optional
+# thing in this batch follows.
+const SHRINE_PCT := 30
+## What it asks, as a percentage of the health bar. The D88 shape rather than a flat number.
+const SHRINE_HP_PCT := 8.0
+const SHRINE_HP_MIN := 3
+## And what it pays when you finally take the stairs.
+const SHRINE_GOLD := 26
+const SHRINE_GOLD_PER_DIFF := 9
+
+static func shrine_hp_cost(max_hp: int) -> int:
+	return maxi(SHRINE_HP_MIN, int(round(float(maxi(1, max_hp)) * SHRINE_HP_PCT / 100.0)))
+
+static func shrine_gold(difficulty: int) -> int:
+	return SHRINE_GOLD + SHRINE_GOLD_PER_DIFF * maxi(0, difficulty - 1)
+
+## What a stone offers, in the register of the events. It names the STATE, because the whole
+## point is that the player knows what they are buying before they pay for it.
+const SHRINE_LINE := {
+	ASPECT_WAKING: "Put your hand on it and the floor will stir. It pays for the trouble.",
+	ASPECT_DARK: "Put your hand on it and the light goes out of this floor. It pays for the trouble.",
+	ASPECT_CROWDED: "Put your hand on it and more of this floor gets up. It pays for the trouble.",
+}
+
+static func shrine_line(state: String) -> String:
+	return String(SHRINE_LINE.get(state, ""))
+
 # --- aspects: a place you have cleared should not be the same place (D187) -------
 #
 # Twelve dungeons, and the twelfth clear of one is the first clear with different rooms in

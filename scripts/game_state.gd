@@ -32,6 +32,9 @@ var current_zone: String = ""  # zone being explored on the overworld
 # --- traversal state ---
 ## The active traversal for this run (the iso crawl). Null outside a run.
 var traversal: Traversal = null
+## Did this run go in by the back door (D190)? Set by the region screen before the deck
+## builder, consumed by `build_traversal`, and cleared with the run.
+var deep_entry: bool = false
 ## What the crawl's model number was in saves written before D94 deleted the other
 ## three models. Read once, on resume, to tell a restorable run from a stale one.
 const LEGACY_ISO_KIND := 3
@@ -398,8 +401,17 @@ func clear_run() -> void:
 		var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
 		if meta != null:
 			meta.note_depth(dungeon_id, iso.depth + 1)
+			# ...and the debt, judged on the run that just ended (D191). Here for the same
+			# reason the depth log is: this is where every ending meets, and the gold is paid
+			# by the caller because MetaState is where it lands.
+			var owed_debt: int = meta.settle_debt(dungeon_id, iso.is_complete(),
+				iso.depth + 1, iso.caught_ever)
+			if owed_debt > 0:
+				meta.add_gold(owed_debt)
+				last_haul += " A debt is settled: +%d gold." % owed_debt
 	traversal = null
 	dungeon_id = ""
+	deep_entry = false
 	combat_state = {}
 	shop_stock = []
 
@@ -485,6 +497,10 @@ func generate_map() -> void:
 	var meta_a := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
 	if meta_a != null and d != null:
 		(traversal as TraversalIso).aspect = Balance.aspect_for(meta_a.times_cleared(d.id))
+	# ...and whether they came in by the back door (D190). Chosen on the region screen and
+	# carried here rather than re-derived, because "is a deep entry available" and "did the
+	# player take it" are different questions and only the screen knows the second.
+	(traversal as TraversalIso).deep = deep_entry
 	traversal.generate(d)
 
 ## Choices available right now (empty outside a run).
