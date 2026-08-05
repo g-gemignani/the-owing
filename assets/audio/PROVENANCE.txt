@@ -1,33 +1,60 @@
 Sound effects: generated for this project, not a downloaded pack.
 
-Source: tools/gen_sfx.py (run under `nix shell nixpkgs#ffmpeg-headless`).
+Source: tools/gen_sfx.py, built on tools/audio_voices.py — the instrument the score is
+        also built from. Run under `nix shell nixpkgs#ffmpeg-headless`.
 Licence: same as the rest of this repository — see ../../LICENSE.
+Format:  24 files, OGG Vorbis, mono, 44.1 kHz — the same rate as the score.
 
-Why generated (D150). These were three CC0 Kenney packs, and the packs do not agree
-with each other about what kind of game this is. The file headers were the receipt:
-16 files at 48 kHz stereo (RPG Audio: recorded foley), 5 at 44.1 kHz mono (Interface
-Sounds: soft modern UI blips), 5 at 44.1 kHz stereo (Music Jingles: 8-bit chiptune
-fanfares) — over a score of our own at 22.05 kHz mono. So winning played a chiptune
-fanfare, taking a hit played a foley recording, and clicking a button played a modern
-blip. Every file was fine; the set was three sets.
+Two rewrites, and both reasons are worth keeping.
 
-Three packs cannot be reconciled by turning knobs, because the difference is the
-instrument and not the level. The 23 effects here are synthesised from four voices —
-square, triangle, filtered noise, a two-operator bell — at the score's sample rate,
-in the score's key (A natural minor), on one stated loudness ladder: the interface
-under the world, the world under the stingers, all of it over the music.
+D150 — one set instead of three. These were three CC0 Kenney packs, and the packs did not
+agree about what kind of game this is. The file headers were the receipt: 16 files at
+48 kHz stereo (RPG Audio: recorded foley), 5 at 44.1 kHz mono (Interface Sounds: soft
+modern UI blips), 5 at 44.1 kHz stereo (Music Jingles: 8-bit chiptune fanfares) — over a
+score of our own at 22.05 kHz mono. So winning played a chiptune fanfare, taking a hit
+played a foley recording, and clicking a button played a modern blip. Every file was fine;
+the set was three sets. Three packs cannot be reconciled by turning knobs, because the
+difference is the instrument and not the level.
 
-Measurements for the shipped files are in measurements.json, regenerated on every run
-of the script, which fails rather than writing a set that:
+D173 — one set, and now the right one. What D150 built was uniform, and it was a chiptune:
+square, triangle, a two-operator bell, one-pole noise, 22.05 kHz, and not a millisecond of
+reverb anywhere in it. Measured with the metrics added for this pass, the old set says it
+plainly — `ui_click` had a 35 ms tail, `attack` 65 ms, `block` 130 ms. Nothing in the game
+happened anywhere. The target is the dark, physical, reverberant sound of a dungeon crawl,
+so the instrument changed:
 
-  * puts a file outside its family's loudness, length or register band,
+  * a plucked string (Karplus-Strong), low bowed strings, a formant choir,
+  * struck metal with inharmonic partials — a bar, a plate, a bell, a coin,
+  * frame drums, filtered air, sub weight and stone scrape,
+  * every file put through a Schroeder reverb before it is written.
+
+The room in these files is deliberately small. `scripts/audio.gd` puts a second, bigger
+reverb on the SFX bus and retunes it with where the player is, so the same blow rings on in
+a dungeon and does not in a menu.
+
+Nothing here is copied from another game's audio. A struck plate, a frame drum, a coin
+scatter and a distant choir are the shared vocabulary of dark fantasy; the recipes, the
+loudness ladder and the arrangement of each effect are this project's.
+
+Measurements for the shipped files are in measurements.json, regenerated on every run of
+the script, which fails rather than writing a set that:
+
+  * puts a file outside its family's loudness, length, register, TAIL or ONSET band — the
+    tail floor is the D173 rule (a sound with no tail did not happen anywhere) and the
+    onset ceiling is its counterweight (feedback for a button may not be late),
   * spans more than 22 dB of RMS end to end, which is not one set,
   * lets the interface family span more than x2.6 in timbre — menu sounds play
     back-to-back and mean nearly the same thing, so they have to BE one instrument,
-  * ships two effects that measure identically under two names.
+  * ships two effects that measure identically under two names,
+  * sits more than x4 from the SCORE's own register, or at a different sample rate. That
+    last check reads music/measurements.json rather than trusting this file: D150's bug
+    was four rates in one game, and nothing was watching.
 
-The three Kenney licence files that used to sit here are gone with the packs they
-covered. Nothing in this directory came from outside the repository.
+`tests/test_art.gd` re-asks the tail, onset and rate questions of the shipped files from
+inside the game, because the gates above live in Python that a gameplay branch never runs.
 
-Replacing any of these with recorded or commissioned sound is a file swap: keep the
-names in `Audio.SOUNDS` and drop OGG files here.
+The three Kenney licence files that used to sit here are gone with the packs they covered.
+Nothing in this directory came from outside the repository.
+
+Replacing any of these with recorded or commissioned sound is a file swap: keep the names
+in `Audio.SOUNDS` and drop OGG files here.

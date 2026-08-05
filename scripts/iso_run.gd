@@ -1153,7 +1153,9 @@ func _step_dir(d: int) -> void:
 			_on_pick(i)
 			return
 	# Nothing that way. Worth a line rather than silence — a key that does nothing
-	# reads as a key that is not bound.
+	# reads as a key that is not bound. And worth the sound for the same reason, which is
+	# the sound of a locked door: `ui_denied` is a thud with no ring in it.
+	Audio.play("ui_denied")
 	log_label.text = "Solid rock that way."
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -1418,6 +1420,14 @@ func _on_pick(i: int) -> void:
 	# DIR_ARROW) — the same test TraversalIso uses to face a wanderer.
 	var step: Vector2i = TraversalIso.DIRS[int(opts[i]["dir"])]
 	face_step = step
+	# A boot on stone, on every step, from the one place every step goes through — including
+	# the ones that end in a fight, a chest or a staircase, because the foot lands before the
+	# thing at the other end of it happens. The crawl was silent until D173, which is an odd
+	# thing to be able to say about the screen the player spends the most time on: it played
+	# a sound when something HAPPENED and nothing at all when they moved, so walking down an
+	# empty corridor was thirty seconds of score and no game. `Audio` jitters this harder
+	# than anything else it plays (JITTER_BY_EVENT), because it is heard the most.
+	Audio.play("step")
 	# Slipping past a fight is priced on the OPTION, so it is read before the move and paid
 	# here — the model reports a price and never touches run HP (D13), the same contract the
 	# old deck model's dodge always had. Clamped so it can never itself be lethal.
@@ -1444,6 +1454,10 @@ func _on_pick(i: int) -> void:
 			Audio.play("treasure")
 			log_label.text = "A key, down here where nothing else is. You take it."
 		elif tv.depth != from_floor:
+			# The one movement in the crawl that is not a step: stone dragging and a floor
+			# arriving somewhere below. `enter` is the run-entry sound and this is the same
+			# event — going down is going down, and it should not have two voices.
+			Audio.play("enter")
 			log_label.text = "You take the stairs down to floor %d." % (tv.depth + 1)
 		elif not was_seen:
 			log_label.text = "You press on into the dark."

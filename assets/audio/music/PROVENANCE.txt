@@ -1,29 +1,55 @@
 Music: generated for this project, not a downloaded pack.
 
-Source: tools/gen_music.py (run under `nix shell nixpkgs#ffmpeg-headless`).
+Source: tools/gen_music.py, built on tools/audio_voices.py — the instrument the sound
+        effects are also built from. Run under `nix shell nixpkgs#ffmpeg-headless`.
 Licence: same as the rest of this repository — see ../../../LICENSE.
+Format:  5 looping tracks, OGG Vorbis, mono, 44.1 kHz, 31-48 s each.
 
 Why generated. No CC0 pack of *looping* game music turned up whose licence could be
-verified the way the pixel packs' were, and picking tracks by ear is not a judgement
-I can make honestly. Synthesising them is the same answer D29 reached for the
-meaning-carrying UI symbols: author it, then measure it.
+verified the way the pixel packs' were, and picking tracks by ear is not a judgement I can
+make honestly. Synthesising them is the same answer D29 reached for the meaning-carrying UI
+symbols: author it, then measure it.
 
-The sound effects were a downloaded set when this was written, and are not any more
-(D150, ../PROVENANCE.txt): three CC0 Kenney packs at three sample rates over one
-generated score is what "the sound is not uniform" sounded like. They are now built
-from the same voices, at the same rate, in the same key as these tracks — which is
-why `tools/gen_sfx.py` imports its tuning from `tools/gen_music.py` rather than
-keeping a second copy of it.
+Rewritten in D173. The first five tracks (D33) were square-wave arpeggios and sine pads over
+a four-chord progression, dry, at 22.05 kHz — and every one of them had a beat. Measured
+with the pulse metric added for this pass, the old set scores 0.48 (menu), 0.23 (overworld),
+0.59 (dungeon), 0.78 (combat) and 0.58 (boss). A dungeon you can tap along to is a dungeon
+you stop being afraid of.
 
-Measurements for the shipped files are in measurements.json, regenerated on every
-run of the script, which fails rather than writing a track that:
+What replaced them is a place rather than a tune:
 
-  * steps further across the loop point than the waveform steps anywhere else
-    (an audible click, once per loop, forever),
-  * peaks above 0.90 or sits outside an RMS band — music has to lose to the
-    sound effects,
-  * measures identically to another track, which would mean one loop shipped
-    under several names.
+  * drones and modal colour instead of a progression — a progression says where the music
+    is going, a drone says where you are,
+  * no pulse at all outside a fight. The town, the overworld and the dungeon have phrases
+    at intervals nobody can count; the drums arriving MEAN a fight,
+  * a stone room on every track (a Schroeder reverb, primed with the loop's own tail so the
+    seam stays exact),
+  * modelled instruments: a plucked string, low bowed strings, a far-off formant choir,
+    struck metal, frame drums and moving air.
 
-Replacing any of these with real music is a file swap: keep the names in
-`Audio.SCORES` and drop OGG files in this directory.
+Nothing here is transcribed from anything. Drones, minor seconds, tritones and bare fifths
+are the shared vocabulary of dark fantasy the way a minor key is the vocabulary of sad; the
+phrases, the instrument set and the arrangements are this project's.
+
+The sound effects were a downloaded set when this file was first written, and are not any
+more (D150, ../PROVENANCE.txt). They are built from the same voices, at the same rate, in
+the same key as these tracks — which is why both generators import `tools/audio_voices.py`
+rather than keeping a second copy of the instrument, and why `tools/gen_sfx.py` checks its
+own register and rate against the measurements in THIS directory.
+
+Measurements for the shipped files are in measurements.json, regenerated on every run of the
+script, which fails rather than writing a track that:
+
+  * steps further across the loop point than the waveform steps anywhere else (an audible
+    click, once per loop, forever),
+  * peaks above 0.90 or sits outside an RMS band — music has to lose to the sound effects,
+  * measures brighter than the centroid ceiling, or lighter than the bass floor,
+  * keeps time when it should not, or fails to when it should (the pulse gate above),
+  * has a hole in it: the quietest two seconds must be at least 30% of the track's own
+    average, because phrases are now up to 4.6 s apart and a gap with nothing under it
+    reads as the music having stopped rather than as space,
+  * measures identically to another track, which would mean one loop shipped under several
+    names.
+
+Replacing any of these with real music is a file swap: keep the names in `Audio.SCORES` and
+drop OGG files in this directory.

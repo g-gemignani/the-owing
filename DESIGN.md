@@ -154,9 +154,10 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `resources/events/*.tres` | Event definitions (data, not code). |
 | `resources/zones/*.tres` | Zone definitions (data, not code). |
 | `resources/builds/*.tres` | Build archetypes (data, not code). |
-| `scripts/audio.gd` | Sound autoload: buses, voice pool, event -> stream. |
+| `scripts/audio.gd` | Sound autoload: buses, the SFX reverb that follows the player, voice pool, event -> stream (D173). |
 | `scripts/iso_footing.gd` | Where an iso sprite stands and how big: the stand point measured off the art, and the rect that puts it on the tile (D149). |
-| `tools/gen_sfx.py` | The 23 sound effects, one voice, measured (D150). |
+| `tools/audio_voices.py` | The instrument: tuning, filters, the room, and eight physically-modelled voices. Imported by BOTH audio generators, so "one instrument family" is structural (D173). |
+| `tools/gen_sfx.py` | The 24 sound effects, one voice, measured (D150, rewritten D173). |
 | `tools/rematte_iso.gd` | Re-cuts an installed iso figure whose matte ate it, from the paint still under the mask (D152). |
 | `scripts/pixel_art.gd` | Authored 16x16 symbol glyphs, the card sheet, and the lookup for every painted asset (backdrops, enemy plates, the UI kit). |
 | `assets/pixel/` | What is left of the CC0 pixel art: the 1-Bit card sheet and five Pattern Pack zone tiles, each with its licence. The Tiny Dungeon enemy sprites went in D89 and the UI RPG frames in D83. |
@@ -384,7 +385,7 @@ to that fuzz list.
 | UI panels / buttons | Kenney **UI Pack RPG Expansion**, CC0 | **gone (D83)** — computed by `tools/gen_ui_kit.gd` |
 | Effect symbols (13) | **authored in `pixel_art.gd`** as 16x16 bitmaps | still here; 21 painted replacements are Tier 1d of the art list |
 | Backdrops (5, one per zone) | Kenney **Pattern Pack Pixel**, CC0 | still here as the fallback; the zone screens draw painted establishing shots (D83d) |
-| Sound (23 events) | Kenney **Interface / RPG / Jingles**, CC0 | **gone (D150)** — 23 generated effects, one voice, `tools/gen_sfx.py` |
+| Sound (24 events) | Kenney **Interface / RPG / Jingles**, CC0 | **gone (D150)** — 24 generated effects, one voice, `tools/gen_sfx.py`; rewritten from physical models in a room (D173) |
 | Card illustrations (100) | Kenney **1-Bit Pack** sheet, CC0 | still here, and **the worst-looking thing in the game**: a 16x16 tile magnified ten times across a card face. Twelve family illustrations are Tier 3. |
 
 The packs ship *unlabelled* spritesheets (`tile_0093.png`) and there is no way to tell a sword tile from
@@ -432,30 +433,47 @@ making a claim about what it does. The **effect symbol** — derived from the ca
 in front and legible. Decoration behind, meaning in front; `UI.card_button()` builds both so no screen
 can get that ordering wrong.
 
-### Sound (D32)
+### Sound (D32, rebuilt D173)
 
-23 sounds in `assets/audio/`, **generated** by `tools/gen_sfx.py` since D150. They were 23 CC0 Kenney
-sounds from three packs — interface clicks, RPG foley and 8-bit stingers — which is exactly as coherent
-as it sounds: see D150 for the three sample rates and what replaced them.
+24 sounds in `assets/audio/` and five looping tracks in `assets/audio/music/`, all **generated** — from
+ONE instrument, `tools/audio_voices.py`, which `tools/gen_sfx.py` and `tools/gen_music.py` both import.
+Two rewrites got here: D150 replaced three mismatched CC0 Kenney packs with one synthesised set, and
+D173 replaced *that* set, because it was uniform and it was a chiptune. The sound is now physically
+modelled — a plucked string, bowed strings, a formant choir, struck metal, frame drums, moving air — at
+44.1 kHz, and everything happens in a stone room.
 
-`Audio` (autoload) owns two things:
+`Audio` (autoload) owns four things:
 
 * **Buses.** `Music` and `SFX` sit under `Master`, created in code so there is no bus-layout resource to
-  keep in sync. The settings sliders were placeholders until now; they drive these for real, mapped
+  keep in sync. The settings sliders were placeholders until D53; they drive these for real, mapped
   linear-to-dB with 0 muting outright rather than leaving a whisper at -80 dB.
-* **A voice pool** of 8 players. A burst of hits during one turn reuses voices instead of spawning
-  nodes, and each play gets slight pitch jitter — repeated identical samples otherwise fuse into one
-  long machine noise.
+* **The space (D173).** An `AudioEffectReverb` on the SFX bus, retuned by *where the player is* from the
+  same table that picks the music, so a blow in a dungeon rings on and the same blow in a menu does not.
+  The files carry a small close room; the bus carries the building. A hard limiter on `Master` keeps a
+  stinger at 0.85 over a score at 0.52 from clipping.
+* **A voice pool** of 12 players. A burst of hits during one turn reuses voices instead of spawning
+  nodes, and each play gets pitch and level jitter, **per event**: a footstep wanders ±15% because the
+  crawl plays it hundreds of times a floor, and a stinger wanders ±1% because it is a phrase with a bell
+  in it and detuning a phrase is not variety.
+* **The score.** One looping voice on the `Music` bus, switched by which screen the player is on (D53).
 
 Sounds are chosen from **what a card actually did** (poison / heavy hit / light hit / block / buff),
 read off its real fields, so a new card is audible correctly without being registered anywhere.
 `UI.button()` and `UI.card_button()` attach the click and card sounds centrally, so a new screen is
 never silent by omission.
 
-`tests/test_art.gd` covers the part that fails quietly: **a missing sound is silence, and silence is
-indistinguishable from "nothing was meant to play"**. So every declared event must resolve to a real,
-non-empty stream, unused files are flagged, and the volume curve is asserted to mute at 0, be
-unattenuated at 100, and rise monotonically between.
+The crawl gained the sound it plays most often in D173: a **footstep**, on every tile, from the one
+place every step goes through. Until then the screen the player spends the most time on made noise when
+something *happened* and none at all when they moved.
+
+Two tests cover the parts that fail quietly. `tests/test_art.gd` for **a missing sound is silence, and
+silence is indistinguishable from "nothing was meant to play"**: every declared event must resolve to a
+real, non-empty stream, unused files are flagged, and the volume curve is asserted to mute at 0, be
+unattenuated at 100, and rise monotonically between. It also reads the generators' `measurements.json`
+and fails a set that ships a dry effect (no tail), a late one (no onset), or two sample rates — the
+generators' own gates are Python that a gameplay branch never runs. `tests/MixerTest.tscn` covers the
+D173 mixer, which needs a running engine: the reverb has to actually be ON the SFX bus, the limiter on
+Master, and the room has to *change* with the player rather than having been set once at boot.
 
 Still missing: **art-driven** animation. Combat has tweened feedback — floating damage numbers, a hit
 shake, a screen flash scaled to the hit — but no impact sprite, no death effect and no card-play
@@ -10330,3 +10348,161 @@ existing **before** the turn is spent is the whole of this entry.
   `res://tools/` for exactly this and would have named it in one second; it had simply not
   been run since the edit. Run the compile suite after touching a tool, not only after
   touching the game.
+
+### D173 — The sound was uniform, and it was a chiptune
+
+> "The sound of this game is not convincing me at all. I imagine something way similar to
+> Diablo 1 or 2."
+
+D150 ended with 23 sound effects and five music loops that finally agreed with each other:
+one instrument, one rate, one key, one stated loudness ladder, every file measured and gated.
+That work was right and it is not what was wrong. What was wrong is that the instrument was
+**square, triangle, a two-operator bell and one-pole noise, at 22.05 kHz, with no room on
+anything** — a 1988 arcade cabinet playing under a game with 310 paintings in it. A set can
+be perfectly uniform and uniformly the wrong game.
+
+So this is a second rewrite of both generators, plus a mixer at runtime, and the thing worth
+recording is **how badly the first round of measurements described the defect.**
+
+## What I expected the numbers to say, and what they said
+
+The obvious hypothesis was "the old sound is bright and thin". Decoding the shipped files
+and running the new metrics over them says otherwise:
+
+| | old score | new score |
+|---|---|---|
+| centroid | 121-175 Hz | 286-667 Hz |
+| energy under 200 Hz | 0.74-0.88 | 0.37-0.73 |
+| **pulse** (0 = no beat, 1 = metronome) | **0.23-0.78, every track** | 0.07-0.11 ambient, 0.40 fight |
+
+The old score was *darker* than what replaced it and *more* bottom-heavy. It was not bright;
+it was **muffled** — sine pads at 22.05 kHz. Two numbers actually carried the defect:
+
+* **pulse.** Every old track had a beat, including the menu (0.48) and the dungeon (0.59).
+  A dungeon you can tap along to is a dungeon you stop being afraid of, and that single
+  property is most of what separates a chiptune loop from an ambient one.
+* **tail.** `ui_click` 35 ms, `attack` 65 ms, `block` 130 ms. Nothing in the game happened
+  anywhere. Dry sound is the loudest thing telling a player they are holding a toy.
+
+The centroid ceiling and the bass floor are still in the generator, but they are **guards on
+the new instrument** (which owns struck metal, a choir and two air beds and could go bright
+by accident), not a description of what was fixed. Writing them up as the diagnosis would
+have been a story the measurements do not support.
+
+## What replaced it
+
+`tools/audio_voices.py` is new and is the point: **the instrument, imported by both
+generators**, so "one instrument family" is structural rather than a promise repeated in two
+file headers. Eight voices, all models rather than oscillators — `pluck` (Karplus-Strong),
+`bow` (detuned saws through a resonant lowpass), `choir` (three formants over a pulse train),
+`metal` (an inharmonic mode bank: bar, plate, bell, coin — higher modes die first, which is
+the law for real plates and the difference between a struck thing and an organ chord), `drum`
+(a membrane whose pitch falls as the skin relaxes), `air`, `sub`, `scrape` — plus a
+Schroeder/Freeverb room, and the measurement helpers both reports share. Rate doubled to
+44.1 kHz: the modes that make a coin sound like a coin live at 6-10 kHz, and an 11 kHz
+Nyquist takes exactly those off. It is still ONE rate for both sets, which was the invariant
+that mattered.
+
+The score is now a *place* rather than a tune — drones and modal colour instead of a
+progression, phrases at intervals nobody can count, and the drums arriving only in a fight.
+The effects are physical and wet: a blade is air moving and *then* something struck; coins
+are eleven small inharmonic grains, not three bells; a locked door is a thud with no ring in
+it, because that is what "no" sounds like.
+
+**None of it is copied.** Drones, minor seconds, tritones, bare fifths, a plucked string, a
+distant choir and a frame drum are the shared vocabulary of dark fantasy, the way a minor key
+is the vocabulary of sad. Every phrase, arrangement and recipe here is this project's.
+
+## The half that cannot live in a file
+
+Baking the whole space into 24 files is wrong twice: it costs bytes, and it makes every
+location sound the same. So the files carry a *small* close room, and `scripts/audio.gd` puts
+an `AudioEffectReverb` on the SFX bus and **retunes it from the table that already picks the
+music** — one answer to one question (where is the player), so a screen cannot get dungeon
+music in a menu-sized room. A dungeon is `wet 0.30, predelay 28 ms`; a menu is `0.10, 6 ms`.
+It drifts over 1.2 s, which is slower than the music's crossfade on purpose: a room that
+resizes in half a second sounds like a filter sweep.
+
+Two other runtime changes, both of them about repetition rather than timbre. Pitch and level
+jitter are now **per event** — a footstep wanders ±15% and a stinger ±1%, because one is
+played hundreds of times a floor and the other is a phrase with a bell in it. And the crawl
+finally has a footstep at all: it is the sound this game makes most often, and until now the
+screen the player spends the most time on made noise when something *happened* and none at
+all when they moved.
+
+## Six things that broke, all of them in the instruments I was measuring with
+
+1. **The centroid metric was wrong in a way that inverted its answer.** It was a bank of
+   single-frequency Goertzel probes over log-spaced bins, and a narrow probe measures
+   spectral *density* — so summing them weights every octave equally and a whisper of
+   broadband hiss, which has the same density at 15 kHz as at 150 Hz, drags the result up by
+   an octave. Two plucked notes a fourth apart measured 2.1 kHz and 5.7 kHz. It is a filter
+   bank now, integrating over each band's own bandwidth, which is what "how much energy is up
+   there" means.
+2. **And then the filter bank returned NaN.** A Chamberlin state-variable filter is unstable
+   above about `rate/6`, so every analysis band over 7 kHz came back NaN — and NaN measures
+   as *no finding* rather than as a failure, which is the worst way for a gate to break.
+   Replaced with a biquad, stable at any frequency.
+3. **The pulse metric read a drone as a beat.** The first version autocorrelated the loudness
+   envelope and scored the dungeon at 0.74 — a track with no percussion in it whatsoever. It
+   was hearing the two bowed drones beating against each other: six cents apart at 110 Hz is
+   a 2.6-second throb, as periodic as a drum and not a beat, because nothing in it *starts*.
+   It reads the positive difference of the envelope now, where a smooth swell contributes
+   almost nothing.
+4. **Then it called a real beat beatless.** Capped at 1.3 s of lag it scored the combat track
+   at 0.20, because that pattern deliberately limps and its shortest exact repeat is the bar.
+   A bar is a pulse too; the range reaches 3.2 s.
+5. **A seam click from the one voice component that was not ramped.** `_env` ramps every
+   attack precisely because sample zero of a loop *is* the seam — and the contact noise
+   layered on top of `drum` and `metal` was written separately and started at full amplitude.
+   The boss track measured a click. 0.4 ms of ramp on the noise burst fixed it, inaudibly.
+6. **A pluck with a third of its energy at 60 Hz.** The Karplus-Strong loop filter passes DC
+   at unity, so the small non-zero mean left in the excitation burst rang for the whole note.
+   Zero-mean the burst.
+
+And two in the test, worth writing down because both look like a working feature failing:
+
+* **A frame-based wait is not a wait for a time-based process.** `MixerTest` awaited 240
+   frames for a room that drifts over 1.2 s; a headless engine renders as fast as it can, so
+   that was a quarter of a second of real time, the room moved 0.5% of the way, and the test
+   failed a mixer that was working. It waits on the clock.
+* **The scene poller stomps an explicit request one frame later.** `Audio._process` polls
+   `current_scene`, which is null while a scene is still being built, so the change
+   notification for a screen arrives a frame or two after that screen's `_ready` — and it
+   carries the room for that screen with it. Asking for a room in `_ready` and checking
+   afterwards showed it drifting *back*. Documented on `play_space` as the design (`_process`
+   owns the room; anything else is a hint), and the test waits for the poller to catch up.
+
+One more thing was rejected rather than fixed: the interface family's timbre spread. D150's
+rule is that the six menu sounds must sit inside x2.6 of each other in register, because they
+play back-to-back within a second and mean nearly the same thing. My dead low thud for
+`ui_denied` (177 Hz) and leather rustle for `ui_open` (2039 Hz) spanned **x11.5** — three
+octaves, which is two instruments however good each one is. The rule won and the sounds
+changed: a door is wood and iron rather than a subwoofer, and "dull" is a decay, not a
+register. The dead-flat *decay* that carries the meaning of "no" is untouched.
+
+## What it cost
+
+Audio went from 587 KB to 1.59 MB (247 KB of effects, 1.35 MB of score), which is the price
+of 44.1 kHz, reverb tails and loops of 31-48 s instead of 17-34 s. Both generators now assert
+a KB budget so that number cannot drift quietly. Generation is about four minutes of pure
+Python — no new toolchain, still ffmpeg and nothing else, still reproducible from a fixed
+seed.
+
+## What is measured now
+
+Both generators gained gates, and the two sets are finally checked **against each other**
+rather than each asserting its own good behaviour: `gen_sfx.py` reads the score's
+`measurements.json` and fails if the medians sit more than x4 apart in register or if the
+rates differ. That is D150's actual bug asked as a question for the first time. New per-file
+gates: a tail *floor* per family (the room), an onset *ceiling* per family (a blow may take
+60 ms to land, a button may not), a pulse ceiling for the three ambient tracks and a floor
+for the two fight tracks, and a "no holes" floor on the quietest two seconds of a loop —
+phrases are now up to 4.6 s apart, and a gap with nothing under it reads as the music having
+stopped rather than as space.
+
+`tests/test_art.gd` re-asks the tail, onset and rate questions from inside the game, because
+every gate above lives in Python that a gameplay branch never runs, and `tests/MixerTest.tscn`
+is new: the reverb has to actually be on the SFX bus, the limiter on Master, and the room has
+to *change* with the player, because "set once at boot" and "follows the player" are
+indistinguishable for the first second and only one of them is the feature.

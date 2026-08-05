@@ -1,7 +1,7 @@
 # The Owing
 
 [![ci](https://github.com/g-gemignani/the-owing/actions/workflows/ci.yml/badge.svg)](https://github.com/g-gemignani/the-owing/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-39%20suites-brightgreen)](#tests)
+[![tests](https://img.shields.io/badge/tests-40%20suites-brightgreen)](#tests)
 [![latest build](https://img.shields.io/github/release-date-pre/g-gemignani/the-owing?label=latest%20build&color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
 [![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-brightgreen)](#play-it)
 [![Godot](https://img.shields.io/badge/Godot-4.7-478cbf)](https://godotengine.org)
@@ -78,7 +78,7 @@ refused it with *"app not compatible"* (D170).
 
 > **Status: playable prototype, fully painted.** All 310 art files are in — 27
 > backdrops, 35 enemy plates, an illustration for every one of the 100 cards, and a
-> frame kit that is *computed* rather than drawn. 39 test suites, including one that
+> frame kit that is *computed* rather than drawn. 40 test suites, including one that
 > walks every screen and every dungeon asserting the player always has something to
 > press. The systems are the point; the pictures now stop them looking unfinished.
 
@@ -133,7 +133,7 @@ Both are re-run when anything visual lands, so these cannot quietly go stale.</s
 | Dungeons       | 12 across 5 zones, difficulty 1 to 8                           |
 | Traversal      | one model: an isometric crawl, walked by all 12 dungeons       |
 | Art            | 310 files, the list closed — see [ART.md](ART.md)              |
-| Tests          | 39 suites, including a playability integration test            |
+| Tests          | 40 suites, including a playability integration test            |
 
 Every piece of that is a `.tres` file plus one catalogue line. Adding more is a data
 task, not a code task — see [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -182,7 +182,7 @@ non-null Resource for a script that failed to parse.
 **There is no coverage badge, and that is deliberate.** GDScript has no line-coverage
 instrumentation — no `gcov`, no `coverage.py`, nothing the engine exposes — so any
 percentage on this page would be a number somebody typed. Everything in the badge row
-above is either read live from GitHub or asserted by a test: the `39 suites` count is
+above is either read live from GitHub or asserted by a test: the `40 suites` count is
 checked against the globs `tests/run.sh` actually runs, by `tests/test_content.gd`, so
 adding a suite fails the build until the badge is corrected.
 
@@ -198,7 +198,7 @@ resources/   all content as .tres data: cards, enemies, relics, powers, events,
              dungeons, zones, builds
 scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      art and audio; see the licence note at the bottom
-tests/       39 suites + tests/run.sh
+tests/       40 suites + tests/run.sh
 tools/       diagnostics and generators, not shipped
 docs/        the README's screenshots; nothing in the game loads them
 DESIGN.md    the reasoning behind every decision, and every mistake
@@ -269,5 +269,9 @@ RPG Audio and Music Jingles supplied the sound effects until `tools/gen_sfx.py` 
 all 23 with one synthesised set (D150) — three packs at three sample rates over a
 generated score is what made the game sound like three games.
 
-All the audio is now ours: `tools/gen_music.py` for the five loops and `tools/gen_sfx.py`
-for the 23 effects, with provenance and measurements beside the files in `assets/audio/`.
+All the audio is now ours, and all of it comes out of one instrument:
+`tools/audio_voices.py` holds the voices, the tuning and the room, and `tools/gen_music.py`
+(five loops) and `tools/gen_sfx.py` (24 effects) both import it. Both were rewritten in D173
+from physical models — a plucked string, bowed strings, a choir, struck metal, frame drums —
+because the first synthesised set was uniform and was a chiptune. Provenance and the
+measurements that gate every run sit beside the files in `assets/audio/`.
