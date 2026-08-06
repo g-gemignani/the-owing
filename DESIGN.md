@@ -11688,3 +11688,44 @@ Touch. `ScrollContainer` drag-scrolls on a touchscreen by itself, and this was c
 headless desktop viewport — the scroll area measures 1248x688 around 1240x972 of content,
 with the vertical bar live at `max=972, page=688`. That the drag feels right on a phone is
 not something a headless run can answer.
+
+### D192 — The brightest thing on the floor was being drawn under the player
+
+> "Drawing lights in the iso dungeon has the wrong layer depth. The hero looks like it is on
+> top of the light when it should be behind the wall and the light."
+
+The crawl bends depth order once, on purpose: the player is drawn LAST, over everything,
+because correct depth hid her behind whatever rock stood in the row in front — realistic and
+unplayable. The mitigation is that rock which occludes her is held back out of the standing
+pass and re-drawn *over* her at a third strength, so she reads as behind it and is still
+findable. That has worked since the camera existed.
+
+**The landmark was exempted from it, by me, in D177**, with the argument that "a bearing you
+can only see at a third strength is not one". That argument is wrong in the only case it ever
+applies to. A landmark is the tallest thing the floor draws — 2.1 blocks against a wall's 0.9 —
+and the `shaft` variant emits a pale beam a tile and a half high. Drawn at full strength in the
+standing pass and then painted over by the player, the brightest object on the screen came out
+*underneath* her: she read as standing on top of the light rather than behind it. And the
+dimming the exemption was protecting against only happens while she is within two tiles of the
+thing, which is exactly when nobody is using it to take a bearing.
+
+The standing stone (D188) had the same gap for the same reason — tall terrain that was not
+rock, so it never reached the gate at all.
+
+So there is one gate now and everything with height goes through it: rock, the landmark, the
+stone. `near_walls` became `near_front`, and the last pass dispatches on what the cell *is*
+rather than on a kind recorded when it was held back — one list and one decision, so a fourth
+tall thing joins by being tall rather than by somebody remembering to add it to a parallel
+array. Both drawings grew an `alpha` that reaches every mark they paint, not just the block:
+a landmark whose masonry faded while its beam stayed solid would be a worse picture than the
+bug.
+
+One detail found while drawing it: the stone's ground shadow is dropped when it is being drawn
+over the player. A shadow is a thing on the floor, and painted on top of her at a third
+strength it is not a shadow, it is a smear.
+
+**Verified by capture, against the case rather than in general.** The screenshot that proves it
+needed the hero placed one tile *behind* the landmark — the first attempt put her in front of
+it, where the code was already correct and the picture showed nothing. A capture of the wrong
+arrangement is a capture of nothing, and it is the second time this batch that a check looked
+at the wrong state and reported the feature instead of itself (D186).

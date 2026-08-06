@@ -668,8 +668,9 @@ func _draw_floor() -> void:
 	var threats := tv.threats()
 	cam = _camera_for(_eye_plate(tv))
 	var window := Rect2(Vector2.ZERO, _view_size()).grow(maxf(t.x, t.y))
-	## rock standing between the camera and the player, drawn last and translucent
-	var near_walls: Array = []
+	## Anything with HEIGHT standing between the camera and the player: rock, the landmark,
+	## a standing stone. Held back and drawn last, over her, at a third strength.
+	var near_front: Array = []
 
 	# TWO passes, and the split is load-bearing. Ground first, everything that stands
 	# on it second — because a sprite is taller than its tile, so drawing each tile
@@ -748,15 +749,19 @@ func _draw_floor() -> void:
 					# standing on the wall rather than behind it — which on a floor of
 					# one-tile corridors is most of the time, because the tile in front
 					# of you is usually stone.
-					if i2 == tv.landmark:
-						# The one oversized thing on the floor (D177). It stands in rock, so
-						# it is drawn here, in the pass that owns height — and it is NEVER
-						# held back as an occluder, because a landmark is a bearing and a
-						# bearing you can only see at a third strength is not one. The player
-						# is drawn after this pass regardless, so she is still on top of it.
+					# EVERYTHING with height goes through the same gate, the landmark
+					# included (D192). D177 exempted it — "a bearing you can only see at a
+					# third strength is not one" — and that argument was wrong in the only
+					# case it applied to. A landmark is the tallest thing the floor draws and
+					# the `shaft` emits a beam a tile and a half high; drawn at full strength
+					# before the player, it came out UNDER her, so the brightest object on the
+					# screen read as something she was standing on top of. It is only dimmed
+					# while she is within two tiles of it, which is exactly when nobody is
+					# using it to take a bearing.
+					if _occludes_player(x, y, tv):
+						near_front.append(Vector2i(x, y))
+					elif i2 == tv.landmark:
 						_draw_landmark(c2, t, x, y, tv)
-					elif _occludes_player(x, y, tv):
-						near_walls.append(Vector2i(x, y))
 					else:
 						_draw_wall(c2, t, x, y, Color(1, 1, 1), tv)
 				continue
@@ -769,7 +774,13 @@ func _draw_floor() -> void:
 				_draw_key(c2, t)
 				continue
 			if e2 == TraversalIso.SHRINE:
-				_draw_shrine(c2, t)
+				# Tall terrain, so it obeys the same gate as the rock (D192). A slab nearly a
+				# tile high in the row in front of the player was drawn before her and came
+				# out behind her, which is the same defect the landmark had.
+				if _occludes_player(x, y, tv):
+					near_front.append(Vector2i(x, y))
+				else:
+					_draw_shrine(c2, t)
 				continue
 			# the furniture and the things that wait for you
 			if e2 >= 0:
@@ -812,13 +823,23 @@ func _draw_floor() -> void:
 	# occluded correctly by a wall you are standing behind.
 	_draw_you(_eye_plate(tv) + cam, t)
 
-	# ...and the near-side rock goes over her, at a third strength. So the wall is still
-	# there, she is still legibly *behind* it, and you can see where you are — which is
-	# the whole reason the depth order gets bent here at all.
-	for p in near_walls:
+	# ...and everything near-side goes over her, at a third strength. So the thing is still
+	# there, she is still legibly *behind* it, and you can see where you are — which is the
+	# whole reason the depth order gets bent here at all.
+	#
+	# Dispatched on what the cell IS rather than on a kind recorded when it was held back:
+	# one list and one decision, so a fourth tall thing joins by being tall rather than by
+	# somebody remembering to add it to a parallel array (D192).
+	for p in near_front:
 		var pv: Vector2i = p
-		_draw_wall(_to_plate(pv.x, pv.y) + cam, t, pv.x, pv.y,
-			Color(1, 1, 1, OCCLUDER_ALPHA), tv)
+		var pc := _to_plate(pv.x, pv.y) + cam
+		var pi: int = pv.y * g.x + pv.x
+		if pi == tv.landmark:
+			_draw_landmark(pc, t, pv.x, pv.y, tv, OCCLUDER_ALPHA)
+		elif tv.cell(pv.x, pv.y) == TraversalIso.SHRINE:
+			_draw_shrine(pc, t, OCCLUDER_ALPHA)
+		else:
+			_draw_wall(pc, t, pv.x, pv.y, Color(1, 1, 1, OCCLUDER_ALPHA), tv)
 
 ## The tile's diamond, in draw order top / right / bottom / left.
 func _diamond(centre: Vector2, t: Vector2) -> PackedVector2Array:
@@ -1278,12 +1299,15 @@ func _draw_door(at: Vector2, t: Vector2, wash: Color) -> void:
 ## than anything else the floor draws flat, because it is the one piece of terrain that is a
 ## DECISION: it has to be visible from across a room or the choice it offers is one the player
 ## walks past without knowing it was there.
-func _draw_shrine(centre: Vector2, t: Vector2) -> void:
-	var stone := Color(0.62, 0.60, 0.66)
-	var lit := Color(0.80, 0.78, 0.84)
-	# a shadow on the ground, so it reads as standing rather than lying
-	floor_view.draw_colored_polygon(_diamond(centre + Vector2(0, t.y * 0.06), t * 0.42),
-		Color(0.05, 0.05, 0.08, 0.45))
+func _draw_shrine(centre: Vector2, t: Vector2, alpha: float = 1.0) -> void:
+	var stone := Color(0.62, 0.60, 0.66, alpha)
+	var lit := Color(0.80, 0.78, 0.84, alpha)
+	# a shadow on the ground, so it reads as standing rather than lying — and it is dropped
+	# when the slab is being drawn OVER the player (D192), because a shadow painted on top of
+	# her is a smear rather than a shadow
+	if alpha >= 1.0:
+		floor_view.draw_colored_polygon(_diamond(centre + Vector2(0, t.y * 0.06), t * 0.42),
+			Color(0.05, 0.05, 0.08, 0.45))
 	var slab := PackedVector2Array([
 		centre + Vector2(-t.x * 0.13, -t.y * 0.06),
 		centre + Vector2(-t.x * 0.10, -t.y * 0.86),
@@ -1293,7 +1317,7 @@ func _draw_shrine(centre: Vector2, t: Vector2) -> void:
 	floor_view.draw_polyline(slab + PackedVector2Array([slab[0]]), lit, UITheme.px(2.0))
 	# the hollow: what has been worn into it by whatever has been done here before
 	floor_view.draw_circle(centre + Vector2(0, -t.y * 0.46), t.x * 0.045,
-		Color(0.18, 0.17, 0.22))
+		Color(0.18, 0.17, 0.22, alpha))
 
 ## An iron ring lying in the floor.
 func _draw_prop_ring(centre: Vector2, t: Vector2, ink: Color) -> void:
@@ -1311,11 +1335,12 @@ func _draw_prop_ring(centre: Vector2, t: Vector2, ink: Color) -> void:
 ## Four kinds and no more, because each one has to be read at a glance from the far side of
 ## a dark room, and because it is drawn: there is no landmark in any art pack, and a
 ## silhouette is the half of the divide code loses (D89).
-func _draw_landmark(centre: Vector2, t: Vector2, x: int, y: int, tv: TraversalIso) -> void:
+func _draw_landmark(centre: Vector2, t: Vector2, x: int, y: int, tv: TraversalIso,
+		alpha: float = 1.0) -> void:
 	var kind: String = String(Balance.ISO_LANDMARKS[
 		tv.landmark_kind % Balance.ISO_LANDMARKS.size()])
 	var tall := 2.1 if kind != "dome" else 1.35
-	_draw_wall(centre, t, x, y, Color(1, 1, 1), tv, tall)
+	_draw_wall(centre, t, x, y, Color(1, 1, 1, alpha), tv, tall)
 	var cap := centre + Vector2(0, -t.y * WALL_LIFT * tall)
 	var wash := _lit(tv, x, y, Color(1, 1, 1))
 	match kind:
@@ -1327,11 +1352,11 @@ func _draw_landmark(centre: Vector2, t: Vector2, x: int, y: int, tv: TraversalIs
 				var s: float = 0.86 - 0.24 * float(k)
 				var a: float = 0.16 + 0.20 * float(k)
 				floor_view.draw_colored_polygon(_diamond(cap, t * s),
-					Color(0.86, 0.92, 1.0, a))
+					Color(0.86, 0.92, 1.0, a * alpha))
 			var beam := PackedVector2Array([
 				cap + Vector2(-t.x * 0.20, 0), cap + Vector2(t.x * 0.20, 0),
 				cap + Vector2(t.x * 0.09, -t.y * 1.5), cap + Vector2(-t.x * 0.09, -t.y * 1.5)])
-			floor_view.draw_colored_polygon(beam, Color(0.80, 0.88, 1.0, 0.13))
+			floor_view.draw_colored_polygon(beam, Color(0.80, 0.88, 1.0, 0.13 * alpha))
 		"dome":
 			# A dome that came down: a low mound of masonry, deliberately SHORTER than the
 			# other three, because the reading is a roof at head height rather than a tower.
@@ -1354,7 +1379,7 @@ func _draw_landmark(centre: Vector2, t: Vector2, x: int, y: int, tv: TraversalIs
 				var v3: float = 0.86 + 0.10 * float(k)
 				floor_view.draw_colored_polygon(arc,
 					Color(TINT_WALL_TOP.r * wash.r * v3, TINT_WALL_TOP.g * wash.g * v3,
-						TINT_WALL_TOP.b * wash.b * v3, 1.0))
+						TINT_WALL_TOP.b * wash.b * v3, alpha))
 		"stair":
 			# A stair going nowhere: the way down's drawing inverted — steps RISING off the
 			# block and stopping. Deliberately the same shape as the stair, because that is
@@ -1366,7 +1391,7 @@ func _draw_landmark(centre: Vector2, t: Vector2, x: int, y: int, tv: TraversalIs
 				var v5: float = 1.0 + 0.08 * float(k)
 				floor_view.draw_colored_polygon(_diamond(up, t * (0.66 - 0.12 * float(k))),
 					Color(TINT_WALL_TOP.r * wash.r * v5, TINT_WALL_TOP.g * wash.g * v5,
-						TINT_WALL_TOP.b * wash.b * v5, 1.0))
+						TINT_WALL_TOP.b * wash.b * v5, alpha))
 		"stack":
 			# Bone stacked to the roof: a column of small diamonds. The tightest repetition
 			# on the floor, which is what makes it read as *counted* rather than as rubble.
@@ -1382,7 +1407,7 @@ func _draw_landmark(centre: Vector2, t: Vector2, x: int, y: int, tv: TraversalIs
 					_diamond(cap + Vector2(t.x * 0.03 * (1 if k % 2 == 0 else -1),
 						-t.y * 0.12 * float(k)), t * 0.30),
 					Color(TINT_WALL_TOP.r * wash.r * v4, TINT_WALL_TOP.g * wash.g * v4,
-						TINT_WALL_TOP.b * wash.b * v4 * 0.94, 1.0))
+						TINT_WALL_TOP.b * wash.b * v4 * 0.94, alpha))
 
 ## Which SPRITE_H entry a tile's art is sized by. The silhouette says what kind of fight
 ## it is and the size says how big a fight — so an elite swarm is spiders drawn large
