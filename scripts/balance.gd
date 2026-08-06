@@ -17,6 +17,113 @@ const ASCENSION_STEP := 0.10
 static func ascension_mult() -> float:
 	return 1.0 + ASCENSION_STEP * float(maxi(0, ascension))
 
+# --- chosen difficulty (D175) ---
+#
+# A rung the player picks, multiplying the same two enemy numbers ascension does and
+# riding the same seam — `enemy_max_hp` and `enemy_damage` — so the simulator cannot
+# measure a different game from the one being played. A second scaling hook would
+# have been the D34 mistake in new clothes.
+#
+# Set from the save on load, like `ascension`, and for the same reason: a static
+# needs no new argument threaded through every scaling signature.
+static var difficulty: int = DIFFICULTY_DEFAULT
+
+## Why TWO multipliers and not one scalar.
+##
+## The measured disease at depth is fights getting LONGER: above HIGH_POWER_FLOOR
+## enemy HP already grows at 0.68 + 0.52 = 1.20 per point of ratio against player
+## damage at 1.00, so the Maw costs a maxed deck 111 HP a fight. A difficulty knob
+## that multiplies HP feeds exactly that, and buys length rather than danger.
+## Damage is what makes a fight losable — and losable is what was missing: 110 of
+## 111 measured per-fight cells were 100% wins at full HP, at every depth, for
+## every build. So the ladder leans on `dmg` and moves `hp` far less.
+##
+## Loot is deliberately NOT on this table. Ascension pays better because it is a
+## ladder you climb once the game is over; a difficulty PREFERENCE that paid better
+## would stop being a preference — every player who wanted to progress efficiently
+## would be forced to the top rung, and the gentler rungs would become a trap for
+## precisely the players who chose them.
+##
+## And why there is a THIRD knob, `ratio`, which is the one that does the work.
+##
+## A flat multiplier was built first and measured, and it is the wrong lever for this
+## game specifically. Enemies here already scale to `power_ratio`, so a flat number
+## lands hardest on the deck with the least slack — the starter. Measured at dmg x1.50:
+## the tutorial Crypt fell 99% -> 34% and the Ossuary 69% -> 1%, while the cells that
+## were actually too easy barely moved (Relic build at the Vault 100 -> 94, Barricade
+## at the Warrens 100 -> 100, Late at the Drowned Market 100 -> 100). A knob that walls
+## a new player and leaves the walkovers standing is not a difficulty setting.
+##
+## `ratio` multiplies the scaling ratio enemy DAMAGE is computed against — the same
+## `scaling_ratio` every caller already goes through, still capped by the dungeon's own
+## ceiling, so the ratchet (D36) is untouched and a rung can never push a shallow
+## dungeon past what its depth allows. Because the ratio term is `1 + DMG_POWER_K *
+## (sr - 1)`, multiplying sr is nearly free at sr ~1 and expensive at sr ~15: it costs
+## a starter deck a few percent and a maxed one a third. That is the shape the sweep
+## asked for.
+##
+## It is deliberately NOT applied to `enemy_max_hp`. More enemy HP means longer fights,
+## and longer fights are the mechanism behind the depth inversion this project already
+## has at d7/d8 — a difficulty knob must not buy its danger by making the endgame's
+## worst property worse.
+##
+## Numbers are measured, not picked: see D175 for the sweep and the per-rung report.
+const DIFFICULTIES := [
+	{"name": "Wayfarer", "hp": 1.00, "dmg": 1.00, "ratio": 1.0,
+		"blurb": "The dungeons as they were before difficulty could be chosen."},
+	{"name": "Delver", "hp": 1.00, "dmg": 1.05, "ratio": 1.8,
+		"blurb": "A built deck stops being an answer to everything. The first floors are unchanged."},
+	{"name": "Reckoning", "hp": 1.00, "dmg": 1.12, "ratio": 2.8,
+		"blurb": "The intended weight. What you have built is measured against the place you took it."},
+	# NOT "The Owing": that is the game's own title, and a difficulty rung wearing it
+	# would make the one most-read proper noun in the project mean two things. Same
+	# register, its own noun.
+	{"name": "Nothing Forgiven", "hp": 1.00, "dmg": 1.20, "ratio": 4.0,
+		"blurb": "Every fight is a real question. Nothing is written off."},
+]
+## The rung a NEW save starts on. Existing saves are migrated to whatever rung
+## reproduces the numbers they were played at — see `MetaState.load_game`.
+const DIFFICULTY_DEFAULT := 2
+## The rung whose multipliers are both 1.0 — the game as it stood before D175, and
+## what a save written before D175 must land on so nobody's run silently hardens.
+const DIFFICULTY_LEGACY := 0
+
+static func difficulty_row(rung: int = -1) -> Dictionary:
+	var i := clampi(rung if rung >= 0 else difficulty, 0, DIFFICULTIES.size() - 1)
+	return DIFFICULTIES[i]
+
+static func difficulty_name(rung: int = -1) -> String:
+	return String(difficulty_row(rung)["name"])
+
+## Sweep overrides, for `tools/sim_balance.gd` only: NAN means "use the rung".
+##
+## They live HERE, behind the getters, rather than in the tool, because the tool
+## appending a scratch row to `DIFFICULTIES` is not available — a const Array is
+## read-only in Godot 4 — and because a tool that computed multipliers of its own
+## would be measuring a game the player cannot play, which is the D72/D74/D77 trap.
+## The getters stay the one owner; these only change what the one owner answers.
+static var hp_mult_override := NAN
+static var dmg_mult_override := NAN
+
+static func difficulty_hp_mult(rung: int = -1) -> float:
+	if rung < 0 and not is_nan(hp_mult_override):
+		return hp_mult_override
+	return float(difficulty_row(rung)["hp"])
+
+static func difficulty_dmg_mult(rung: int = -1) -> float:
+	if rung < 0 and not is_nan(dmg_mult_override):
+		return dmg_mult_override
+	return float(difficulty_row(rung)["dmg"])
+
+static var ratio_mult_override := NAN
+
+## Multiplier on the ratio enemy DAMAGE scales against. See the note on DIFFICULTIES
+## for why this, and not the flat multipliers, is the knob that does the work.
+static func difficulty_ratio_mult(rung: int = -1) -> float:
+	if rung < 0 and not is_nan(ratio_mult_override):
+		return ratio_mult_override
+	return float(difficulty_row(rung).get("ratio", 1.0))
+
 # --- combat rules ---
 const HAND_SIZE := 5
 
@@ -414,6 +521,26 @@ const RELIC_POWER_PER_RATIO := 50.0
 ## deriving a number from separate copies agree with each other and with nothing else
 ## (D99), and this constant has already caused exactly that: see below.
 const DRAW_VALUE := 1.5
+
+## Sum one numeric field across a set of relics. The ONE owner of that loop (D180).
+##
+## It existed twice, and the second copy is why `heal_after_combat` went unmeasured for
+## the life of the simulator: `MetaState.relic_bonus` walked the player's relics and was
+## called from `combat.gd`, while `sim_balance.gd` held its own Array of the same
+## resources and had no way to ask the same question — so the tool measured a game in
+## which Healing Idol does nothing while still charging ratio points for it. A relic
+## effect the game applies and the simulator does not is the D72/D74/D77 trap wearing a
+## relic: the numbers describe a game nobody plays.
+##
+## `MetaState.relic_bonus` now delegates here, so a third caller cannot start a third
+## copy, and `tests/test_balance.gd` walks `RelicData`'s own fields to check the
+## simulator reads every one the game reads.
+static func relic_field_sum(relics: Array, field: String) -> int:
+	var n := 0
+	for r in relics:
+		if r is RelicData:
+			n += int(r.get(field))
+	return n
 
 static func relic_power(relics: Array) -> float:
 	var p := 0.0
@@ -2168,7 +2295,7 @@ static func enemy_max_hp(dungeon: int, tier: int, ratio: float) -> int:
 	var sr := scaling_ratio(dungeon, ratio)
 	base *= 1.0 + HP_POWER_K * (sr - 1.0) \
 		+ HP_POWER_K_HIGH * maxf(0.0, sr - HIGH_POWER_FLOOR)
-	base *= ascension_mult()
+	base *= ascension_mult() * difficulty_hp_mult()
 	return int(round(base))
 
 ## Enemy attack for turn `turn` (1-based). `roll` in [0,3] keeps randomness
@@ -2184,9 +2311,13 @@ static func enemy_max_hp(dungeon: int, tier: int, ratio: float) -> int:
 static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn: int = 1) -> int:
 	var d := 7.5 + roll + 0.6 * dungeon
 	d += float(TIER_DMG_BONUS[tier])
-	d *= 1.0 + DMG_POWER_K * (scaling_ratio(dungeon, ratio) - 1.0)
+	# The chosen rung multiplies the ratio INSIDE scaling_ratio, so the dungeon's own
+	# ceiling still clamps the result: a rung can make you feel your own power sooner,
+	# never push a shallow dungeon past the depth it is rated for (D36, D175).
+	d *= 1.0 + DMG_POWER_K * (
+		scaling_ratio(dungeon, ratio * difficulty_ratio_mult()) - 1.0)
 	d *= minf(ESCALATION_MAX, 1.0 + ESCALATION_PER_TURN * float(maxi(0, turn - 1)))
-	d *= ascension_mult()
+	d *= ascension_mult() * difficulty_dmg_mult()
 	return int(round(d))
 
 ## Enemy damage grows this much per turn elapsed (compounding pressure), up to

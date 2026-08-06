@@ -60,6 +60,9 @@ func _build() -> void:
 	col.add_child(nums)
 
 	UI.divider(col)
+	_build_difficulty(col)
+
+	UI.divider(col)
 	UI.label(col, "Controls")
 	# Three states, not a checkbox: see `SettingsState.Pad`. The current reading of
 	# Automatic is spelled out beside it, because "Automatic" alone leaves the player
@@ -137,3 +140,62 @@ func _build() -> void:
 	UI.spacer(col)
 	UI.label(col, "Shortcuts: F11 fullscreen, Esc back")
 	UI.exit_button(col, "Back", func(): UI.goto(self, back_to))
+
+## The difficulty rung (D175). The one row on this screen that is NOT a machine
+## setting: it is stored per save, beside `ascension`, for the reasons written on
+## `MetaState.difficulty`. It is drawn here anyway because this is where a player
+## looks for it, and a setting hidden from the settings screen to satisfy a storage
+## rule would be the rule serving itself.
+##
+## Three states, because two of them are honest refusals rather than a greyed control
+## with no explanation:
+##   * no save open  — there is nothing to write to; say so and say where to go
+##   * a run under way — a rung the player could change mid-boss is not a difficulty,
+##     it is a retry button, so it is fixed from the moment they go down
+##   * otherwise      — live, and applied to `Balance` the moment it changes
+func _build_difficulty(col: VBoxContainer) -> void:
+	UI.label(col, "Difficulty")
+	var in_run: bool = GameState.in_run()
+	# `MetaState.slot` is only meaningful once the title screen has picked one; before
+	# that the autoload is holding defaults for nobody.
+	var have_save := MetaState.loaded
+
+	var row := UI.row(col, 10)
+	var lbl := Label.new()
+	lbl.text = "Dungeon difficulty"
+	lbl.custom_minimum_size.x = UITheme.px(300)
+	row.add_child(lbl)
+
+	var opt := OptionButton.new()
+	for i in Balance.DIFFICULTIES.size():
+		opt.add_item(Balance.difficulty_name(i), i)
+	opt.select(clampi(MetaState.difficulty, 0, Balance.DIFFICULTIES.size() - 1))
+	opt.disabled = in_run or not have_save
+	opt.item_selected.connect(func(i: int):
+		MetaState.difficulty = i
+		Balance.difficulty = i        # static, so the change is live without a reload
+		Audio.play("ui_select")
+		MetaState.save_game()
+		_build())                     # the blurb below names the rung, so redraw it
+	row.add_child(opt)
+
+	if not have_save:
+		UI.label(col, "Difficulty belongs to a save, not to this machine — open or start one first.")
+		return
+	if in_run:
+		UI.label(col, "Fixed until this run ends. What a dungeon costs is decided when you go down, not while you are standing in it.")
+
+	# What the rung does, in the player's vocabulary. A label that only says "Hard"
+	# asks them to find out by dying; "scaling ratio x2.80" answers a question nobody
+	# asked, in a word from the source tree. Say what it costs and where it lands.
+	var row_data := Balance.difficulty_row(MetaState.difficulty)
+	UI.label(col, String(row_data["blurb"]))
+	if MetaState.difficulty == Balance.DIFFICULTY_LEGACY:
+		UI.label(col, "Enemies answer the deck you bring, up to what the dungeon's own depth allows.")
+	else:
+		# The shape is the point and it is not obvious: a stronger deck is answered
+		# harder, so the opening floors barely move and a built deck feels all of it.
+		UI.label(col, "Enemies answer the deck you bring far more sharply. A starting deck notices little; a built one is met with everything the dungeon's depth allows.")
+	UI.label(col, "Rewards are unchanged at every setting — a harder run pays exactly the same, so this is a preference and never a grind.")
+	if MetaState.ascension > 0:
+		UI.label(col, "Ascension %d is on top of this." % MetaState.ascension)

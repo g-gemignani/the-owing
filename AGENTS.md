@@ -57,12 +57,11 @@ Two-tier state makes this work:
 ## Content at a glance
 
 100 cards · 35 enemy archetypes (all painted) · 12 bosses (one named per dungeon) · 30 relics ·
-10 powers · 20 events · 12 dungeons across 5 zones · 1 traversal model ·
-7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
-4 pocket prizes · 3 pocket mouths · 3 toll questions · 3 errands · 3 aspects ·
-3 debts · 24 sound
-effects · 5 score tracks · 41 test suites. All content is `.tres` data plus one catalogue
-line; adding more is a data task, not a code task.
+10 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
+model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
+4 pocket prizes · 3 pocket mouths · 3 toll questions · 3 errands · 3 aspects · 3 debts ·
+24 sound effects · 5 score tracks · 42 test suites. All content is `.tres` data
+plus one catalogue line; adding more is a data task, not a code task.
 
 **Art: 310 files wanted, 310 present, 0 to provide — the list is closed.** It was
 205/205/0 at D129, then D131 opened Tier 3b (one illustration per card) and took it to
@@ -99,6 +98,20 @@ effects are drawn at runtime by `scripts/fx.gd`.
    not use. **A number the simulator reports about difficulty may be a fact about its
    policy.**
 
+   **That hole was closed for draw and left open everywhere else, and the second half
+   cost more than the first (D180).** Two years after D124, the same shape: of thirty
+   relics the profiles held ten, and nine of those ten were flat numbers. Four of the
+   five relic TRIGGER kinds never fired once in a full report, and `GAIN_ENERGY` — on
+   the one resource `power_ratio` is *defined* against — was one relic in the catalogue
+   and zero measured. Worse than uncovered: `heal_after_combat` was applied in
+   `combat.gd` and nowhere in the simulator, so Healing Idol measured as strictly
+   **worse than no relic**, paying ratio points that raise enemy scaling and returning
+   nothing to a metric that is pure attrition. **The fix is not another profile, it is a
+   check that DISCOVERS its subjects** — `tests/test_relic.gd` now walks `RelicData`'s
+   own property list and both its enums, so a field or a trigger the game reads and the
+   tool does not is a failing test rather than a discovery. Coverage kept by a list of
+   what somebody remembered is the D89 art bug in a third costume.
+
    And when you add a rule to that policy, **count how often it fires.** The first
    version of the draw gate looked principled and declined nothing at all — 1,498
    opportunities, zero refusals — because every card it would have caught costs zero
@@ -120,6 +133,19 @@ effects are drawn at runtime by `scripts/fx.gd`.
   player only up to a ceiling set by its difficulty (D36). You outgrow the Crypt; you
   never outgrow the Maw. Progression should *feel* like progression — HP lost per
   fight must fall as you get stronger, at any fixed depth.
+
+- **A difficulty knob in THIS game must scale with the player, because the enemies
+  already do.** The obvious design — one constant multiplying enemy HP and damage — was
+  built, measured and deleted (D175). Enemies scale to `power_ratio`, so a flat number
+  lands hardest on the deck with the least slack: at enemy damage x1.50 the tutorial
+  Crypt fell 99% → 34% and the Ossuary 69% → 1%, while every walkover cell (Barricade at
+  the Warrens, Late at the Drowned Market) sat at 100% and did not move. **It walled the
+  opening and left the too-easy cells exactly where they were**, and the aggregate hid it
+  — the mean slid 86 → 74 → 57 the whole time, looking like a working ladder. The knob
+  that works multiplies the ratio enemies are scaled AGAINST, inside `scaling_ratio()` so
+  the ratchet above still clamps it: nearly free at ratio ~1, expensive at ratio ~15.
+  Ask of any difficulty control: does it cost the strong player more than the weak one?
+  And check that per cell — a mean cannot see the shape.
 
 - **Every turn should have a floor and a ceiling.** Powers (once per turn) put a floor
   under a bad draw without raising the ceiling on a good one (D37). Reactive enemies
@@ -979,7 +1005,7 @@ resources/   all content as .tres: cards, enemies, relics, powers, events, dunge
 scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      pixel/ (CC0 Kenney), art/ (painted + generated, incl. the computed app icon),
              audio/ (all ours: 5 loops, 24 effects, one instrument in tools/audio_voices.py)
-tests/       41 suites + run.sh; export.sh and export_ready.sh need templates
+tests/       42 suites + run.sh; export.sh and export_ready.sh need templates
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
              screenshots.gd (renders every screen to PNG — drive it under
              `Xvfb -screen 0 1280x720x24`, NOT on the desktop, or a 16:10 monitor

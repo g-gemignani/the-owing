@@ -261,8 +261,11 @@ func _init() -> void:
 	if str(e4.relic_fired) != str(e3.relic_fired):
 		fails += 1; print("FAIL spent relic triggers not persisted")
 
+	fails += _simulator_reads_every_relic_field()
+	fails += _simulator_plays_every_trigger_and_effect()
+
 	if fails == 0:
-		print("RELIC TEST: PASS (ownership, persistence, scaling, effects, death-safety)")
+		print("RELIC TEST: PASS (ownership, persistence, scaling, effects, death-safety, simulator parity)")
 	else:
 		print("RELIC TEST: FAIL (%d)" % fails)
 	_cleanup_sandbox()
@@ -302,3 +305,139 @@ func _starter_deck() -> Array[CardData]:
 		deck.append((load(CARD_DIR + "hack.tres") as CardData).duplicate())
 		deck.append((load(CARD_DIR + "cover.tres") as CardData).duplicate())
 	return deck
+
+
+## Every relic FIELD the game reads, the simulator must read too (D180).
+##
+## `heal_after_combat` was applied in `combat.gd` and nowhere in `sim_balance.gd`, so
+## Healing Idol measured as strictly worse than no relic at all: it costs ratio points,
+## which raise enemy scaling, and returned nothing against a metric that is pure
+## attrition. The tool was pricing a relic it could not deliver.
+##
+## The subjects are DISCOVERED from `RelicData`'s own property list rather than listed
+## here, because a hand-kept list of fields is guarded nowhere new — the mistake D89
+## documents for the art check, and the reason that one now walks `assets/`. Add a
+## field to the resource and forget the simulator, and this fails on the next run.
+func _simulator_reads_every_relic_field() -> int:
+	var fails := 0
+	# CODE ONLY, comments stripped — and this is not fastidiousness, it is the whole
+	# assertion. The first version matched raw text and PASSED with the bug reinstated,
+	# because the doc comment above the fix says "heal_after_combat" in prose. A guard
+	# that a comment can satisfy is satisfied by writing about the thing instead of
+	# doing it, which is the exact failure it exists to catch.
+	var sim := _code_of("res://tools/sim_balance.gd")
+	var engine := _code_of("res://scripts/combat_engine.gd")
+	if sim == "" or engine == "":
+		print("FAIL could not read the simulator or the engine"); return 1
+	# Fields the ENGINE consumes need no mention in the tool: the tool hands it the
+	# same relic array the game does, so anything the engine reads is already played.
+	# What has to appear in the tool is the rest — the run-scoped effects, which live
+	# outside any fight and which only the run loop can apply.
+	# The four triggered-effect arrays are ONE mechanism, authored in parallel and read
+	# together, and the engine reaches `trigger_threshold` through `threshold_at()`
+	# rather than by name — so a bare text match calls it unread and reports a field the
+	# engine plays on every fight. Grouped, so the group is covered when the engine
+	# reads any of it. This is a real seam, not a convenience: they cannot be applied
+	# separately, and `relic_data.gd` says so where it declares them.
+	const TRIGGER_GROUP := ["trigger", "trigger_threshold", "effect", "effect_value"]
+	var group_in_engine := false
+	for g in TRIGGER_GROUP:
+		if engine.find(g) != -1:
+			group_in_engine = true
+	var proto := RelicData.new()
+	for p in proto.get_property_list():
+		var name: String = String(p["name"])
+		if not (int(p["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE):
+			continue
+		if name in ["id", "name", "description", "rarity"]:
+			continue   # identity, not an effect
+		if group_in_engine and name in TRIGGER_GROUP:
+			continue   # played inside the fight, via threshold_at() for one of them
+		if engine.find(name) != -1:
+			continue   # consumed inside the fight, which the tool already runs
+		if sim.find(name) == -1:
+			fails += 1
+			print("FAIL relic field '%s' is applied by the game but never by tools/sim_balance.gd — the simulator prices it in power_ratio and never delivers it" % name)
+	return fails
+
+## And every TRIGGER and EFFECT kind must be held by some profile (D180).
+##
+## The companion to the field check, and a different failure: the fields can all be
+## wired while no profile in the table actually carries a relic that fires. Measured
+## before this guard existed — four of the five trigger kinds never fired once in a
+## full report, and `GAIN_ENERGY` was 1 in the catalogue and 0 measured, on the one
+## resource the whole `power_ratio` axis is defined against.
+##
+## This is D124's finding in a second noun: a tool that cannot play the build cannot
+## price it. Both enums are walked from `RelicData` rather than restated.
+func _simulator_plays_every_trigger_and_effect() -> int:
+	var fails := 0
+	var sim := _read("res://tools/sim_balance.gd")
+	if sim == "":
+		return 1
+	# The relic ids the profile table actually hands out.
+	var held := {}
+	var re := RegEx.new()
+	re.compile('_relics\\(\\[([^\\]]*)\\]')
+	for m in re.search_all(sim):
+		for piece in m.get_string(1).split(","):
+			var s: String = piece.strip_edges().replace('"', "").strip_edges()
+			if s != "":
+				held[s] = true
+	var seen_trigger := {}
+	var seen_effect := {}
+	var have_trigger := {}
+	var have_effect := {}
+	var dir := DirAccess.open("res://resources/relics/")
+	if dir == null:
+		print("FAIL could not open the relic directory"); return 1
+	dir.list_dir_begin()
+	var fn := dir.get_next()
+	while fn != "":
+		if fn.ends_with(".tres"):
+			var rid := fn.replace(".tres", "")
+			var r := load("res://resources/relics/%s.tres" % rid) as RelicData
+			if r != null:
+				for t in r.trigger:
+					have_trigger[int(t)] = true
+					if held.has(rid):
+						seen_trigger[int(t)] = true
+				for e in r.effect:
+					have_effect[int(e)] = true
+					if held.has(rid):
+						seen_effect[int(e)] = true
+		fn = dir.get_next()
+	dir.list_dir_end()
+	for t in have_trigger:
+		if not seen_trigger.has(t):
+			fails += 1
+			print("FAIL no simulator profile holds a relic that fires on %s — the trigger is priced and never measured" % (
+				RelicData.Trigger.keys()[t] if t < RelicData.Trigger.keys().size() else str(t)))
+	for e in have_effect:
+		if not seen_effect.has(e):
+			fails += 1
+			print("FAIL no simulator profile holds a relic whose effect is %s — the effect is priced and never measured" % (
+				RelicData.Effect.keys()[e] if e < RelicData.Effect.keys().size() else str(e)))
+	return fails
+
+func _read(path: String) -> String:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	var t := f.get_as_text()
+	f.close()
+	return t
+
+## A file with its whole-line comments removed, so a name mentioned in prose cannot
+## stand in for a name the code actually reads.
+##
+## Whole-line only, deliberately. Stripping trailing `# ...` would have to know whether
+## the hash is inside a string literal, and getting that wrong would delete real code
+## and turn this into a guard that fails for reasons that have nothing to do with
+## relics. Every doc block in this project is whole-line, which is the case that matters.
+func _code_of(path: String) -> String:
+	var out := PackedStringArray()
+	for line in _read(path).split("\n"):
+		if not String(line).strip_edges().begins_with("#"):
+			out.append(line)
+	return "\n".join(out)

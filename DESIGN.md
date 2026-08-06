@@ -10615,6 +10615,122 @@ a `CombatReward` row; the collision above is plainly visible in the first captur
 plainly gone in the second. Every other state of this screen had a row (D104 added the hover
 and the inspect for exactly this reason) and the busiest one it ever reaches did not — which
 is D123's blind spot in its usual shape: nothing photographs it, so nobody has looked at it.
+
+### D175 — Difficulty the player chooses, and the flat multiplier that was built first and thrown away
+
+**The ask** was a difficulty setting in the Settings menu. **What shipped** is a four-rung
+ladder stored per SAVE, whose working knob is not the obvious one.
+
+**Three decisions were settled before any code**, because each changes what the feature is:
+
+* **Per save, not per machine.** `settings_state.gd` opens by stating its own invariant —
+  *settings belong to the machine, not to a save slot* — and a difficulty scalar breaks it
+  twice. It changes what a run MEANS, so a clear at one rung is not a clear at another; and
+  a machine-wide toggle can be dropped mid-boss and put back, which is not a difficulty, it
+  is a retry button. It lives in `MetaState` beside `ascension`, which multiplies the same
+  two numbers. The control is still drawn on the Settings screen — that is where a player
+  looks for it, and hiding it to satisfy a storage rule would be the rule serving itself.
+  It greys out during a run, and `MetaState.loaded` (new) is what lets it distinguish "no
+  save open" from slot 0, which `slot` alone cannot: `slot` defaults to 0, a real slot.
+* **No rung pays better.** Ascension sweetens loot because it is a ladder climbed once the
+  game is over. A difficulty PREFERENCE that paid better would stop being a preference —
+  every player wanting to progress efficiently would be forced to the top rung and the
+  gentler ones would become a trap for exactly the players who chose them. Asserted over
+  every rung, tier and depth, not spot-checked, because ascension's loot tilt lives two
+  functions away and this is the kind of claim one line quietly breaks.
+* **Recentre rather than only extend.** The shipped default is `Reckoning`, which is harder
+  than the game was. Every save written before this migrates to `Wayfarer`, the rung whose
+  multipliers are all 1.0 — an existing player's game must not get harder because they
+  opened it. Save v9.
+
+**The flat multiplier was built, measured and thrown away, and that is the whole finding.**
+The obvious design — multiply enemy HP and damage by a per-rung constant — is the wrong
+lever for THIS game, because enemies here already scale to `power_ratio`. A flat number
+therefore lands hardest on the deck with the least slack. Measured at 120 trials, enemy
+damage x1.50:
+
+```
+                              flat x1.00   flat x1.25   flat x1.50
+Starter / The Crypt (tutorial)      99%          86%          34%
+Starter / The Ossuary               69%          23%           1%
+Barricade / The Warrens            100%         100%         100%
+Relic build / The Sunken Vault     100%          99%          94%
+Late / The Drowned Market          100%         100%         100%
+```
+
+It walls the opening and leaves every walkover standing — the exact inverse of the job.
+Aggregate looked fine the whole time (mean 86 -> 74 -> 57), which is why the shape had to
+be looked at per cell and not as a mean.
+
+**The knob that works is `ratio`**: a multiplier on the scaling ratio enemy DAMAGE is
+computed against, applied inside the existing `scaling_ratio()` so the dungeon's own
+ceiling still clamps it and the D36 ratchet is untouched. Because the damage term is
+`1 + DMG_POWER_K * (sr - 1)`, multiplying `sr` is nearly free at `sr ~1` and expensive at
+`sr ~15`. Re-measured:
+
+```
+                              Wayfarer   Delver  Reckoning  Nothing Forgiven
+Starter / The Crypt (tutorial)    100%      98%        90%       88%
+Starter / The Warrens              98%      97%        81%       51%
+Barricade / The Sunken Vault       98%      93%        67%       32%
+Poison / The Rot Gardens           96%      92%        49%       29%
+Late / The Abyssal Stair           99%      75%        56%       35%
+Late / The Maw                     99%      68%        42%       40%
+mean                              85.9     74.7       64.1      57.1
+cells >= 95% (of 42)                27       19         14        11
+```
+
+> **Re-measured under D180**, which put relics into the simulator properly and added two
+> profiles, taking the table from 37 cells to 42. The numbers above are the new ones. Every
+> cell moved within the documented noise floor (mean 0.4, one cell can swing 15 — D120) and
+> no existing profile holds the relic whose handling D180 fixed, so the movement is RNG and
+> not the fix. The ordering, the shape and the choice of default are unchanged: mean 85.9 >
+> 74.7 > 64.1 > 57.1, and Reckoning still sits in the middle of the 50-70% target.
+>
+> The original table also counted "cells in the 50-70% band", which is replaced above.
+> That statistic is knife-edge — a cell at 71% and a cell at 70% differ by noise and by one
+> in the count — and it moved non-monotonically (3 -> 7 at Wayfarer) purely because the
+> table grew. Cells at or above 95% is the honest version of the same question: how much of
+> the game has no resistance left in it.
+
+The stated target is 50-70% run completion at matched progression. `Reckoning` means 63.1
+and puts 8 of 37 cells in the band against Wayfarer's 3. **The cost is named rather than
+hidden**: a fresh save at the default meets the Ossuary at 24%. That is the harshest early
+cell and it is a *stated* difficulty-2 choice the player can defer — the Crypt is 92% and
+the Warrens 78% — but it is the number to revisit first if the opening reads as unfair.
+
+**It is deliberately not applied to `enemy_max_hp`.** More enemy HP means longer fights, and
+longer fights are the mechanism behind the depth inversion this project already has at
+d7/d8 (see the analysis that prompted this work: above `HIGH_POWER_FLOOR` enemy HP grows at
+0.68 + 0.52 = 1.20 per point of ratio against player damage at 1.00, so the Maw costs a
+maxed deck 111 HP a fight). A difficulty knob must not buy its danger by worsening the
+endgame's existing worst property. `tests/test_difficulty.gd` asserts the ratio knob never
+reaches enemy HP.
+
+**The assertion that matters, and the proof it is not vacuous.** The suite pins the SHAPE,
+not the direction: at a fixed depth, a rung must cost a built deck at least 10% more,
+relatively, than a starting one. A bare `built > starter` was written first and **the
+rejected flat design passes it** — measured x1.500 against x1.545, a 3% edge it gets for
+free from the ratio term already in `enemy_damage`. The shipped shape scores x1.250 against
+x1.455, a 16% gap, so the margin sits between them with room on both sides. Verified by
+replaying the flat constants through the same assertion and watching it fail. Every
+assertion in the first version of this suite asked whether the numbers went UP, and every
+one of them passed on the design that had to be deleted.
+
+**Tooling.** `--difficulty=N` plays a rung; `--dhp/--ddmg/--dratio` sweep raw multipliers
+that no rung describes, and the report header says so when they are in force. The overrides
+live behind the getters in `Balance` rather than in the tool — a `const` Array is read-only
+in Godot 4 so the tool cannot append a scratch rung, and a tool computing multipliers of its
+own would be measuring a game the player cannot play (the D72/D74/D77 trap). `--no-calibration`
+is new and is the mirror of `--calibration-only`: the avoid block is 80% of a full run's wall
+clock (306s of 385s, measured), so a sweep that only reads run completion was paying four
+times over for a block it never looked at.
+
+**Left undone, deliberately.** `Balance.ascension` has the same static-leak `new_save` now
+guards for difficulty — begin a new save in a session that loaded an ascended one and the
+new save inherits its ascension until something loads. One line to fix, not fixed here
+because it is not this decision's subject.
+
 ### D176 — The floor had two visual axes and none of them was inside a room
 
 `ISO_STYLES` × `ISO_TERRAINS` is sixteen readings out of eight constants (D82), and it was
@@ -10668,14 +10784,6 @@ to the hero in the Warrens capture it was the brightest thing in the frame: a st
 sheets on a dark floor, reading as an object you might be able to pick up. Every value in
 the table stays *below* the ground it lies on now. A prop is read by its shape, and the
 shape only reads if it is not competing with the hero and the chest.
-
-**And the light count had to become a DENSITY.** The coverage band caught its own tuning a
-second time, on the one floor small enough to show it: floor sizes run 26 to 65 tiles, and
-three sources at radius two lit 26 of the Abyssal Stair's 34 — 76%, over the band, on a floor
-that is mostly corridor so every source funnels along it. It failed one run in several, which
-is what an unseeded generator does with an assertion that is nearly right. The count is capped
-by area now (`ISO_TILES_PER_LIGHT`) and the band stayed where it was, because the band was not
-the thing that was wrong.
 
 **And they were too sparse.** A fifteen-tile view of the Maw held one prop. Rates up about
 half again — but the SPREAD between the roles is what does the work, not their size: a store
@@ -10882,6 +10990,90 @@ Track C's expensive half — back doors, debts, aspects. The plan sequences them
 phase for a stated reason ("nothing in a later phase starts before the earlier phase's number
 is in"), and Phase 4 is the phase whose whole job is to ship alone. The baseline above is
 what they are now waiting on rather than what they would have been bundled with.
+
+### D180 — The simulator priced every relic and delivered only some of them
+
+Asked of the tool after D175 landed: *are we considering relics?* Partly, and the
+partly was the problem.
+
+**What was already right.** Relics reach the real `CombatEngine.setup(...)`, so inside a
+simulated fight every combat-scoped field behaves as it does in the game; `relic_power()`
+folds into `power_ratio`, so enemy scaling is charged for them; `bonus_max_hp` raises the
+profile's HP. The plumbing was never the fault. What was plugged into it was.
+
+**Three findings, in rising order of seriousness.**
+
+*Coverage.* Ten of thirty relics appeared in any profile, across four of fourteen.
+
+*The triggered half was unmeasured.* The catalogue splits into flat numbers and eleven
+relics that FIRE on something, and nine of the ten measured were flat. Walked over the
+whole table:
+
+```
+ON_KILL           2 relics in the catalogue, 0 ever fired in a report
+ON_CARDS_PLAYED   2, 0
+ON_HP_BELOW_PCT   2, 0
+ON_BLOCK_EXPIRED  1, 0
+ON_TURN_START     4, 2
+```
+
+Four of five trigger kinds never fired once, while every one of those relics is charged
+for in `power_ratio`. And `Trigger` and `Effect` are separate enums, so covering one says
+nothing about the other: with all five triggers subsequently covered, `GAIN_ENERGY` was
+still one in the catalogue and zero measured — on the resource `power_ratio` is *defined*
+against.
+
+*A relic the tool made worse than nothing.* `heal_after_combat` and `gold_percent` were
+read in `combat.gd` and nowhere in `sim_balance.gd`. So Healing Idol paid ratio points —
+which raise enemy scaling — and returned no HP against a metric that is pure attrition
+across five or six fights. **The tool did not merely fail to see the relic; it reported it
+as a liability.** That is the D72/D74/D77 trap wearing a relic: numbers describing a game
+nobody plays.
+
+**Fixes.** `Balance.relic_field_sum()` is now the one owner of "sum a field across
+relics" — the loop existed twice, in `MetaState.relic_bonus` (which now delegates) and
+implicitly in the tool, and the second copy is exactly why the two diverged.
+`_measure_run` applies the heal before it estimates what a fight cost, because what a
+fight costs is what it costs *after* the heal — that is the number the driver decides on.
+`gold_percent` is applied too; the report does not read gold, so it changes nothing today
+and is written so the next thing that does read it is not measuring a game without
+Merchant's Seal in it. Two profiles added: **Triggered relics**, one relic per trigger
+kind plus Lucky Penny for the energy effect, and **Between-fights relics**, whose whole
+strength is invisible inside a fight — every per-fight column reads like an unrelic'd
+deck and only RUN moves, which is what makes it the row that keeps the heal honest.
+Coverage went 10/30 to 19/30, and all five triggers and all six effects are now played.
+The eleven still unheld are pure magnitude variants of effects already covered.
+
+**The guard, and the version of it that did not work.** `tests/test_relic.gd` now walks
+`RelicData`'s own property list and both its enums — DISCOVERED subjects, because a
+hand-kept list of relics to check is guarded nowhere new, which is D89's art check in a
+third costume. Two things it had to learn:
+
+* The four triggered arrays are ONE mechanism and the engine reaches `trigger_threshold`
+  through `threshold_at()`, so a per-field text match reported a field the engine plays
+  on every fight. Grouped.
+* **The first version passed with the bug reinstated.** It matched raw file text, and the
+  doc comment above the fix says `heal_after_combat` in prose — so writing *about* the
+  field satisfied a guard meant to check the code *does* it. It now strips whole-line
+  comments first. Both guards were then verified by reinstating each defect and watching
+  the right one fail: un-applying the heal fails the field check, gutting the triggered
+  profile fails six trigger and effect checks.
+
+**Did it move D175?** No. Re-measured all four rungs at 120 trials over the new 42-cell
+table: mean 85.9 / 74.7 / 64.1 / 57.1 against the 86.2 / 73.3 / 63.1 / 56.0 D175 recorded.
+Every quoted cell moved within the noise floor, and no existing profile holds Healing
+Idol, so the movement is RNG rather than the fix. Reckoning remains the rung that lands in
+the 50-70% target and remains the default. D175's table has been corrected in place rather
+than left to disagree with the tree.
+
+**One thing the new row found immediately.** Before the dungeon list was tuned, Triggered
+relics at the Maw returned the first per-fight rates below 100% anywhere in the report —
+N 98%, E 82%, B 65%. The earlier reading that *no fight in this game can be lost at full
+HP* (110 of 111 cells at 100%) was measured on the pre-D175 curve; a ratio-19 deck on a
+140 HP bar at a chosen rung can now lose one. That cell was moved to the Drowned Market
+because 3% run completion with the driver dodging 1.6 fights measures nothing, but the
+finding is worth keeping: **relic loadouts carrying no `bonus_max_hp` over-reach two
+dungeons earlier than their ratio suggests**, and no profile had that shape before.
 
 ### D181 — The game was wearing the engine's logo
 

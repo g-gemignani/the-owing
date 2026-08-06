@@ -7,6 +7,13 @@ const SAVE_PATH := "user://save.json"        # slot 0 keeps the original path
 const SLOT_COUNT := 3
 ## Which slot is being played. Set by the menus before loading or saving.
 var slot: int = 0
+## Whether `slot` names a save this session has actually opened.
+##
+## `slot` cannot answer this: it defaults to 0, which is a real slot, so the autoload
+## sitting on the title screen with nobody's save in it is indistinguishable from slot
+## 0 being played. Anything that must not act on an unopened save asks this instead —
+## the Settings screen's difficulty row is the first such caller (D175).
+var loaded: bool = false
 
 ## Prefix for save paths. Tests set this so they cannot write over a real save —
 ## they previously shared the player's files and clobbered their settings and slots.
@@ -330,6 +337,16 @@ var starter_kit: String = "blade"
 var seen_hints: Array = []
 ## New Game+ level: raises difficulty globally once the world has been cleared.
 var ascension: int = 0
+## The chosen difficulty rung — an index into `Balance.DIFFICULTIES` (D175).
+##
+## Per SAVE, not per machine, and that is the whole reason it is not in
+## `SettingsState`: that file states its own invariant — settings belong to the
+## machine, not to a save slot — and a difficulty scalar breaks it twice over. It
+## changes what a run MEANS, so a clear at one rung is not a clear at another; and a
+## machine-wide toggle could be dropped mid-boss and put back, which makes the whole
+## ladder unenforceable. It sits beside `ascension` because they multiply the same two
+## numbers and answer the same question about how hard the game currently is.
+var difficulty: int = Balance.DIFFICULTY_DEFAULT
 ## Sealed packs waiting to be opened, each {"kind", "dungeon", "tier", "build"}.
 ## Tier and build are decided where the pack was found, never here. They are
 ## banked (past escrow) but deliberately NOT yet resolved: the opening is the moment
@@ -408,6 +425,14 @@ func new_save(kit: String = "blade", persist: bool = true) -> void:
 	packs = []
 	highest_dungeon = 1
 	gold = 0
+	# A fresh save starts on the shipped rung, and the STATIC has to be written here as
+	# well as in `load_game`: `Balance.difficulty` outlives any one MetaState, so a new
+	# save begun in the same session as a loaded one would otherwise inherit that one's
+	# rung until something loaded. (`Balance.ascension` has the same leak and is not
+	# touched here — see the note in D175.)
+	difficulty = Balance.DIFFICULTY_DEFAULT
+	Balance.difficulty = difficulty
+	loaded = true
 	if persist:
 		save_game()
 
@@ -775,11 +800,10 @@ func grant_relic(tier: int) -> String:
 	return pool[0]
 
 ## Summed relic bonuses, for run setup and rewards.
+## Delegates the sum to `Balance` (D180) so the simulator, which holds its relics as a
+## plain Array rather than as a save, asks the same question through the same code.
 func relic_bonus(field: String) -> int:
-	var n := 0
-	for r in relic_data():
-		n += int(r.get(field))
-	return n
+	return Balance.relic_field_sum(relic_data(), field)
 
 func add_gold(n: int) -> void:
 	gold = max(0, gold + n)
@@ -1029,6 +1053,7 @@ func _write_meta() -> void:
 		"collection": collection, "decks": decks, "relics": relics,
 		"consumables": consumables, "powers": powers, "equipped_power": equipped_power,
 		"starter_kit": starter_kit, "seen_hints": seen_hints, "ascension": ascension,
+		"difficulty": difficulty,
 		"cleared_dungeons": cleared_dungeons, "clear_counts": clear_counts,
 		"depth_records": depth_records,
 		"debt_offers": debt_offers, "debt_taken": debt_taken,
@@ -1081,6 +1106,7 @@ func load_game() -> bool:
 		parsed = _migrate(parsed, from_version)
 
 	_apply(parsed)
+	loaded = true
 	if from_version < SAVE_VERSION:
 		save_game()   # rewrite in the current shape
 	return true
@@ -1104,12 +1130,23 @@ func _migrate(data: Dictionary, from_version: int) -> Dictionary:
 		# would hand an existing player a door for a contract the file cannot show they took.
 		pass
 	if from_version < 9:
+		# v9 carries TWO shape changes, landed together. Kept in one guard rather than two
+		# identical ones, because "a version that only some changes bump is a version
+		# nobody can reason from" cuts the same way when a version records only some of
+		# what it covers — a reader looking for what v9 means must find all of it here.
+		#
 		# v8 has no depth log, so it earns no depth credit (D178) — and that is the right
 		# answer rather than a generous one. The credit is evidence of where you have been,
 		# and a save that never recorded it has no evidence; inventing some would hand an
 		# existing player up to three gates for runs the file cannot show they made. The
-		# loader defaults the field to empty, so there is nothing to write here.
-		pass
+		# loader defaults the field to empty, so there is nothing to write for it.
+		#
+		# v8 also predates the chosen difficulty (D175). An existing save must land on the
+		# rung whose multipliers are all 1.0, NOT on the shipped default: the default is
+		# harder than the game these players have been playing, and a save that got harder
+		# because it was opened is a save the game broke. Choosing to move up is theirs to
+		# make, on the Settings screen.
+		d["difficulty"] = Balance.DIFFICULTY_LEGACY
 	if from_version < 8:
 		# v7 packs have no tier and no build (D81). Nothing to compute here: the
 		# loader normalises a missing tier to worn and rolls a build from where the
@@ -1259,6 +1296,13 @@ func _apply(parsed: Dictionary) -> void:
 	seen_hints = parsed.get("seen_hints", [])
 	ascension = maxi(0, int(parsed.get("ascension", 0)))
 	Balance.ascension = ascension   # static, so scaling formulas need no new args
+	# Same static-write reason as the line above. The default here is the LEGACY rung,
+	# not the shipped default: `_migrate` writes the key for every save that predates
+	# D175, so a missing key at this point means a file that migration did not see, and
+	# the safe answer for one of those is still "the game you were already playing".
+	difficulty = clampi(int(parsed.get("difficulty", Balance.DIFFICULTY_LEGACY)),
+		0, Balance.DIFFICULTIES.size() - 1)
+	Balance.difficulty = difficulty
 	saved_run = parsed.get("run", {})
 	if FileAccess.file_exists(run_file()):
 		var rf := FileAccess.open(run_file(), FileAccess.READ)

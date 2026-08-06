@@ -21,6 +21,7 @@ static var TRIALS := DEFAULT_TRIALS
 static var ONLY := ""       ## comma-separated dungeon ids; empty = all
 static var PROFILE := ""    ## substring of a profile name, case-insensitive
 static var REPORT := true   ## --calibration-only turns the per-cell report off
+static var CALIBRATE := true  ## --no-calibration turns the avoid block off
 static var CAL_TRIALS := CALIBRATION_TRIALS
 ## Which ROUTE through a floor the driver walks (D179, D183).
 ##
@@ -59,6 +60,25 @@ static func _read_args() -> void:
 		# what the guards cost is the difference between them.
 		elif arg == "--explore-guards":
 			ROUTE = ROUTE_GUARDS
+		# The mirror of --calibration-only, and the reason it exists: the calibration is
+		# 80% of a full run's wall clock (306s of 385s, measured), so a difficulty sweep
+		# that only reads run-completion pays four times over for a block it never looks
+		# at. Skipping it is a NARROWING like the filters above — every cell still
+		# measured exactly as it would be in a full run.
+		elif arg == "--no-calibration":
+			CALIBRATE = false
+		elif arg.begins_with("--difficulty="):
+			Balance.difficulty = clampi(int(arg.substr(13)), 0, Balance.DIFFICULTIES.size() - 1)
+		# Raw multiplier overrides, for SWEEPING candidate rungs before any of them are
+		# written into the table (D175). Not a play mode: these bypass the named ladder
+		# on purpose, so the report header prints whatever is actually in force rather
+		# than a rung name that may not describe it.
+		elif arg.begins_with("--dhp="):
+			Balance.hp_mult_override = maxf(0.1, float(arg.substr(6)))
+		elif arg.begins_with("--ddmg="):
+			Balance.dmg_mult_override = maxf(0.1, float(arg.substr(7)))
+		elif arg.begins_with("--dratio="):
+			Balance.ratio_mult_override = maxf(0.1, float(arg.substr(9)))
 
 ## Which player this report measured, in words (D179, D183).
 ##
@@ -73,6 +93,18 @@ static func _route_line() -> String:
 		ROUTE_GUARDS:
 			return "explore and fight — pushes every wall and takes on what is standing there (--explore-guards)"
 	return "stairs — gets on with the dungeon (--explore / --explore-guards for the others)"
+
+## What difficulty the report was measured at, for the header. Prints the raw
+## multipliers rather than only the rung name, because `--dhp`/`--ddmg` can put
+## numbers in force that no rung describes.
+static func _difficulty_line() -> String:
+	return "Difficulty: %s (enemy HP x%.2f, enemy damage x%.2f, scaling ratio x%.2f)%s" % [
+		Balance.difficulty_name(),
+		Balance.difficulty_hp_mult(), Balance.difficulty_dmg_mult(),
+		Balance.difficulty_ratio_mult(),
+		"  [swept, not a shipped rung]" if not (
+			is_nan(Balance.hp_mult_override) and is_nan(Balance.dmg_mult_override)
+			and is_nan(Balance.ratio_mult_override)) else ""]
 
 ## Filters are ADDITIVE narrowings of the full report, never a different measurement:
 ## every cell they let through is measured exactly as it would be in a full run.
@@ -93,6 +125,7 @@ func _init() -> void:
 		quit()
 		return
 	print("=== Balance report (%d trials per cell) ===" % TRIALS)
+	print(_difficulty_line())
 	print("RUN = full-dungeon completion with persistent HP (the metric that matters).")
 	print("Per-fight rates are full-HP diagnostics only.\n")
 	for profile in _profiles():
@@ -142,7 +175,10 @@ func _init() -> void:
 	# 0.4 points already (D120); a route change is a much larger difference wearing the same
 	# clothes, and the header is the only place that can tell them apart afterwards.
 	print("Route: %s" % _route_line())
-	_avoid_calibration()
+	if CALIBRATE:
+		_avoid_calibration()
+	else:
+		print("\n(avoid calibration skipped: --no-calibration)")
 	_print_budget()
 	quit()
 
@@ -396,12 +432,30 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						cost_n[enc_kind] = nd
 					else:
 						hp = eng.player.hp
+						# Relic: heal after victory (D180). `combat.gd:_win()` does exactly
+						# this and the sim did not, so Healing Idol measured as WORSE than
+						# nothing — it costs ratio points, which raise enemy scaling, and
+						# returned no HP against the one metric (run completion) that is
+						# pure attrition. Applied before the cost estimate below, because
+						# what a fight here costs is what it costs AFTER the heal; that is
+						# the number the driver is deciding on.
+						var heal := Balance.relic_field_sum(relics, "heal_after_combat")
+						if heal > 0:
+							hp = mini(max_hp, hp + heal)
 						# the driver's only source of "what does a fight here cost me"
 						var n: int = int(cost_n.get(enc_kind, 0)) + 1
 						var prev: float = float(cost_est.get(enc_kind, 0.0))
 						cost_est[enc_kind] = prev + (float(hp_before - hp) - prev) / float(n)
 						cost_n[enc_kind] = n
-						gold += Balance.gold_reward(difficulty, tier, randi() % 6)
+						# Relic: gold percentage (D180). Modelled for completeness and
+						# because the field exists; the report does not read `gold`, so
+						# this changes no number today. Written anyway so the next thing
+						# that DOES read it is not quietly measuring a game without
+						# Merchant's Seal in it.
+						var g := Balance.gold_reward(difficulty, tier, randi() % 6)
+						g += int(round(float(g)
+							* float(Balance.relic_field_sum(relics, "gold_percent")) / 100.0))
+						gold += g
 						var t_rw := Time.get_ticks_usec()
 						var won_card := _reward_card(dungeon_id, reward_level)
 						_tick("rewards", t_rw)
@@ -807,6 +861,78 @@ func _profiles() -> Array:
 		"dungeons": ["foundry", "sunken_vault", "drowned_market"],
 		"hp_mult": 1.0,
 		"relics": _relics(["keen_lens", "scholars_lens"]),
+	})
+	out.append({
+		# D180, and it is D124's finding a second time in a different noun. The relic
+		# catalogue splits into flat numbers (+max HP, start with Block, +gold%) and the
+		# eleven that FIRE on something, and the report held ten relics of which nine
+		# were flat. Measured over the whole table before this row existed:
+		#
+		#     ON_KILL           2 relics in the catalogue, 0 ever fired in a report
+		#     ON_CARDS_PLAYED   2, 0
+		#     ON_HP_BELOW_PCT   2, 0
+		#     ON_BLOCK_EXPIRED  1, 0
+		#     ON_TURN_START     4, 2
+		#
+		# Four of the five trigger kinds never fired once, while every one of those
+		# relics is charged for in `power_ratio` — enemies scale up for a strength the
+		# tool had never watched anybody deliver. That is precisely the shape of the
+		# hand-kept-list bug the art check had (D89): the coverage was whatever the
+		# profiles happened to hold, and nothing asked what they missed.
+		#
+		# One relic per trigger kind, chosen so each fires on a DIFFERENT condition
+		# rather than stacking one:
+		#   crown_of_thorns  ON_KILL           - needs a multi-enemy fight to matter
+		#   bone_charm       ON_KILL           - the draw half of the same trigger
+		#   duelists_glove   ON_CARDS_PLAYED   - needs a hand that empties
+		#   field_kit        ON_CARDS_PLAYED   - the draw half again
+		#   reliquary_heart  ON_HP_BELOW_PCT   - needs the fight to actually go badly
+		#   weighted_soles   ON_BLOCK_EXPIRED  - needs Block left unspent
+		#   lucky_penny      ON_TURN_START     - the only ENERGY grant in the catalogue
+		#
+		# Lucky Penny is here on the EFFECT axis rather than the trigger axis, and that
+		# distinction is the second half of the coverage finding: `Trigger` and `Effect`
+		# are separate enums and covering one says nothing about the other. With the
+		# five triggers covered, `GAIN_ENERGY` was still 1 in the catalogue and 0
+		# measured — and energy is the constraint `power_ratio` is defined against, so
+		# of all the gaps that was the one least affordable to leave.
+		#
+		# Surgeon's Thread is deliberately LEFT OUT of this row: it is a second
+		# ON_HP_BELOW_PCT and pairing it with Reliquary Heart would measure the two
+		# together and neither alone. It is carried by the between-fights row below
+		# instead. Seven relics is a late-game loadout, so deck and clears match `Late`.
+		#
+		# The dungeons are the two where these can show their work: a roster that spawns
+		# groups (so ON_KILL has more than one thing to kill) and one deep enough that
+		# HP actually falls far enough to cross a threshold.
+		"name": "Triggered relics (Lv40 + 6)",
+		"clears": 8, "power_level": 3,
+		"deck": _deck({"hack": 6, "cover": 4, "stave_in": 4, "shoulder": 3,
+			"black_tide": 3}, 40),
+		# The Maw was here and came out at 3% with the driver dodging 1.6 of its fights —
+		# "a row that reads zero measures nothing", the same trap the Draw profile above
+		# records. These seven relics carry no `bonus_max_hp` between them, so this is a
+		# ratio-19 deck on a 140 HP bar: it over-reaches two dungeons earlier than the
+		# `Late` row does, and the informative cells are shallower than its ratio suggests.
+		"dungeons": ["warrens", "sunken_vault", "drowned_market"],
+		"hp_mult": 1.0,
+		"relics": _relics(["crown_of_thorns", "bone_charm", "duelists_glove",
+			"field_kit", "reliquary_heart", "weighted_soles", "lucky_penny"]),
+	})
+	out.append({
+		# The other half of D180: a relic whose whole effect is between fights. Healing
+		# Idol measured as strictly WORSE than no relic at all until `_measure_run`
+		# learned to apply `heal_after_combat`, because it costs ratio points — which
+		# raise enemy scaling — and returned nothing against a metric that is pure
+		# attrition across five or six fights. This row is what keeps that honest: it is
+		# the only profile whose strength is invisible inside a single fight, so every
+		# per-fight column will read the same as an unrelic'd deck and only RUN moves.
+		"name": "Between-fights relics (Lv15)",
+		"clears": 4, "power_level": 2,
+		"deck": _deck({"hack": 5, "cover": 5, "stave_in": 3, "shoulder": 3}, 15),
+		"dungeons": ["foundry", "sunken_vault"],
+		"hp_mult": 1.0,
+		"relics": _relics(["healing_idol", "surgeons_thread", "iron_ration"]),
 	})
 	out.append({
 		"name": "Late (Lv40 + 6 relics)",
