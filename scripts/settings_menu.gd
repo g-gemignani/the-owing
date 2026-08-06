@@ -32,7 +32,12 @@ func _ready() -> void:
 func _build() -> void:
 	for c in get_children():
 		c.queue_free()
-	var col := UI.screen(self, "Settings", "", "ledger")
+	# Scrolls, because it does not fit and never really did (D182). Measured at the
+	# project's own 1280x720: the column asks for 972px of a 720px window, so the bottom
+	# 252px — the build stamp, and Back — was drawn past the edge of the screen with no
+	# way to reach it. It grows further whenever a control explains itself: switching
+	# effects on adds a slider, opening a save adds four lines of difficulty blurb.
+	var col := UI.screen(self, "Settings", "", "ledger", false, "", true)
 
 	UI.label(col, "Display")
 	# The UI-scale slider used to live here. Removed with the zoom it drove: the

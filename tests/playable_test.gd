@@ -97,6 +97,7 @@ func _every_screen_is_usable() -> void:
 			_fails += 1
 			print("FAIL %s presents nothing the player can press — a dead end" % name)
 		_no_scroll_is_crushed(inst, name)
+		_content_fits_or_scrolls(inst, name)
 		inst.queue_free()
 		await get_tree().process_frame
 
@@ -129,6 +130,7 @@ func _every_dungeon_is_enterable() -> void:
 			_fails += 1; print("FAIL %s offers no reachable encounter" % did)
 		# ...and the map/board/deck it built must be on screen and not 0px
 		_no_scroll_is_crushed(inst, did)
+		_content_fits_or_scrolls(inst, did)
 		inst.queue_free()
 		await get_tree().process_frame
 
@@ -372,6 +374,42 @@ func _no_scroll_is_crushed(n: Node, where: String) -> void:
 				_fails += 1
 				print("FAIL %s: a scroll area is 0px WIDE holding %.0fpx of content — invisible" % [
 					where, need.x])
+
+## Content taller than the window must be inside something that scrolls (D182).
+##
+## The mirror of the check above, and the same bug seen from the other end: that one is a
+## scroll with no room, this one is a screen with too much content and no scroll. Settings
+## asked for 972px of a 720px window, so the build stamp and the **Back button** were drawn
+## past the bottom edge with no way to reach them — and every check in this suite passed,
+## because the screen loads, its script compiles, and it has plenty of enabled buttons. They
+## were simply somewhere the player could not get to. `_enabled_buttons` counts a control it
+## cannot see.
+##
+## Only `BoxContainer`s are measured. They are the shape a page of rows is built from, and a
+## backdrop is a `TextureRect` whose minimum size is its painting — 1280x720 or larger — so
+## measuring every Control would fail every screen in the game for the wallpaper.
+func _content_fits_or_scrolls(root: Node, where: String) -> void:
+	var vp: float = get_viewport().get_visible_rect().size.y
+	if vp <= 0.0:
+		return
+	var worst: float = _tallest_unscrolled(root, false)
+	if worst > vp:
+		_fails += 1
+		print("FAIL %s: %.0fpx of content in a %.0fpx window and nothing scrolls — the bottom %.0fpx is unreachable" % [
+			where, worst, vp, worst - vp])
+
+## The tallest box on this screen that nothing can scroll to. One downward pass, carrying
+## "am I inside a scroll" with it — asking each candidate to walk back up to the root
+## instead made this the slowest check in the suite, over a crawl view with a thousand
+## tiles in it.
+func _tallest_unscrolled(n: Node, in_scroll: bool) -> float:
+	var scrolled: bool = in_scroll or n is ScrollContainer
+	var worst: float = 0.0
+	if not scrolled and n is BoxContainer and (n as Control).is_visible_in_tree():
+		worst = (n as Control).get_combined_minimum_size().y
+	for c in n.get_children():
+		worst = maxf(worst, _tallest_unscrolled(c, scrolled))
+	return worst
 
 func _scrolls(n: Node) -> Array[ScrollContainer]:
 	var out: Array[ScrollContainer] = []

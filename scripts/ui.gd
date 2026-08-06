@@ -13,8 +13,24 @@ extends RefCounted
 ## the top-band scrim rather than the title screen's left-hand column, and `zone` a
 ## Tier 5b establishing shot. All three are "use it if it exists", so a screen keeps
 ## its pixel pattern until the art lands.
+## Build a screen's scaffold and hand back the column its content goes in.
+##
+## `scroll` puts that column inside a `ScrollContainer` (D182). It is opt-in rather than the
+## default, and the reason is not caution: five screens here already own an INNER scroll and
+## give it the height the column has left over (`collection`, `overworld`, `glossary`,
+## `packs`, and the deck picker below). A scroll inside a scroll has no leftover height to
+## be given — the outer one hands the column its minimum size — so those lists would
+## collapse to a couple of rows. Wrapping every screen would fix the short ones and break
+## the long ones.
+##
+## Opt-in has the flaw D95 keeps re-teaching, though: a thing each screen must remember is
+## a thing the next screen will not have. So it is opt-in *and measured* — `PlayableTest`
+## instantiates every screen and fails any whose content is taller than the window without
+## a scroll to reach the rest of it. A new screen that overflows fails the suite instead of
+## quietly hiding its own Back button.
 static func screen(root: Control, title: String, art: String = "",
-		scene: String = "", foot: bool = false, zone: String = "") -> VBoxContainer:
+		scene: String = "", foot: bool = false, zone: String = "",
+		scroll: bool = false) -> VBoxContainer:
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
 	# Backdrop first, so it sits behind everything, and mouse-deaf so it never eats
 	# a click meant for a button.
@@ -34,7 +50,26 @@ static func screen(root: Control, title: String, art: String = "",
 	root.add_child(margin)
 	var col := VBoxContainer.new()
 	col.add_theme_constant_override("separation", UITheme.sep(10))
-	margin.add_child(col)
+	if scroll:
+		var sc := ScrollContainer.new()
+		sc.set_anchors_preset(Control.PRESET_FULL_RECT)
+		# Vertically only. A screen that can scroll sideways stops constraining its own
+		# width, so every over-wide row gets the width it asks for instead of wrapping —
+		# `glossary.gd` disables it for the same reason, and here it would let one long
+		# label push the whole column off to the right rather than fold.
+		sc.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		# Keyboard and controller focus drags the view with it. Without this, tabbing to a
+		# control below the fold moves the focus somewhere the player cannot see, which is
+		# the same complaint as the one this whole flag answers.
+		sc.follow_focus = true
+		margin.add_child(sc)
+		# A child of a ScrollContainer is given its own minimum width unless it is told to
+		# fill; left alone the column shrinks to its widest single control and the screen
+		# draws in a strip down the left.
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		sc.add_child(col)
+	else:
+		margin.add_child(col)
 	if title != "":
 		var t := Label.new()
 		t.text = title

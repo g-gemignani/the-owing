@@ -11617,3 +11617,74 @@ per kind spoken in a voice per terrain rather than twenty strings.
     required route   34.2 turns a floor   7.1 moves per encounter   (D179 baseline 33.8 / 7.0)
     optional route   49.0 turns a floor   +15 turns, budget 22
     back door        6.5 moves per encounter, same quota
+
+### D193 — The settings screen was 972px tall in a 720px window
+
+> "The settings menu cannot be scrolled if it overflows."
+
+It overflowed, and it had done from the moment it grew past the window. Measured at the
+project's own 1280x720 viewport, the content column asks for **972px** — 1005px with a run
+under way, because the difficulty row explains itself then. Everything past 720px was drawn
+below the bottom edge: the build stamp, the commit line to quote in a bug report, and
+**Back**. Escape still worked, which is the only reason this was an annoyance rather than a
+trap.
+
+## The fix is one flag, and where it lives is the whole decision
+
+`UI.screen()` is the scaffold every menu routes through, and it built `root → Margin →
+VBox` with nothing between. It now takes `scroll` and, when asked, puts the column inside a
+`ScrollContainer`.
+
+**Opt-in, not default**, and that is not caution. Five screens already own an INNER scroll
+and hand it the height the column has left over — `collection`, `overworld`, `glossary`,
+`packs` and the deck picker. A scroll inside a scroll has no leftover height to be given,
+because the outer one hands the column its *minimum* size, so those lists would have
+collapsed to a couple of rows each. Wrapping everything would have fixed the short screens
+by breaking the long ones.
+
+Two details that are not obvious and were both wrong at first:
+
+* **Horizontal scrolling is disabled.** A container that can scroll sideways stops
+  constraining its own width, so every over-wide row is granted the width it asks for
+  instead of wrapping — one long label would push the column off to the right rather than
+  fold. `glossary.gd` disables it for exactly this reason.
+* **The column is told to fill.** A child of a `ScrollContainer` is given its own minimum
+  width unless it expands, so the screen otherwise draws in a strip down the left-hand side.
+
+`follow_focus` is on as well, so tabbing to a control below the fold brings it into view —
+which is the same complaint this entry answers, arriving by keyboard.
+
+## Opt-in is a thing the next screen will forget, so it is measured
+
+D95's lesson is that a helper only reaches the callers that call it, and the screens that
+hand-roll their own scaffold are the ones that quietly miss whatever was added last. So the
+flag is opt-in *and* gated: `PlayableTest` now measures every screen it instantiates and
+fails any whose tallest unscrolled box is taller than the window.
+
+It is the mirror of `_no_scroll_is_crushed`, which has been in that suite since the dice
+board turned out to be 0px tall — that check is a scroll with no room, this one is content
+with no scroll. Both describe the same defect: **every other assertion passes.** The screen
+loads, its script compiles, and `_enabled_buttons` counts eleven enabled controls, because
+that function cannot tell a button the player can reach from one drawn past the edge of the
+screen.
+
+Turning the flag back off produces:
+
+    FAIL Settings: 1005px of content in a 720px window and nothing scrolls
+         — the bottom 285px is unreachable
+
+Only `BoxContainer`s are measured, and that is load-bearing: a backdrop is a `TextureRect`
+whose minimum size is its painting, so measuring every `Control` failed every screen in the
+game for its wallpaper. The walk also carries "am I inside a scroll" downward rather than
+asking each candidate to walk back up — the first version did the latter and turned a
+four-second suite into a slow one over a crawl view with a thousand tiles in it.
+
+Nothing else in the game overflows today: with the check in, the other twenty screens and
+all twelve dungeon views pass at 1280x720.
+
+## What was not verified
+
+Touch. `ScrollContainer` drag-scrolls on a touchscreen by itself, and this was checked on a
+headless desktop viewport — the scroll area measures 1248x688 around 1240x972 of content,
+with the vertical bar live at `max=972, page=688`. That the drag feels right on a phone is
+not something a headless run can answer.
