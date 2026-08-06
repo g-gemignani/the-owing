@@ -800,6 +800,39 @@ func _init() -> void:
 		fails += 1
 		print("FAIL painted enemy art is not looked up by archetype id")
 
+	# --- and each plate holds ONE monster -------------------------------------
+	#
+	# `rat_swarm` shipped for four days with the lower half of a robed figure standing
+	# over the rat: two subjects in one frame, so the trim box stretched around both and
+	# the rat installed at a third of the canvas (D194). Nothing caught it. The installer
+	# only ever asked whether a leftover island was SMALL — a second monster is not small,
+	# it is the same size as the first, and it sails through.
+	#
+	# The rule is not "one component": a moth has fifteen (wing scales), a hexer's sleeves
+	# are two, `false_step` is a stair tread resting on a maw. It is one component that is
+	# BIG and has AIR between it and the figure on the floor, which over all 35 plates
+	# described exactly one file. `cutout_lib` states the thresholds; restating them here
+	# would be the D34 habit that has already cost this project four bugs.
+	# Through the IMPORTED texture, not `Image.load_from_file` on the PNG: the loose file
+	# is not what ships, and reading it warns once per plate that this would break on
+	# export. `PixelArt.enemy_art` is also the exact call `combat.gd` makes, so what is
+	# measured here is what is drawn.
+	var Cutl := load("res://tools/cutout_lib.gd")
+	for aid5 in PixelArt.archetype_ids():
+		var tex5 := PixelArt.enemy_art(String(aid5))
+		if tex5 == null:
+			continue
+		var img5 := tex5.get_image()
+		if img5 == null:
+			continue
+		img5.decompress()
+		img5.convert(Image.FORMAT_RGBA8)
+		var note5: String = Cutl.stowaways(
+			Cutl.alpha_of(img5), img5.get_width(), img5.get_height())
+		if note5 != "":
+			fails += 1
+			print("FAIL enemies/%s.png: %s" % [aid5, note5])
+
 	# --- the art the game does not have yet must still have somewhere to land ----
 	#
 	# Two whole paths in ART_ASSETS had no code behind them: the twelve card-family

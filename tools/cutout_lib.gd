@@ -26,6 +26,18 @@ const MIN_COVER := 0.02
 const MAX_COVER := 0.92
 ## Opaque components smaller than this fraction of the largest are dropped.
 const ISLAND_MIN := 0.08
+## A surviving component this big a fraction of the largest is a SECOND SUBJECT, not a
+## speck — `despeckle` was never going to catch it, because it only ever asked whether an
+## island was small (D194).
+const STOWAWAY_MIN := 0.20
+## ...and this far clear of the main body, vertically, as a fraction of the source height.
+## The gap is what separates a stowaway from a subject that is simply made of two pieces:
+## measured over all 310 installed cutouts, the only file with a large detached component
+## AND air between the two is `rat_swarm`, at 55px of a 256px frame. Everything else with a
+## big second island either overlaps it outright (the two arcs of `expose`, a moth's wings,
+## a hexer's sleeves) or sits directly on it (`false_step`'s stair tread, 4px; the clasp of
+## `coin_purse`, 3px). 5% of the frame is the gap between 4 and 55.
+const STOWAWAY_GAP := 0.05
 ## Second-pass tolerance for background the border flood fill could not REACH — a pocket
 ## sealed off by the subject's own silhouette (see `fill_trapped`). Much tighter than
 ## `TOL` on purpose: a trapped pocket is the literal untouched field, so its distance to
@@ -96,6 +108,59 @@ const BLOOM_LIFT := 0.008
 ## The false ones are what put a transparent notch in a mummy's arm, and area alone does not
 ## separate them — the ogre's real armpit gap is smaller than the mummy's false one.
 const POCKET_STD := 2.4
+## Luma spread, in 0-255 levels, that the region a pocket GREW INTO may carry and still be
+## cleared. Asked after the growth, of everything the growth took — and it is a third
+## question again, not a restatement of `POCKET_STD` (D###).
+##
+## `POCKET_STD` averages the LOCAL deviation, so it is blind to a gradient: a smooth
+## airbrushed sac spanning a third of the frame is flat at every individual pixel and
+## nothing like one colour overall. It passes, and then the growth runs at the ordinary
+## `TOL` and takes the whole sac. The Brood-Mother's abdomen went exactly that way — 4009 px
+## of painted egg-sac, enclosed by her own legs, base tone within `HOLE_TOL` of the slate
+## field, 16 levels of spread across it — and so did seven other installed cutouts.
+##
+## Testing the SEED instead would catch none of them. The seed is by construction the
+## pixels within `HOLE_TOL` of the field, so its spread is bounded near zero whatever it is
+## sitting on. What has to be checked is the result: **a field is one colour; paint is not.**
+## Measured over the 18 enclosed pockets in the installed enemy, relic and power sets:
+##
+##   real, cleared   leather_wrap 0.25 · bramble 0.69 · bone_picker 1.09 · blight 1.19
+##                   crown_of_thorns 1.25 · cinder_knight 1.45, 1.47 · foresight 1.66
+##                   siphon 1.72, 1.85
+##   false, kept     the_gardener 3.08 · grave_sexton 3.77 · bone_picker 5.51
+##                   crypt_hound 5.73 · rot_priest 13.37 · ember_hound 14.82
+##                   brood_mother 16.06 · ancient_battery 24.03
+##
+## Measured on the 256px OUTPUTS rather than on the sources, which are gone — so the two
+## pixels of each pocket that touch the subject were excluded, because `place` scales with
+## LANCZOS and the ring it leaves carries the subject's colour whatever the pocket is. Here
+## the question is asked before any resize, so no such exclusion is needed. 2.5 is the gap.
+const POCKET_SPREAD := 2.5
+## The same question asked of a FINISHED file (`find_gouges`), where three things differ.
+##
+## `GOUGE_CORE_R`: the pocket is measured two pixels in from the subject. `place` scales
+## with LANCZOS, which rings, so the boundary of a pocket carries the subject's colour
+## whatever the pocket is. Over the whole pocket the ten real ones measure 2.2-3.6 and the
+## gap to the eight gouges closes to nothing; two pixels in, they measure under 1.9.
+## `GOUGE_CORE_MIN`: below this much interior there is not enough to measure, and what has
+## that little interior is a sliver — the gap between two limbs.
+## `GOUGE_MIN`: and the pocket has to be a body part, not a nick.
+const GOUGE_CORE_R := 2
+const GOUGE_CORE_MIN := 50
+const GOUGE_MIN := 200
+## And `POCKET_SPREAD` only ever REFUSES a region this big a fraction of the frame.
+##
+## The two mistakes here are not the same size, so the guard should not police them the same
+## way. Filling a 300px pocket that was really paint is a blemish; filling a 60,000px one is
+## a hole through a monster, which is what happened, and which nothing downstream noticed.
+## Conversely a refusal costs a slab of field left inside the subject — tolerable once,
+## loudly reported (`kept_pockets`), and fixed by looking at the file.
+##
+## So the guard is pointed at the catastrophic end only. The Brood-Mother's abdomen was 6.1%
+## of the frame; 1% is comfortably below that and above every marginal call in the set, and
+## it keeps the guard away from the small pockets where a ring artefact or a lit patch of
+## floor could tip the measurement either way.
+const POCKET_GUARD_MIN := 0.01
 
 ## Breathing room left at the top and sides, as a fraction of the canvas. NEVER at the
 ## bottom on a bottom-anchored family — see `place()`.
@@ -119,6 +184,7 @@ static func cut(img: Image, canvas: Vector2i, anchor_bottom: bool) -> String:
 	# An image that arrives WITH alpha never reaches `matte`, so this would otherwise
 	# report the previous image's pockets — a per-file counter has to be cleared per file.
 	filled_pockets = 0
+	kept_pockets = 0
 	var a := alpha_of(img)
 	var matted := false
 	if opaque_fraction(a) > 0.995:
@@ -141,6 +207,14 @@ static func cut(img: Image, canvas: Vector2i, anchor_bottom: bool) -> String:
 		despeckle(a, w, h)
 	else:
 		erode_and_soften(a, w, h)
+	# Only on the bottom-anchored families, because that anchor is the premise the check
+	# rests on: an enemy plate is ONE figure standing on `PixelArt.STAND_LINE`, so a second
+	# body floating clear above it is a stowaway. A relic or a power icon is a composition
+	# and may legitimately be two pieces with air between them.
+	if anchor_bottom:
+		var stow := stowaways(a, w, h)
+		if stow != "":
+			return stow
 	apply_alpha(img, a)
 	return place(img, a, canvas, anchor_bottom)
 
@@ -193,6 +267,7 @@ static func cut_mono(img: Image, canvas: Vector2i) -> String:
 	var w := img.get_width()
 	var h := img.get_height()
 	filled_pockets = 0   # `cut_mono` mattes by luminance and never traps a pocket
+	kept_pockets = 0
 	var a := mono_alpha(img)
 	if last_mono_range < MONO_MIN_RANGE:
 		return "flat — no glyph here (dynamic range %.3f)" % last_mono_range
@@ -212,6 +287,12 @@ static var dropped_islands := 0
 ## How many trapped background pockets the last `cut()` filled. Reported for the same
 ## reason: from inside here, a filled pocket and a gouged subject look identical.
 static var filled_pockets := 0
+## How many looked trapped and turned out to be PAINT, so were left alone (`POCKET_SPREAD`).
+## Worth printing rather than swallowing: it is the one signal that a subject has a large
+## enclosed area the same colour as its own field, which is also the shape of a real
+## background pocket the tool has now declined to cut. Either the art is fine and this is
+## the guard working, or there is a slab of field left in the file.
+static var kept_pockets := 0
 ## Luminance spread of the last `mono_alpha()` — how much glyph there was to find.
 static var last_mono_range := 0.0
 ## The field colour the last `matte()` sampled, for the feather pass that follows it.
@@ -220,6 +301,15 @@ static var last_field := Vector3.ZERO
 ## checks it against the cell it came from: a subject touching its own cell edge means
 ## the grid is misaligned and that glyph is clipped.
 static var last_bbox := Rect2i()
+## How many stowaway subjects the last `cut()` removed. Only ever non-zero when the caller
+## asked for it — see `drop_stowaways`.
+static var dropped_stowaways := 0
+## Cut a stowaway out instead of refusing the image. OFF by default and it should stay
+## that way: the honest fix for a painting with two monsters in it is another painting,
+## and a tool that quietly deletes half of what it was handed cannot tell a stowaway from
+## a floating limb the artist meant. Turned on deliberately, per run, to salvage a file
+## whose good subject is already on disk and whose source is gone.
+static var drop_stowaways := false
 
 static func _survives(a: PackedByteArray, w: int, h: int) -> String:
 	var kept := despeckle(a, w, h)
@@ -440,6 +530,7 @@ static func feather_edge(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int,
 		detail: PackedFloat32Array = PackedFloat32Array()) -> int:
 	var min_area := int(w * h * HOLE_MIN)
+	var guard_min := int(w * h * POCKET_GUARD_MIN)
 	var comp := PackedInt32Array()
 	comp.resize(w * h)
 	comp.fill(-1)
@@ -486,12 +577,13 @@ static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 		open.append(edge)
 		rough.append(detail_sum / float(maxi(1, n)))
 
-	var filled := 0
+	var seeds: Array[int] = []
 	for id in sizes.size():
 		if _is_field(id, sizes, open, rough, min_area):
-			filled += 1
-	filled_pockets = filled
-	if filled == 0:
+			seeds.append(id)
+	kept_pockets = 0
+	filled_pockets = 0
+	if seeds.is_empty():
 		return 0
 
 	# Now GROW each qualifying pocket at the normal `TOL`, 4-connected, exactly as the
@@ -507,31 +599,178 @@ static func fill_trapped(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 	# gets, and the ordinary tolerance can finish the job. Growing an UNVERIFIED seed at
 	# `TOL` is the thing that would gouge grey armour on a grey field — so the seed is
 	# what the tight test guards, not the growth.
+	#
+	# One pocket at a time, and the clear is not committed until the region is measured:
+	# what the growth TOOK is the only thing that can answer whether this was field or a
+	# painted body sealed inside its own outline (`POCKET_SPREAD`). Grown together in one
+	# pass, as this used to be, a gouge and a real pocket are indistinguishable afterwards
+	# — there is nothing left to attribute to either.
+	var seen := PackedInt32Array()
+	seen.resize(w * h)
+	seen.fill(-1)
+	for id in seeds:
+		var region: Array[int] = []
+		var stack2: Array[int] = []
+		for i in w * h:
+			if comp[i] == id:
+				seen[i] = id
+				stack2.append(i)
+		while not stack2.is_empty():
+			var i: int = stack2.pop_back()
+			region.append(i)
+			var x: int = i % w
+			var y: int = i / w
+			for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+				var nx: int = x + d[0]
+				var ny: int = y + d[1]
+				if nx < 0 or ny < 0 or nx >= w or ny >= h:
+					continue
+				var j: int = ny * w + nx
+				# and the growth is gated the same way the border fill is, for the same reason
+				if seen[j] != id and a[j] > ALPHA_CUT \
+						and (j >= detail.size() or detail[j] < STD_FLAT) \
+						and _near(img.get_pixel(nx, ny), bg):
+					seen[j] = id
+					stack2.append(j)
+		# Measured on the region's INTERIOR. Its boundary is the ramp where the field meets
+		# the subject's outline, and a ramp from field to ink is 40 levels wide whatever it
+		# encloses — measured over the whole region, `leather_wrap`'s pocket reads the same as
+		# the Brood-Mother's abdomen and the question answers itself wrong every time.
+		var inner := _interior(region, w, h, GOUGE_CORE_R)
+		if region.size() >= guard_min and inner.size() >= GOUGE_CORE_MIN \
+				and luma_spread(img, inner, w) >= POCKET_SPREAD:
+			# Paint, not field. Leave it alone: the cost of being wrong here is a flat slab
+			# of background behind a rib cage, and the cost of being wrong the other way is
+			# a hole through a monster.
+			kept_pockets += 1
+			continue
+		for i in region:
+			a[i] = 0
+		filled_pockets += 1
+	return filled_pockets
+
+
+## The members of `region` that are at least `r` pixels clear of its boundary.
+static func _interior(region: Array[int], w: int, h: int, r: int) -> Array[int]:
+	var mask := PackedByteArray()
+	mask.resize(w * h)
+	for i in region:
+		mask[i] = 1
+	var kept := _erode(mask, w, h, r)
+	var out: Array[int] = []
+	for i in region:
+		if kept[i] == 1:
+			out.append(i)
+	return out
+
+
+## Standard deviation of luma over `members`, in 0-255 levels. A field is one colour and
+## measures near zero; paint does not.
+static func luma_spread(img: Image, members: Array[int], w: int) -> float:
+	if members.is_empty():
+		return 0.0
+	var s := 0.0
+	var s2 := 0.0
+	for i in members:
+		var c := img.get_pixel(i % w, i / w)
+		var v: float = (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) * 255.0
+		s += v
+		s2 += v * v
+	var n := float(members.size())
+	var mean := s / n
+	return sqrt(maxf(0.0, s2 / n - mean * mean))
+
+
+## Enclosed transparent pockets of a FINISHED cutout that are worth LOOKING at: big enough
+## to be a body part, with an interior that is not one colour. Returns
+## `{"pixels": Array[int], "core": int, "spread": float}` per pocket, biggest first.
+##
+## **This is a shortlist, not a verdict, and the difference is the whole point.** Run over
+## the installed enemy, relic and power sets it returns eight pockets, and looking at them
+## one is the defect (the Brood-Mother's abdomen) and seven are correct background — the
+## gap between a hound's legs, the space under a sexton's robe, the slot between the ancient
+## battery's pillars. They score high because the field BEHIND the subject is shadowed or
+## lit, so the untouched field in a pocket genuinely carries a gradient. Nothing measurable
+## on a finished file separated the eight: spread does not, and neither does the residual
+## after fitting a plane, which tracks it at 0.76-1.00 (D195).
+##
+## So this exists to point a person at candidates, and `refill_pockets.gd` prints them and
+## restores only what it is told to. It is deliberately NOT wired into `test_art.gd`: an
+## assertion with seven false positives out of eight is not a measure, it is noise that
+## teaches the suite to be ignored.
+##
+## The pipeline-side question is different and answerable, because `fill_trapped` still has
+## the source and the sampled field colour to compare against — see `POCKET_SPREAD`.
+static func find_gouges(img: Image, w: int, h: int) -> Array[Dictionary]:
+	var clear := PackedByteArray()
+	clear.resize(w * h)
+	for y in h:
+		for x in w:
+			clear[y * w + x] = 1 if img.get_pixel(x, y).a * 255.0 <= float(ALPHA_CUT) else 0
+	var core := _erode(clear, w, h, GOUGE_CORE_R)
+
 	var seen := PackedByteArray()
 	seen.resize(w * h)
-	var stack2: Array[int] = []
-	for i in w * h:
-		var id := comp[i]
-		if id >= 0 and _is_field(id, sizes, open, rough, min_area):
-			seen[i] = 1
-			stack2.append(i)
-	while not stack2.is_empty():
-		var i: int = stack2.pop_back()
-		a[i] = 0
-		var x: int = i % w
-		var y: int = i / w
-		for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
-			var nx: int = x + d[0]
-			var ny: int = y + d[1]
-			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+	var out: Array[Dictionary] = []
+	for start in w * h:
+		if seen[start] == 1 or clear[start] == 0:
+			continue
+		var edge := false
+		var members: Array[int] = []
+		var stack: Array[int] = [start]
+		seen[start] = 1
+		while not stack.is_empty():
+			var i: int = stack.pop_back()
+			members.append(i)
+			var x: int = i % w
+			var y: int = i / w
+			# a region that reaches the frame is the surround, not a pocket
+			if x == 0 or y == 0 or x == w - 1 or y == h - 1:
+				edge = true
+			for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+				var nx: int = x + d[0]
+				var ny: int = y + d[1]
+				if nx < 0 or ny < 0 or nx >= w or ny >= h:
+					continue
+				var j: int = ny * w + nx
+				if seen[j] == 0 and clear[j] == 1:
+					seen[j] = 1
+					stack.append(j)
+		if edge or members.size() < GOUGE_MIN:
+			continue
+		var inner: Array[int] = []
+		for i in members:
+			if core[i] == 1:
+				inner.append(i)
+		# too thin to judge, and a sliver is a gap between two limbs
+		if inner.size() < GOUGE_CORE_MIN:
+			continue
+		var spread := luma_spread(img, inner, w)
+		if spread < POCKET_SPREAD:
+			continue
+		out.append({"pixels": members, "core": inner.size(), "spread": spread})
+	out.sort_custom(func(p, q): return int(p["pixels"].size()) > int(q["pixels"].size()))
+	return out
+
+
+## Shrink a mask by `r` pixels. Used to reach a pocket's INTERIOR, clear of the LANCZOS
+## ring `place` leaves where the pocket meets the subject.
+static func _erode(mask: PackedByteArray, w: int, h: int, r: int) -> PackedByteArray:
+	var out := PackedByteArray()
+	out.resize(w * h)
+	for y in h:
+		for x in w:
+			if mask[y * w + x] == 0:
 				continue
-			var j: int = ny * w + nx
-			# and the growth is gated the same way the border fill is, for the same reason
-			if seen[j] == 0 and a[j] > ALPHA_CUT and (j >= detail.size() or detail[j] < STD_FLAT) \
-					and _near(img.get_pixel(nx, ny), bg):
-				seen[j] = 1
-				stack2.append(j)
-	return filled
+			var ok := true
+			for dy in range(-r, r + 1):
+				for dx in range(-r, r + 1):
+					var nx := x + dx
+					var ny := y + dy
+					if nx < 0 or ny < 0 or nx >= w or ny >= h or mask[ny * w + nx] == 0:
+						ok = false
+			out[y * w + x] = 1 if ok else 0
+	return out
 
 
 static func _tight(img: Image, i: int, w: int, bg: Vector3) -> bool:
@@ -600,15 +839,47 @@ static func white_out(img: Image, a: PackedByteArray) -> void:
 ## the corner, which would drag the trim box out to meet it and shrink the subject to
 ## fit beside its own watermark.
 static func despeckle(a: PackedByteArray, w: int, h: int) -> int:
+	var lab := label(a, w, h)
+	var comp: PackedInt32Array = lab[0]
+	var sizes: Array = lab[1]
+	if sizes.is_empty():
+		return -1
+	var biggest := 0
+	for n in sizes:
+		biggest = maxi(biggest, int(n))
+	var floor_size := int(biggest * ISLAND_MIN)
+	var dropped := 0
+	for id in sizes.size():
+		if int(sizes[id]) < floor_size:
+			dropped += 1
+	if dropped == 0:
+		return 0
+	for i in w * h:
+		var id := comp[i]
+		if id >= 0 and int(sizes[id]) < floor_size:
+			a[i] = 0
+	return dropped
+
+
+## Four-connected components of the opaque pixels. Returns `[comp, sizes, boxes]`:
+## a per-pixel label (-1 where transparent), each label's pixel count, and each label's
+## bounding box. One flood fill serving both the size question `despeckle` asks and the
+## where question `_stowaways` asks, so the two cannot disagree about what a component is.
+static func label(a: PackedByteArray, w: int, h: int) -> Array:
 	var comp := PackedInt32Array()
 	comp.resize(w * h)
 	comp.fill(-1)
 	var sizes: Array[int] = []
+	var boxes: Array[Rect2i] = []
 	for start in w * h:
 		if a[start] <= ALPHA_CUT or comp[start] >= 0:
 			continue
 		var id := sizes.size()
 		var n := 0
+		var minx := w
+		var maxx := 0
+		var miny := h
+		var maxy := 0
 		var stack: Array[int] = [start]
 		comp[start] = id
 		while not stack.is_empty():
@@ -616,6 +887,10 @@ static func despeckle(a: PackedByteArray, w: int, h: int) -> int:
 			n += 1
 			var x: int = i % w
 			var y: int = i / w
+			minx = mini(minx, x)
+			maxx = maxi(maxx, x)
+			miny = mini(miny, y)
+			maxy = maxi(maxy, y)
 			for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
 				var nx: int = x + d[0]
 				var ny: int = y + d[1]
@@ -626,23 +901,86 @@ static func despeckle(a: PackedByteArray, w: int, h: int) -> int:
 					comp[j] = id
 					stack.append(j)
 		sizes.append(n)
-	if sizes.is_empty():
-		return -1
+		boxes.append(Rect2i(minx, miny, maxx - minx + 1, maxy - miny + 1))
+	return [comp, sizes, boxes]
+
+
+## A SECOND SUBJECT in a one-subject frame: big enough to be a body, with air between it
+## and the one standing on the floor. Returns "" when the frame is clean, the refusal
+## otherwise — or drops it and returns "" when `drop_stowaways` is set.
+##
+## This is the hole `despeckle` leaves and cannot close. Despeckle asks one question, "is
+## this island small", and answers it well; a generator that paints two monsters hands
+## back two islands that are both large, both survive, and the trim box then stretches
+## around BOTH. The subject is not corrupted — it is squeezed into whatever fraction of
+## the canvas the intruder left it, which in the game is an enemy rendered at a third of
+## its size with someone else's legs above it. Nothing in the pipeline said a word, and
+## the file looks like art that was simply drawn badly (D194).
+##
+## Which one is the subject is decided by the floor, not by mass: the keeper is the
+## component reaching LOWEST, because that is the one whose feet are on the standing line.
+## In the rat plate the intruder was the bigger of the two.
+static func stowaways(a: PackedByteArray, w: int, h: int) -> String:
+	dropped_stowaways = 0
+	var lab := label(a, w, h)
+	var comp: PackedInt32Array = lab[0]
+	var sizes: Array = lab[1]
+	var boxes: Array = lab[2]
+	if sizes.size() < 2:
+		return ""
 	var biggest := 0
 	for n in sizes:
-		biggest = maxi(biggest, n)
-	var floor_size := int(biggest * ISLAND_MIN)
-	var dropped := 0
+		biggest = maxi(biggest, int(n))
+	var gap := maxi(1, int(h * STOWAWAY_GAP))
+
+	# The subject: lowest bottom edge among the components substantial enough to be one.
+	var keeper := -1
 	for id in sizes.size():
-		if sizes[id] < floor_size:
-			dropped += 1
-	if dropped == 0:
-		return 0
+		if float(sizes[id]) / float(biggest) < STOWAWAY_MIN:
+			continue
+		if keeper < 0 or (boxes[id] as Rect2i).end.y > (boxes[keeper] as Rect2i).end.y:
+			keeper = id
+	if keeper < 0:
+		return ""
+
+	var kept: Rect2i = boxes[keeper]
+	var found: Array[int] = []
+	for id in sizes.size():
+		if id == keeper or float(sizes[id]) / float(biggest) < STOWAWAY_MIN:
+			continue
+		var b: Rect2i = boxes[id]
+		# Vertical clearance between the two boxes. Negative overlap is a gap.
+		if maxi(kept.position.y, b.position.y) - mini(kept.end.y, b.end.y) > gap:
+			found.append(id)
+	if found.is_empty():
+		return ""
+
+	if not drop_stowaways:
+		var parts: Array[String] = []
+		for id in found:
+			var b: Rect2i = boxes[id]
+			parts.append("%dx%d at (%d,%d), %d%% the size of the subject" % [
+				b.size.x, b.size.y, b.position.x, b.position.y,
+				int(round(100.0 * float(sizes[id]) / float(sizes[keeper])))])
+		return ("a second subject in the frame — %s. One monster per image: the trim box "
+			+ "would stretch around both and the real subject would be installed at a "
+			+ "fraction of its size. Repaint it, or pass --drop-stowaways to cut it out."
+			) % "; ".join(parts)
+
+	# Everything clear of the keeper goes, not just the large ones: a filament of the
+	# intruder left behind is a speck that drags the trim box right back where it was.
+	var doomed := {}
+	for id in sizes.size():
+		if id == keeper:
+			continue
+		var b: Rect2i = boxes[id]
+		if maxi(kept.position.y, b.position.y) - mini(kept.end.y, b.end.y) > gap:
+			doomed[id] = true
 	for i in w * h:
-		var id := comp[i]
-		if id >= 0 and sizes[id] < floor_size:
+		if comp[i] >= 0 and doomed.has(comp[i]):
 			a[i] = 0
-	return dropped
+	dropped_stowaways = found.size()
+	return ""
 
 
 ## One pixel of erosion, then one box blur of the alpha channel. The flood-fill matte

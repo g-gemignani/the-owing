@@ -116,9 +116,10 @@ duplicates into levels, buy and level Powers and Relics, and unlock deeper zones
 | ![The collection](docs/screenshots/Collection.webp) | ![Powers](docs/screenshots/Powers.webp) |
 | **The collection is the progression.** | **One Power equipped per run, fired every turn.** |
 
-<sub>Captures are generated, not curated: `tools/screenshots.gd` boots all 25 screens at
-the shipped 1280x720 and `tools/readme_shots.gd` picks and downsamples the seven above.
-Both are re-run when anything visual lands, so these cannot quietly go stale.</sub>
+<sub>Captures are generated, not curated: `tools/screenshots.gd` boots every screen at the
+shipped 1280x720 and `tools/readme_shots.gd` picks and downsamples the seven above. Both
+are re-run when anything visual lands, so these cannot quietly go stale. The number of
+captures is not written here on purpose — it was wrong in three places at once (D196).</sub>
 
 ## What's in it
 
@@ -231,9 +232,11 @@ disagree with the code eventually will.
 
 ## Design notes
 
-[DESIGN.md](DESIGN.md) is long, and it is the actual documentation: decisions **D1
-through D140**, each with what was tried, what was measured, and what broke. If you only
-read three:
+[DESIGN.md](DESIGN.md) is long, and it is the actual documentation: every decision this
+project has made, each with what was tried, what was measured, and what broke. It opens
+with a generated index, because the entries are not in numeric order and the file is past
+eleven thousand lines. (The range used to be written out here and was two years stale —
+D196.) If you only read three:
 
 * **D36, the difficulty ratchet** and **D38, enemies that react** — two cases where the
   obvious design was wrong and the simulator said so.

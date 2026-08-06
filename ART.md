@@ -10,7 +10,9 @@ a drawing that then needs somebody to figure out where it goes.
 
 Captures used to write this were made with `tools/screenshots.gd` — regenerate them
 before and after any art pass (§7). Nothing here was inferred from source code alone;
-§6 says what each of the 16 captures shows.
+§6 says what the original pass of sixteen showed, screen by screen. That pass is a
+dated record and its count is not the tool's current one — `SHOTS` in
+`tools/screenshots.gd` is the only answer to "how many captures are there".
 
 ---
 
@@ -32,7 +34,7 @@ screens' worth of assets speak five unrelated dialects — four, as first counte
 | language | assets | verdict |
 |---|---|---|
 | **Painted, inked illustration** | all 12 dungeon backdrops | **This is the game.** Keep. |
-| **Flat vector illustration** | `main_menu.jpg` | *Was counted as inked here and it is not (D114) — no outline anywhere, a ninth the outline density of the rooms it shipped beside. On the re-roll list.* |
+| **Flat vector illustration** | `main_menu.jpg` | *Was counted as inked here and it is not (D114) — no outline anywhere, a ninth the outline density of the rooms it shipped beside. Re-rolled since, twice: D126 for the foreground and D134 for a frame that measured 41.5% green against a style bible at 0.0%. The file is `main_menu.png` now; the installer writes PNG and deletes the superseded .jpg.* |
 | **Kenney 16×16 pixel art** | 41 enemy sprites, 5 zone tiles, 1 card sheet | Off-style, and semantically arbitrary — *the 41 enemy sprites are gone (D89); the zone tiles and the card sheet remain* |
 | **Hand-authored 16×16 mono glyphs** | 13 in `PixelArt.GLYPHS` | Off-style, too small to read as art |
 | **A stretched illustration pretending to be a frame** | `ui_button.png`, `ui_panel.png` | Actively damaging — see below |
@@ -149,31 +151,40 @@ Taken from what already works, so it needs no leap of faith:
 > way a hand-typed list of 35 enemy names would:
 >
 > ```bash
-> godot --headless --script tools/art_manifest.gd > ART_ASSETS.md
-> godot --headless --script tools/art_manifest.gd -- --prompts > ART_PROMPTS.md
+> tools/art_docs.sh          # both, together
+> tools/art_docs.sh --check  # non-zero if either has drifted
 > ```
+>
+> **Regenerate both or neither.** They come off one tool and one set of catalogues, so
+> updating one leaves the other asking for art that is already installed — which is
+> exactly what shipped: ART_PROMPTS.md spent this consolidation briefing sixty card
+> illustrations and a gear symbol that were all on disk (D101's lesson, D196).
 >
 > **This section is the reasoning; those files are the shopping list and the wording.**
 > Where any of them disagree on a count, the generated one is right — no total is
 > restated here, deliberately (D34).
 
-Two thirds are icons. Ordering below is by *visible improvement per hour*, not by
-category:
+Two thirds are icons. The ordering is by *visible improvement per hour*, not by
+category, and the ordering is the only thing this table is for — **no count appears in
+it**, deliberately (D34). The tier list itself is owned by `tools/art_manifest.gd` and
+has grown sub-tiers since this was written (1b–1d, 3b–3c, 5b–5d, 6a–6b, 8a–8b); read
+the current one, and every wanted/present/missing figure, off `ART_ASSETS.md`.
 
-| tier | what | files |
-|---|---|---|
-| 0 | frame kit + control chrome | 24 |
-| 1 | combat readability (player, vitals, intents, symbols, VFX) | 43 |
-| 2 | enemies | 35 — **done** |
-| 3 | card illustrations | 12 |
-| 4 | map and traversal | 0 — deleted with the models (D94/D111) |
-| 5 | backdrops (5 zone + 6 scene; all 12 dungeons) | 23 — **done** |
-| 6 | relics and powers | 40 |
-| 7 | identity and shell | 6 |
+| tier | what |
+|---|---|
+| 0 | frame kit + control chrome |
+| 1 | combat readability — vitals, intent telegraphs, status symbols |
+| 2 | enemies |
+| 3 | card illustrations |
+| 4 | map and traversal — *empty; deleted with the models (D94/D111)* |
+| 5 | backdrops — dungeon, zone, scene, meta-screen |
+| 6 | relics and powers |
+| 7 | identity and shell |
+| 8 | the isometric floor's figures and furniture |
 
-**No total here is authoritative** and none is restated deliberately (D34) — the tiers
-above are the *ordering*, and `ART_ASSETS.md` is generated and wins on any disagreement.
-Its header line carries the wanted/present/missing counts; read them there.
+An earlier version of this table carried a file count per tier and marked two of them
+**done**. Every tier is done now, and the counts had drifted — which is the whole
+reason the numbers are gone rather than corrected (D196).
 
 Proposed layout — `assets/art/` grows subdirectories, `assets/pixel/` demotes to
 fallback. Partly built: `enemies/`, `iso/` and `ui/` exist; the backdrops are still
@@ -335,14 +346,22 @@ tint by rarity and fade for spent states, and that behaviour is load-bearing.
 | `ui/target_ring.png` | 256×256 | replaces the `"▶ "` text prefix on the targeted enemy |
 | `ui/card_glow.png` | 320×448, additive | playable-vs-unaffordable card, currently unmarked |
 
-**VFX (6 sprite sheets, 8 frames each, 256×256 per frame)** — the game has **no
-combat feedback animation at all**. A card is played and text changes.
+**VFX (0 files) — done (D129), and the answer was that they are not files.** This
+specced six sprite sheets, 8 frames each at 256×256: `fx/slash.png`, `fx/impact.png`,
+`fx/block_up.png`, `fx/poison_cloud.png`, `fx/heal.png`, `fx/death_dissolve.png`.
 
-`fx/slash.png`, `fx/impact.png`, `fx/block_up.png`, `fx/poison_cloud.png`,
-`fx/heal.png`, `fx/death_dissolve.png`
-→ hook: new one-shot `AnimatedSprite2D` spawner called from
-`combat.gd:_on_card_pressed()`, keyed off the same effect branch that already picks
-the sound. The audio switch there is the exact shape the VFX switch wants.
+None was drawn. The manifest's own brief had already argued the case against it —
+*"eight plausible frames of eight different explosions read as a strobe, not an
+impact"* — because an image model returns eight slashes, not eight frames of one
+slash. `scripts/fx.gd` draws all six at runtime instead: a `Mark` control that
+`_draw()`s one inked primitive at whatever progress it is tweened to, plus one
+self-reaping `CPUParticles2D` each effect tunes. CPU rather than GPU, because the
+counts are 12–26 and a headless run has no GPU.
+
+The lesson is D129's and it is the same one Tier 0 learned: **check whether the thing
+is a picture or a mechanism before adding it to a shopping list.** (`assets/art/fx/`
+does exist, and holds the six level overlays — a different tier that happens to share
+the directory.)
 
 ---
 
@@ -540,26 +559,40 @@ Assets that land on top of these problems will not look better. None of it is la
 
 ## 5. If you only do three things
 
-1. ~~**Tier 0, the frame kit.**~~ **Mostly done (D83/D105/D107)** — computed rather
-   than painted, 16 of 24 installed, every control wired. The three track housings and
-   the panel/inset/tooltip frames are what is left.
+**All three are closed, and so is the list they came off.** `ART_ASSETS.md` reports
+every file the game looks for as present. Kept because the ordering was the useful part
+— each of these was chosen as the highest visible improvement per hour at the time, and
+each turned out to be.
+
+1. ~~**Tier 0, the frame kit.**~~ **Done (D83/D105/D107)** — computed rather than
+   painted, every control wired, and the housings that were outstanding when this was
+   written have since landed.
 2. ~~The nine missing dungeon backdrops.~~ **Done (D73), and all 23 backdrops with
    them (D83b/D83d)**, and the screens that were bypassing `UI.screen()` were brought
-   inside it (D95). This item is closed.
+   inside it (D95).
 3. ~~**A font, and the enemies.**~~ **Done.** The 35 enemy plates landed in D89 and the
    two faces are installed: Fira Sans as the `Theme` default, Cinzel Bold on headings
-   and card names. This item is closed. What is now the largest visible win left is the
-   **twelve card family illustrations** — the card is the object the player looks at for
-   most of the runtime and it is still a 16×16 tile magnified ten times.
+   and card names.
+4. ~~**The twelve card family illustrations**, added here as "the largest visible win
+   left".~~ **Done, and overtaken** — D131 reopened the tier at one illustration per
+   *card* rather than per family, and D136 painted the hundred four to a picture. It was
+   the right call about which object mattered: the card is what the player looks at for
+   most of the runtime.
+
+What is left is not on this list, because it is not art. The open items are in
+[REVIEW.md](REVIEW.md)'s P1/P2 — the collection as a grid of card faces rather than
+rows, the isometric floor filling the screen, and an input map.
 
 ---
 
 ## 6. The captures, screen by screen
 
 All rendered at 1280×720 — the size the interface is laid out at, and the only one
-there is (D65) — with a stocked save. This was the 16-capture pass; `tools/screenshots.gd`
-now takes **19**, having added `Chest`, `Packs`, and the two extra states of the combat
-hand that D104 exists because nobody had photographed. What each one said:
+there is (D65) — with a stocked save. This was the sixteen-capture pass, and the list has
+grown several times since — `Chest` and `Packs`, the extra states of the combat hand that
+D104 exists because nobody had photographed, the four iso terrains D122 found had never
+been shot. Read the current list off `SHOTS` in `tools/screenshots.gd`; the count was
+restated here twice and was wrong both times (D196). What each of the sixteen said:
 
 | capture | verdict |
 |---|---|
@@ -580,8 +613,8 @@ hand that D104 exists because nobody had photographed. What each one said:
 
 ## 7. Looking at the game
 
-`tools/screenshots.gd` boots 19 captures at the shipped 1280×720 with a stocked
-save and writes a PNG each. It is a diagnostic, not shipped, and it needs a real GL
+`tools/screenshots.gd` boots every capture in its `SHOTS` list at the shipped 1280×720
+with a stocked save and writes a PNG each. It is a diagnostic, not shipped, and needs a real GL
 context — art direction cannot be judged from a simulation:
 
 ```bash

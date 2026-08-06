@@ -2,10 +2,12 @@
 
 Brief for anyone (human or AI) picking up this project. It is the *why*: the game's
 concept, the decisions that shaped it, and the working rules that keep changes from
-breaking it. The *what* — file-by-file detail and the full decision log D1–D192 — is
-in [DESIGN.md](DESIGN.md); how to add content is in [CONTRIBUTING.md](CONTRIBUTING.md);
-how to build and run is in [BUILD.md](BUILD.md); what the game should *look* like, and
-the file-by-file asset list, are in [ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md).
+breaking it. The *what* — file-by-file detail and the whole decision log — is in
+[DESIGN.md](DESIGN.md), which opens with a generated index; how to add content is in
+[CONTRIBUTING.md](CONTRIBUTING.md); how to build and run is in [BUILD.md](BUILD.md);
+what the game should *look* like, and the file-by-file asset list, are in
+[ART.md](ART.md) and [ART_ASSETS.md](ART_ASSETS.md). An outside view of what it all
+adds up to as a *game*, with the open work, is in [REVIEW.md](REVIEW.md).
 
 > **Keep this file and DESIGN.md current.** Every substantive change should land with
 > its reasoning written down. A decision that only lives in a commit message is a
@@ -68,8 +70,8 @@ plus one catalogue line; adding more is a data task, not a code task.
 205/305; the hundred were painted four to a picture, a 2x2 grid of 4:3 cells tiling one
 4:3 image, which turned a hundred browser requests into twenty-five (D136). The shopping
 list is
-generated — `godot --headless --script tools/art_manifest.gd > ART_ASSETS.md` — so it
-cannot fall out of step with the catalogues. Two things in it are not paintings and
+generated — `tools/art_docs.sh`, which writes ART_ASSETS.md and ART_PROMPTS.md together
+— so it cannot fall out of step with the catalogues. Two things in it are not paintings and
 never will be: the frame kit is computed by `tools/gen_ui_kit.gd`, and the six combat
 effects are drawn at runtime by `scripts/fx.gd`.
 
@@ -812,7 +814,7 @@ These are failure modes that have actually bitten this project. Treat each as a 
   fill walks in through one shaded pixel, `despeckle` keeps whichever scraps survive, and
   what lands is a plausible file. `ui/cursor.png` shipped **9.4% opaque against 93.9%
   non-black RGB** and `ui/logo.png` lost its carved scrollwork while keeping the panel
-  behind it (D125; the cursor file is gone since D138, the bug it proves is not). It then
+  behind it (D125b; the cursor file is gone since D138, the bug it proves is not). It then
   did it again to five iso figures — a mummy in grey bandages on a grey field came out as
   a scatter of dust (D152).
   **All of them look perfect in an image viewer**, because the matte destroys alpha and
@@ -835,6 +837,21 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `tools/rematte_iso.gd` recovered all 23 figures from the files themselves, no new art. A
   repair tool must not assume its own direction, either — the campfire's correct mask is
   *smaller* than its broken one, so the tool rewrites on disagreement, not on growth.
+
+- **A filter that asks one question is blind to everything on the other side of it.**
+  `despeckle` removes opaque islands under 8% of the largest, and it was built for the
+  generator's watermark, which is a speck in a corner. A generator that paints **two
+  monsters** hands back two islands that are both large, so nothing in the pipeline said a
+  word: the trim box stretched around both, and `rat_swarm` shipped with the rat at a third
+  of its canvas and a robed figure's legs standing over it, through 42 passing tests (D194).
+  Size alone cannot separate the cases — `powers/expose` is two arcs of one ring at 94% —
+  and over all 310 cutouts the signal is the **gap**: every legitimate multi-part cutout
+  overlaps its other half or sits directly on it, the broken one had 55px of air. The
+  bottom-anchored families can ask this at all because the anchor names the subject: the
+  body reaching lowest is the one standing on `PixelArt.STAND_LINE`, and in the rat's case
+  it was the *smaller* of the two. It refuses rather than cleaning up (`--drop-stowaways`
+  is the deliberate override), for the reason `despeckle` prints its count: from inside the
+  tool, a stowaway and a floating limb the artist meant look identical.
 
 - **A secret in the wrong place is indistinguishable from a secret that is absent**, so the
   absence has to say so and name the place. The Android key lives in *repository secrets*: not
@@ -1023,7 +1040,10 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              captures the README shows, LANCZOS-downsamples them and writes
              docs/screenshots/ as WebP — the front page's pictures are generated
              so they cannot go stale, D141),
-             art_manifest.gd,
+             art_manifest.gd (driven by art_docs.sh — see the doc list below),
+             art_docs.sh and design_index.sh (the two documentation generators;
+             both take `--check`, which is how you find out a generated file has
+             drifted without reading it — D196),
              install_backdrops.gd, install_scene_backdrops.gd,
              install_cutouts.gd (mattes/trims/anchors enemies, relics, powers — D90),
              install_sheet.gd (slices an icon-set sheet into its files — D91),
@@ -1056,16 +1076,31 @@ docs/        the README's screenshots, and nothing else. Carries a .gdignore:
              tag never moves off `latest` — the README's download links are only
              stable URLs because of it (D142). actions/setup-godot/ is the shared
              cache-and-install step, and runs on both Linux and macOS
-DESIGN.md    the full reasoning, decision by decision (D1–D192)
-ART.md       the art brief: the diagnosis, the style, the reasoning
-ART_ASSETS.md  GENERATED by tools/art_manifest.gd — every art file wanted, and
-             whether it exists yet. Never edit by hand; regenerate it.
-ART_PROMPTS.md GENERATED by the same tool with `-- --prompts` — the style block, the
-             per-tier recipe, and which files must NOT be generated (D90).
+DESIGN.md    the full reasoning, decision by decision. Chapters 1-8 are the
+             architecture and the plan; the rest is the log, which is most of
+             the 11,600 lines. It opens with a GENERATED index
+             (tools/design_index.sh) because the entries are not in numeric
+             order — a correction lands beside its subject, not at the end. The
+             range is not written down anywhere: read it off the index (D196)
+ART.md       the art brief: the diagnosis, the style, the reasoning. Carries no
+             file counts at all, on purpose — the tiers here are the ORDERING
+             and ART_ASSETS.md owns every number (D34)
+ART_ASSETS.md  GENERATED — every art file wanted, and whether it exists yet
+ART_PROMPTS.md GENERATED — the style block, the per-tier recipe, and which files
+             must NOT be generated (D90)
+             Both come from tools/art_manifest.gd via `tools/art_docs.sh`, which
+             writes them TOGETHER and strips Godot's version banner. Regenerate
+             both or neither: ART_PROMPTS spent a long time briefing sixty card
+             illustrations that were already installed, because only the other
+             one was ever refreshed (D101, D196). `--check` fails if either drifted
 REVIEW.md    a review of the game AS A GAME (2026-08-01) — playability, graphics,
              originality, fun — with a prioritised fix list. Not a decision log:
              it is the outside view of what the systems currently add up to, and
-             its P0 list is the argument for what to build next.
+             its P-lists are the argument for what to build next. Reconciled
+             against the tree in D196; four items are genuinely open (a card
+             grid, the iso floor filling the screen, the numeric relics, and an
+             input map). RECONCILE IT WHEN YOU CLOSE ONE — a queue that still
+             lists finished work reads as a bigger backlog than the project has
 ```
 
 ## Working rules

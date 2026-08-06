@@ -17,6 +17,15 @@ what about it is worth finishing.
 > a work queue. The *measurements* in the evidence table below are not re-run and are
 > stale by design — they date the review. Anything numeric here should be taken from
 > the tool that produces it, never from this file.
+>
+> **Reconciled against the tree in D196**, which is the only part of this file that is
+> current. Eight items were still written as open and were not: the crawl header (D114),
+> the card illustrations (D131/D136), the vitals and intent art, the relic and power
+> icons, the combat FX (D129), the empty states, the simulator profile (D99) and this
+> file's own request for a DESIGN.md index. **Four are genuinely still open** — the
+> collection as a card grid (#6), the isometric floor filling the screen (#8), the
+> eighteen numeric relics (#9), and keyboard/gamepad input (#13), which has not moved at
+> all. A queue nobody reconciles reads as a longer backlog than the project has.
 
 It is blunt where blunt is useful. The project is well past the stage where
 encouragement helps more than a list.
@@ -53,10 +62,12 @@ Three things, in order:
    you find is *at risk* until you kill the boss, and an Escape Rope is the only way
    to walk out with it — is the best mechanic in the game. It is also invisible for
    the first hour and explained in a status line.
-2. **The card is the object the player looks at for 90% of the runtime, and it has no
-   art, clipped text, and ~~a name they cannot read at rest~~.** The name is readable now
-   (D97); **the art is not there at all** and that is the half that still stands. This
-   one screen is worth more than the other nineteen combined.
+2. ~~**The card is the object the player looks at for 90% of the runtime, and it has no
+   art, clipped text, and a name they cannot read at rest.**~~ **DONE, all three.** The
+   name is readable (D97), the text fits (D117), and every one of the hundred cards has
+   its own illustration (D131, painted four to a picture in D136) — this review asked for
+   twelve shared family pictures and the project went past that. It was right that this
+   one screen was worth more than the other nineteen combined.
 3. ~~**Roughly a third of the card names are Slay the Spire's, verbatim.** That is a
    real problem for a game whose stated pitch is "Slay-the-Spire-shaped, but…".~~
    **DONE** — renamed in D98, the fourteen copied constants re-tuned in D103. §4 below is
@@ -272,18 +283,27 @@ touches.** That is the whole finding, and it explains why screens with beautiful
 backdrops still look unfinished: the art and the interface are two different games
 stacked on top of each other.
 
-> The column above is the split *at the time of the review* and is not maintained — the
-> two struck rows landed in D112, along with part of the frame kit and part of the vitals.
-> The rows that still read `0 /` are the ones nobody has started. For the live figures ask
-> the tool that owns them: `godot --headless --script tools/art_manifest.gd`, whose summary
-> line and per-tier "*N files, M still to provide*" counts are the only current answer. The
-> finding survives the update: the tiers still at zero are the card illustrations, the
-> relic icons, the power icons and the combat FX — which is to say the split has begun to
-> move but it has not moved on the object §3 says matters most.
+> The column above is the split *at the time of the review* and is not maintained. For the
+> live figures ask the tool that owns them — `tools/art_docs.sh`, whose summary line and
+> per-tier "*N files, M still to provide*" counts are the only current answer.
+>
+> **The finding did NOT survive, and that is the point of writing it down.** Every row
+> that read `0 /` has since landed: the card illustrations, the relic icons, the power
+> icons, the vitals and the frame kit; the combat FX arrived as code rather than files
+> (D129). The list is closed. This paragraph previously claimed the split "has not moved
+> on the object §3 says matters most" and had been wrong about that for some time —
+> a note that says a document is unmaintained does not stop it being read as current
+> (D196).
 
-### The card art specifically
+### The card art specifically — **closed, and it went further than this asked**
 
-`assets/art/cards/` does not exist. So `PixelArt.card_art()` (`pixel_art.gd:474`)
+> `assets/art/cards/` holds an illustration for every one of the hundred cards. This
+> section asked for twelve shared family pictures; D131 reopened the tier at one per
+> card and D136 painted them four to a picture, a 2x2 grid of 4:3 cells tiling one 4:3
+> image, which turned a hundred requests into twenty-five. The original finding is kept
+> below as the argument that won.
+
+`assets/art/cards/` did not exist. So `PixelArt.card_art()` (`pixel_art.gd:474`)
 falls through to a **16×16 CC0 atlas tile**, which `ui.gd:494` then stretches across a
 ~160×210 card face at 22% alpha. A 16-pixel icon magnified ten times is not an
 illustration; it is noise. In the combat capture the five cards in hand are covered in
@@ -514,7 +534,7 @@ Two costs worth naming:
 | 5 | `scripts/packs_screen.gd` | ~~The three "Open" buttons land at three different x positions; two overlap the column the third starts in.~~ **FIXED (D95)** — `clip_text` makes the label's minimum width an actual minimum. |
 | 6 | `scripts/zone_view.gd` | Every dungeon row is labelled "isometric floor" — an internal enum name, and true of all 12, so it carries no information. **[fixed in the working tree while this was written]** |
 | 7 | `scripts/iso_run.gd` (status line) | Header wraps mid-phrase: `AT RISK: 0` / `cards, 0 gold`. |
-| 8 | `assets/art/bg_chest.png`, `bg_victory.png`, `bg_defeat.png` | Visibly a flatter, unrendered art tier than the other 20 backdrops. Victory is the end-of-run screen. |
+| 8 | `assets/art/bg_treasure.png`, `bg_victory.png`, `bg_defeat.png` | Visibly a flatter, unrendered art tier than the other 20 backdrops. Victory is the end-of-run screen. **Still open.** (Written as `bg_chest.png`, which has never existed — the chest screen draws `bg_treasure.png`. Corrected in D196 so the row names a file somebody can act on.) |
 | 9 | `scripts/deck_builder.gd:35`, `scripts/collection.gd:13` | ~~The only two screens with no backdrop — flat black. **Root cause:** both build their own `MarginContainer` + `VBoxContainer` instead of calling `UI.screen()`, which is the function that installs the backdrop.~~ **FIXED (D95).** The lesson generalised into a pillar: a helper whose whole value is uniformity needs a check that everyone is inside it. |
 | 10 | `README.md` | ~~Stale in three places: "3 pluggable models" (there are 4, and only the unlisted one is used), "decisions D1 through D38" (D92), and "Art and audio are CC0 placeholders… there is no animation yet".~~ **FIXED**, and found stale again twice since — suite counts, the decision range and the Kenney licence list were all wrong at the D111 audit. A README that restates a count will go stale again; the durable fix is to stop restating them. |
 | 11 | `project.godot` | No `[input]` map, and no `grab_focus` in `scripts/` — the keyboard does nothing until the mouse is used, no gamepad, no rebinding. |
@@ -530,13 +550,13 @@ the original review's queue. All measured at a true 1280x720 (D115: the harness 
 | what | state |
 |---|---|
 | `bg_world`, `bg_table`, `bg_ledger`, `bg_reliquary` are **half painted** — a hard seam at 42-59% down, flat grey below, across nine screen instances | handed to a concurrent session |
-| `ui/cursor.png` 9.4% opaque, `ui/logo.png` 44%, both with the artwork intact in RGB — the matte cannot key a dark subject on a near-black field | FIXED (D125, `lumakey`) |
-| `ui/boot_splash.png` shipped the generator's watermark, brightest thing in the first image anyone sees | FIXED (D125, `strip_sparkle --grow=`) |
-| logo, target ring, all seven intent telegraphs, card glow, boot splash, cursors, divider: installed and read by nothing | FIXED (D125) |
+| `ui/cursor.png` 9.4% opaque, `ui/logo.png` 44%, both with the artwork intact in RGB — the matte cannot key a dark subject on a near-black field | FIXED (D125b, `lumakey`) |
+| `ui/boot_splash.png` shipped the generator's watermark, brightest thing in the first image anyone sees | FIXED (D125b, `strip_sparkle --grow=`) |
+| logo, target ring, all seven intent telegraphs, card glow, boot splash, cursors, divider: installed and read by nothing | FIXED (D125b) |
 | `intent_attack_multi` and `intent_poison` telegraph behaviour `EnemyData.Action` cannot produce — no multi-hit action, and no enemy applies Poison | OPEN; the fix is in the enum, not the art |
-| "needs 1 clears"; every slider value rendered as "100.0"; "Block 0" shown at zero | FIXED (D125) |
-| Victory's ascension line at **3.86:1** over the lit doorway, under the 4.5:1 floor the suite holds buttons to | FIXED (D125) — 5.8:1 |
-| Encounter's three 1244px option bars; deck builder and overworld lists clipped mid-row; Shop's buttons at three x positions; Packs' "Open all" above the packs it skips | FIXED (D125) |
+| "needs 1 clears"; every slider value rendered as "100.0"; "Block 0" shown at zero | FIXED (D125b) |
+| Victory's ascension line at **3.86:1** over the lit doorway, under the 4.5:1 floor the suite holds buttons to | FIXED (D125b) — 5.8:1 |
+| Encounter's three 1244px option bars; deck builder and overworld lists clipped mid-row; Shop's buttons at three x positions; Packs' "Open all" above the packs it skips | FIXED (D125b) |
 | **12 card illustrations across 100 cards**, so a five-card hand can show the same picture twice — "Abyssal Gift" and "Kick" are pixel-identical neighbours | OPEN, and it is a content decision, not a defect |
 | Energy orbs read as three small dots at their shipped ~20px | OPEN |
 
@@ -553,52 +573,71 @@ the original review's queue. All measured at a true 1280x720 (D115: the harness 
    only runs on the five-card hand a combat start deals, so "a full hand" — one pushed
    past five by draw effects, against `FAN_OVERLAP` 0.88 — is untested. Worth a hand-size
    sweep, not a re-open.
-2. **Twelve card illustrations, one per effect family.** The manifest already
-   specifies them and `PixelArt.painted_card_art()` already prefers them. This
-   changes the look of the whole game. *(the single highest-leverage art job in the
-   list)*
+2. ~~**Twelve card illustrations, one per effect family.**~~ **DONE, and overtaken** —
+   the twelve families landed, then D131 reopened the tier at one illustration *per
+   card* and D136 painted the hundred four to a picture. `ART_ASSETS.md` reports the
+   whole list closed. This was called "the single highest-leverage art job" and it was.
 3. ~~**Rename the ~36 borrowed card names, and re-tune the 14 that copy the effect and
    the constant too.**~~ **DONE** — renamed in D98, re-tuned in D103. Eleven of the
    fourteen constants moved; `strike`/`defend` were measured at three values and kept
    at 6/5 on the numbers, and three mechanic-only cards were left alone. Verified to
    move no cell more than 12 points against a pre-change baseline.
-4. **Fix defects 3, 4, 5, 7, 9, 10** — all small, all visible.
-   **3, 4, 5, 9 and 10 are done** (3, 4, 5 and 9 in D95; 10 in D95 and again in the D111
-   doc audit). **7 is the only one still open**: the crawl header wrapping mid-phrase
-   (`iso_run.gd` `_refresh()`).
+4. ~~**Fix defects 3, 4, 5, 7, 9, 10**~~ **DONE, all six.** 3, 4, 5 and 9 in D95; 10 in
+   D95 and again in the D111 doc audit; **7 in D114** — the crawl header stopped being
+   one run-on Label and became three tiers of importance, every fact its own Label in a
+   flow container, so a row that runs out of width breaks *between* facts instead of
+   inside "AT RISK: 0 cards, 0 gold". This list said 7 was still open for eleven
+   decisions after it was fixed (D196).
 
 ### P1 — the next tier
 
-5. **Vitals as art, not strings.** HP/Block/Energy bars (9 files) plus the 7 intent
-   icons. `HP 60/60` and `hit 5` are the two most-read pieces of text in a fight and
-   both are placeholder.
-6. **Rebuild the deck builder and collection as card grids** on a backdrop. They are
-   where the deckbuilding happens and they currently look like debug screens.
-7. **Give the rewards a moment.** Pack reveal one card at a time; a Victory screen
-   that shows the haul as objects instead of a stats table; demote "Open all".
+5. ~~**Vitals as art, not strings.**~~ **DONE.** The bar and orb art is installed and
+   `combat.gd` reads it (`_bar_fill("bar_hp_fill")`, `UITheme.kit_icon("energy_orb_*")`),
+   and the seven intent telegraphs landed in D112.
+6. **Rebuild the deck builder and collection as card grids** on a backdrop. **Still
+   open** — the backdrop half was done in D95 and the two screens became one in D133,
+   but the rows are still rows. The deck builder and the collection are now one script
+   (`collection.gd`), so this is one job rather than two.
+7. ~~**Give the rewards a moment.**~~ **Mostly done.** Packs reveal one card after
+   another rather than as a text line, and the reveal is pinned so it does not scroll
+   away. The Victory screen showing the haul as objects is the half still open.
 8. **Let the isometric floor fill the screen**, and give the player figure a
-   silhouette worth being the only picture of the protagonist in the game.
-9. **Redesign the eighteen numeric relics** into twelve that change a rule. Cut the
-   duplicate outright.
+   silhouette worth being the only picture of the protagonist in the game. The figure
+   half is done — the 23 iso figures are painted (D131, anchored in D149). The floor
+   still does not fill the screen. D168 rebuilt the controls under it into a fixed pad,
+   which changes what the space around the floor is spent on.
+9. **Redesign the eighteen numeric relics** into twelve that change a rule. **Still
+   open**, except the outright duplicate: Scholar's Lens was re-cut in D95.
 
 ### P2 — worth doing, not yet
 
-10. Combat impact FX (6 files).
-11. Relic and power icons (40 files) — needed before the Relics screen is worth
-    opening.
-12. Design the empty states: 30 locked relic silhouettes, a Collection that shows what
-    you have not found.
-13. Keyboard/gamepad focus, and an `[input]` map so the crawl's keys can be rebound.
+10. ~~Combat impact FX (6 files).~~ **DONE (D129), and not as files** — `scripts/fx.gd`
+    draws all six at runtime, because an image model returns eight slashes rather than
+    eight frames of one slash.
+11. ~~Relic and power icons (40 files)~~ **DONE.** Installed *and* wired, which are two
+    jobs: `PixelArt.relic_art()` exists and `relics_screen.gd:179` calls it. The gap this
+    review named — art on disk that nothing reads — is what D115 and D121 were about.
+12. ~~Design the empty states~~ **DONE.** The Relics screen states the undiscovered count
+    once for the whole list and reads as filled-in versus empty at a glance.
+13. **Keyboard/gamepad focus, and an `[input]` map so the crawl's keys can be rebound.**
+    **Still open, and unchanged** — `project.godot` still has no `[input]` section and
+    there is still no `grab_focus` anywhere in `scripts/` (re-checked in D196). This is
+    the oldest untouched item on the list.
 14. ~~Consolidate or delete the three unused traversal models~~ **DONE (D94)**, ~~but
     drop their 26 map icons from the art manifest in the same pass~~ **DONE (D111)** —
     though not in the same pass, which is the whole finding: the models went in D94 and
     the manifest went on briefing their art for eleven more decisions.
-15. Give the mechanics on 1–3 cards either a family or a funeral.
-16. Split `DESIGN.md` by system, or give it an index.
-17. **Profile `sim_balance.gd` again.** It runs fine (~8 min at 120 trials, ~9 at 400)
-    — the appendix's original "cannot be run" claim was wrong and is corrected there —
-    but that is still far off the ~53s of measured work `8514f38` profiled, and the gap
-    is unexplained.
+15. Give the mechanics on 1–3 cards either a family or a funeral. **Still open** —
+    `damage_from_block` and `strength_mult` are still one card each.
+16. ~~Split `DESIGN.md` by system, or give it an index.~~ **DONE (D196)** — an index,
+    not a split, so no D## cross-reference in the other twelve documents had to move.
+    It is generated by `tools/design_index.sh`, because a hand-kept list of what a file
+    contains goes stale on the next decision.
+17. ~~**Profile `sim_balance.gd` again.**~~ **DONE (D99)** — and the gap this item calls
+    "unexplained" had an answer: combat was 4% of the runtime and the avoid calibration
+    was 95%, inside which the crawl was flooding four times per step with `pop_front` on
+    an Array. 1142s → 420s, with `fight_play` unmoved at 49s, which is what proved the
+    diagnosis.
 
 ---
 

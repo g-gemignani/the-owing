@@ -11,7 +11,7 @@ upstream `OFL.txt` verbatim beside it. See `fonts/PROVENANCE.txt`.
 
 | file                     | used by                        | origin                       |
 |--------------------------|--------------------------------|------------------------------|
-| main_menu.jpg            | scenes/MainMenu                | generated (Gemini 2.5 Flash) — RE-ROLL, off-style (D114) |
+| main_menu.png            | scenes/MainMenu                | generated — re-rolled twice since D114 flagged it off-style: D126 for the foreground, D134 for the green |
 | bg_&lt;dungeon_id&gt;.png      | the fight in that dungeon (12) | generated (Gemini 2.5 Flash) |
 | bg_shop.png              | scenes/Shop                    | generated (Leonardo)         |
 | bg_rest.png              | the rest overlay, RunFlow      | generated (Leonardo)         |

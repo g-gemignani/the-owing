@@ -14,6 +14,13 @@
 ##   godot --headless --script tools/install_cutouts.gd -- cards   <src_dir>
 ##   godot --headless --import
 ##
+## **`--drop-stowaways` is for the frame that came back with two monsters in it.** The
+## enemy families are bottom-anchored, which means the pipeline knows which body is the
+## subject — the one whose feet are on the floor — and can cut the other out. It refuses
+## by default and should: the honest fix is another painting, and only the caller knows
+## whether the floating shape is an intruder or a limb. Used once, on `rat_swarm`, whose
+## 1024px source was long gone and whose rat was the good half of the file (D194).
+##
 ## **The filename is the wiring, again** (D73). `PixelArt.enemy_art(id)` resolves
 ## `enemies/<archetype_id>.png` directly, so a file under the wrong name is not a
 ## mis-titled asset, it is an invisible one — indistinguishable from art that was
@@ -74,6 +81,7 @@ var _dry := false
 func _init() -> void:
 	var args := OS.get_cmdline_user_args()
 	_dry = args.has("--dry")
+	Cut.drop_stowaways = args.has("--drop-stowaways")
 	var positional: Array[String] = []
 	for a in args:
 		if not String(a).begins_with("--"):
@@ -131,6 +139,10 @@ func _init() -> void:
 			notes += "  (dropped %d stray island(s) — watermark or specks)" % Cut.dropped_islands
 		if Cut.filled_pockets > 0:
 			notes += "  (filled %d trapped background pocket(s))" % Cut.filled_pockets
+		if Cut.kept_pockets > 0:
+			notes += "  (kept %d enclosed area(s) — they carry paint, not field)" % Cut.kept_pockets
+		if Cut.dropped_stowaways > 0:
+			notes += "  (CUT %d second subject(s) out of the frame)" % Cut.dropped_stowaways
 		print("  %-24s <- %-28s %dx%d%s" % [id + ".png", path.get_file(), canvas.x, canvas.y,
 			notes])
 		wrote += 1
