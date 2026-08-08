@@ -186,73 +186,13 @@ const REDO := {
 ## out. A key here is only ever as wide as the defect actually is, and the defect
 ## shrinks — which is the same thing `REDO` itself is for, one level up.
 const REDO_DIRS := {
-	# Every figure that stands on the isometric floor, and the reason is the floor itself.
-	# The tile is 116x58 — exactly 2:1 — so the camera looks DOWN at it from about 27
-	# degrees, and the four walking directions all run diagonally across the screen. Every
-	# one of these files is drawn HEAD-ON AT EYE LEVEL and bilaterally symmetric, which is
-	# a standee standing on an isometric floor rather than a figure standing in it.
-	#
-	# It is not a slip in one batch: the 23 hand-painted figures shipped this way and the 70
-	# per-archetype ones inherited it, because the fronts were cut from combat plates that
-	# are framed head-on into the corridor BY DESIGN (Tier 2 says so). The brief above always
-	# asked for a three-quarter isometric view; nothing ever measured whether that is what
-	# arrived, because "present" is the only question this file used to ask.
-	#
-	# Two consequences beyond the look, both now real: `IsoFooting.facing_mirrored` mirrors
-	# each file to get the other two of the four directions, and a symmetric figure mirrors
-	# to ITSELF — so the whole facing model has been decorative. And a figure painted on the
-	# wrong diagonal walks sideways on half the compass once it is not symmetric.
-	"iso/": "HEAD-ON, and the floor is isometric — redraw at the camera's own angle (see the brief).",
 }
 
-## Files under a `REDO_DIRS` prefix that have ALREADY been redrawn, so the sheet stops asking
-## for them. The iso redraw (D202) is 97 files and cannot be done in one sitting: without this,
-## the prompt sheet keeps listing everything already finished, and dropping the directory rule
-## instead would stop it asking for the ones that are not.
-##
-## Grown as each sheet lands, and it goes out with the `iso/` line when it reaches all 97.
-const REDO_CLEARED := [
-	# Tier 8a, all 20: the hero's six, the three families, the four wanderers.
-	"iso/hero_s.png", "iso/hero_n.png",
-	"iso/hero_s_a.png", "iso/hero_n_a.png", "iso/hero_s_b.png", "iso/hero_n_b.png",
-	"iso/mon_swarm_s.png", "iso/mon_swarm_n.png",
-	"iso/mon_brute_s.png", "iso/mon_brute_n.png",
-	"iso/mon_caster_s.png", "iso/mon_caster_n.png",
-	"iso/wander_0_s.png", "iso/wander_0_n.png",
-	"iso/wander_1_s.png", "iso/wander_1_n.png",
-	"iso/wander_2_s.png", "iso/wander_2_n.png",
-	"iso/wander_3_s.png", "iso/wander_3_n.png",
-	# Tier 8b, six of seven. `treasure` is NOT here: the sheet came back with that cell
-	# empty, so the chest on disk is still the head-on one.
-	"iso/combat.png", "iso/elite.png", "iso/boss.png",
-	"iso/shop.png", "iso/rest.png", "iso/event.png",
-	# Tier 8c, redrawn in batches of three creatures a sheet.
-	"iso/foe/abyss_horror_s.png", "iso/foe/abyss_horror_n.png",
-	"iso/foe/bellows_brute_s.png", "iso/foe/bellows_brute_n.png",
-	"iso/foe/bellows_master_s.png", "iso/foe/bellows_master_n.png",
-	"iso/foe/bog_lurker_s.png", "iso/foe/bog_lurker_n.png",
-	"iso/foe/bone_picker_s.png", "iso/foe/bone_picker_n.png",
-	"iso/foe/brood_mother_s.png", "iso/foe/brood_mother_n.png",
-	"iso/foe/brute_s.png", "iso/foe/brute_n.png",
-	"iso/foe/cinder_knight_s.png", "iso/foe/cinder_knight_n.png",
-	"iso/foe/crypt_hound_s.png", "iso/foe/crypt_hound_n.png",
-	"iso/foe/cultist_s.png", "iso/foe/cultist_n.png",
-	"iso/foe/deep_warden_s.png", "iso/foe/deep_warden_n.png",
-	"iso/foe/drowned_thrall_s.png", "iso/foe/drowned_thrall_n.png",
-	"iso/foe/ember_hound_s.png", "iso/foe/ember_hound_n.png",
-	"iso/foe/false_step_s.png", "iso/foe/false_step_n.png",
-	"iso/foe/forge_hound_s.png", "iso/foe/forge_hound_n.png",
-	"iso/foe/fungal_host_s.png", "iso/foe/fungal_host_n.png",
-	"iso/foe/grave_moth_s.png", "iso/foe/grave_moth_n.png",
-	"iso/foe/grave_sexton_s.png", "iso/foe/grave_sexton_n.png",
-	"iso/foe/hexer_s.png", "iso/foe/hexer_n.png",
-	"iso/foe/last_vendor_s.png", "iso/foe/last_vendor_n.png",
-	"iso/foe/market_ghoul_s.png", "iso/foe/market_ghoul_n.png",
-	"iso/foe/marrow_abbot_s.png", "iso/foe/marrow_abbot_n.png",
-	"iso/foe/marrow_priest_s.png", "iso/foe/marrow_priest_n.png",
-	"iso/foe/maw_tender_s.png", "iso/foe/maw_tender_n.png",
-]
-
+## A `REDO_CLEARED` list lived here twice: once while Tier 2 was half repainted, and again
+## through the iso redraw (D202), which was 97 files across one long session. Both times the
+## midpoint is what needs it — leave the directory rule alone and the sheet asks for what is
+## already finished, drop it and it stops asking for the rest. Both times it went out with
+## the `REDO_DIRS` line when the last file landed. Bring it back the same way next time.
 ## A `REDO_CLEARED` list lived here while Tier 2 was half repainted — the thirty-five
 ## enemy plates could not be done in one sitting, and midway both available answers were
 ## wrong: leave the directory rule alone and the sheet asks for files already finished,
@@ -267,11 +207,6 @@ const REDO_CLEARED := [
 ## in one place and forgotten in another — which is exactly how the prompt sheet and
 ## the asset sheet would start disagreeing about what is wrong.
 func _redo(rel: String) -> String:
-	# Checked FIRST, so a file that has already been redrawn is clear of the directory rule
-	# that put it on the list. Every reader goes through this one function (see below), which
-	# is what stops the two sheets disagreeing about what is still outstanding.
-	if rel in REDO_CLEARED:
-		return ""
 	if REDO.has(rel):
 		return String(REDO[rel])
 	for prefix in REDO_DIRS:

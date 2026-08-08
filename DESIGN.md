@@ -12635,6 +12635,27 @@ that needs it.
 states the angle as a measurement rather than an adjective — 27 degrees, both diagonals named,
 and *why* the diagonal is not negotiable — because "slightly above" is what produced this.
 
+**Done, in one session, 97 for 97.** Sixteen sheets: the hero, the three families, the four
+wanderers, the seven pieces of furniture and all thirty-five creatures in both facings. Two
+things had to be learned the hard way and are worth writing down, because the next sheet tier
+will meet both.
+
+*The generator's grid is advisory.* One request for "EXACTLY 2 columns by 3 rows, all rows the
+same height" returned 4x2, 4x3, 2x3 and a 4-column sheet with three uneven bands, sometimes
+with a creature repeated across two cells and sometimes with four orientations where two were
+asked for. So every sheet is READ before it is installed: `--cells` picks the two wanted out
+of what arrived, and a band whose height does not match its neighbours is cropped out and
+installed on its own. Dividing such a sheet uniformly is what put an ogre's head inside the
+swarm's cell — caught by `cutout_lib.stowaways`, which is exactly the failure that guard was
+written for.
+
+*A subject can be drawn past its own cell.* The warden's maces cross both edges of every crop
+of it, so no crop has the flat border `BORDER_AGREE` requires, and it refused four attempts at
+78%, 36%, 10% and 0%. The refusal is right and the art is fine: the field is simply not
+visible at the edge any more. `tools/padregion.gd` puts it back, surrounding the crop with the
+same key colour the sheet was drawn on — which is what the matte would have seen had the cell
+been drawn to size.
+
 **What is deliberately given up.** The fronts stop being cut from the plates, so the floor
 figure is no longer the *same picture* as the arena figure — the guarantee that made D198 work.
 The match is kept by design instead: each is drawn against its own `enemies/<id>.png`. That is
