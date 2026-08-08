@@ -226,6 +226,16 @@ const REDO_CLEARED := [
 	# empty, so the chest on disk is still the head-on one.
 	"iso/combat.png", "iso/elite.png", "iso/boss.png",
 	"iso/shop.png", "iso/rest.png", "iso/event.png",
+	# Tier 8c, redrawn in batches of three creatures a sheet.
+	"iso/foe/abyss_horror_s.png", "iso/foe/abyss_horror_n.png",
+	"iso/foe/bellows_brute_s.png", "iso/foe/bellows_brute_n.png",
+	"iso/foe/bellows_master_s.png", "iso/foe/bellows_master_n.png",
+	"iso/foe/bog_lurker_s.png", "iso/foe/bog_lurker_n.png",
+	"iso/foe/bone_picker_s.png", "iso/foe/bone_picker_n.png",
+	"iso/foe/brood_mother_s.png", "iso/foe/brood_mother_n.png",
+	"iso/foe/brute_s.png", "iso/foe/brute_n.png",
+	"iso/foe/cinder_knight_s.png", "iso/foe/cinder_knight_n.png",
+	"iso/foe/crypt_hound_s.png", "iso/foe/crypt_hound_n.png",
 ]
 
 ## A `REDO_CLEARED` list lived here while Tier 2 was half repainted — the thirty-five
