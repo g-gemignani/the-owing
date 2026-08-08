@@ -358,7 +358,7 @@ def install_hints(tier: Tier, jobs: list[tuple[str, str]]) -> list[str]:
     return hints
 
 
-def build_jobs(style: str, tier: Tier, only: str | None) -> list[tuple[str, str]]:
+def build_jobs(style: str, tier: Tier, only: str | None, batch: int = 0) -> list[tuple[str, str]]:
     """(filename, prompt) pairs for a tier — ONE per sheet where the tier is a sheet.
 
     Shared by the API route and the browser route so the two cannot drift: a
@@ -376,7 +376,27 @@ def build_jobs(style: str, tier: Tier, only: str | None) -> list[tuple[str, str]
                 jobs.append((f"sheet_{label}.png", compose_sheet(style, tier, rows)))
         return jobs
     if tier.sheet:
-        return [(f"sheet_tier{tier.key}.png", compose_sheet(style, tier, tier.rows))]
+        rows = [r for r in tier.rows if not only or only in r[0]]
+        if not rows:
+            return []
+        # `--only` narrows a SHEET tier too, and `--batch` splits what is left into
+        # several sheets. Without this, Tier 8c asks for seventy subjects inside one
+        # 1024px image: about 120px of canvas each before the installer scales them to
+        # 128x192, drawn by a model that has to keep seventy designs straight at once.
+        # The whole reason these tiers are sheets is that the SET has to be mutually
+        # distinguishable, and that argument stops working long before seventy.
+        #
+        # Batches are contiguous slices of the tier's own order, so the `--cells` and
+        # `--only` lists the Godot installers want come straight off the filenames here
+        # and the positional contract survives the split.
+        if batch <= 0 or batch >= len(rows):
+            return [(f"sheet_tier{tier.key}.png", compose_sheet(style, tier, rows))]
+        jobs = []
+        for i in range(0, len(rows), batch):
+            chunk = rows[i:i + batch]
+            jobs.append((f"sheet_tier{tier.key}_{i // batch + 1:02d}.png",
+                         compose_sheet(style, tier, chunk)))
+        return jobs
     return [
         (pathlib.PurePosixPath(path).name, compose(style, tier, subject))
         for path, subject in tier.rows
@@ -557,6 +577,8 @@ def main() -> int:
     ap.add_argument("--tier", help="tier key, e.g. 2, 3, 6a")
     ap.add_argument("--out", help="staging directory to write into")
     ap.add_argument("--only", help="substring filter on the target filename")
+    ap.add_argument("--batch", type=int, default=0,
+                    help="for a SHEET tier: how many cells per sheet (0 = one sheet)")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--limit", type=int, help="stop after N images")
     ap.add_argument("--list", action="store_true", help="show tiers and exit")
@@ -623,7 +645,7 @@ def main() -> int:
             "model such as nanobanana-2 or seedream5 (D100)."
         )
 
-    jobs = build_jobs(style, tier, args.only)
+    jobs = build_jobs(style, tier, args.only, args.batch)
     if tier.groups:
         print(
             f"tier {tier.key} installs as {len(jobs)} separate SHEETS: "

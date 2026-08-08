@@ -311,11 +311,15 @@ func _ids(set_name: String) -> Array:
 		"iso_figures":
 			out.append(["iso/hero_s.png", "hero, facing you"])
 			out.append(["iso/hero_n.png", "hero, from behind"])
-			for e in ["s", "n"]:
-				for foot in ["a", "b"]:
+			# Paired by FOOT, not by facing, so each row of the two-column sheet is still
+			# one figure toward the camera beside the same figure walking away. Ordered
+			# s,n the other way round and row two would be her two front strides side by
+			# side, which is not what the column rule says the sheet means.
+			for foot in ["a", "b"]:
+				for e in ["s", "n"]:
 					out.append(["iso/hero_%s_%s.png" % [e, foot],
 						"hero %s, %s leg leading" % [
-							"facing you" if e == "s" else "from behind",
+							"toward you (down-left)" if e == "s" else "away (up-right)",
 							"left" if foot == "a" else "right"]])
 			for fam in Balance.ISO_FAMILIES:
 				out.append(["iso/mon_%s_s.png" % fam, "%s, facing you" % fam])
@@ -335,8 +339,13 @@ func _ids(set_name: String) -> Array:
 		"iso_foes":
 			for aid in PixelArt.archetype_ids():
 				var a := load("res://resources/enemies/%s.tres" % aid) as EnemyData
-				out.append(["iso/foe/%s_n.png" % aid,
-					"%s, from behind" % (a.name if a != null else String(aid))])
+				var nm: String = a.name if a != null else String(aid)
+				# A PAIR per row, in the same left/right order every iso sheet uses: the
+				# left cell walks toward the camera, the right cell is the same creature
+				# walking away. Only `_n` was emitted while the `_s` files were cut from
+				# the combat plates (D198); both are painted now (D202).
+				out.append(["iso/foe/%s_s.png" % aid, "%s, toward you (down-left)" % nm])
+				out.append(["iso/foe/%s_n.png" % aid, "%s, away (up-right)" % nm])
 		# The three fight tiers come FIRST, so the three that have to read as escalating
 		# sit next to each other on the sheet and are drawn against each other.
 		"iso_furniture":
