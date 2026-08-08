@@ -147,6 +147,33 @@ static func hero_mirrored(step: Vector2i) -> bool:
 	return step != painted
 
 
+## The same question for anything that is not the hero, asked in the terms the MODEL can
+## answer it in: is this thing walking toward the camera, and is it walking to the right?
+##
+## A monster has no `step` vector to compare against a table — it has two booleans the
+## traversal recorded when it moved (`south`, `east`). Written out against the painting
+## convention every figure in this set follows, the rule collapses to one comparison:
+##
+##   `_s` is painted looking ↙ — toward the camera and to the LEFT   (south, not east)
+##   `_n` is painted looking ↗ — away from it and to the RIGHT       (not south, east)
+##
+## so a figure is mirrored exactly when its two booleans AGREE. Both true is ↘, both false
+## is ↖, and each of those is the opposite hand of the file that would otherwise be used.
+##
+## `tests/test_art.gd` asserts this against `hero_mirrored` over all four steps rather than
+## trusting the derivation — they are one rule, and if they ever disagree the hero and the
+## monster beside her are turned different ways on the same tile.
+static func facing_mirrored(south: bool, east: bool) -> bool:
+	return south == east
+
+
+## The two booleans above, derived from a grid step. The projection's own arithmetic: `x`
+## runs ↘ and `y` runs ↙, so a step's screen travel is `dx + dy` downward and `dx - dy`
+## rightward (see `TraversalIso.DIR_ARROW`).
+static func facing_of(step: Vector2i) -> Array:
+	return [(step.x + step.y) > 0, (step.x - step.y) > 0]
+
+
 ## Where `tex` goes if it stands at the middle of the tile at `centre`, drawn `height` px
 ## tall on a tile of size `t`, with its own stand point `dx` (from `offset`).
 ##

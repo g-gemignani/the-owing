@@ -862,6 +862,18 @@ These are failure modes that have actually bitten this project. Treat each as a 
   corridor, where a hole reads as shadow. **A cutout can only be judged against something
   brighter than it** — the check is now a render onto flat magenta.
 
+- **"Present" is not "correct", and a manifest that only counts files cannot tell you.** Every
+  figure standing on the isometric floor was drawn HEAD-ON AT EYE LEVEL, while the tile is
+  116x58 — exactly 2:1 — so the camera looks down from 27 degrees and all four walking
+  directions project to screen diagonals. The brief had asked for a three-quarter isometric
+  view all along; nothing ever checked, because the only question being asked was whether the
+  file existed. The 23 hand-painted figures shipped that way and the 70 derived ones inherited
+  it faithfully, because their source plates are framed head-on into the corridor *by design*.
+  Its worst effect was silent: a bilaterally symmetric painting **mirrors to itself**, so
+  `IsoFooting`'s whole facing model — three rounds of anchor arithmetic — has been decorative
+  since it was written. The brief now states the angle as a measurement and names both
+  diagonals, because "slightly above" is the adjective that produced this (D202).
+
 - **A key colour you can find is a key colour you can see.** Asking a generator for a
   maximally-unlike backdrop makes the matte's job easy and its *residue* loud, and it
   exposed three defects that muted slate had hidden in every cutout ever installed:

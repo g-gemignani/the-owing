@@ -348,10 +348,13 @@ func _load_art() -> void:
 				# rather than a flipped rect (D154). Built once here: her left-hand facings
 				# then draw through exactly the same code as her right-hand ones, with the
 				# anchor negated, and no call site has to remember what a negative width does.
-				# Every hero painting, standing and striding: her left-hand facings are the
-				# right-hand file mirrored (D131), and a stride frame that skipped this would
-				# stand still on exactly half the compass.
-				if String(r).begins_with("hero"):
+				# EVERY figure, not just the hero. Her left-hand facings have always been the
+				# right-hand file mirrored (D131); the monsters' were not, because the art was
+				# bilaterally symmetric and mirroring it produced the same pixels — so the
+				# missing flip cost nothing and nobody noticed. Directional art makes it
+				# visible immediately: a creature painted looking down-LEFT, drawn unmirrored
+				# while it walks down-RIGHT, walks sideways.
+				if not (String(r).begins_with("floor") or String(r).begins_with("rock")):
 					var flip := IsoFooting.flipped(tex)
 					if flip != null:
 						art[r + FLIP] = flip
@@ -400,6 +403,13 @@ func _foe_role(enemy_id: String, face: String) -> String:
 		if tex != null:
 			art[role] = tex
 			stand[role] = IsoFooting.offset(tex)
+			# ...and its mirror, on the same terms as every other figure. Built here rather
+			# than in `_load_art` for the same reason the texture is: a floor uses a handful
+			# of these and building 70 mirrors to draw six is work for nothing.
+			var flip := IsoFooting.flipped(tex)
+			if flip != null:
+				art[role + FLIP] = flip
+				stand[role + FLIP] = -float(stand.get(role, 0.0))
 			return role
 	foe_missing[role] = true
 	return ""
@@ -885,6 +895,13 @@ func _draw_floor() -> void:
 					var famrole := "mon_%s_%s" % [Balance.iso_family(mcast), face]
 					if art.has(famrole):
 						mrole = famrole
+				# Which HAND of that painting. `south` says toward or away and picks the
+				# file; `east` says which of that pair of diagonals and picks the mirror —
+				# one rule shared with the hero (`IsoFooting.facing_mirrored`), so the two
+				# cannot end up turned different ways on the same floor.
+				if IsoFooting.facing_mirrored(bool(m["south"]), bool(m.get("east", false))) \
+						and art.has(mrole + FLIP):
+					mrole += FLIP
 				# A wanderer bobs only while it is actually crossing ground. One that has just
 				# come into sight has no entry in `walk_mons` and simply appears, so it stands
 				# still — which is the same distinction `_mon_slide` already makes.

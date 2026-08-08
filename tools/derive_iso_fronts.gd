@@ -39,6 +39,17 @@
 ## whole canvas to `SPRITE_H` tile-heights, so the rat then DRAWS small and the ogre fills
 ## its two tiles. Size on the floor comes out of the painting's own proportions rather than
 ## a table, which is the same trade `IsoFooting` makes for the stand point.
+## **SUPERSEDED, and it will not run without `--force`.** Deriving the fronts made the floor
+## figure identical to the arena figure, which is what fixed D198's mismatch — and a combat
+## plate is framed head-on into the corridor at eye level, while the floor camera looks down
+## from 27 degrees. Pasting one onto the other is a standee. The `_s` files are painted at the
+## camera's own angle now (D202) and the match is kept by design instead.
+##
+## The guard is the point of this paragraph: run this on a checkout with the painted fronts
+## installed and it silently replaces all thirty-five with head-on plate cuts — a regression
+## that looks like nothing, because every file is still present and still the right creature.
+## It stays in the tree because it is the answer for an archetype that has a plate and no
+## painting yet, which is exactly the state a half-finished art pass is in.
 extends SceneTree
 
 const Cut := preload("res://tools/cutout_lib.gd")
@@ -54,7 +65,9 @@ const CANVAS := Vector2i(128, 192)
 const THIN_COVER := 0.08
 
 func _init() -> void:
-	var dry := "--dry" in OS.get_cmdline_user_args()
+	var args := OS.get_cmdline_user_args()
+	var dry := "--dry" in args
+	var force := "--force" in args
 	var ids: Array = PixelArt.archetype_ids()
 	if ids.is_empty():
 		print("no archetypes found in res://resources/enemies/")
@@ -96,7 +109,13 @@ func _init() -> void:
 
 		if dry:
 			continue
+		# Refuses to overwrite a PAINTED front. A file that is already there was drawn at the
+		# floor camera's angle and is strictly better than what this tool produces; replacing
+		# it is a silent regression, so the caller has to say `--force` and mean it.
 		var dst := ProjectSettings.globalize_path(OUT + "%s_s.png" % aid)
+		if not force and FileAccess.file_exists(dst):
+			print("   SKIP %s already exists (pass --force to replace a painted front)" % aid)
+			continue
 		if img.save_png(dst) != OK:
 			print("   FAILED to write %s" % dst)
 			continue

@@ -2121,6 +2121,15 @@ func _floor_turn(field: PackedInt32Array = PackedInt32Array()) -> int:
 			var dx := target % w - here % w
 			var dy := int(target / w) - int(here / w)
 			m["south"] = (dx + dy) > 0
+			# ...and WHICH of the two toward-camera diagonals, because the sprite is drawn
+			# looking along one of them and mirrored for the other. A step's horizontal
+			# travel on screen is `(dx - dy)`, so that sign IS "to the right" — the same
+			# arithmetic the projection itself uses, rather than a second opinion about it.
+			#
+			# `south` alone was enough while every figure was symmetric: mirroring a
+			# bilaterally symmetric painting produces the same pixels, so the model never had
+			# to say which way a thing was turned. Directional art makes it a real question.
+			m["east"] = (dx - dy) > 0
 			taken.erase(here)
 			taken[target] = true
 			m["cell"] = target
@@ -2839,6 +2848,9 @@ func _load(d: Dictionary) -> void:
 			"type": int(md.get("type", Enc.COMBAT)),
 			"design": int(md.get("design", 0)),
 			"south": bool(md.get("south", true)),
+			# A save from before this existed has no facing beyond `south`. False is the
+			# unmirrored painting, which is what every such save was already drawing.
+			"east": bool(md.get("east", false)),
 			"enemy": String(md.get("enemy", "")),
 			# A save from before D197 has no pen and no guards among its `mons` at all — its
 			# guards are still standing on tiles as ELITE encounters, which resolve exactly as

@@ -186,6 +186,23 @@ const REDO := {
 ## out. A key here is only ever as wide as the defect actually is, and the defect
 ## shrinks — which is the same thing `REDO` itself is for, one level up.
 const REDO_DIRS := {
+	# Every figure that stands on the isometric floor, and the reason is the floor itself.
+	# The tile is 116x58 — exactly 2:1 — so the camera looks DOWN at it from about 27
+	# degrees, and the four walking directions all run diagonally across the screen. Every
+	# one of these files is drawn HEAD-ON AT EYE LEVEL and bilaterally symmetric, which is
+	# a standee standing on an isometric floor rather than a figure standing in it.
+	#
+	# It is not a slip in one batch: the 23 hand-painted figures shipped this way and the 70
+	# per-archetype ones inherited it, because the fronts were cut from combat plates that
+	# are framed head-on into the corridor BY DESIGN (Tier 2 says so). The brief above always
+	# asked for a three-quarter isometric view; nothing ever measured whether that is what
+	# arrived, because "present" is the only question this file used to ask.
+	#
+	# Two consequences beyond the look, both now real: `IsoFooting.facing_mirrored` mirrors
+	# each file to get the other two of the four directions, and a symmetric figure mirrors
+	# to ITSELF — so the whole facing model has been decorative. And a figure painted on the
+	# wrong diagonal walks sideways on half the compass once it is not symmetric.
+	"iso/": "HEAD-ON, and the floor is isometric — redraw at the camera's own angle (see the brief).",
 }
 
 ## A `REDO_CLEARED` list lived here while Tier 2 was half repainted — the thirty-five
@@ -985,8 +1002,8 @@ func _iso() -> void:
 	_section("Tier 8a — isometric figures",
 		"Every one of these exists and is a flat near-black silhouette; the floor is the screen a run is mostly spent on.",
 		Kind.PAINT,
-		"A small figure seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field for the matte. It is composited onto a lit stone floor at about 90px tall and anchored BY ITS FEET, so the feet must be the lowest painted pixel and there must be no ground, no shadow, no plinth and no scenery under it. The whole tier's defect is that the current set is unlit: every figure measures luma 0.16-0.21 against a floor of 0.43-0.49, so they read as holes cut in the ground rather than as people standing on it. So these must be MID-VALUE AND LIT — clearly lighter than the floor across most of their body, lit from the upper left, with real interior: cloth, metal, skin, a face. A rim light alone is what is already there and is not enough.",
-		"Two columns and one row per figure. The LEFT column faces the camera, the RIGHT column is the SAME figure from behind, same size, same colours, same silhouette width — it is one character turned around, not a second character. Flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- iso_figures <sheet.png>`")
+		"A small figure seen from the ISOMETRIC CAMERA THIS GAME ACTUALLY USES, which is not a head-on view. The floor tile is 116x58 - exactly 2:1 - so the camera looks DOWN at the floor from about 27 degrees above it. Draw the figure from that height: you see the top of its head and its shoulders, its feet are further down the frame than a head-on view would put them, and the ground it stands on would read as a flattened diamond rather than a line. It is also TURNED: the four walking directions all run diagonally across the screen, so the figure faces a DIAGONAL, three-quarter, never straight out of the frame. IT FACES DOWN AND TO THE LEFT - toward the camera and to the viewer's left, at 45 degrees, so the viewer sees the front of it and its left-hand side at once. Standing on nothing, on a flat even field for the matte: the feet must be the lowest painted pixel and there must be no ground, no shadow, no plinth and no scenery under it. Mid-value and lit from above and in front, clearly lighter than the floor across most of the body, with real interior: cloth, metal, skin, a face.",
+		"Two columns and one row per figure. LEFT column: the figure walking TOWARD the camera and to the viewer's LEFT (down-left, 45 degrees). RIGHT column: the SAME figure walking AWAY and to the viewer's RIGHT (up-right, 45 degrees) — seen from behind and above, one character turned around, not a second character, same size and colours and silhouette width. THOSE TWO ANGLES ARE NOT NEGOTIABLE: the game mirrors each file to get the other two of the four walking directions (`IsoFooting.facing_mirrored`), so a figure drawn facing straight out of the frame mirrors to itself and the mirror does nothing, and a figure drawn on the WRONG diagonal walks sideways on half the compass. Flat even background of a single colour that appears nowhere in the subject, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- iso_figures <sheet.png> --key`")
 	_add("iso/hero_s.png", "128x192", "The player, facing the camera. Standing still: this is the pose the floor draws whenever she is not mid-step.")
 	_add("iso/hero_n.png", "128x192", "The player, walking away. Standing still.")
 	# Her walk. Two poses per facing, alternated once per step by `iso_run.stride`, and the
@@ -1014,15 +1031,15 @@ func _iso() -> void:
 	_section("Tier 8c — the creature on the tile",
 		"One figure per enemy archetype, so the thing you walk toward is the thing you meet.",
 		Kind.PAINT,
-		"A small figure seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field of a single colour that appears nowhere in the subject. Anchored BY ITS FEET: the feet must be the lowest painted pixel, with no ground, no shadow, no plinth and no scenery under it. Mid-value and lit, clearly lighter than the floor across most of the body.",
-		"ONLY THE `_n` FILES ARE FOR A GENERATOR. Every `_s` is CUT FROM THE COMBAT PLATE by `tools/derive_iso_fronts.gd` and must never be painted separately — the whole point of this tier is that the floor figure and the arena figure are the same picture, and a second opinion about what a cultist looks like is the defect it exists to remove. Draw the `_n` files against the matching `enemies/<id>.png`: same creature, same colours, same proportions, turned around. Install: `godot --headless --script tools/install_sheet.gd -- iso_foes <sheet.png> --only=<ids>`")
+		"A small figure seen from the ISOMETRIC CAMERA THIS GAME ACTUALLY USES, which is not a head-on view. The floor tile is 116x58 - exactly 2:1 - so the camera looks DOWN at the floor from about 27 degrees above it. Draw the figure from that height: you see the top of its head and its shoulders, its feet are further down the frame than a head-on view would put them, and the ground it stands on would read as a flattened diamond rather than a line. It is also TURNED: the four walking directions all run diagonally across the screen, so the figure faces a DIAGONAL, three-quarter, never straight out of the frame. IT FACES DOWN AND TO THE LEFT - toward the camera and to the viewer's left, at 45 degrees, so the viewer sees the front of it and its left-hand side at once. Standing on nothing, on a flat even field for the matte: the feet must be the lowest painted pixel and there must be no ground, no shadow, no plinth and no scenery under it. Mid-value and lit from above and in front, clearly lighter than the floor across most of the body, with real interior: cloth, metal, skin, a face.",
+        "BOTH facings are painted, and the `_s` files are no longer cut from the combat plates. Deriving them made the floor figure IDENTICAL to the arena figure, which is what fixed the mismatch (D198) — but a combat plate is framed head-on into the corridor at eye level, and pasting that onto a floor the camera looks down at from 27 degrees is a standee, not a creature standing there. The match is kept by DESIGN instead: draw each one against its `enemies/<id>.png` — same creature, same colours, same proportions, same silhouette — turned onto the diagonals above. `_s` walks down-left toward the camera; `_n` is that same creature walking up-right, seen from behind and above. Install: `godot --headless --script tools/install_sheet.gd -- iso_foes <sheet.png> --key --only=<ids>`")
 	for aid in PixelArt.archetype_ids():
 		var ae := load("res://resources/enemies/%s.tres" % aid) as EnemyData
 		var nm: String = ae.name if ae != null else String(aid)
 		_add("iso/foe/%s_s.png" % aid, "128x192",
-			"**%s**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/%s.png`." % [nm, aid])
+			"**%s**, walking down-left toward the camera. The same creature as `enemies/%s.png`, turned onto the diagonal." % [nm, aid])
 		_add("iso/foe/%s_n.png" % aid, "128x192",
-			"**%s**, from behind. The same creature as `enemies/%s.png`, turned around." % [nm, aid])
+			"**%s**, walking up-right away from the camera, seen from behind and above." % [nm, aid])
 
 	_section("Tier 8b — isometric furniture",
 		"What a tile IS, read off the floor before you walk into it.",

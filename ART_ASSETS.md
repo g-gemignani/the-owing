@@ -442,76 +442,76 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-| x | `iso/foe/abyss_horror_s.png` | 128x192 | **The Maw Itself**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/abyss_horror.png`. |
-| x | `iso/foe/abyss_horror_n.png` | 128x192 | **The Maw Itself**, from behind. The same creature as `enemies/abyss_horror.png`, turned around. |
-| x | `iso/foe/bellows_brute_s.png` | 128x192 | **Bellows Brute**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/bellows_brute.png`. |
-| x | `iso/foe/bellows_brute_n.png` | 128x192 | **Bellows Brute**, from behind. The same creature as `enemies/bellows_brute.png`, turned around. |
-| x | `iso/foe/bellows_master_s.png` | 128x192 | **The Bellows-Master**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/bellows_master.png`. |
-| x | `iso/foe/bellows_master_n.png` | 128x192 | **The Bellows-Master**, from behind. The same creature as `enemies/bellows_master.png`, turned around. |
-| x | `iso/foe/bog_lurker_s.png` | 128x192 | **Bog Lurker**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/bog_lurker.png`. |
-| x | `iso/foe/bog_lurker_n.png` | 128x192 | **Bog Lurker**, from behind. The same creature as `enemies/bog_lurker.png`, turned around. |
-| x | `iso/foe/bone_picker_s.png` | 128x192 | **Bone Picker**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/bone_picker.png`. |
-| x | `iso/foe/bone_picker_n.png` | 128x192 | **Bone Picker**, from behind. The same creature as `enemies/bone_picker.png`, turned around. |
-| x | `iso/foe/brood_mother_s.png` | 128x192 | **The Brood-Mother**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/brood_mother.png`. |
-| x | `iso/foe/brood_mother_n.png` | 128x192 | **The Brood-Mother**, from behind. The same creature as `enemies/brood_mother.png`, turned around. |
-| x | `iso/foe/brute_s.png` | 128x192 | **Brute**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/brute.png`. |
-| x | `iso/foe/brute_n.png` | 128x192 | **Brute**, from behind. The same creature as `enemies/brute.png`, turned around. |
-| x | `iso/foe/cinder_knight_s.png` | 128x192 | **The Cinder Knight**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/cinder_knight.png`. |
-| x | `iso/foe/cinder_knight_n.png` | 128x192 | **The Cinder Knight**, from behind. The same creature as `enemies/cinder_knight.png`, turned around. |
-| x | `iso/foe/crypt_hound_s.png` | 128x192 | **Crypt Hound**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/crypt_hound.png`. |
-| x | `iso/foe/crypt_hound_n.png` | 128x192 | **Crypt Hound**, from behind. The same creature as `enemies/crypt_hound.png`, turned around. |
-| x | `iso/foe/cultist_s.png` | 128x192 | **Cultist**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/cultist.png`. |
-| x | `iso/foe/cultist_n.png` | 128x192 | **Cultist**, from behind. The same creature as `enemies/cultist.png`, turned around. |
-| x | `iso/foe/deep_warden_s.png` | 128x192 | **The Deep Warden**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/deep_warden.png`. |
-| x | `iso/foe/deep_warden_n.png` | 128x192 | **The Deep Warden**, from behind. The same creature as `enemies/deep_warden.png`, turned around. |
-| x | `iso/foe/drowned_thrall_s.png` | 128x192 | **Drowned Thrall**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/drowned_thrall.png`. |
-| x | `iso/foe/drowned_thrall_n.png` | 128x192 | **Drowned Thrall**, from behind. The same creature as `enemies/drowned_thrall.png`, turned around. |
-| x | `iso/foe/ember_hound_s.png` | 128x192 | **Ember Hound**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/ember_hound.png`. |
-| x | `iso/foe/ember_hound_n.png` | 128x192 | **Ember Hound**, from behind. The same creature as `enemies/ember_hound.png`, turned around. |
-| x | `iso/foe/false_step_s.png` | 128x192 | **The False Step**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/false_step.png`. |
-| x | `iso/foe/false_step_n.png` | 128x192 | **The False Step**, from behind. The same creature as `enemies/false_step.png`, turned around. |
-| x | `iso/foe/forge_hound_s.png` | 128x192 | **Forge Hound**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/forge_hound.png`. |
-| x | `iso/foe/forge_hound_n.png` | 128x192 | **Forge Hound**, from behind. The same creature as `enemies/forge_hound.png`, turned around. |
-| x | `iso/foe/fungal_host_s.png` | 128x192 | **Fungal Host**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/fungal_host.png`. |
-| x | `iso/foe/fungal_host_n.png` | 128x192 | **Fungal Host**, from behind. The same creature as `enemies/fungal_host.png`, turned around. |
-| x | `iso/foe/grave_moth_s.png` | 128x192 | **Grave Moth**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/grave_moth.png`. |
-| x | `iso/foe/grave_moth_n.png` | 128x192 | **Grave Moth**, from behind. The same creature as `enemies/grave_moth.png`, turned around. |
-| x | `iso/foe/grave_sexton_s.png` | 128x192 | **The Grave-Sexton**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/grave_sexton.png`. |
-| x | `iso/foe/grave_sexton_n.png` | 128x192 | **The Grave-Sexton**, from behind. The same creature as `enemies/grave_sexton.png`, turned around. |
-| x | `iso/foe/hexer_s.png` | 128x192 | **Hexer**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/hexer.png`. |
-| x | `iso/foe/hexer_n.png` | 128x192 | **Hexer**, from behind. The same creature as `enemies/hexer.png`, turned around. |
-| x | `iso/foe/last_vendor_s.png` | 128x192 | **The Last Vendor**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/last_vendor.png`. |
-| x | `iso/foe/last_vendor_n.png` | 128x192 | **The Last Vendor**, from behind. The same creature as `enemies/last_vendor.png`, turned around. |
-| x | `iso/foe/market_ghoul_s.png` | 128x192 | **Market Ghoul**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/market_ghoul.png`. |
-| x | `iso/foe/market_ghoul_n.png` | 128x192 | **Market Ghoul**, from behind. The same creature as `enemies/market_ghoul.png`, turned around. |
-| x | `iso/foe/marrow_abbot_s.png` | 128x192 | **The Marrow-Abbot**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/marrow_abbot.png`. |
-| x | `iso/foe/marrow_abbot_n.png` | 128x192 | **The Marrow-Abbot**, from behind. The same creature as `enemies/marrow_abbot.png`, turned around. |
-| x | `iso/foe/marrow_priest_s.png` | 128x192 | **Marrow Priest**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/marrow_priest.png`. |
-| x | `iso/foe/marrow_priest_n.png` | 128x192 | **Marrow Priest**, from behind. The same creature as `enemies/marrow_priest.png`, turned around. |
-| x | `iso/foe/maw_tender_s.png` | 128x192 | **Maw Tender**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/maw_tender.png`. |
-| x | `iso/foe/maw_tender_n.png` | 128x192 | **Maw Tender**, from behind. The same creature as `enemies/maw_tender.png`, turned around. |
-| x | `iso/foe/mycelial_lord_s.png` | 128x192 | **The Mycelial Lord**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/mycelial_lord.png`. |
-| x | `iso/foe/mycelial_lord_n.png` | 128x192 | **The Mycelial Lord**, from behind. The same creature as `enemies/mycelial_lord.png`, turned around. |
-| x | `iso/foe/ossuary_wretch_s.png` | 128x192 | **Ossuary Wretch**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/ossuary_wretch.png`. |
-| x | `iso/foe/ossuary_wretch_n.png` | 128x192 | **Ossuary Wretch**, from behind. The same creature as `enemies/ossuary_wretch.png`, turned around. |
-| x | `iso/foe/pale_acolyte_s.png` | 128x192 | **Pale Acolyte**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/pale_acolyte.png`. |
-| x | `iso/foe/pale_acolyte_n.png` | 128x192 | **Pale Acolyte**, from behind. The same creature as `enemies/pale_acolyte.png`, turned around. |
-| x | `iso/foe/plague_rat_s.png` | 128x192 | **Plague Rat**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/plague_rat.png`. |
-| x | `iso/foe/plague_rat_n.png` | 128x192 | **Plague Rat**, from behind. The same creature as `enemies/plague_rat.png`, turned around. |
-| x | `iso/foe/rat_swarm_s.png` | 128x192 | **Rat**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/rat_swarm.png`. |
-| x | `iso/foe/rat_swarm_n.png` | 128x192 | **Rat**, from behind. The same creature as `enemies/rat_swarm.png`, turned around. |
-| x | `iso/foe/rot_priest_s.png` | 128x192 | **Rot Priest**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/rot_priest.png`. |
-| x | `iso/foe/rot_priest_n.png` | 128x192 | **Rot Priest**, from behind. The same creature as `enemies/rot_priest.png`, turned around. |
-| x | `iso/foe/slag_wretch_s.png` | 128x192 | **Slag Wretch**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/slag_wretch.png`. |
-| x | `iso/foe/slag_wretch_n.png` | 128x192 | **Slag Wretch**, from behind. The same creature as `enemies/slag_wretch.png`, turned around. |
-| x | `iso/foe/spore_thing_s.png` | 128x192 | **Spore Thing**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/spore_thing.png`. |
-| x | `iso/foe/spore_thing_n.png` | 128x192 | **Spore Thing**, from behind. The same creature as `enemies/spore_thing.png`, turned around. |
-| x | `iso/foe/the_gardener_s.png` | 128x192 | **The Gardener**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/the_gardener.png`. |
-| x | `iso/foe/the_gardener_n.png` | 128x192 | **The Gardener**, from behind. The same creature as `enemies/the_gardener.png`, turned around. |
-| x | `iso/foe/tomb_guard_s.png` | 128x192 | **Tomb Guard**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/tomb_guard.png`. |
-| x | `iso/foe/tomb_guard_n.png` | 128x192 | **Tomb Guard**, from behind. The same creature as `enemies/tomb_guard.png`, turned around. |
-| x | `iso/foe/warden_s.png` | 128x192 | **The Forge-Warden**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/warden.png`. |
-| x | `iso/foe/warden_n.png` | 128x192 | **The Forge-Warden**, from behind. The same creature as `enemies/warden.png`, turned around. |
+| x | `iso/foe/abyss_horror_s.png` | 128x192 | **The Maw Itself**, walking down-left toward the camera. The same creature as `enemies/abyss_horror.png`, turned onto the diagonal. |
+| x | `iso/foe/abyss_horror_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/bellows_brute_s.png` | 128x192 | **Bellows Brute**, walking down-left toward the camera. The same creature as `enemies/bellows_brute.png`, turned onto the diagonal. |
+| x | `iso/foe/bellows_brute_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/bellows_master_s.png` | 128x192 | **The Bellows-Master**, walking down-left toward the camera. The same creature as `enemies/bellows_master.png`, turned onto the diagonal. |
+| x | `iso/foe/bellows_master_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/bog_lurker_s.png` | 128x192 | **Bog Lurker**, walking down-left toward the camera. The same creature as `enemies/bog_lurker.png`, turned onto the diagonal. |
+| x | `iso/foe/bog_lurker_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/bone_picker_s.png` | 128x192 | **Bone Picker**, walking down-left toward the camera. The same creature as `enemies/bone_picker.png`, turned onto the diagonal. |
+| x | `iso/foe/bone_picker_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/brood_mother_s.png` | 128x192 | **The Brood-Mother**, walking down-left toward the camera. The same creature as `enemies/brood_mother.png`, turned onto the diagonal. |
+| x | `iso/foe/brood_mother_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/brute_s.png` | 128x192 | **Brute**, walking down-left toward the camera. The same creature as `enemies/brute.png`, turned onto the diagonal. |
+| x | `iso/foe/brute_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/cinder_knight_s.png` | 128x192 | **The Cinder Knight**, walking down-left toward the camera. The same creature as `enemies/cinder_knight.png`, turned onto the diagonal. |
+| x | `iso/foe/cinder_knight_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/crypt_hound_s.png` | 128x192 | **Crypt Hound**, walking down-left toward the camera. The same creature as `enemies/crypt_hound.png`, turned onto the diagonal. |
+| x | `iso/foe/crypt_hound_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/cultist_s.png` | 128x192 | **Cultist**, walking down-left toward the camera. The same creature as `enemies/cultist.png`, turned onto the diagonal. |
+| x | `iso/foe/cultist_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/deep_warden_s.png` | 128x192 | **The Deep Warden**, walking down-left toward the camera. The same creature as `enemies/deep_warden.png`, turned onto the diagonal. |
+| x | `iso/foe/deep_warden_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/drowned_thrall_s.png` | 128x192 | **Drowned Thrall**, walking down-left toward the camera. The same creature as `enemies/drowned_thrall.png`, turned onto the diagonal. |
+| x | `iso/foe/drowned_thrall_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/ember_hound_s.png` | 128x192 | **Ember Hound**, walking down-left toward the camera. The same creature as `enemies/ember_hound.png`, turned onto the diagonal. |
+| x | `iso/foe/ember_hound_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/false_step_s.png` | 128x192 | **The False Step**, walking down-left toward the camera. The same creature as `enemies/false_step.png`, turned onto the diagonal. |
+| x | `iso/foe/false_step_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/forge_hound_s.png` | 128x192 | **Forge Hound**, walking down-left toward the camera. The same creature as `enemies/forge_hound.png`, turned onto the diagonal. |
+| x | `iso/foe/forge_hound_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/fungal_host_s.png` | 128x192 | **Fungal Host**, walking down-left toward the camera. The same creature as `enemies/fungal_host.png`, turned onto the diagonal. |
+| x | `iso/foe/fungal_host_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/grave_moth_s.png` | 128x192 | **Grave Moth**, walking down-left toward the camera. The same creature as `enemies/grave_moth.png`, turned onto the diagonal. |
+| x | `iso/foe/grave_moth_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/grave_sexton_s.png` | 128x192 | **The Grave-Sexton**, walking down-left toward the camera. The same creature as `enemies/grave_sexton.png`, turned onto the diagonal. |
+| x | `iso/foe/grave_sexton_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/hexer_s.png` | 128x192 | **Hexer**, walking down-left toward the camera. The same creature as `enemies/hexer.png`, turned onto the diagonal. |
+| x | `iso/foe/hexer_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/last_vendor_s.png` | 128x192 | **The Last Vendor**, walking down-left toward the camera. The same creature as `enemies/last_vendor.png`, turned onto the diagonal. |
+| x | `iso/foe/last_vendor_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/market_ghoul_s.png` | 128x192 | **Market Ghoul**, walking down-left toward the camera. The same creature as `enemies/market_ghoul.png`, turned onto the diagonal. |
+| x | `iso/foe/market_ghoul_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/marrow_abbot_s.png` | 128x192 | **The Marrow-Abbot**, walking down-left toward the camera. The same creature as `enemies/marrow_abbot.png`, turned onto the diagonal. |
+| x | `iso/foe/marrow_abbot_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/marrow_priest_s.png` | 128x192 | **Marrow Priest**, walking down-left toward the camera. The same creature as `enemies/marrow_priest.png`, turned onto the diagonal. |
+| x | `iso/foe/marrow_priest_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/maw_tender_s.png` | 128x192 | **Maw Tender**, walking down-left toward the camera. The same creature as `enemies/maw_tender.png`, turned onto the diagonal. |
+| x | `iso/foe/maw_tender_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/mycelial_lord_s.png` | 128x192 | **The Mycelial Lord**, walking down-left toward the camera. The same creature as `enemies/mycelial_lord.png`, turned onto the diagonal. |
+| x | `iso/foe/mycelial_lord_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/ossuary_wretch_s.png` | 128x192 | **Ossuary Wretch**, walking down-left toward the camera. The same creature as `enemies/ossuary_wretch.png`, turned onto the diagonal. |
+| x | `iso/foe/ossuary_wretch_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/pale_acolyte_s.png` | 128x192 | **Pale Acolyte**, walking down-left toward the camera. The same creature as `enemies/pale_acolyte.png`, turned onto the diagonal. |
+| x | `iso/foe/pale_acolyte_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/plague_rat_s.png` | 128x192 | **Plague Rat**, walking down-left toward the camera. The same creature as `enemies/plague_rat.png`, turned onto the diagonal. |
+| x | `iso/foe/plague_rat_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/rat_swarm_s.png` | 128x192 | **Rat**, walking down-left toward the camera. The same creature as `enemies/rat_swarm.png`, turned onto the diagonal. |
+| x | `iso/foe/rat_swarm_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/rot_priest_s.png` | 128x192 | **Rot Priest**, walking down-left toward the camera. The same creature as `enemies/rot_priest.png`, turned onto the diagonal. |
+| x | `iso/foe/rot_priest_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/slag_wretch_s.png` | 128x192 | **Slag Wretch**, walking down-left toward the camera. The same creature as `enemies/slag_wretch.png`, turned onto the diagonal. |
+| x | `iso/foe/slag_wretch_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/spore_thing_s.png` | 128x192 | **Spore Thing**, walking down-left toward the camera. The same creature as `enemies/spore_thing.png`, turned onto the diagonal. |
+| x | `iso/foe/spore_thing_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/the_gardener_s.png` | 128x192 | **The Gardener**, walking down-left toward the camera. The same creature as `enemies/the_gardener.png`, turned onto the diagonal. |
+| x | `iso/foe/the_gardener_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/tomb_guard_s.png` | 128x192 | **Tomb Guard**, walking down-left toward the camera. The same creature as `enemies/tomb_guard.png`, turned onto the diagonal. |
+| x | `iso/foe/tomb_guard_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/warden_s.png` | 128x192 | **The Forge-Warden**, walking down-left toward the camera. The same creature as `enemies/warden.png`, turned onto the diagonal. |
+| x | `iso/foe/warden_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
 
 ## Tier 8b — isometric furniture
 

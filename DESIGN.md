@@ -189,6 +189,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D199** | [Six plates had holes in them, and the arena was the wrong place to look](#d199--six-plates-had-holes-in-them-and-the-arena-was-the-wrong-place-to-look) |
 | **D200** | [A key colour you can find is a key colour you can see](#d200--a-key-colour-you-can-find-is-a-key-colour-you-can-see) |
 | **D201** | [She was sliding, and the second effect had to be a stretch](#d201--she-was-sliding-and-the-second-effect-had-to-be-a-stretch) |
+| **D202** | [The figures were drawn head-on and the floor is not](#d202--the-figures-were-drawn-head-on-and-the-floor-is-not) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -12587,3 +12588,58 @@ ground — one that has just come into sight simply appears, which is the distin
 `_begin_walk` rather than off a clock, so the gait follows the model's steps and cannot drift
 out of phase with a walk that pauses for a fight; a checkout without them falls back to the
 standing painting and still walks.
+
+### D202 — The figures were drawn head-on and the floor is not
+
+Asked whether the sprites were wrong, because the dungeon is isometric and they look like they
+are facing the camera. They are, and the floor's own numbers say how wrong: the tile is
+**116x58, exactly 2:1**, so the camera looks down from `atan(0.5)` = **26.6 degrees** above the
+floor, and all four walking directions project to screen DIAGONALS (`DIR_ARROW` is ↘ ↖ ↙ ↗ —
+there is no direction that walks straight up the screen). Every figure is drawn head-on at eye
+level and bilaterally symmetric. That is a standee standing *on* an isometric floor rather than
+a figure standing *in* it.
+
+**It is not a slip in one batch, and the brief already said so.** Tier 8a has always asked for
+"three-quarter ISOMETRIC view from slightly above". The 23 hand-painted figures shipped head-on
+anyway, and the 70 per-archetype ones inherited it — necessarily, because D198 cut the fronts
+from combat plates, and Tier 2 frames those *head-on into the corridor by design*. The
+derivation was working perfectly; it was faithfully propagating a framing that belongs to a
+different camera. Nothing measured it because **"present" was the only question the manifest
+ever asked**, and every one of these files is present.
+
+**The second consequence is worse than the look, and it had been invisible for the same
+reason.** `IsoFooting` mirrors each file to get two of the four directions (D131/D154) — and a
+bilaterally symmetric painting mirrors to *itself*. So the entire facing model has been
+decorative: three rounds of anchor arithmetic were spent on mirrored facings that could not
+have looked different either way. Monsters were never mirrored at all (`FLIP` was built only
+for roles starting with `hero`), and that cost nothing for exactly the same reason.
+
+**So the rule was restated in terms the model can answer.** A monster has no step vector, only
+what the traversal recorded when it moved, so `TraversalIso` now stores `east` beside `south` —
+`(dx - dy) > 0`, which is the projection's own arithmetic for "travelled right" rather than a
+second opinion about it. Written against the painting convention, mirroring collapses to one
+comparison:
+
+    `_s` is painted looking ↙ — toward the camera and to the LEFT   (south, not east)
+    `_n` is painted looking ↗ — away from it and to the RIGHT       (not south, east)
+    mirrored  ==  south == east
+
+`tests/test_art.gd` asserts that against `hero_mirrored` over all four steps rather than
+trusting the derivation: they are one rule, and if they ever disagree the hero and the creature
+beside her face opposite ways on the same tile. Landing it while the art is still symmetric is
+free — mirroring a symmetric sprite changes nothing — so the code is in place before the art
+that needs it.
+
+**97 files go back on the list**: 20 figures, 70 creatures, 7 pieces of furniture, via
+`REDO_DIRS`. The computed floor and rock materials are correctly untouched. The brief now
+states the angle as a measurement rather than an adjective — 27 degrees, both diagonals named,
+and *why* the diagonal is not negotiable — because "slightly above" is what produced this.
+
+**What is deliberately given up.** The fronts stop being cut from the plates, so the floor
+figure is no longer the *same picture* as the arena figure — the guarantee that made D198 work.
+The match is kept by design instead: each is drawn against its own `enemies/<id>.png`. That is
+a weaker promise and it is the right trade, because the thing it buys — a figure at the
+camera's angle — cannot be had from a plate framed for a different one. `derive_iso_fronts.gd`
+stays as the answer for an archetype with a plate and no painting yet, but it now refuses to
+overwrite a painted front without `--force`: replacing one is a regression that looks like
+nothing, since every file is still present and still the right creature.

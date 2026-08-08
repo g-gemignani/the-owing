@@ -1008,6 +1008,30 @@ func _init() -> void:
 	print("  (info: worst iso stand point is %s, %.1f%% of its own width off centre)" % [
 		worst_role, worst * 100.0])
 
+	# --- the hero's mirror rule and the monsters' are ONE rule -------------------------
+	#
+	# The hero picks her mirror by comparing a step against the diagonal her file was painted
+	# along (`HERO_PAINTED`). A monster cannot: it has no step vector, only the two booleans
+	# the traversal recorded when it moved. `facing_mirrored` restates the same rule in those
+	# terms, and this is the check that the restatement is faithful — if the two ever
+	# disagree, the hero and the creature beside her face opposite ways on the same tile, on
+	# exactly half the compass, which is the shape of every facing bug this file already
+	# guards against (D131, D154).
+	for step in TraversalIso.DIRS:
+		var f: Array = IsoFooting.facing_of(step)
+		var by_bools: bool = IsoFooting.facing_mirrored(bool(f[0]), bool(f[1]))
+		var by_step: bool = IsoFooting.hero_mirrored(step)
+		if by_bools != by_step:
+			fails += 1
+			print("FAIL step %s: hero mirrors %s, the same facing as booleans mirrors %s" % [
+				step, by_step, by_bools])
+		# ...and the boolean pair has to round-trip the direction it came from, or the
+		# traversal is recording something other than what the projection does.
+		var want_south: bool = (step.x + step.y) > 0
+		if bool(f[0]) != want_south:
+			fails += 1
+			print("FAIL step %s: facing_of says south=%s" % [step, f[0]])
+
 	# --- the gait starts and ends on the ground ---------------------------------------
 	#
 	# A walking figure is lifted and squashed over the length of one step, and the only
