@@ -8,7 +8,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**97 files can be generated.** The rest of the list cannot, and the sections below
+**71 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -27,7 +27,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 97 times.
+   improve it between images. Its job is to be identical 71 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -123,37 +123,7 @@ Nothing to generate here — all 3 present.
 
 ## Tier 8a — isometric figures
 
-A small figure seen from the ISOMETRIC CAMERA THIS GAME ACTUALLY USES, which is not a head-on view. The floor tile is 116x58 - exactly 2:1 - so the camera looks DOWN at the floor from about 27 degrees above it. Draw the figure from that height: you see the top of its head and its shoulders, its feet are further down the frame than a head-on view would put them, and the ground it stands on would read as a flattened diamond rather than a line. It is also TURNED: the four walking directions all run diagonally across the screen, so the figure faces a DIAGONAL, three-quarter, never straight out of the frame. IT FACES DOWN AND TO THE LEFT - toward the camera and to the viewer's left, at 45 degrees, so the viewer sees the front of it and its left-hand side at once. Standing on nothing, on a flat even field for the matte: the feet must be the lowest painted pixel and there must be no ground, no shadow, no plinth and no scenery under it. Mid-value and lit from above and in front, clearly lighter than the floor across most of the body, with real interior: cloth, metal, skin, a face.
-
-**Generate this tier as ONE image, not 20.** Two columns and one row per figure. LEFT column: the figure walking TOWARD the camera and to the viewer's LEFT (down-left, 45 degrees). RIGHT column: the SAME figure walking AWAY and to the viewer's RIGHT (up-right, 45 degrees) — seen from behind and above, one character turned around, not a second character, same size and colours and silhouette width. THOSE TWO ANGLES ARE NOT NEGOTIABLE: the game mirrors each file to get the other two of the four walking directions (`IsoFooting.facing_mirrored`), so a figure drawn facing straight out of the frame mirrors to itself and the mirror does nothing, and a figure drawn on the WRONG diagonal walks sideways on half the compass. Flat even background of a single colour that appears nowhere in the subject, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- iso_figures <sheet.png> --key`
-Cells in the order of the table below, left to right then top to bottom.
-
-**20 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
-
-*All 20 have the same defect: HEAD-ON, and the floor is isometric — redraw at the camera's own angle (see the brief)..*
-
-| save as | size | subject |
-|---|---|---|
-| `iso/hero_s.png` | 128x192 | The player, facing the camera. Standing still: this is the pose the floor draws whenever she is not mid-step. |
-| `iso/hero_n.png` | 128x192 | The player, walking away. Standing still. |
-| `iso/hero_s_a.png` | 128x192 | The player facing the camera, mid-stride with her LEFT leg leading. Same character, same cloak, same colours and the same height as `hero_s.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
-| `iso/hero_s_b.png` | 128x192 | The player facing the camera, mid-stride with her RIGHT leg leading. Same character, same cloak, same colours and the same height as `hero_s.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
-| `iso/hero_n_a.png` | 128x192 | The player walking away, mid-stride with her LEFT leg leading. Same character, same cloak, same colours and the same height as `hero_n.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
-| `iso/hero_n_b.png` | 128x192 | The player walking away, mid-stride with her RIGHT leg leading. Same character, same cloak, same colours and the same height as `hero_n.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
-| `iso/mon_swarm_s.png` | 128x192 | A swarm, facing the camera. It IS the fight this tile becomes, so it must match the arena's swarm (D85). |
-| `iso/mon_swarm_n.png` | 128x192 | The same swarm, from behind. |
-| `iso/mon_brute_s.png` | 128x192 | A brute, facing the camera. It IS the fight this tile becomes, so it must match the arena's brute (D85). |
-| `iso/mon_brute_n.png` | 128x192 | The same brute, from behind. |
-| `iso/mon_caster_s.png` | 128x192 | A caster, facing the camera. It IS the fight this tile becomes, so it must match the arena's caster (D85). |
-| `iso/mon_caster_n.png` | 128x192 | The same caster, from behind. |
-| `iso/wander_0_s.png` | 128x192 | Wanderer design 0, facing the camera — something else walking the floor. |
-| `iso/wander_0_n.png` | 128x192 | Wanderer design 0, from behind. |
-| `iso/wander_1_s.png` | 128x192 | Wanderer design 1, facing the camera — something else walking the floor. |
-| `iso/wander_1_n.png` | 128x192 | Wanderer design 1, from behind. |
-| `iso/wander_2_s.png` | 128x192 | Wanderer design 2, facing the camera — something else walking the floor. |
-| `iso/wander_2_n.png` | 128x192 | Wanderer design 2, from behind. |
-| `iso/wander_3_s.png` | 128x192 | Wanderer design 3, facing the camera — something else walking the floor. |
-| `iso/wander_3_n.png` | 128x192 | Wanderer design 3, from behind. |
+Nothing to generate here — all 20 present.
 
 ## Tier 8c — the creature on the tile
 
@@ -243,20 +213,15 @@ Cells in the order of the table below, left to right then top to bottom.
 
 A small object or prop seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field for the matte, anchored by its base. Same lighting and same value rule as Tier 8a: clearly lighter than the floor, lit from the upper left, real material. No ground, no shadow, no scenery.
 
-**Generate this tier as ONE image, not 7.** One row of seven, in the order of the table below. Flat even background, nothing touching a cell edge. THE THREE FIGHT MARKERS ARE THE WHOLE POINT OF THIS SHEET and they are why it is drawn as a set: today `combat`, `elite` and `boss` are the same silhouette to the pixel, so the floor cannot tell you whether the room ahead is a trash fight or the thing that ends the run, and that is the one decision the map exists to support. Give the three visibly ESCALATING silhouettes — bigger, taller, more of it — not three tints of one shape. Install: `godot --headless --script tools/install_sheet.gd -- iso_furniture <sheet.png>`
-Cells in the order of the table below, left to right then top to bottom.
+**Generate these as ONE image, not 1.** A 1x1 grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is a RE-ROLL of 1 of this tier's 7 files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- iso_furniture <sheet.png> --only=treasure`
 
-**7 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+**1 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
 
-*All 7 have the same defect: HEAD-ON, and the floor is isometric — redraw at the camera's own angle (see the brief)..*
+| save as | size | what is wrong with the one we have |
+|---|---|---|
+| `iso/treasure.png` | 128x192 | HEAD-ON, and the floor is isometric — redraw at the camera's own angle (see the brief). |
 
 | save as | size | subject |
 |---|---|---|
-| `iso/combat.png` | 128x192 | An ordinary fight waiting on this tile. |
-| `iso/elite.png` | 128x192 | A harder fight — bigger than `combat.png` at a glance. |
-| `iso/boss.png` | 128x192 | The floor's boss — unmistakably the biggest of the three. |
-| `iso/shop.png` | 128x192 | A merchant's stall, nobody behind it. |
-| `iso/rest.png` | 128x192 | A campfire. A light source, so it is the one thing here that glows. |
-| `iso/event.png` | 128x192 | A standing rune-stone. Something to read, not to fight. |
 | `iso/treasure.png` | 128x192 | A chest, shut. |
 
