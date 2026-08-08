@@ -87,6 +87,42 @@ const STD_R := 2
 ## transparent, an inked outline stays fully opaque, and a genuinely soft edge lands in
 ## between, which is what it already was.
 const EDGE_BAND := 3
+## How far `despill_edge` looks for clean interior colour to repaint a contaminated rim pixel
+## with. Two is enough to reach past the rim itself on every silhouette measured here, and
+## small enough that the colour it borrows is genuinely local — a wider radius averages a
+## boot into a cloak.
+const DESPILL_R := 2
+## How close to the sampled field a surviving opaque pixel has to be before it is called
+## contamination. LOOSER than `TOL`, because these are blends: a 50/50 mix of magenta and
+## dark fur is nowhere near `TOL` of pure magenta and is still unmistakably wrong. The risk of
+## going loose is repainting a subject pixel that genuinely resembles the field, and it is
+## bounded — the replacement is the mean of that pixel's own clean neighbours, so the worst
+## case is a rim pixel taking the colour of the paint 2px inside it.
+const DESPILL_PULL := 0.45
+## How many times to re-run the despill. Each pass reaches one ring further into a feature
+## too thin to have an interior; four covers the thinnest thing in the set (a moth's antenna)
+## and the loop stops early the moment a pass changes nothing, so this is a ceiling rather
+## than a cost.
+const DESPILL_PASSES := 4
+## How far the despill will reach when nothing clean is found at `DESPILL_R`. Bounded because
+## the further it goes the less the borrowed colour has to do with the pixel it lands on;
+## eight is about a fifth of the short side of a cell at these sizes, and every feature in
+## the set is resolved well inside it.
+const DESPILL_WIDE := 8
+## How far the subject's colour is pushed out into the transparent region. Three rings is
+## comfortably more than any filter or downscale reaches: `place`'s LANCZOS kernel touches
+## about two texels and a LINEAR magnification one, so past this nothing is ever sampled.
+## Going wider is not free — it is a full pass over the image each time.
+const BLEED_PASSES := 3
+## How close to the sampled field a pixel must be for `key_clear` to call it background.
+## Between `HOLE_TOL` (the untouched field, ~0) and `DESPILL_PULL` (a rim blend): this has to
+## catch a pixel that is mostly key and mixed with a little subject, without reaching a pixel
+## that is mostly subject. Only ever used on a sheet the caller declared keyed.
+const KEY_TOL := 0.30
+## Set by an installer when the source was drawn on a chroma key — a flat field of a colour
+## the brief guaranteed appears nowhere in the subject. Enables `key_clear`. Off by default,
+## because that guarantee is a property of the PROMPT, not of the image.
+static var assume_keyed := false
 ## How much brighter than the field a pixel has to be to be called the subject's own light
 ## rather than the subject (`clear_bloom`), in 0-1 luma. Small on purpose: the condition that
 ## does the work is reachability, and this only has to exclude the field's own noise.
@@ -185,6 +221,9 @@ static func cut(img: Image, canvas: Vector2i, anchor_bottom: bool) -> String:
 	# report the previous image's pockets — a per-file counter has to be cleared per file.
 	filled_pockets = 0
 	kept_pockets = 0
+	despilled = 0
+	bled = 0
+	key_cleared = 0
 	var a := alpha_of(img)
 	var matted := false
 	if opaque_fraction(a) > 0.995:
@@ -200,11 +239,32 @@ static func cut(img: Image, canvas: Vector2i, anchor_bottom: bool) -> String:
 		# Grade the rim by colour rather than eroding it off. `erode_and_soften` is still the
 		# answer for an image that arrived WITH alpha, where there is no field colour to
 		# measure against and a 1px erode plus a blur is the best guess available.
+		# On a keyed sheet, take the key out everywhere first — the passes below are about
+		# rims and specks, and they should not be handed a slab of pure key to feather.
+		if assume_keyed:
+			key_cleared = key_clear(img, a, last_field, w, h)
+			despeckle(a, w, h)
 		feather_edge(img, a, last_field, w, h)
 		# And despeckle AGAIN: grading a rim to zero can cut a one-pixel filament that was
 		# holding a speck onto the body, and the speck is then an island that the first pass
 		# never saw. Eight of them survived on the first mummy, at 1-6 px each.
 		despeckle(a, w, h)
+		# Then take the field's colour off whatever rim is still opaque. AFTER the feather,
+		# because the feather decides which pixels are still part of the subject at all, and
+		# there is no point repainting one that is about to be graded away.
+		# Repeated until it stops finding anything. One pass cannot clean a THIN feature —
+		# a finger, an antenna, a spider's leg — because every pixel of it is rim, so there
+		# is no clean interior nearby to borrow from and `despill_edge` correctly leaves it
+		# alone. But a pixel it DID repaint no longer leans toward the field, so on the next
+		# pass it is itself a valid source and the clean colour walks inward one ring at a
+		# time. Measured over the 35 back views: one pass left 2579 visibly magenta pixels,
+		# concentrated in exactly those thin features, and the hexer's raised fingers were
+		# pink at the size the floor actually draws them.
+		for _dp in DESPILL_PASSES:
+			var n := despill_edge(img, a, last_field, w, h)
+			despilled += n
+			if n == 0:
+				break
 	else:
 		erode_and_soften(a, w, h)
 	# Only on the bottom-anchored families, because that anchor is the premise the check
@@ -216,7 +276,31 @@ static func cut(img: Image, canvas: Vector2i, anchor_bottom: bool) -> String:
 		if stow != "":
 			return stow
 	apply_alpha(img, a)
-	return place(img, a, canvas, anchor_bottom)
+	# Repaint the cleared region from the subject BEFORE `place` scales anything, so the
+	# downscale has no backdrop left to mix back in.
+	bled = bleed_alpha(img, w, h)
+	var placed := place(img, a, canvas, anchor_bottom)
+	if placed != "" or not assume_keyed:
+		return placed
+
+	# ...and once more on the FINAL canvas, because `place` RESIZES. `bleed_alpha` above
+	# repaints three rings out from the subject, which is everything a filter samples — but a
+	# wide transparent gap between two thin features (a spider's legs, a hexer's fingers) is
+	# deeper than three rings, so it still holds the key colour in its middle, and LANCZOS
+	# reaches into it while shrinking the cell to 128x192. The result is magenta mixed back
+	# into exactly the thin features the pre-resize despill had just cleaned: measured, the
+	# hexer's fingers came out pink after a despill that reported 293 pixels repaired.
+	#
+	# Doing it here as well costs one more pass over a small image and is the only place the
+	# post-resize pixels exist at all.
+	var fa := alpha_of(img)
+	for _fp in DESPILL_PASSES:
+		var n := despill_edge(img, fa, last_field, canvas.x, canvas.y)
+		despilled += n
+		if n == 0:
+			break
+	bled += bleed_alpha(img, canvas.x, canvas.y)
+	return ""
 
 
 ## A FILLED rectangle, not a cutout: no matte, no trim, no alpha.
@@ -293,6 +377,18 @@ static var filled_pockets := 0
 ## background pocket the tool has now declined to cut. Either the art is fine and this is
 ## the guard working, or there is a slab of field left in the file.
 static var kept_pockets := 0
+## How many rim pixels `despill_edge` repainted on the last `cut`. Reported for the same
+## reason the counters around it are: from inside the library, a rim cleaned of the field's
+## colour and a subject smeared inward look identical, and only the caller can say which one
+## a four-figure count means.
+static var despilled := 0
+## How many transparent pixels `bleed_alpha` repainted on the last `cut`. Large numbers are
+## normal and expected — a cutout is mostly transparent — so this is a sign of life rather
+## than a warning, and a ZERO on a matted image is the thing worth noticing.
+static var bled := 0
+## How many pixels `key_clear` removed on the last `cut`. Zero when the caller did not
+## declare the source keyed, which is the ordinary case.
+static var key_cleared := 0
 ## Luminance spread of the last `mono_alpha()` — how much glyph there was to find.
 static var last_mono_range := 0.0
 ## The field colour the last `matte()` sampled, for the feather pass that follows it.
@@ -503,6 +599,243 @@ static func feather_edge(img: Image, a: PackedByteArray, bg: Vector3, w: int, h:
 		var d: float = maxf(maxf(absf(c.r - bg.x), absf(c.g - bg.y)), absf(c.b - bg.z))
 		var t: float = clampf((d - HOLE_TOL) / (TOL - HOLE_TOL), 0.0, 1.0)
 		a[i] = int(round(float(a[i]) * t))
+
+
+## Clear EVERY pixel that is essentially the field colour, enclosed or not.
+##
+## `fill_trapped` deliberately only clears a pocket that is sealed off from the frame, and
+## that caution is right for the art this library was built on: those fields were muted
+## slate, and a subject pixel can legitimately be slate. Enclosure is what separates "field
+## the fill could not reach" from "a grey pauldron".
+##
+## A CHROMA-KEYED sheet is a different contract. The brief tells the generator to lay the
+## subjects on one flat field of a colour that appears nowhere in the subject, and when that
+## holds, the key colour IS background wherever it appears — enclosed, half-open, or a notch
+## in a silhouette that the border flood could not turn into. Measured on the first keyed
+## batch, `fill_trapped` left 108-724 fully opaque and 497-1094 semi-transparent magenta
+## pixels per figure, in the gaps between limbs: bright pink patches inside the creature.
+##
+## So this is the stronger rule, and it is OPT-IN precisely because it is stronger — the
+## caller says whether the sheet was keyed (`assume_keyed`), because only the caller knows
+## whether the promise "this colour is nowhere in the subject" was actually made. Applying it
+## to the older muted-field art would cut holes in exactly the places `fill_trapped` is
+## careful about.
+##
+## `KEY_TOL` is deliberately generous where `HOLE_TOL` is tight: a semi-transparent rim pixel
+## is a BLEND of key and subject, so it sits well away from the pure colour and is still
+## unmistakably contamination. Returns how many pixels it cleared.
+static func key_clear(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int) -> int:
+	var n := 0
+	for i in w * h:
+		if a[i] <= ALPHA_CUT:
+			continue
+		var c := img.get_pixel(i % w, i / w)
+		if absf(c.r - bg.x) <= KEY_TOL and absf(c.g - bg.y) <= KEY_TOL \
+				and absf(c.b - bg.z) <= KEY_TOL:
+			a[i] = 0
+			n += 1
+	return n
+
+
+## Push the SUBJECT'S colour out into the transparent pixels around it.
+##
+## Cutting a subject sets alpha and leaves RGB alone, so a pixel the matte removed still holds
+## the backdrop's colour. That is invisible in an image viewer and it is NOT invisible in the
+## game: iso art renders with `texture_filter = LINEAR` (ART.md), and a linear sample near the
+## silhouette mixes neighbouring texels REGARDLESS of their alpha — so the colour sitting
+## under the cut is dragged back into the edge of the sprite, every frame, at every zoom.
+## `place`'s own LANCZOS downscale does the same thing before the file is even written.
+##
+## With the muted slate fields this project used before, what bled back was a slightly cool
+## edge and nobody ever saw it. Keyed against pure magenta it is a bright pink outline around
+## every creature — measured at 4158 to 9222 transparent-but-magenta pixels per figure in the
+## first batch, against 6086 to 11799 opaque ones. The art was clean; the file was carrying a
+## second copy of the backdrop underneath it.
+##
+## So the transparent region is repainted from the subject outward: each cleared pixel takes
+## the mean of its opaque neighbours, then the newly-painted ring counts as a source for the
+## next pass. Alpha is never touched — the silhouette is exactly what it was — and after a few
+## passes there is no colour anywhere in the file that did not come from the painting.
+##
+## This is standard edge-padding and it belongs here rather than in a caller, because every
+## family this library cuts is drawn scaled, and every one of them has been carrying its own
+## backdrop under the alpha since the first installer ran.
+static func bleed_alpha(img: Image, w: int, h: int, passes: int = BLEED_PASSES) -> int:
+	var painted := 0
+	for _p in passes:
+		var out := PackedVector3Array()
+		var at := PackedInt32Array()
+		for y in h:
+			for x in w:
+				var c := img.get_pixel(x, y)
+				if c.a * 255.0 > float(ALPHA_CUT):
+					continue
+				var sum := Vector3.ZERO
+				var n := 0
+				for d in [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, 1], [-1, 1], [1, -1]]:
+					var nx: int = x + d[0]
+					var ny: int = y + d[1]
+					if nx < 0 or ny < 0 or nx >= w or ny >= h:
+						continue
+					var q := img.get_pixel(nx, ny)
+					# A neighbour is a source if it is subject, or if an earlier pass has
+					# already repainted it. `_bled` marks the latter, because an unpainted
+					# transparent pixel still holds the backdrop and must never be a source.
+					if q.a * 255.0 > float(ALPHA_CUT) or _bled.has(ny * w + nx):
+						sum += Vector3(q.r, q.g, q.b)
+						n += 1
+				if n == 0:
+					continue
+				out.append(sum / float(n))
+				at.append(y * w + x)
+		if at.is_empty():
+			break
+		# Second pass to write, so a pixel repainted in this round is not a source in the
+		# same round — otherwise the fill runs away along one axis and streaks.
+		for k in at.size():
+			var v: Vector3 = out[k]
+			var idx: int = at[k]
+			img.set_pixel(idx % w, idx / w, Color(v.x, v.y, v.z, img.get_pixel(idx % w, idx / w).a))
+			_bled[idx] = true
+			painted += 1
+	_bled.clear()
+	return painted
+
+## Which transparent pixels the current `bleed_alpha` has already repainted. Cleared at the
+## end of every call — it is scratch space for one image, not state.
+static var _bled := {}
+
+
+## Take the FIELD'S COLOUR back off the rim that survives the matte.
+##
+## `feather_edge` above grades a rim pixel's ALPHA by how close it is to the field. What it
+## cannot do is fix a pixel that stays opaque and is still carrying the field's colour in it:
+## a silhouette is anti-aliased, so the outermost opaque ring is a blend of subject and
+## backdrop, and that blend keeps whatever the backdrop was.
+##
+## For every field this project used before, the backdrop was a muted slate and the residue
+## was a slightly cool edge nobody could see. It stops being invisible the moment the field
+## is chosen to be MAXIMALLY unlike the subject — the thing that makes a key colour easy to
+## detect is exactly what makes its residue loud. Keyed against pure magenta, a brood mother's
+## legs came back rimmed in bright pink, on art that was otherwise clean.
+##
+## **The fix does not need to know what the key colour is.** Guessing at magenta specifically
+## would be a rule that breaks on the next sheet keyed green, and subtracting a hue would eat
+## a subject that is legitimately that hue — this one is a violet-grey spider. So instead the
+## rim is repainted from the subject's OWN interior: each contaminated pixel takes the mean of
+## the opaque pixels near it that are not themselves on the rim. The silhouette does not move,
+## the alpha does not change, and a colour that was never in the painting cannot survive,
+## because nothing outside the painting is ever sampled.
+##
+## Returns how many pixels were repainted, so a caller can report it — a despill that fires on
+## thousands of pixels is a matte that cut in the wrong place, and that should be visible.
+static func despill_edge(img: Image, a: PackedByteArray, bg: Vector3, w: int, h: int) -> int:
+	# The rim: opaque pixels within `EDGE_BAND` of something transparent. Same band
+	# `feather_edge` grades, so the two are talking about the same pixels.
+	var band := PackedByteArray()
+	band.resize(w * h)
+	for y in h:
+		for x in w:
+			if a[y * w + x] > ALPHA_CUT:
+				continue
+			for dy in range(-EDGE_BAND, EDGE_BAND + 1):
+				var ny := y + dy
+				if ny < 0 or ny >= h:
+					continue
+				for dx in range(-EDGE_BAND, EDGE_BAND + 1):
+					var nx := x + dx
+					if nx < 0 or nx >= w:
+						continue
+					var j := ny * w + nx
+					if a[j] > ALPHA_CUT:
+						band[j] = 1
+
+	var fixed := 0
+	var out := PackedVector3Array()
+	var at := PackedInt32Array()
+	for i in w * h:
+		if band[i] == 0 or a[i] <= ALPHA_CUT:
+			continue
+		var c := img.get_pixel(i % w, i / w)
+		# Contaminated only if it actually leans toward the field. A rim pixel that is pure
+		# subject is left exactly alone — this is a repair, not a blur applied to every edge.
+		if not _leans_to(c, bg):
+			continue
+		var x0: int = i % w
+		var y0: int = i / w
+		var sum := Vector3.ZERO
+		var n := 0
+		for dy in range(-DESPILL_R, DESPILL_R + 1):
+			var ny := y0 + dy
+			if ny < 0 or ny >= h:
+				continue
+			for dx in range(-DESPILL_R, DESPILL_R + 1):
+				var nx := x0 + dx
+				if nx < 0 or nx >= w:
+					continue
+				var j := ny * w + nx
+				# interior only: opaque, off the rim, and not itself leaning to the field
+				if band[j] == 1 or a[j] <= ALPHA_CUT:
+					continue
+				var q := img.get_pixel(nx, ny)
+				if _leans_to(q, bg):
+					continue
+				sum += Vector3(q.r, q.g, q.b)
+				n += 1
+		if n == 0:
+			# Nothing clean within `DESPILL_R`. That is the normal case for a feature only a
+			# pixel or two wide — a finger, an antenna, a spider's leg — where EVERY pixel is
+			# rim and every neighbour is contaminated too. Iterating does not rescue it: with
+			# no source anywhere near, the whole feature is a fixed point and stays pink,
+			# which is what the hexer's raised hands looked like on the floor.
+			#
+			# So widen the search until a clean pixel is found. Still the subject's own paint,
+			# just from further along the same limb — the only alternative is inventing a
+			# colour, and a stripe of borrowed forearm reads as the finger it belongs to while
+			# a stripe of magenta never does.
+			for r in range(DESPILL_R + 1, DESPILL_WIDE + 1):
+				for dy in range(-r, r + 1):
+					var ny2 := y0 + dy
+					if ny2 < 0 or ny2 >= h:
+						continue
+					for dx in range(-r, r + 1):
+						# ring only: the interior was covered by a smaller radius already
+						if absi(dx) != r and absi(dy) != r:
+							continue
+						var nx2 := x0 + dx
+						if nx2 < 0 or nx2 >= w:
+							continue
+						var j2 := ny2 * w + nx2
+						if a[j2] <= ALPHA_CUT:
+							continue
+						var q2 := img.get_pixel(nx2, ny2)
+						if _leans_to(q2, bg):
+							continue
+						sum += Vector3(q2.r, q2.g, q2.b)
+						n += 1
+				if n > 0:
+					break
+		if n == 0:
+			continue          # genuinely nothing to borrow from; leave it rather than invent
+		out.append(sum / float(n))
+		at.append(i)
+		fixed += 1
+	# Written in a second pass so a repainted pixel is never itself a source — otherwise the
+	# repair walks inward along the rim and smears the subject's edge into a flat band.
+	for k in at.size():
+		var v: Vector3 = out[k]
+		var idx: int = at[k]
+		var old := img.get_pixel(idx % w, idx / w)
+		img.set_pixel(idx % w, idx / w, Color(v.x, v.y, v.z, old.a))
+	return fixed
+
+
+## Is `c` pulled toward the field colour — closer to it than `DESPILL_PULL` in every channel
+## the field is extreme in? Deliberately a comparison against the SAMPLED field rather than
+## against a named colour, so it works for whatever the next sheet is keyed against.
+static func _leans_to(c: Color, bg: Vector3) -> bool:
+	var d: float = maxf(maxf(absf(c.r - bg.x), absf(c.g - bg.y)), absf(c.b - bg.z))
+	return d < DESPILL_PULL
 
 
 ## Clear background the flood fill could not REACH.

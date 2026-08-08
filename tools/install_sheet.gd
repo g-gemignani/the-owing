@@ -41,6 +41,20 @@
 ## a stored permutation would be right once and silently wrong afterwards. The
 ## mapping is printed either way — check it (D112).
 ##
+## **`--inset=N` is for the sheet that came back with the grid DRAWN ON IT.** Asked for six
+## subjects on one continuous field, a generator will helpfully rule the cells for you — a
+## hairline between every row and column, sitting exactly on the cell boundaries this tool
+## cuts at. Every cell then has a line down one or more edges, `cutout_lib.BORDER_AGREE`
+## measures 70-73% of the border agreeing against the 80% it needs, and all six are refused
+## with "this looks like a painting of a room". The refusal is right and the sheet is fine:
+## the art is good, there is just a pencil line around it.
+##
+## So `--inset=10` throws away 10px from every side of each cell before matting. It is not a
+## crop of the subject — the subjects are drawn well inside their cells because the prompt
+## says so — it is a crop of the ruler. Deliberately an argument rather than a default: a
+## silent inset would quietly eat the edge of a subject that really did fill its cell, and
+## the caller is the only one who knows which sheet is which.
+##
 ## **`--only=` is for re-rolling PART of a set**, which is what happens once a sheet
 ## has landed and two of its twenty-one glyphs turn out to be unreadable. It restricts
 ## the target list, and the grid is then sized for what is left — so two names means a
@@ -71,6 +85,16 @@ const SETS := {
 	# sprites by their bottom edge, so the standing point would float.
 	"iso_figures": [0, false],
 	"iso_furniture": [0, false],
+	# The per-archetype BACK views, one per enemy in `resources/enemies/`. Always driven
+	# with `--only`, like `enemies`: thirty-five will not fit one sheet, and the whole
+	# point of a sheet is that the subjects on it are drawn against each other.
+	#
+	# There is no `_s` half here. The fronts are CUT FROM THE COMBAT PLATES by
+	# `tools/derive_iso_fronts.gd`, so they match the arena by construction and asking a
+	# generator for a second opinion about what a cultist looks like would only introduce
+	# the mismatch this set exists to remove. A plate has no back, which is the one thing
+	# that has to be painted.
+	"iso_foes": [0, false],
 	# Thirty-five archetypes is far too many for one sheet, so this set is always
 	# driven with `--only`: name the handful on the sheet in hand and the grid sizes
 	# itself for them. The full ordered list is still here because `--only` refuses a
@@ -85,6 +109,7 @@ const SETS := {
 const TALL := {
 	"iso_figures": Vector2i(128, 192),
 	"iso_furniture": Vector2i(128, 192),
+	"iso_foes": Vector2i(128, 192),
 }
 
 ## Sets whose subject STANDS on something, so it is anchored to the bottom of its
@@ -105,7 +130,7 @@ const TALL := {
 ## `install_cutouts.gd` already passes `true` for this family; a sheet has to agree with
 ## the per-file installer or the same archetype lands differently depending on which
 ## tool took it in.
-const FOOTED := ["iso_figures", "iso_furniture", "enemies"]
+const FOOTED := ["iso_figures", "iso_furniture", "iso_foes", "enemies"]
 
 var _dry := false
 
@@ -118,11 +143,19 @@ func _init() -> void:
 	var rows := 0
 	var cells: Array[int] = []
 	var only: Array[String] = []
+	var inset := 0
 	for a in args:
 		var s := String(a)
 		if s.begins_with("--only="):
 			for n in s.trim_prefix("--only=").split(",", false):
 				only.append(String(n).get_file().get_basename())
+		elif s == "--key":
+			# The sheet was drawn on a chroma key. Says so explicitly rather than sniffing
+			# the image, because what makes it true is that the PROMPT promised the colour
+			# appears nowhere in the subject.
+			Cut.assume_keyed = true
+		elif s.begins_with("--inset="):
+			inset = maxi(0, int(s.trim_prefix("--inset=")))
 		elif s.begins_with("--cols="):
 			cols = int(s.trim_prefix("--cols="))
 		elif s.begins_with("--rows="):
@@ -133,7 +166,7 @@ func _init() -> void:
 		elif not s.begins_with("--"):
 			positional.append(s)
 	if positional.size() < 2 or not SETS.has(positional[0]):
-		print("usage: -- <%s> <sheet.png> [--only=a,b] [--cols=N] [--rows=N] [--cells=i,j,k...] [--dry]" % "|".join(SETS.keys()))
+		print("usage: -- <%s> <sheet.png> [--only=a,b] [--cols=N] [--rows=N] [--cells=i,j,k...] [--inset=N] [--key] [--dry]" % "|".join(SETS.keys()))
 		quit(2)
 		return
 
@@ -213,7 +246,13 @@ func _init() -> void:
 		var src: int = cells[i] if not cells.is_empty() else i
 		var cx := src % cols
 		var cy := src / cols
-		var cell := sheet.get_region(Rect2i(cx * cw, cy * ch, cw, ch))
+		# The cell, less the border the generator may have ruled around it. Clamped so an
+		# inset larger than the cell cannot produce an empty region — it degrades to the
+		# whole cell and the matte then refuses it on its own terms, which is a message the
+		# caller can act on rather than a crash.
+		var ins: int = mini(inset, mini(cw, ch) / 2 - 1)
+		var cell := sheet.get_region(Rect2i(cx * cw + ins, cy * ch + ins,
+			cw - ins * 2, ch - ins * 2))
 		var note := Cut.cut_mono(cell, canvas) if mono \
 			else Cut.cut(cell, canvas, set_name in FOOTED)
 		if note != "":
@@ -224,10 +263,12 @@ func _init() -> void:
 		# on, so what landed in the file is a crop, not an icon.
 		var box: Rect2i = Cut.last_bbox
 		var edge := box.position.x <= 0 or box.position.y <= 0 \
-			or box.end.x >= cw or box.end.y >= ch
+			or box.end.x >= cw - ins * 2 or box.end.y >= ch - ins * 2
 		var flag := ""
+		if Cut.despilled > 0 or Cut.bled > 0 or Cut.key_cleared > 0:
+			flag = "  (key %d, despilled %d, bled %d)" % [Cut.key_cleared, Cut.despilled, Cut.bled]
 		if edge:
-			flag = "  <-- TOUCHES ITS CELL EDGE, probably clipped"
+			flag += "  <-- TOUCHES ITS CELL EDGE, probably clipped"
 			clipped += 1
 		if _dry:
 			print("DRY   r%dc%d -> %-26s %-22s %dx%d%s" % [
@@ -270,6 +311,12 @@ func _ids(set_name: String) -> Array:
 		"iso_figures":
 			out.append(["iso/hero_s.png", "hero, facing you"])
 			out.append(["iso/hero_n.png", "hero, from behind"])
+			for e in ["s", "n"]:
+				for foot in ["a", "b"]:
+					out.append(["iso/hero_%s_%s.png" % [e, foot],
+						"hero %s, %s leg leading" % [
+							"facing you" if e == "s" else "from behind",
+							"left" if foot == "a" else "right"]])
 			for fam in Balance.ISO_FAMILIES:
 				out.append(["iso/mon_%s_s.png" % fam, "%s, facing you" % fam])
 				out.append(["iso/mon_%s_n.png" % fam, "%s, from behind" % fam])
@@ -282,6 +329,14 @@ func _ids(set_name: String) -> Array:
 			for aid in PixelArt.archetype_ids():
 				var a := load("res://resources/enemies/%s.tres" % aid) as EnemyData
 				out.append(["enemies/%s.png" % aid, a.name if a != null else String(aid)])
+		# One entry per archetype, in the same order the manifest prints Tier 2 in, so the
+		# sheet order and the install order are one list. `--only` is what narrows it to
+		# the handful actually on the sheet in hand.
+		"iso_foes":
+			for aid in PixelArt.archetype_ids():
+				var a := load("res://resources/enemies/%s.tres" % aid) as EnemyData
+				out.append(["iso/foe/%s_n.png" % aid,
+					"%s, from behind" % (a.name if a != null else String(aid))])
 		# The three fight tiers come FIRST, so the three that have to read as escalating
 		# sit next to each other on the sheet and are drawn against each other.
 		"iso_furniture":

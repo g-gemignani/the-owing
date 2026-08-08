@@ -958,6 +958,15 @@ func _init() -> void:
 	for i in Balance.ISO_WANDERERS:
 		iso_roles.append("wander_%d_s" % i)
 		iso_roles.append("wander_%d_n" % i)
+	# The per-archetype figures are held to the same invariant, and they need it MORE than
+	# the hand-installed set does: the fronts are cut from the combat plates by a tool
+	# (`tools/derive_iso_fronts.gd`), so a plate whose subject is not a standing figure — a
+	# long tail, a swung limb, a creature lying down — produces a stand point that is wrong
+	# in a file nobody looked at. The loop skips what is not on disk, so the backs enter this
+	# check one at a time as they are painted.
+	for aid in PixelArt.archetype_ids():
+		iso_roles.append("foe/%s_s" % String(aid))
+		iso_roles.append("foe/%s_n" % String(aid))
 	var worst := 0.0
 	var worst_role := ""
 	for role in iso_roles:
@@ -998,6 +1007,47 @@ func _init() -> void:
 			fails += 1; print("FAIL mirrored %s got a negative-width rect (D154)" % role)
 	print("  (info: worst iso stand point is %s, %.1f%% of its own width off centre)" % [
 		worst_role, worst * 100.0])
+
+	# --- the gait starts and ends on the ground ---------------------------------------
+	#
+	# A walking figure is lifted and squashed over the length of one step, and the only
+	# property that MUST hold is that both effects are identities at the two ends. `walk_t`
+	# reaches exactly 1.0 on arrival (`iso_run._process` clamps it there) and the next step
+	# starts at exactly 0.0, so a gait that is non-zero at either end moves the figure off
+	# its tile at the instant it arrives — every step, forever, on the one screen where
+	# knowing where you are is the thing that cannot go wrong.
+	#
+	# Asserted rather than looked at because it is invisible in a screenshot: the error
+	# lasts one frame at each end of a 0.13s step.
+	var gait_tile := Vector2(116.0, 58.0)
+	for wt in [0.0, 1.0, 1.5, -1.0]:
+		var lift: Vector2 = IsoFooting.gait_lift(gait_tile, wt)
+		var sq: float = IsoFooting.gait_stretch(wt)
+		if lift.length() > 0.0001:
+			fails += 1
+			print("FAIL gait lifts %.3fpx at walk_t %.1f, which has to be flat" % [lift.y, wt])
+		if absf(sq - 1.0) > 0.0001:
+			fails += 1
+			print("FAIL gait scales to %.4f at walk_t %.1f, which has to be 1.0" % [sq, wt])
+	# ...and in between it goes UP and reaches, or it is not a gait at all
+	var mid_lift: Vector2 = IsoFooting.gait_lift(gait_tile, 0.5)
+	if mid_lift.y >= 0.0:
+		fails += 1
+		print("FAIL gait does not rise mid-step (%.3f)" % mid_lift.y)
+	if IsoFooting.gait_stretch(0.5) <= 1.0:
+		fails += 1
+		print("FAIL gait does not extend mid-step (%.4f)" % IsoFooting.gait_stretch(0.5))
+	# ...and it is CONTINUOUS with standing still at both ends, which is what killed the
+	# squash this replaced: one frame into a step must not be a visibly different height
+	# from the frame before it.
+	if absf(IsoFooting.gait_stretch(0.001) - 1.0) > 0.001:
+		fails += 1
+		print("FAIL gait pops at the start of a step (%.4f)" % IsoFooting.gait_stretch(0.001))
+	# The lift is a fraction of the TILE, so it has to scale with one — a constant in pixels
+	# would be a different gait at every window size the canvas stretches to.
+	if absf(IsoFooting.gait_lift(gait_tile * 2.0, 0.5).y - mid_lift.y * 2.0) > 0.0001:
+		fails += 1
+		print("FAIL gait does not scale with the tile")
 
 	# --- the hero's four facings are four DIFFERENT draws, and each looks where she walks ---
 	#

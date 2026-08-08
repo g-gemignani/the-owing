@@ -116,6 +116,15 @@ const TIER_LIGHT := {
 ## per redraw, and every lookup tolerates a missing file: art that has not been
 ## installed must degrade to the drawn floor, not crash a run.
 const ART_DIR := "res://assets/art/iso/"
+## Where the PER-ARCHETYPE figures live, relative to `ART_DIR`, and part of the role key
+## so `art` and `stand` stay one flat namespace.
+##
+## A subdirectory rather than a `mon_<id>_` prefix beside the family sprites, because
+## `brute` is BOTH a name in `Balance.ISO_FAMILIES` and an id in `resources/enemies/` —
+## `mon_brute_s.png` would name two different pictures, and the derive step would overwrite
+## the family fallback with one member of it. The nesting makes that impossible for every
+## id rather than for the one that was noticed.
+const FOE_DIR := "foe/"
 ## Suffix for the mirrored copy of a sprite in `art` and `stand`. Not a file on disk.
 const FLIP := "_flip"
 ## On-screen height of each sprite, as a multiple of the tile's height. A sprite is
@@ -135,6 +144,10 @@ const SPRITE_H := {
 const WANDER_DESIGNS := Balance.ISO_WANDERERS
 
 var art := {}          ## role -> Texture2D, or absent
+## Per-archetype roles already looked up and NOT found, so `_foe_role` asks the filesystem
+## once per archetype instead of once per redraw. A plain absence from `art` cannot say
+## this: absent means "not loaded yet" and is exactly what triggers the lookup.
+var foe_missing := {}
 ## role -> where that sprite's feet are, as a signed fraction of its own width from the
 ## middle of the canvas. Measured from the art at load (`IsoFooting.offset`), never typed.
 var stand := {}
@@ -159,6 +172,14 @@ var stand := {}
 ## where she is looking, and a resumed run starts her facing down-right, toward the
 ## player and toward the side the eye reads first.
 var face_step := Vector2i(1, 0)
+## Which of the hero's two stride paintings the step in progress uses. Flipped once per
+## step, so consecutive steps lead with alternate feet — holding a key down then produces a
+## walk instead of one pose stamped over and over, which is the entire difference between a
+## walk cycle and a sprite being dragged across the floor.
+##
+## Pure view state like `face_step`, and deliberately not saved: a resumed run starts on the
+## left foot, which nobody can tell from the right one.
+var stride := 0
 ## One key of the movement pad, and the pad's inset from the corner of the floor window
 ## (D168).
 ##
@@ -303,7 +324,11 @@ func _ready() -> void:
 ## taking a run down with it.
 func _load_art() -> void:
 	var roles: Array = ["floor", "rock", "combat", "elite", "boss", "shop", "rest",
-		"event", "treasure", "hero_s", "hero_n"]
+		"event", "treasure", "hero_s", "hero_n",
+		# The two stride poses of each hero painting. Absent from a checkout that has not
+		# installed them, and `_draw_you` then falls back to the standing painting — so the
+		# gait below is what walks and these only ever make it better, never load-bearing.
+		"hero_s_a", "hero_s_b", "hero_n_a", "hero_n_b"]
 	for i in WANDER_DESIGNS:
 		roles.append("wander_%d_s" % i)
 		roles.append("wander_%d_n" % i)
@@ -323,7 +348,10 @@ func _load_art() -> void:
 				# rather than a flipped rect (D154). Built once here: her left-hand facings
 				# then draw through exactly the same code as her right-hand ones, with the
 				# anchor negated, and no call site has to remember what a negative width does.
-				if r == "hero_s" or r == "hero_n":
+				# Every hero painting, standing and striding: her left-hand facings are the
+				# right-hand file mirrored (D131), and a stride frame that skipped this would
+				# stand still on exactly half the compass.
+				if String(r).begins_with("hero"):
 					var flip := IsoFooting.flipped(tex)
 					if flip != null:
 						art[r + FLIP] = flip
@@ -341,6 +369,40 @@ func _load_art() -> void:
 				var ttex := load(tpath) as Texture2D
 				if ttex != null:
 					art["%s_%s" % [pair, t]] = ttex
+
+## The sprite for ONE archetype, by id and facing — the creature itself rather than the
+## family it belongs to. Returns the role key, or "" when that archetype has no painting
+## and the caller should fall back to `mon_<family>_<face>`.
+##
+## **Why this exists at all.** D85 cast the fight when the floor was laid out, and the
+## floor then drew it as `mon_<family>_<face>`. Three families over thirty-five archetypes
+## means twelve different swarms crossing the hall as one grey quadruped and nineteen
+## brutes as one ogre: you walked toward an ogre and met a robed cultist. Family is the
+## right reading at the far end of a dark hall and the wrong one four tiles away, where the
+## sprite is large enough to be a promise about what is standing there.
+##
+## **Loaded on demand rather than in `_load_art`.** The roles above are a fixed list that
+## can each appear on any floor. These are thirty-five PAIRS of which a floor casts a
+## handful, and every load also runs `IsoFooting.offset` over the whole image — so eager
+## loading would scan seventy files to use six. The cache is `art` itself, plus an explicit
+## miss set, so an archetype with no painting is looked up once rather than every redraw.
+func _foe_role(enemy_id: String, face: String) -> String:
+	if enemy_id == "":
+		return ""
+	var role: String = "%s%s_%s" % [FOE_DIR, enemy_id, face]
+	if art.has(role):
+		return role
+	if foe_missing.has(role):
+		return ""
+	var path: String = "%s%s.png" % [ART_DIR, role]
+	if ResourceLoader.exists(path):
+		var tex := load(path) as Texture2D
+		if tex != null:
+			art[role] = tex
+			stand[role] = IsoFooting.offset(tex)
+			return role
+	foe_missing[role] = true
+	return ""
 
 func _build_ui() -> void:
 	# UI.screen gives the zone backdrop, the root margin and the content column, so
@@ -796,8 +858,14 @@ func _draw_floor() -> void:
 				# there, not as a generic slab per encounter tier. `_role_of` stays as the
 				# fallback for a tile with no cast enemy and for a save from before the
 				# floor knew what it was showing.
+				# The archetype's own painting first, its family second, the tier glyph last:
+				# each step is a weaker claim about what is standing there, and the floor should
+				# never make a stronger one than it can keep.
 				var cast := tv.enemy_at(x, y)
-				if cast != "" and art.has("mon_%s_s" % Balance.iso_family(cast)):
+				var foe := _foe_role(cast, "s")
+				if foe != "":
+					role = foe
+				elif cast != "" and art.has("mon_%s_s" % Balance.iso_family(cast)):
 					role = "mon_%s_s" % Balance.iso_family(cast)
 				if role != "":
 					_draw_standing(role, c2, t, 1.0, _size_key_for(e2),
@@ -810,11 +878,18 @@ func _draw_floor() -> void:
 				var face: String = "s" if bool(m["south"]) else "n"
 				var mrole := "wander_%d_%s" % [int(m["design"]) % WANDER_DESIGNS, face]
 				var mcast := String(m.get("enemy", ""))
-				if mcast != "":
+				var mfoe := _foe_role(mcast, face)
+				if mfoe != "":
+					mrole = mfoe
+				elif mcast != "":
 					var famrole := "mon_%s_%s" % [Balance.iso_family(mcast), face]
 					if art.has(famrole):
 						mrole = famrole
-				_draw_standing(mrole, c2 + _mon_slide(i2), t, 1.0, "wander")
+				# A wanderer bobs only while it is actually crossing ground. One that has just
+				# come into sight has no entry in `walk_mons` and simply appears, so it stands
+				# still — which is the same distinction `_mon_slide` already makes.
+				_draw_standing(mrole, c2 + _mon_slide(i2), t, 1.0, "wander",
+					Color(1, 1, 1), walk_mons.has(i2))
 
 	# The player goes LAST, over everything, deliberately breaking the depth order the
 	# pass above is careful about. Correct depth put a rock block between the camera and
@@ -1442,7 +1517,7 @@ func _role_of(e: int) -> String:
 ## ever gives a darker version of the same object. Applied to the glyph fallback too, so a
 ## checkout with no iso art installed still tells the tiers apart.
 func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
-		size_key: String = "", tint: Color = Color(1, 1, 1)) -> void:
+		size_key: String = "", tint: Color = Color(1, 1, 1), walking: bool = false) -> void:
 	var tex: Texture2D = art.get(role)
 	var key: String = size_key if size_key != "" else role
 	var ink := Color(tint.r, tint.g, tint.b, alpha)
@@ -1453,15 +1528,18 @@ func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
 			floor_view.draw_texture_rect(glyph,
 				Rect2(centre - Vector2(s * 0.5, s * 0.5), Vector2(s, s)), false, ink)
 		return
-	floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, key, role), false, ink)
+	var lift: Vector2 = IsoFooting.gait_lift(t, walk_t) if walking else Vector2.ZERO
+	var stretch: float = IsoFooting.gait_stretch(walk_t) if walking else 1.0
+	floor_view.draw_texture_rect(tex,
+		_footed_rect(tex, centre + lift, t, key, role, stretch), false, ink)
 
 ## Where a sprite goes if it stands at the middle of `centre`'s tile: the size table here,
 ## the geometry and the stand point in `IsoFooting`. Shared by the standing art and by the
 ## player, so the hero cannot end up standing on a subtly different spot than the monster
 ## next to her.
 func _footed_rect(tex: Texture2D, centre: Vector2, t: Vector2, key: String,
-		role: String) -> Rect2:
-	return IsoFooting.rect(tex, centre, t, t.y * float(SPRITE_H.get(key, 1.8)),
+		role: String, scale: float = 1.0) -> Rect2:
+	return IsoFooting.rect(tex, centre, t, t.y * float(SPRITE_H.get(key, 1.8)) * scale,
 		float(stand.get(role, 0.0)))
 
 ## The reverse of `_role_of`, for the glyph fallback only.
@@ -1506,11 +1584,19 @@ func _draw_you(centre: Vector2, t: Vector2) -> void:
 	# here — unmirrored for whichever of the pair had the larger x — was wrong for one facing
 	# of the four no matter what the art did (D154).
 	var role := IsoFooting.hero_role(face_step)
+	# Mid-step, swap in the stride pose for the facing she is already using. Checked against
+	# what is LOADED rather than assumed installed: the standing painting is the fallback, so a
+	# checkout without the stride frames still walks — it just walks without moving its feet.
+	if walk_t < 1.0:
+		var posed: String = "%s_%s" % [role, "a" if stride == 0 else "b"]
+		if art.has(posed):
+			role = posed
 	if IsoFooting.hero_mirrored(face_step) and art.has(role + FLIP):
 		role += FLIP
 	var tex: Texture2D = art.get(role)
 	if tex != null:
-		floor_view.draw_texture_rect(tex, _footed_rect(tex, centre, t, "hero", role), false)
+		floor_view.draw_texture_rect(tex,
+			_footed_rect(tex, centre + IsoFooting.gait_lift(t, walk_t), t, "hero", role, IsoFooting.gait_stretch(walk_t)), false)
 		return
 	# no hero installed: the pip is what the eye tracks while the floor scrolls underneath
 	floor_view.draw_circle(centre - Vector2(0, t.y * 0.30), t.y * 0.17,
@@ -1577,6 +1663,10 @@ func _begin_walk(tv: TraversalIso, from_cell: int, from_depth: int,
 	var g := tv.grid()
 	walk_from = _to_plate(from_cell % g.x, int(from_cell / g.x))
 	walk_t = 0.0
+	# Alternate the leading foot. Done here rather than off a clock because the gait has to
+	# follow the MODEL's steps: a timer would drift out of phase with a walk that pauses for a
+	# fight and resumes, and the foot would change in the middle of a stride.
+	stride = 1 - stride
 
 	# Match each wanderer now in sight to where it stood a moment ago. There is no id
 	# on a monster, so this goes by design and type within one step — which is exact

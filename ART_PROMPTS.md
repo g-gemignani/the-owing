@@ -123,7 +123,11 @@ Nothing to generate here — all 3 present.
 
 ## Tier 8a — isometric figures
 
-Nothing to generate here — all 16 present.
+Nothing to generate here — all 20 present.
+
+## Tier 8c — the creature on the tile
+
+Nothing to generate here — all 70 present.
 
 ## Tier 8b — isometric furniture
 

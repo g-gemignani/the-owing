@@ -380,6 +380,13 @@ effects are drawn at runtime by `scripts/fx.gd`.
   rules follow: the cast is drawn from the pool combat *would* have used, so this changes
   *when* the choice happens and never *what* — and the simulator honours the same key,
   because a tool rolling its own enemy measures a different game (the D72/D74/D77 trap).
+  **Casting the fight was only half the promise.** The floor then drew that cast as one of
+  three FAMILY silhouettes over thirty-five archetypes, so twelve swarms shared one grey
+  quadruped and nineteen brutes one ogre: you still walked toward an ogre and met a cultist.
+  Family is the right reading across a dark hall and the wrong one four tiles away. The
+  fronts are now **cut from the combat plate each archetype already has**
+  (`tools/derive_iso_fronts.gd`), so the floor figure and the arena figure are the same
+  picture by construction rather than by a prompt asking for a match (D198).
   Silhouettes are **derived** from fight behaviour, never tabled: the first two derivations
   put all 35 archetypes in one family, and the roster had to be read to find the one that
   separates them.
@@ -845,6 +852,26 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `tools/rematte_iso.gd` recovered all 23 figures from the files themselves, no new art. A
   repair tool must not assume its own direction, either — the campfire's correct mask is
   *smaller* than its broken one, so the tool rewrites on disagreement, not on growth.
+
+  **That repair does not generalise, and six holed enemy plates are how we found out.** The
+  iso figures came off a sheet and kept a border of field inside their own cells, which is
+  what a second matte samples. A combat plate was trimmed at install and has none, so
+  re-cutting all thirty-five made **every one of them 5-25 points more opaque**, healthy
+  files included. They were repainted instead (D199). The deeper lesson is about *where* a
+  cutout is judged: these had shipped holed because the arena draws an enemy over a dark
+  corridor, where a hole reads as shadow. **A cutout can only be judged against something
+  brighter than it** — the check is now a render onto flat magenta.
+
+- **A key colour you can find is a key colour you can see.** Asking a generator for a
+  maximally-unlike backdrop makes the matte's job easy and its *residue* loud, and it
+  exposed three defects that muted slate had hidden in every cutout ever installed:
+  background sealed in by a silhouette but not enclosed (`key_clear`, opt-in via
+  `--key` because the guarantee lives in the prompt, not the image); the field's colour
+  left on the rim that survives (`despill_edge`, which repaints from the subject's own
+  interior and so never needs to know the key colour); and the backdrop **still sitting
+  under the alpha**, which `texture_filter = LINEAR` drags back into the sprite's edge
+  regardless of alpha (`bleed_alpha`). Every cutout this library writes carried that last
+  one; it only became visible when the backdrop was loud (D200).
 
 - **A filter that asks one question is blind to everything on the other side of it.**
   `despeckle` removes opaque islands under 8% of the largest, and it was built for the

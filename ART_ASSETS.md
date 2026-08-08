@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**310 files wanted · 310 already present · 0 to provide.**
+**384 files wanted · 384 already present · 0 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -411,12 +411,16 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 8a — isometric figures
 
-*16 files, 0 still to provide.* Every one of these exists and is a flat near-black silhouette; the floor is the screen a run is mostly spent on.
+*20 files, 0 still to provide.* Every one of these exists and is a flat near-black silhouette; the floor is the screen a run is mostly spent on.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-| x | `iso/hero_s.png` | 128x192 | The player, facing the camera. |
-| x | `iso/hero_n.png` | 128x192 | The player, walking away. |
+| x | `iso/hero_s.png` | 128x192 | The player, facing the camera. Standing still: this is the pose the floor draws whenever she is not mid-step. |
+| x | `iso/hero_n.png` | 128x192 | The player, walking away. Standing still. |
+| x | `iso/hero_s_a.png` | 128x192 | The player facing the camera, mid-stride with her LEFT leg leading. Same character, same cloak, same colours and the same height as `hero_s.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
+| x | `iso/hero_s_b.png` | 128x192 | The player facing the camera, mid-stride with her RIGHT leg leading. Same character, same cloak, same colours and the same height as `hero_s.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
+| x | `iso/hero_n_a.png` | 128x192 | The player walking away, mid-stride with her LEFT leg leading. Same character, same cloak, same colours and the same height as `hero_n.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
+| x | `iso/hero_n_b.png` | 128x192 | The player walking away, mid-stride with her RIGHT leg leading. Same character, same cloak, same colours and the same height as `hero_n.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
 | x | `iso/mon_swarm_s.png` | 128x192 | A swarm, facing the camera. It IS the fight this tile becomes, so it must match the arena's swarm (D85). |
 | x | `iso/mon_swarm_n.png` | 128x192 | The same swarm, from behind. |
 | x | `iso/mon_brute_s.png` | 128x192 | A brute, facing the camera. It IS the fight this tile becomes, so it must match the arena's brute (D85). |
@@ -431,6 +435,83 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `iso/wander_2_n.png` | 128x192 | Wanderer design 2, from behind. |
 | x | `iso/wander_3_s.png` | 128x192 | Wanderer design 3, facing the camera — something else walking the floor. |
 | x | `iso/wander_3_n.png` | 128x192 | Wanderer design 3, from behind. |
+
+## Tier 8c — the creature on the tile
+
+*70 files, 0 still to provide.* One figure per enemy archetype, so the thing you walk toward is the thing you meet.
+
+| ? | file | size | what it is |
+|---|---|---|---|
+| x | `iso/foe/abyss_horror_s.png` | 128x192 | **The Maw Itself**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/abyss_horror.png`. |
+| x | `iso/foe/abyss_horror_n.png` | 128x192 | **The Maw Itself**, from behind. The same creature as `enemies/abyss_horror.png`, turned around. |
+| x | `iso/foe/bellows_brute_s.png` | 128x192 | **Bellows Brute**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/bellows_brute.png`. |
+| x | `iso/foe/bellows_brute_n.png` | 128x192 | **Bellows Brute**, from behind. The same creature as `enemies/bellows_brute.png`, turned around. |
+| x | `iso/foe/bellows_master_s.png` | 128x192 | **The Bellows-Master**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/bellows_master.png`. |
+| x | `iso/foe/bellows_master_n.png` | 128x192 | **The Bellows-Master**, from behind. The same creature as `enemies/bellows_master.png`, turned around. |
+| x | `iso/foe/bog_lurker_s.png` | 128x192 | **Bog Lurker**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/bog_lurker.png`. |
+| x | `iso/foe/bog_lurker_n.png` | 128x192 | **Bog Lurker**, from behind. The same creature as `enemies/bog_lurker.png`, turned around. |
+| x | `iso/foe/bone_picker_s.png` | 128x192 | **Bone Picker**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/bone_picker.png`. |
+| x | `iso/foe/bone_picker_n.png` | 128x192 | **Bone Picker**, from behind. The same creature as `enemies/bone_picker.png`, turned around. |
+| x | `iso/foe/brood_mother_s.png` | 128x192 | **The Brood-Mother**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/brood_mother.png`. |
+| x | `iso/foe/brood_mother_n.png` | 128x192 | **The Brood-Mother**, from behind. The same creature as `enemies/brood_mother.png`, turned around. |
+| x | `iso/foe/brute_s.png` | 128x192 | **Brute**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/brute.png`. |
+| x | `iso/foe/brute_n.png` | 128x192 | **Brute**, from behind. The same creature as `enemies/brute.png`, turned around. |
+| x | `iso/foe/cinder_knight_s.png` | 128x192 | **The Cinder Knight**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/cinder_knight.png`. |
+| x | `iso/foe/cinder_knight_n.png` | 128x192 | **The Cinder Knight**, from behind. The same creature as `enemies/cinder_knight.png`, turned around. |
+| x | `iso/foe/crypt_hound_s.png` | 128x192 | **Crypt Hound**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/crypt_hound.png`. |
+| x | `iso/foe/crypt_hound_n.png` | 128x192 | **Crypt Hound**, from behind. The same creature as `enemies/crypt_hound.png`, turned around. |
+| x | `iso/foe/cultist_s.png` | 128x192 | **Cultist**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/cultist.png`. |
+| x | `iso/foe/cultist_n.png` | 128x192 | **Cultist**, from behind. The same creature as `enemies/cultist.png`, turned around. |
+| x | `iso/foe/deep_warden_s.png` | 128x192 | **The Deep Warden**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/deep_warden.png`. |
+| x | `iso/foe/deep_warden_n.png` | 128x192 | **The Deep Warden**, from behind. The same creature as `enemies/deep_warden.png`, turned around. |
+| x | `iso/foe/drowned_thrall_s.png` | 128x192 | **Drowned Thrall**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/drowned_thrall.png`. |
+| x | `iso/foe/drowned_thrall_n.png` | 128x192 | **Drowned Thrall**, from behind. The same creature as `enemies/drowned_thrall.png`, turned around. |
+| x | `iso/foe/ember_hound_s.png` | 128x192 | **Ember Hound**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/ember_hound.png`. |
+| x | `iso/foe/ember_hound_n.png` | 128x192 | **Ember Hound**, from behind. The same creature as `enemies/ember_hound.png`, turned around. |
+| x | `iso/foe/false_step_s.png` | 128x192 | **The False Step**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/false_step.png`. |
+| x | `iso/foe/false_step_n.png` | 128x192 | **The False Step**, from behind. The same creature as `enemies/false_step.png`, turned around. |
+| x | `iso/foe/forge_hound_s.png` | 128x192 | **Forge Hound**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/forge_hound.png`. |
+| x | `iso/foe/forge_hound_n.png` | 128x192 | **Forge Hound**, from behind. The same creature as `enemies/forge_hound.png`, turned around. |
+| x | `iso/foe/fungal_host_s.png` | 128x192 | **Fungal Host**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/fungal_host.png`. |
+| x | `iso/foe/fungal_host_n.png` | 128x192 | **Fungal Host**, from behind. The same creature as `enemies/fungal_host.png`, turned around. |
+| x | `iso/foe/grave_moth_s.png` | 128x192 | **Grave Moth**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/grave_moth.png`. |
+| x | `iso/foe/grave_moth_n.png` | 128x192 | **Grave Moth**, from behind. The same creature as `enemies/grave_moth.png`, turned around. |
+| x | `iso/foe/grave_sexton_s.png` | 128x192 | **The Grave-Sexton**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/grave_sexton.png`. |
+| x | `iso/foe/grave_sexton_n.png` | 128x192 | **The Grave-Sexton**, from behind. The same creature as `enemies/grave_sexton.png`, turned around. |
+| x | `iso/foe/hexer_s.png` | 128x192 | **Hexer**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/hexer.png`. |
+| x | `iso/foe/hexer_n.png` | 128x192 | **Hexer**, from behind. The same creature as `enemies/hexer.png`, turned around. |
+| x | `iso/foe/last_vendor_s.png` | 128x192 | **The Last Vendor**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/last_vendor.png`. |
+| x | `iso/foe/last_vendor_n.png` | 128x192 | **The Last Vendor**, from behind. The same creature as `enemies/last_vendor.png`, turned around. |
+| x | `iso/foe/market_ghoul_s.png` | 128x192 | **Market Ghoul**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/market_ghoul.png`. |
+| x | `iso/foe/market_ghoul_n.png` | 128x192 | **Market Ghoul**, from behind. The same creature as `enemies/market_ghoul.png`, turned around. |
+| x | `iso/foe/marrow_abbot_s.png` | 128x192 | **The Marrow-Abbot**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/marrow_abbot.png`. |
+| x | `iso/foe/marrow_abbot_n.png` | 128x192 | **The Marrow-Abbot**, from behind. The same creature as `enemies/marrow_abbot.png`, turned around. |
+| x | `iso/foe/marrow_priest_s.png` | 128x192 | **Marrow Priest**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/marrow_priest.png`. |
+| x | `iso/foe/marrow_priest_n.png` | 128x192 | **Marrow Priest**, from behind. The same creature as `enemies/marrow_priest.png`, turned around. |
+| x | `iso/foe/maw_tender_s.png` | 128x192 | **Maw Tender**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/maw_tender.png`. |
+| x | `iso/foe/maw_tender_n.png` | 128x192 | **Maw Tender**, from behind. The same creature as `enemies/maw_tender.png`, turned around. |
+| x | `iso/foe/mycelial_lord_s.png` | 128x192 | **The Mycelial Lord**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/mycelial_lord.png`. |
+| x | `iso/foe/mycelial_lord_n.png` | 128x192 | **The Mycelial Lord**, from behind. The same creature as `enemies/mycelial_lord.png`, turned around. |
+| x | `iso/foe/ossuary_wretch_s.png` | 128x192 | **Ossuary Wretch**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/ossuary_wretch.png`. |
+| x | `iso/foe/ossuary_wretch_n.png` | 128x192 | **Ossuary Wretch**, from behind. The same creature as `enemies/ossuary_wretch.png`, turned around. |
+| x | `iso/foe/pale_acolyte_s.png` | 128x192 | **Pale Acolyte**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/pale_acolyte.png`. |
+| x | `iso/foe/pale_acolyte_n.png` | 128x192 | **Pale Acolyte**, from behind. The same creature as `enemies/pale_acolyte.png`, turned around. |
+| x | `iso/foe/plague_rat_s.png` | 128x192 | **Plague Rat**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/plague_rat.png`. |
+| x | `iso/foe/plague_rat_n.png` | 128x192 | **Plague Rat**, from behind. The same creature as `enemies/plague_rat.png`, turned around. |
+| x | `iso/foe/rat_swarm_s.png` | 128x192 | **Rat**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/rat_swarm.png`. |
+| x | `iso/foe/rat_swarm_n.png` | 128x192 | **Rat**, from behind. The same creature as `enemies/rat_swarm.png`, turned around. |
+| x | `iso/foe/rot_priest_s.png` | 128x192 | **Rot Priest**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/rot_priest.png`. |
+| x | `iso/foe/rot_priest_n.png` | 128x192 | **Rot Priest**, from behind. The same creature as `enemies/rot_priest.png`, turned around. |
+| x | `iso/foe/slag_wretch_s.png` | 128x192 | **Slag Wretch**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/slag_wretch.png`. |
+| x | `iso/foe/slag_wretch_n.png` | 128x192 | **Slag Wretch**, from behind. The same creature as `enemies/slag_wretch.png`, turned around. |
+| x | `iso/foe/spore_thing_s.png` | 128x192 | **Spore Thing**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/spore_thing.png`. |
+| x | `iso/foe/spore_thing_n.png` | 128x192 | **Spore Thing**, from behind. The same creature as `enemies/spore_thing.png`, turned around. |
+| x | `iso/foe/the_gardener_s.png` | 128x192 | **The Gardener**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/the_gardener.png`. |
+| x | `iso/foe/the_gardener_n.png` | 128x192 | **The Gardener**, from behind. The same creature as `enemies/the_gardener.png`, turned around. |
+| x | `iso/foe/tomb_guard_s.png` | 128x192 | **Tomb Guard**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/tomb_guard.png`. |
+| x | `iso/foe/tomb_guard_n.png` | 128x192 | **Tomb Guard**, from behind. The same creature as `enemies/tomb_guard.png`, turned around. |
+| x | `iso/foe/warden_s.png` | 128x192 | **The Forge-Warden**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/warden.png`. |
+| x | `iso/foe/warden_n.png` | 128x192 | **The Forge-Warden**, from behind. The same creature as `enemies/warden.png`, turned around. |
 
 ## Tier 8b — isometric furniture
 

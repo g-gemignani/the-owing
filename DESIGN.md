@@ -185,6 +185,10 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D195** | [The Brood-Mother's abdomen was cut out of her and called background](#d195--the-brood-mothers-abdomen-was-cut-out-of-her-and-called-background) |
 | **D196** | [The documentation had drifted in the two ways it warns about, and one of them was in the file that does the warning](#d196--the-documentation-had-drifted-in-the-two-ways-it-warns-about-and-one-of-them-was-in-the-file-that-does-the-warning) |
 | **D197** | [Nothing in the dungeon waits any more](#d197--nothing-in-the-dungeon-waits-any-more) |
+| **D198** | [The floor was showing a family where the fight had a face](#d198--the-floor-was-showing-a-family-where-the-fight-had-a-face) |
+| **D199** | [Six plates had holes in them, and the arena was the wrong place to look](#d199--six-plates-had-holes-in-them-and-the-arena-was-the-wrong-place-to-look) |
+| **D200** | [A key colour you can find is a key colour you can see](#d200--a-key-colour-you-can-find-is-a-key-colour-you-can-see) |
+| **D201** | [She was sliding, and the second effect had to be a stretch](#d201--she-was-sliding-and-the-second-effect-had-to-be-a-stretch) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -349,7 +353,8 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `tools/gen_icon.gd` | The app icon: 48x48 pixel art, computed, scaled by whole numbers to every size the platforms ask for, with the Android adaptive layers (D181). |
 | `tools/audio_voices.py` | The instrument: tuning, filters, the room, and eight physically-modelled voices. Imported by BOTH audio generators, so "one instrument family" is structural (D173). |
 | `tools/gen_sfx.py` | The 24 sound effects, one voice, measured (D150, rewritten D173). |
-| `tools/rematte_iso.gd` | Re-cuts an installed iso figure whose matte ate it, from the paint still under the mask (D152). |
+| `tools/rematte_iso.gd` | Re-cuts an installed iso figure whose matte ate it, from the paint still under the mask (D152). Does NOT work on the combat plates — they were trimmed at install and have no field left to sample, so re-cutting inflates every file (D199). |
+| `tools/derive_iso_fronts.gd` | Cuts each archetype's iso FRONT out of the combat plate it already has, so the floor figure and the arena figure are the same picture by construction (D198). |
 | `scripts/pixel_art.gd` | Authored 16x16 symbol glyphs, the card sheet, and the lookup for every painted asset (backdrops, enemy plates, the UI kit). |
 | `assets/pixel/` | What is left of the CC0 pixel art: the 1-Bit card sheet and five Pattern Pack zone tiles, each with its licence. The Tiny Dungeon enemy sprites went in D89 and the UI RPG frames in D83. |
 | `assets/art/` | Everything painted or generated for this project: 23 backdrops, 35 enemy plates, the iso floor, the computed UI kit. Not CC0 — see its README. |
@@ -12415,3 +12420,170 @@ and `dodgeable` is now every fight in the dungeon. Whether a player who breaks a
 caught out by the last rung is a question only a human hand answers — the simulator's driver
 prices HP and not loot (it says so itself), and it has never been the right instrument for
 "was this fun to decline".
+
+### D198 — The floor was showing a family where the fight had a face
+
+Asked to fix "iso monster sprites not matching their image during battle". The mismatch was
+real and it was designed in: `iso_run.gd` drew a cast fight as `mon_<family>_<face>`, and
+`Balance.iso_family` sorts **thirty-five archetypes into three buckets**. Twelve different
+swarms crossed the hall as one grey quadruped and nineteen brutes as one ogre. You walked
+toward an ogre and met a robed cultist.
+
+D85 is what makes this a defect rather than a shortfall: it bound the tile to the creature
+*cast for it*, and said so — "the thing you see coming has to be the thing you meet". With
+sixteen paintings, family was the most that promise could be kept at. Family is good
+information at the far end of a dark hall and the **wrong** information four tiles away,
+where the sprite is big enough to be a promise.
+
+**The fronts were not painted, they were cut from the plates already on disk.**
+`assets/art/enemies/<id>.png` is a matted, bottom-anchored front view of exactly this
+creature, so `tools/derive_iso_fronts.gd` reads its alpha and re-places it on a 128x192
+footed canvas. Thirty-five files for nothing, and — the part that matters — the floor figure
+and the arena figure are **the same picture by construction**, not by a prompt asking nicely.
+A fresh iso painting of `cultist` would have been a second opinion about what a cultist looks
+like, which is the defect, not the fix.
+
+Aspect is preserved, and that is load-bearing rather than incidental: a rat is wide and short,
+lands in the bottom third of its canvas, and `IsoFooting.rect` then draws it small, while the
+ogre fills its two tiles. **Size on the floor falls out of the painting's own proportions**,
+the same trade `IsoFooting` already makes for the stand point.
+
+**They live in `iso/foe/` because `brute` is both a family and an archetype id.**
+`mon_brute_s.png` would have named two different pictures and the derive step would have
+overwritten the family fallback with one member of it. A subdirectory makes that impossible
+for every id rather than for the one that was noticed.
+
+**Lookup is lazy and three-tiered**: the archetype's own painting, then its family, then the
+tier glyph — each a weaker claim about what is standing there, and the floor never makes a
+stronger one than it can keep. Loaded on demand because a floor casts a handful of thirty-five
+pairs and each load runs `IsoFooting.offset` over the whole image.
+
+### D199 — Six plates had holes in them, and the arena was the wrong place to look
+
+Reviewing the derived fronts, six came back with the field showing through the subject:
+`hexer` had lost most of its robe, `tomb_guard` the interior of its shield, `false_step`,
+`pale_acolyte`, `the_gardener` and `rot_priest` were streaked through. **The damage was in the
+shipped combat plates**, so it was in the arena too, and had been since they were installed.
+
+It had never been seen because of *where* it was seen. `combat.gd` draws an enemy over a dark
+painted corridor and a hole in a chest reads as shadow. Put the same alpha on a lit stone
+floor — the brightest band on the screen — and it is a window. **A cutout can only be judged
+against something brighter than it**, which is why the check that found this is a render onto
+flat magenta, and why that render is now how these are looked at.
+
+**Two repairs were tried and both were wrong, which is the useful half.**
+
+* *Re-cutting* (the `rematte_iso.gd` mechanism, D152) made **every one of the thirty-five
+  plates 5-25 points more opaque**, healthy ones included: matting an already-downscaled image
+  softens the silhouette and the new edge counts as subject. That tool works on the iso
+  figures because they came off a sheet and kept a border of field inside their cells; a plate
+  was trimmed at install and has none. A repair that inflates thirty-five files to fix six is
+  not a repair.
+* *Reclaiming by colour* looked better founded: `apply_alpha` leaves RGB alone, and the mean
+  colour under the cleared pixels is **(0.27, 0.32, 0.37) in all thirty-five files** — the
+  generator's backdrop, still sitting there. But restoring the pixels far from that colour
+  recovered edges only, and on `hexer` it restored a green blob that was painted ground
+  shadow. The paint under the real damage is gone, not masked.
+
+So they were repainted — one sheet of six — and because the fronts derive from the plates,
+that fixed the arena and the floor in one pass. Coverage: `hexer` 17.4% -> 48.3%,
+`false_step` 28.6% -> 42.2%, `tomb_guard` 45.9% -> 50.8%.
+
+**A metric that ranked the damage was written and thrown away**, and it is worth recording
+why: "transparent pixels enclosed by the subject" put `bone_picker` and `crypt_hound` at the
+top — the legitimate gaps between their own legs — and `hexer`, whose robe was eaten from the
+outside in, at the bottom at 0.03%. Enclosure describes where a matte *leaks*, not where it
+*ate*. The magenta render answered in one look what the number got backwards.
+
+### D200 — A key colour you can find is a key colour you can see
+
+The brief for the new sheets asked for a flat **pure magenta** field, on the reasoning that a
+backdrop maximally unlike the subject is maximally easy to remove. That is true of *detection*
+and it is the opposite of true for *residue*: the first keyed batch came back with bright pink
+patches inside the creatures and a pink rim around them. The art was clean; the pipeline was
+not. Three separate defects, none of which the muted-slate fields had ever exposed:
+
+1. **Trapped field that is not enclosed.** `fill_trapped` only clears a pocket sealed off from
+   the frame, and that caution is correct for a slate field where a subject pixel can
+   legitimately be slate. A keyed sheet is a different contract — the brief promises the colour
+   appears nowhere in the subject — so `cutout_lib.key_clear` clears it **wherever it appears**.
+   Opt-in via `install_sheet --key`, because what makes it safe is a promise made in the
+   *prompt*, not a property of the image. Measured: 108-724 opaque and 497-1094 semi-transparent
+   magenta pixels per figure, down to 1-8 and 30-62.
+2. **The field's colour on the surviving rim.** `feather_edge` grades a rim pixel's alpha; it
+   never takes the backdrop's colour *out* of one that stays opaque. `despill_edge` repaints
+   those from the subject's own interior — it never needs to know what the key colour was,
+   which is what stops it eating a subject that is legitimately that hue (this batch had a
+   violet-grey spider).
+3. **The backdrop still under the alpha.** Cutting sets alpha and leaves RGB, and iso art
+   renders with `texture_filter = LINEAR`, which samples neighbouring texels *regardless of
+   alpha* — so the colour under the cut is dragged back into the sprite's edge at every zoom,
+   and `place`'s LANCZOS downscale does it before the file is even written. 4158-9222
+   transparent-but-magenta pixels per figure. `bleed_alpha` pushes the subject's colour outward
+   so nothing outside the painting survives to be sampled. **Every cutout this library has ever
+   written carries its own backdrop under the alpha**; it only became visible when the backdrop
+   was loud.
+
+**Two of those three needed a second try, and the reason is the same both times: a pass that
+runs at the wrong moment, or stops one ring short.**
+
+* *The despill had a fixed point.* It repaints a contaminated rim pixel from its own clean
+  interior — and a feature only a pixel or two wide has no interior, so every neighbour is
+  contaminated too, nothing is ever repaired, and the whole feature stays pink. Iterating does
+  not rescue it, because a fixed point iterates to itself. The hexer's raised fingers were the
+  case that showed it, at the size the floor actually draws them. So when nothing clean is
+  found locally, the search WIDENS (`DESPILL_WIDE`) — still the subject's own paint, just from
+  further along the same limb, which is the only alternative to inventing a colour. Repairs on
+  that one file went 311 -> 1816 pixels.
+* *And it ran before the resize.* `place` scales the cell down with LANCZOS AFTER the matte,
+  and a wide transparent gap between two thin features still holds the key colour in its
+  middle — deeper than `bleed_alpha`'s three rings — so the downscale mixed magenta straight
+  back into the features just cleaned. The despill runs again on the FINAL canvas now, which
+  is the only place those pixels exist.
+
+Measured over the 35 back views: 2579 visibly magenta pixels after the first version, 526
+after both fixes, and most of what remains is a detector artefact rather than residue — a
+violet mushroom cap and a violet-grey spider match "mostly red and blue, little green" because
+they genuinely are that colour.
+
+**The same defect was sitting in the six repainted PLATES**, because they were installed one
+step before `--key` existed. `derive_iso_fronts.gd` then copied it faithfully into the floor
+sprites — `the_gardener_s` 1526 magenta pixels, `hexer_s` 1314 — which is the derivation
+working exactly as designed, propagating whatever the plate says. Reinstalling the repaint
+sheet with the full pipeline and re-deriving took all 35 plates to **1 pixel between them**.
+
+**`--inset=N` is the fourth thing that sheet needed and the least interesting**: asked for six
+subjects on one continuous field, the generator ruled the grid, and a hairline on every cell
+boundary put each cell's border at 70-73% flat against the 80% `BORDER_AGREE` requires. All six
+refused, correctly. The inset crops the ruler, not the subject, and it is an argument rather
+than a default because only the caller knows which sheet is which.
+
+### D201 — She was sliding, and the second effect had to be a stretch
+
+The hero glided: `walk_t` lerps her position over `STEP_TIME`, but the sprite is one painting
+with both feet planted, so the floor slid under a standing figure. The step machinery was
+already there; what was missing was that anything moved.
+
+**One lift arc per step, `sin(PI * walk_t)`, and the phase is the whole design.** The model
+moves one tile per turn, so a step *is* the unit of the gait — the arc is zero at both ends by
+construction, which means her feet are on the ground at the instant she arrives no matter what
+the amplitude is or what `STEP_TIME` becomes. An amplitude tuned until the landing happens to
+look right stops being right the next time either is touched.
+
+It lives in `IsoFooting` rather than `iso_run.gd` for that file's stated reason: `iso_run.gd`
+references autoloads and cannot be loaded in a `--script` run, so anything in it can be looked
+at but not asserted. **That paid immediately.** The second effect was written as a *squash*
+peaking at foot-down, and the new test rejected it: a step ends at exactly 1.0 and the next
+begins at exactly 0.0 with the standing pose in between, so an effect peaking at the ends sits
+at full strength one frame either side of an unscaled figure — she pops 4.5% shorter the
+instant a key goes down, every step. No amplitude fixes a phase error. An effect on this arc
+can only be continuous if it is zero where the lift is zero, which leaves the rise itself to
+carry it, so she **extends** as she comes up. The bug was invisible in a screenshot: one frame
+at each end of a 0.13s step.
+
+Wanderers bob off the same `walk_t`, and only while `walk_mons` says they are actually crossing
+ground — one that has just come into sight simply appears, which is the distinction
+`_mon_slide` already made. Her stride frames (`hero_<face>_<a|b>`) alternate once per step in
+`_begin_walk` rather than off a clock, so the gait follows the model's steps and cannot drift
+out of phase with a walk that pauses for a fight; a checkout without them falls back to the
+standing painting and still walks.

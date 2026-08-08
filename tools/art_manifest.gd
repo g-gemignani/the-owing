@@ -987,8 +987,17 @@ func _iso() -> void:
 		Kind.PAINT,
 		"A small figure seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field for the matte. It is composited onto a lit stone floor at about 90px tall and anchored BY ITS FEET, so the feet must be the lowest painted pixel and there must be no ground, no shadow, no plinth and no scenery under it. The whole tier's defect is that the current set is unlit: every figure measures luma 0.16-0.21 against a floor of 0.43-0.49, so they read as holes cut in the ground rather than as people standing on it. So these must be MID-VALUE AND LIT — clearly lighter than the floor across most of their body, lit from the upper left, with real interior: cloth, metal, skin, a face. A rim light alone is what is already there and is not enough.",
 		"Two columns and one row per figure. The LEFT column faces the camera, the RIGHT column is the SAME figure from behind, same size, same colours, same silhouette width — it is one character turned around, not a second character. Flat even background, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- iso_figures <sheet.png>`")
-	_add("iso/hero_s.png", "128x192", "The player, facing the camera.")
-	_add("iso/hero_n.png", "128x192", "The player, walking away.")
+	_add("iso/hero_s.png", "128x192", "The player, facing the camera. Standing still: this is the pose the floor draws whenever she is not mid-step.")
+	_add("iso/hero_n.png", "128x192", "The player, walking away. Standing still.")
+	# Her walk. Two poses per facing, alternated once per step by `iso_run.stride`, and the
+	# reason there are two rather than four is that the model moves one tile per turn — a
+	# step IS the unit of the cycle, so a third pose would never be on screen at a decision
+	# point. The standing paintings above stay the idle frame, so this is a set of four, not
+	# a replacement for the two.
+	for e in [["s", "facing the camera"], ["n", "walking away"]]:
+		for foot in [["a", "LEFT"], ["b", "RIGHT"]]:
+			_add("iso/hero_%s_%s.png" % [e[0], foot[0]], "128x192",
+				("The player %s, mid-stride with her %s leg leading. Same character, same cloak, same colours and the same height as `hero_%s.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into." % [e[1], foot[1], e[0]]))
 	for fam in Balance.ISO_FAMILIES:
 		_add("iso/mon_%s_s.png" % fam, "128x192",
 			"A %s, facing the camera. It IS the fight this tile becomes, so it must match the arena's %s (D85)." % [fam, fam])
@@ -1001,6 +1010,19 @@ func _iso() -> void:
 		_add("iso/wander_%d_s.png" % i, "128x192",
 			"Wanderer design %d, facing the camera — something else walking the floor." % i)
 		_add("iso/wander_%d_n.png" % i, "128x192", "Wanderer design %d, from behind." % i)
+
+	_section("Tier 8c — the creature on the tile",
+		"One figure per enemy archetype, so the thing you walk toward is the thing you meet.",
+		Kind.PAINT,
+		"A small figure seen in three-quarter ISOMETRIC view from slightly above, standing on nothing, on a flat even field of a single colour that appears nowhere in the subject. Anchored BY ITS FEET: the feet must be the lowest painted pixel, with no ground, no shadow, no plinth and no scenery under it. Mid-value and lit, clearly lighter than the floor across most of the body.",
+		"ONLY THE `_n` FILES ARE FOR A GENERATOR. Every `_s` is CUT FROM THE COMBAT PLATE by `tools/derive_iso_fronts.gd` and must never be painted separately — the whole point of this tier is that the floor figure and the arena figure are the same picture, and a second opinion about what a cultist looks like is the defect it exists to remove. Draw the `_n` files against the matching `enemies/<id>.png`: same creature, same colours, same proportions, turned around. Install: `godot --headless --script tools/install_sheet.gd -- iso_foes <sheet.png> --only=<ids>`")
+	for aid in PixelArt.archetype_ids():
+		var ae := load("res://resources/enemies/%s.tres" % aid) as EnemyData
+		var nm: String = ae.name if ae != null else String(aid)
+		_add("iso/foe/%s_s.png" % aid, "128x192",
+			"**%s**, facing the camera. GENERATED, do not paint: `tools/derive_iso_fronts.gd` cuts it from `enemies/%s.png`." % [nm, aid])
+		_add("iso/foe/%s_n.png" % aid, "128x192",
+			"**%s**, from behind. The same creature as `enemies/%s.png`, turned around." % [nm, aid])
 
 	_section("Tier 8b — isometric furniture",
 		"What a tile IS, read off the floor before you walk into it.",

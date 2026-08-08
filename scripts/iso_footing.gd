@@ -173,6 +173,55 @@ static func rect(tex: Texture2D, centre: Vector2, t: Vector2, height: float,
 	return Rect2(foot - Vector2(w * (0.5 + dx), height), Vector2(w, height))
 
 
+## --- the gait ---------------------------------------------------------------------
+##
+## How far a walking figure rises at the top of its step, as a fraction of a tile's height.
+##
+## ONE arc per step rather than a repeating sine, and that is the whole design. The model
+## moves one tile per turn, so a step IS the unit of the gait: `sin(PI * walk_t)` is zero at
+## both ends by construction, so the feet are on the ground at the moment of arrival no
+## matter what this amplitude is or what `iso_run.STEP_TIME` becomes. An amplitude tuned
+## until the landing happens to look right is one that stops being right the next time
+## either number is touched — and a figure whose feet go through the floor on arrival is the
+## single most visible thing this screen can get wrong.
+##
+## It lives here rather than in `iso_run.gd` for the reason the rest of this file does: that
+## script references autoloads and cannot be loaded in a `--script` run at all, so anything
+## in it can be looked at but not asserted. `tests/test_art.gd` pins both ends of the arc.
+const GAIT_LIFT := 0.07
+## How much a figure extends as it rises, as a fraction of its height.
+##
+## This was a SQUASH — compression peaking at the two moments the foot is down — and the
+## test below rejected it, correctly. A step ends at `walk_t` exactly 1.0 and the next
+## begins at exactly 0.0, with the standing pose in between, so an effect that peaks at the
+## ends is at full strength one frame either side of an unscaled figure: she pops 4.5%
+## shorter the instant a key goes down, every step. Nothing about the amplitude fixes that;
+## the phase is what is wrong.
+##
+## An effect on this arc can only be continuous if it is zero where the lift is zero, which
+## leaves the rise itself to carry it. So she EXTENDS as she comes up, which is the same
+## shape the lift already has and reads as a stride reaching rather than as a wobble.
+const GAIT_STRETCH := 0.025
+
+
+## The vertical offset of a figure `walk_t` of the way through a step, on a tile of size `t`.
+## Zero while standing still (`walk_t` >= 1), which is the state every other measurement on
+## this screen is written against.
+static func gait_lift(t: Vector2, walk_t: float) -> Vector2:
+	if walk_t >= 1.0 or walk_t < 0.0:
+		return Vector2.ZERO
+	return Vector2(0.0, -t.y * GAIT_LIFT * sin(PI * walk_t))
+
+
+## The height multiplier that goes with it. Applied to a rect that is anchored by its FEET
+## (`rect` above), so the extension happens upward from the ground rather than outward around
+## the middle — the feet stay where they are and the figure reaches.
+static func gait_stretch(walk_t: float) -> float:
+	if walk_t >= 1.0 or walk_t < 0.0:
+		return 1.0
+	return 1.0 + GAIT_STRETCH * sin(PI * walk_t)
+
+
 ## `tex` mirrored left-to-right, as a texture in its own right. Null if it cannot be read,
 ## which the caller treats as "no mirrored art" and falls back to the unflipped file.
 static func flipped(tex: Texture2D) -> Texture2D:
