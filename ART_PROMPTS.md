@@ -8,7 +8,7 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**53 files can be generated.** The rest of the list cannot, and the sections below
+**23 files can be generated.** The rest of the list cannot, and the sections below
 say which and why — the expensive mistake is not a bad painting, it is a good
 painting of a thing that had to be computed.
 
@@ -27,7 +27,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 53 times.
+   improve it between images. Its job is to be identical 23 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -129,44 +129,14 @@ Nothing to generate here — all 20 present.
 
 A small figure seen from the ISOMETRIC CAMERA THIS GAME ACTUALLY USES, which is not a head-on view. The floor tile is 116x58 - exactly 2:1 - so the camera looks DOWN at the floor from about 27 degrees above it. Draw the figure from that height: you see the top of its head and its shoulders, its feet are further down the frame than a head-on view would put them, and the ground it stands on would read as a flattened diamond rather than a line. It is also TURNED: the four walking directions all run diagonally across the screen, so the figure faces a DIAGONAL, three-quarter, never straight out of the frame. IT FACES DOWN AND TO THE LEFT - toward the camera and to the viewer's left, at 45 degrees, so the viewer sees the front of it and its left-hand side at once. Standing on nothing, on a flat even field for the matte: the feet must be the lowest painted pixel and there must be no ground, no shadow, no plinth and no scenery under it. Mid-value and lit from above and in front, clearly lighter than the floor across most of the body, with real interior: cloth, metal, skin, a face.
 
-**Generate these as ONE image, not 52.** A 8x7 grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is a RE-ROLL of 52 of this tier's 70 files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- iso_foes <sheet.png> --only=cultist_s,cultist_n,deep_warden_s,deep_warden_n,drowned_thrall_s,drowned_thrall_n,ember_hound_s,ember_hound_n,false_step_s,false_step_n,forge_hound_s,forge_hound_n,fungal_host_s,fungal_host_n,grave_moth_s,grave_moth_n,grave_sexton_s,grave_sexton_n,hexer_s,hexer_n,last_vendor_s,last_vendor_n,market_ghoul_s,market_ghoul_n,marrow_abbot_s,marrow_abbot_n,marrow_priest_s,marrow_priest_n,maw_tender_s,maw_tender_n,mycelial_lord_s,mycelial_lord_n,ossuary_wretch_s,ossuary_wretch_n,pale_acolyte_s,pale_acolyte_n,plague_rat_s,plague_rat_n,rat_swarm_s,rat_swarm_n,rot_priest_s,rot_priest_n,slag_wretch_s,slag_wretch_n,spore_thing_s,spore_thing_n,the_gardener_s,the_gardener_n,tomb_guard_s,tomb_guard_n,warden_s,warden_n`
+**Generate these as ONE image, not 22.** A 5x5 grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is a RE-ROLL of 22 of this tier's 70 files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- iso_foes <sheet.png> --only=mycelial_lord_s,mycelial_lord_n,ossuary_wretch_s,ossuary_wretch_n,pale_acolyte_s,pale_acolyte_n,plague_rat_s,plague_rat_n,rat_swarm_s,rat_swarm_n,rot_priest_s,rot_priest_n,slag_wretch_s,slag_wretch_n,spore_thing_s,spore_thing_n,the_gardener_s,the_gardener_n,tomb_guard_s,tomb_guard_n,warden_s,warden_n`
 
-**52 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
+**22 to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back.
 
-*All 52 have the same defect: HEAD-ON, and the floor is isometric — redraw at the camera's own angle (see the brief)..*
+*All 22 have the same defect: HEAD-ON, and the floor is isometric — redraw at the camera's own angle (see the brief)..*
 
 | save as | size | subject |
 |---|---|---|
-| `iso/foe/cultist_s.png` | 128x192 | **Cultist**, walking down-left toward the camera. The same creature as `enemies/cultist.png`, turned onto the diagonal. |
-| `iso/foe/cultist_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/deep_warden_s.png` | 128x192 | **The Deep Warden**, walking down-left toward the camera. The same creature as `enemies/deep_warden.png`, turned onto the diagonal. |
-| `iso/foe/deep_warden_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/drowned_thrall_s.png` | 128x192 | **Drowned Thrall**, walking down-left toward the camera. The same creature as `enemies/drowned_thrall.png`, turned onto the diagonal. |
-| `iso/foe/drowned_thrall_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/ember_hound_s.png` | 128x192 | **Ember Hound**, walking down-left toward the camera. The same creature as `enemies/ember_hound.png`, turned onto the diagonal. |
-| `iso/foe/ember_hound_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/false_step_s.png` | 128x192 | **The False Step**, walking down-left toward the camera. The same creature as `enemies/false_step.png`, turned onto the diagonal. |
-| `iso/foe/false_step_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/forge_hound_s.png` | 128x192 | **Forge Hound**, walking down-left toward the camera. The same creature as `enemies/forge_hound.png`, turned onto the diagonal. |
-| `iso/foe/forge_hound_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/fungal_host_s.png` | 128x192 | **Fungal Host**, walking down-left toward the camera. The same creature as `enemies/fungal_host.png`, turned onto the diagonal. |
-| `iso/foe/fungal_host_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/grave_moth_s.png` | 128x192 | **Grave Moth**, walking down-left toward the camera. The same creature as `enemies/grave_moth.png`, turned onto the diagonal. |
-| `iso/foe/grave_moth_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/grave_sexton_s.png` | 128x192 | **The Grave-Sexton**, walking down-left toward the camera. The same creature as `enemies/grave_sexton.png`, turned onto the diagonal. |
-| `iso/foe/grave_sexton_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/hexer_s.png` | 128x192 | **Hexer**, walking down-left toward the camera. The same creature as `enemies/hexer.png`, turned onto the diagonal. |
-| `iso/foe/hexer_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/last_vendor_s.png` | 128x192 | **The Last Vendor**, walking down-left toward the camera. The same creature as `enemies/last_vendor.png`, turned onto the diagonal. |
-| `iso/foe/last_vendor_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/market_ghoul_s.png` | 128x192 | **Market Ghoul**, walking down-left toward the camera. The same creature as `enemies/market_ghoul.png`, turned onto the diagonal. |
-| `iso/foe/market_ghoul_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/marrow_abbot_s.png` | 128x192 | **The Marrow-Abbot**, walking down-left toward the camera. The same creature as `enemies/marrow_abbot.png`, turned onto the diagonal. |
-| `iso/foe/marrow_abbot_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/marrow_priest_s.png` | 128x192 | **Marrow Priest**, walking down-left toward the camera. The same creature as `enemies/marrow_priest.png`, turned onto the diagonal. |
-| `iso/foe/marrow_priest_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
-| `iso/foe/maw_tender_s.png` | 128x192 | **Maw Tender**, walking down-left toward the camera. The same creature as `enemies/maw_tender.png`, turned onto the diagonal. |
-| `iso/foe/maw_tender_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
 | `iso/foe/mycelial_lord_s.png` | 128x192 | **The Mycelial Lord**, walking down-left toward the camera. The same creature as `enemies/mycelial_lord.png`, turned onto the diagonal. |
 | `iso/foe/mycelial_lord_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
 | `iso/foe/ossuary_wretch_s.png` | 128x192 | **Ossuary Wretch**, walking down-left toward the camera. The same creature as `enemies/ossuary_wretch.png`, turned onto the diagonal. |

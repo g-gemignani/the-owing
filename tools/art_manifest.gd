@@ -236,6 +236,21 @@ const REDO_CLEARED := [
 	"iso/foe/brute_s.png", "iso/foe/brute_n.png",
 	"iso/foe/cinder_knight_s.png", "iso/foe/cinder_knight_n.png",
 	"iso/foe/crypt_hound_s.png", "iso/foe/crypt_hound_n.png",
+	"iso/foe/cultist_s.png", "iso/foe/cultist_n.png",
+	"iso/foe/deep_warden_s.png", "iso/foe/deep_warden_n.png",
+	"iso/foe/drowned_thrall_s.png", "iso/foe/drowned_thrall_n.png",
+	"iso/foe/ember_hound_s.png", "iso/foe/ember_hound_n.png",
+	"iso/foe/false_step_s.png", "iso/foe/false_step_n.png",
+	"iso/foe/forge_hound_s.png", "iso/foe/forge_hound_n.png",
+	"iso/foe/fungal_host_s.png", "iso/foe/fungal_host_n.png",
+	"iso/foe/grave_moth_s.png", "iso/foe/grave_moth_n.png",
+	"iso/foe/grave_sexton_s.png", "iso/foe/grave_sexton_n.png",
+	"iso/foe/hexer_s.png", "iso/foe/hexer_n.png",
+	"iso/foe/last_vendor_s.png", "iso/foe/last_vendor_n.png",
+	"iso/foe/market_ghoul_s.png", "iso/foe/market_ghoul_n.png",
+	"iso/foe/marrow_abbot_s.png", "iso/foe/marrow_abbot_n.png",
+	"iso/foe/marrow_priest_s.png", "iso/foe/marrow_priest_n.png",
+	"iso/foe/maw_tender_s.png", "iso/foe/maw_tender_n.png",
 ]
 
 ## A `REDO_CLEARED` list lived here while Tier 2 was half repainted — the thirty-five
