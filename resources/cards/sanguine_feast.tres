@@ -6,10 +6,12 @@
 script = ExtResource("1")
 id = "sanguine_feast"
 name = "Sanguine Feast"
-description = "Deal 10 damage. Heal for the damage dealt."
-cost = 2
+description = "Spend all your remaining Energy. Deal 4 damage, +6 per Energy spent. Heal for the damage dealt."
+spend_all_energy = true
+damage_per_energy = 6
+cost = 1
 type = 0
 rarity = 2
 level = 1
-damage = 10
+damage = 4
 lifesteal = true

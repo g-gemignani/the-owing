@@ -404,11 +404,25 @@ func clear_run() -> void:
 			# ...and the debt, judged on the run that just ended (D191). Here for the same
 			# reason the depth log is: this is where every ending meets, and the gold is paid
 			# by the caller because MetaState is where it lands.
-			var owed_debt: int = meta.settle_debt(dungeon_id, iso.is_complete(),
-				iso.depth + 1, iso.caught_ever)
-			if owed_debt > 0:
-				meta.add_gold(owed_debt)
-				last_haul += " A debt is settled: +%d gold." % owed_debt
+			#
+			# Handed the run's own counters rather than three hand-picked facts (D205). That
+			# is the whole of what made the catalogue possible: D191 had exactly three
+			# conditions because three facts were being passed here, and a fourth condition
+			# would have meant a fourth argument and a fourth thing to forget.
+			var owed_debt: Dictionary = meta.settle_debt(dungeon_id, iso.is_complete(),
+				iso.depth + 1, iso.run_tally)
+			var debt_gold := int(owed_debt.get("gold", 0))
+			if debt_gold > 0:
+				meta.add_gold(debt_gold)
+				last_haul += " A debt is settled: +%d gold." % debt_gold
+				# The pack is BANKED, not escrowed. Escrow is what a run stands to lose (D20)
+				# and this run is already over — a pack put at risk here would be forfeitable
+				# by a death that has already happened.
+				var won_pack := String(owed_debt.get("pack", ""))
+				if won_pack != "":
+					meta.add_pack(Balance.PACK_TREASURE, dungeon_id, won_pack)
+					last_haul += " And a %s pack for the trouble." % \
+						Balance.PACK_TIER_NAME.get(won_pack, "Worn")
 	traversal = null
 	dungeon_id = ""
 	deep_entry = false

@@ -73,14 +73,35 @@ const DIFFICULTIES := [
 		"blurb": "The dungeons as they were before difficulty could be chosen."},
 	{"name": "Delver", "hp": 1.00, "dmg": 1.05, "ratio": 1.8,
 		"blurb": "A built deck stops being an answer to everything. The first floors are unchanged."},
-	{"name": "Reckoning", "hp": 1.00, "dmg": 1.12, "ratio": 2.8,
+	{"name": "Reckoning", "hp": 1.00, "dmg": 1.12, "ratio": 2.4,
 		"blurb": "The intended weight. What you have built is measured against the place you took it."},
 	# NOT "The Owing": that is the game's own title, and a difficulty rung wearing it
 	# would make the one most-read proper noun in the project mean two things. Same
 	# register, its own noun.
-	{"name": "Nothing Forgiven", "hp": 1.00, "dmg": 1.20, "ratio": 4.0,
+	{"name": "Nothing Forgiven", "hp": 1.00, "dmg": 1.20, "ratio": 3.2,
 		"blurb": "Every fight is a real question. Nothing is written off."},
 ]
+## The `ratio` column came DOWN in D209 — 2.8/4.0 to 2.4/3.2 — and the `dmg` column did
+## not move at all. Both of those are the opposite of the first attempt, and the test is
+## what turned it round.
+##
+## Raising `dmg` was tried first, because it is the one number here that lands after every
+## clamp. `tests/test_difficulty.gd` rejected it in its own words — *a flat multiplier
+## wearing a curve's clothes* — and it was right: a rung has to cost a BUILT deck more than
+## a starting one, and a flat multiplier by construction costs them the same.
+##
+## Lowering `ratio` looks backwards for a difficulty rung and is the move that makes the
+## ladder lean harder on the strong. At d6 a built deck (ratio 15.1) is clamped by
+## `ratio_ceiling` at any multiplier above about 1.6, so every point above that lands ONLY
+## on the deck too weak to be clamped. Measured at the top rung: 4.0 leans 1.07, 3.2 leans
+## 1.15 against a required 1.10. The column was punishing the beginner and sliding off the
+## veteran, which is precisely the fault its own guard names.
+##
+## Wayfarer's row is untouched so the rung that must reproduce a pre-difficulty save keeps
+## reproducing one at the multiplier level. Note honestly that D209 moved the ratio
+## ceiling and DMG_POWER_K underneath ALL four rungs, Wayfarer included: a retune of the
+## curve is not something a legacy rung can be held harmless from, and pretending otherwise
+## would make DIFFICULTY_LEGACY a promise this file cannot keep.
 ## The rung a NEW save starts on. Existing saves are migrated to whatever rung
 ## reproduces the numbers they were played at — see `MetaState.load_game`.
 const DIFFICULTY_DEFAULT := 2
@@ -145,6 +166,23 @@ const HAND_SIZE := 5
 ## which is a buff to any build that wants its discard back and the opposite of what
 ## a cap is for. `CombatEngine.draw_cards()` is the one place that enforces this.
 const MAX_HAND_SIZE := 10
+
+## Most exhausted cards a `per_exhausted` payoff will count (D204).
+##
+## MEASURED, and the reason it exists at all. The exhaust tally is monotonic across a
+## whole fight, so an uncapped payoff is a scaler with no ceiling inside the one system
+## that already punishes long fights from the other side — and `power_value()` is a
+## single static number, so no price can ever be right for it. Uncapped, at 120 trials:
+## the Exhaust build cleared **100% / 100% / 97%** across the Slag Pits, the Sunken
+## Vault and THE MAW at d8 on five clears, losing 7% of its HP to a boss it had no
+## business reaching. Red Mind was priced at 23 and delivering 58 by turn five, which is
+## the D17 unpriced-mechanic failure with a new subject.
+##
+## Six, because six is a hand and a bit: it is reachable in one good Cull, so the build
+## still turns on when it is supposed to, and it stops the fifth turn being worth twice
+## the third. What the payoffs are worth is now bounded, which is what makes them
+## priceable — `CardData.power_value()` charges `per_exhausted` at two thirds of this.
+const EXHAUST_TALLY_CAP := 6
 
 const MAX_ENERGY := 3
 const BASE_MAX_HP := 60
@@ -297,7 +335,27 @@ const HP_POWER_K := 0.68
 ## maxed-deck guard wants it LOWER (at depth, pierce multiplies it against a deck
 ## that already bled for its own power). Measured ceiling before that guard fails:
 ## 0.07. 0.060 is the most attrition the guard allows.
-const DMG_POWER_K := 0.060
+##
+## 0.060 -> 0.085 in D209, and the sentence above is left standing because it was true when
+## written and is the reason this was re-measured rather than nudged. The limit is not a
+## property of this constant alone: it is where the d6 comparison in `tests/test_balance.gd`
+## flips, and D209 moved the ceiling curve that comparison runs on.
+##
+## **This is the lever the ratio ceiling could not be.** Enemy damage carries the scaling
+## ratio as `1 + DMG_POWER_K * (sr - 1)`, so at 0.060 even large ceiling moves barely
+## register: the D209 lift raised d3's ceiling by 37% and moved that column four points.
+## Raising K is what lets a strong deck's own power reach it while leaving a starter deck at
+## ratio ~1 almost exactly where it was — the reason the opening survives this retune at
+## d1 94%, where the flat `dmg` column took it to 23%.
+##
+## **Do not tune this by watching `test_difficulty.gd` flip.** That guard probes one integer
+## damage value, which quantises in steps of about 6% — finer than the 10% margin it
+## asserts — so 0.095 fails and 0.105 passes and neither fact means anything. 0.085 is taken
+## because a probe averaged over rolls, turns and tiers puts the top rung's lean at 1.15
+## against a required 1.10, with the margin on the right side of the rounding rather than
+## made of it. Raising the resolution of that probe is the honest fix and belongs to
+## whoever next needs headroom here.
+const DMG_POWER_K := 0.085
 ## The knee where further ratio starts to compress, and now a BACKSTOP rather than a
 ## working part: it sits above the strongest reachable deck (31.7), so nothing a
 ## player can build is softened.
@@ -362,6 +420,34 @@ const RATIO_CEILING_BASE := 1.4
 ## The deepest dungeon (d8) now ceilings at 33.25 against a reachable 31.7.
 const RATIO_CEILING_PER_DEPTH := 4.55
 
+## The early LIFT (D209), and it is a second line rather than a steeper one.
+##
+## The straight line above is pinned at both ends — 1.4 at d1 so a fresh player is never
+## scaled, 33.25 at d8 so the deepest dungeon out-reaches the strongest deck — so the
+## MIDDLE was never chosen. It was whatever a line between those two points happened to
+## give: 5.95 at d2, 10.5 at d3, 15.05 at d4. Once D208 put the relics a player's clears
+## have already bought them onto the profiles, mid-game decks ran at ratio 6-9 and sat
+## above every one of those figures, with the clamp eating the difference. Measured: at
+## Reckoning the rung's own `ratio` multiplier was ALREADY a no-op in 25 of 42 cells,
+## which is why sweeping it 2.8 -> 12.0 bought five points of table mean. The line was the
+## wall, not the rung.
+##
+## **Steepening the line does not work, and the test says so out loud.** Slope 7.0 raises
+## d6 from 24.15 to 33.25, and `tests/test_balance.gd` fails with *power is punished at
+## d6: starter loses 67.4 HP/fight, maxed loses 77.3* — the D45/D52 regression exactly,
+## because at d6 only the strong deck was under the old ceiling and only the strong deck
+## pays for raising it. And any monotone curve from (1, 1.4) to (8, 33.25) that runs above
+## the line in the middle is also above it at d6, so the shape had to be a lift that
+## REJOINS rather than a curve that bulges.
+##
+## Hence: rise faster from the same origin, stop at `EARLY_LIFT_MAX`, and hand back to the
+## old line where the old line overtakes it. d1 is untouched by construction, d2-d5 rise
+## (5.95 -> 7.9, 10.5 -> 14.4, 15.05 -> 20.9, 19.6 -> 22.0), and d6, d7 and d8 keep the
+## exact ceilings they were tuned against. The walkover was in the MIDDLE; a knob that
+## cannot tell the middle from the ends takes the ends down with it.
+const EARLY_LIFT_SLOPE := 6.5
+const EARLY_LIFT_MAX := 22.0
+
 ## The strongest ratio a fully-built player can reach: maxed card levels plus a
 ## full relic set. Measured with tools/sim_balance.gd, not guessed. The deepest
 ## dungeon must scale past this or the endgame stops resisting.
@@ -378,7 +464,9 @@ const MAX_ACHIEVABLE_RATIO := 31.7
 
 ## The power level `difficulty` will scale its enemies to match.
 static func ratio_ceiling(difficulty: int) -> float:
-	return RATIO_CEILING_BASE + RATIO_CEILING_PER_DEPTH * float(maxi(1, difficulty) - 1)
+	var d := float(maxi(1, difficulty) - 1)
+	return maxf(RATIO_CEILING_BASE + RATIO_CEILING_PER_DEPTH * d,
+		minf(RATIO_CEILING_BASE + EARLY_LIFT_SLOPE * d, EARLY_LIFT_MAX))
 
 ## The ratio enemies actually scale against: the player's, capped by the dungeon.
 ## Applied inside enemy_max_hp / enemy_damage so no caller can forget it.
@@ -402,8 +490,26 @@ static func deck_power(deck: Array) -> float:
 static func deck_cost(deck: Array) -> float:
 	var c := 0.0
 	for card in deck:
-		c += card.eff_cost()
+		c += card_energy_cost(card)
 	return maxf(1.0, c)
+
+## What playing one card actually costs you in energy.
+##
+## Not the same question as `eff_cost()`, and D204 is where they came apart.
+## `eff_cost` is what leaves the pool; this is what the card costs you to play, and
+## for a `spend_all_energy` card the difference is the rest of the turn. Charging Stave
+## In the 1 it is authored at told `power_ratio` a deck could play three of them in a
+## turn, when the card's whole rule is that you can play ONE — which is the same
+## unpriced-throughput hole `deck_cost` above already documents for a levelled Set
+## Stone, pointing the other way.
+##
+## One owner because two things divide power by it — `deck_cost` here and the rarity
+## ladder in `test_rarity.gd` — and the second one drew the opposite conclusion from
+## the same cards while this was inlined in both. That is D34 in miniature.
+static func card_energy_cost(card) -> float:
+	if card.spend_all_energy:
+		return float(MAX_ENERGY)
+	return float(card.eff_cost())
 
 # --- powers (once-per-turn abilities) ---
 const POWER_DIR := "res://resources/powers/"
@@ -1250,65 +1356,246 @@ const POCKET_GUARDS_PER_RUN := 3
 static func pocket_guardable(prize: String) -> bool:
 	return prize != POCKET_NOTHING
 
-# --- debts: pick what you owe (D191) ---------------------------------------------
+# --- debts: pick what you owe (D191, rebuilt in D205) ----------------------------
 #
-# A hub-level contract: three offered, you take one, it names a PLACE and a CONDITION. This is
-# the piece that makes the campaign feel chosen rather than walked, because the player decides
-# which dungeon is next by deciding which debt to take — and of everything in the plan it is
-# the closest fit to the game's own title and voice.
+# A contract on a PLACE and a CONDITION, taken at the door of the place it names. This is the
+# piece that makes the campaign feel chosen rather than walked, and of everything in the plan
+# it is the closest fit to the game's own title and voice.
 #
-# Two constraints, and the first is the one that keeps it out of the scaling model. **A debt
-# may never be a card-pool or difficulty MODIFIER on the run, only a condition OBSERVED during
-# it.** A modifier would reopen every scaling question the ratchet exists to close; an
-# observation cannot, because the run is exactly the run it would have been.
+# **D205 moved it to the dungeon row and made it a wager.** D191 offered three at the hub, and
+# the hub lists ZONES: a debt saying "Go to the Drowned Vault and finish it" named a place that
+# was not on the screen offering it, one screen up from the row that could actually be pressed.
+# So the same decision was made twice — pick the debt, then go and pick the dungeon it already
+# picked — and one of those two was always theatre. A dungeon carries its own standing offer
+# now, on the row that already names its difficulty, its aspect and its boss, and taking it is
+# the same gesture as going in.
 #
-# And **every condition must be checkable from state the run already tracks.** If a condition
-# needs new bookkeeping it is the wrong condition — bookkeeping kept for one feature is
-# bookkeeping that goes stale the first time another one moves. The three here read: did you
-# beat it, how deep did you get, and were you ever caught in the open. All three were already
-# being written down for something else.
+# Two constraints from D191 survive unchanged, and the first is what keeps it out of the
+# scaling model. **A debt may never be a card-pool or difficulty MODIFIER on the run, only a
+# condition OBSERVED during it.** A modifier would reopen every scaling question the ratchet
+# exists to close; an observation cannot, because the run is exactly the run it would have been.
+# A stake does not break this: paying gold at the door changes what you own, never what is
+# behind it.
 #
-# It pays the GATE CURRENCY (D178) and gold. Paying the gate is what makes it a route through
-# the world rather than a side quest: a debt settled is a door opened somewhere.
+# **And every condition must be checkable from state the run already tracks.** That rule is why
+# there were only three — did you beat it, how deep did you get, were you ever caught — and it
+# is why there can now be many: `run_tally` (D203's bus on the run's clock) is state the run
+# already tracks, forty-four counters of it. The three originals keep their ids, because they
+# are in saved games, and they are rows in the same table as everything else rather than the
+# surviving arms of a `match`.
+
+## What a dungeon's standing offer is DERIVED from, so it never has to be stored.
+##
+## A function of the place and how many times you have beaten it, exactly as `aspect_for` is
+## (D187) — which buys three things at once. It is stable, so a hub reopened twice shows the
+## same offer and is not a slot machine (D22 is the rule; D191 got there with a "only re-roll
+## when empty" flag, which is state to save and get wrong). It changes when you clear the
+## place, so the second visit is a different contract. And there is nothing to persist, so
+## `debt_offers` and `offer_debts()` are deleted rather than migrated.
+static func debt_for(dungeon_id: String, times_cleared: int) -> String:
+	var rows := DEBT_LIST
+	if rows.is_empty():
+		return ""
+	# Hashed off the id so two dungeons at the same clear count do not offer the same thing,
+	# and stepped by the clear count so one dungeon does not offer the same thing for ever.
+	var h := 0
+	for c in dungeon_id.to_utf8_buffer():
+		h = (h * 31 + int(c)) % 100003
+	return String((rows[(h + maxi(0, times_cleared)) % rows.size()] as Dictionary)["id"])
+
 const DEBT_SETTLE := "settle"
 const DEBT_DEEP := "deep"
 const DEBT_UNSEEN := "unseen"
-const DEBTS := [DEBT_SETTLE, DEBT_DEEP, DEBT_UNSEEN]
-const DEBT_TEXT := {
-	DEBT_SETTLE: "Go to %s and finish it.",
-	DEBT_DEEP: "Go to %s and get to the bottom of it, whatever it costs you.",
-	DEBT_UNSEEN: "Go to %s and finish it without once being caught in the open.",
-}
-## How many are on the table at once. Three, because two is a coin and four is a list.
-const DEBT_OFFERS := 3
+
+## What a debt is sized against. A debt is taken BEFORE the dungeon is generated, so unlike an
+## errand it cannot measure a floor that exists — every supply here is a function of the
+## dungeon's STATIC facts, which is what makes the number on the button the number at the end.
+const DSUPPLY_FLOORS := "floors"     ## how many floors this place has
+const DSUPPLY_FIGHTS := "fights"     ## every fight in it, boss included
+const DSUPPLY_HP := "hp"             ## everything those fights stand up
+const DSUPPLY_DAMAGE := "damage"     ## what they swing for in a turn
+const DSUPPLIES := [DSUPPLY_FLOORS, DSUPPLY_FIGHTS, DSUPPLY_HP, DSUPPLY_DAMAGE]
+
+## How much of a supply a dungeon holds, before a single tile of it is laid out.
+##
+## Priced at ratio 1.0 for the reason `_errand_supply` is: enemy HP rises with `power_ratio`,
+## so a strong deck meets more than this and discharges sooner. Sizing against the run's real
+## deck power would be a contract that gets harder because you got better, and it would also be
+## unquotable — the button has to say a number before the deck is chosen.
+static func debt_supply(kind: String, dungeon_id: String) -> int:
+	var d := dungeon(dungeon_id)
+	var diff: int = d.difficulty if d != null else 1
+	var floors := iso_floors_for(diff)
+	if kind == DSUPPLY_FLOORS:
+		return floors
+	# Every fight the dungeon deals, plus the boss, which is never in the encounter budget.
+	var fights := 1
+	var elites := 0
+	for e in Traversal.standard_encounters(d):
+		if int(e) == Traversal.Enc.COMBAT:
+			fights += 1
+		elif int(e) == Traversal.Enc.ELITE:
+			fights += 1
+			elites += 1
+	match kind:
+		DSUPPLY_FIGHTS:
+			return fights
+		DSUPPLY_HP:
+			var normals := maxi(0, fights - elites - 1)
+			return normals * enemy_max_hp(diff, Tier.NORMAL, 1.0) \
+				+ elites * enemy_max_hp(diff, Tier.ELITE, 1.0) \
+				+ enemy_max_hp(diff, Tier.BOSS, 1.0)
+		DSUPPLY_DAMAGE:
+			var normals2 := maxi(0, fights - elites - 1)
+			return normals2 * enemy_damage(diff, Tier.NORMAL, 1.0, 1) \
+				+ elites * enemy_damage(diff, Tier.ELITE, 1.0, 1) \
+				+ enemy_damage(diff, Tier.BOSS, 1.0, 1)
+	return 0
+
+## The catalogue. Same row shape as `ERRAND_LIST`, one clock up, plus a `weight`:
+##
+##   weight — how much this asks, 1 to 3. It is the ONE number that drives both the entry fee
+##            and the tier of the pack that comes back, so "the pack is proportional to the
+##            challenge and to what you paid" is true by construction rather than by two
+##            formulas agreeing. Two numbers here would be D34 with money in it.
+##
+## `settle`, `deep` and `unseen` are first and keep their ids: they are written into saved
+## games, and an id reused for a different ask would silently change what a player agreed to.
+const DEBT_LIST := [
+	{"id": DEBT_SETTLE, "text": "Go to %s and finish it.",
+		"key": TALLY_CLEARED, "supply": DSUPPLY_FLOORS, "per": 0.0, "floor": 1, "weight": 1},
+	{"id": DEBT_DEEP, "text": "Go to %s and get to the bottom of it, whatever it costs you.",
+		"key": TALLY_DEPTH, "supply": DSUPPLY_FLOORS, "per": 1.0, "floor": 1, "weight": 2},
+	{"id": DEBT_UNSEEN, "text": "Go to %s and finish it without once being caught in the open.",
+		"key": TALLY_SEEN, "supply": DSUPPLY_FLOORS, "per": 0.0, "floor": 0, "weight": 3,
+		"under": true},
+
+	{"id": "debt_damage", "text": "Go to %s and take %d damage out of it.",
+		"key": TALLY_DAMAGE, "supply": DSUPPLY_HP, "per": 0.7, "floor": 60, "weight": 1},
+	{"id": "debt_kills", "text": "Go to %s and put %d of them down.",
+		"key": TALLY_KILLS, "supply": DSUPPLY_FIGHTS, "per": 1.2, "floor": 4, "weight": 2},
+	{"id": "debt_poison", "text": "Go to %s and leave %d poison in it.",
+		"key": TALLY_POISON, "supply": DSUPPLY_FIGHTS, "per": 5.0, "floor": 12, "weight": 2},
+	{"id": "debt_block", "text": "Go to %s and raise %d block getting through it.",
+		"key": TALLY_BLOCK, "supply": DSUPPLY_DAMAGE, "per": 2.5, "floor": 40, "weight": 1},
+	{"id": "debt_wall", "text": "Go to %s and stand behind %d block at one time.",
+		"key": TALLY_PEAK_BLOCK, "supply": DSUPPLY_DAMAGE, "per": 0.5, "floor": 20, "weight": 2},
+	{"id": "debt_burst", "text": "Go to %s and land %d damage inside a single turn.",
+		"key": TALLY_PEAK_TURN, "supply": DSUPPLY_HP, "per": 0.12, "floor": 25, "weight": 3},
+	{"id": "debt_flawless", "text": "Go to %s and win %d fights there without losing a point of health.",
+		"key": TALLY_FLAWLESS, "supply": DSUPPLY_FIGHTS, "per": 0.35, "floor": 2, "weight": 3},
+	{"id": "debt_swift", "text": "Go to %s and finish %d of its fights inside four turns.",
+		"key": TALLY_SWIFT, "supply": DSUPPLY_FIGHTS, "per": 0.4, "floor": 2, "weight": 2},
+	{"id": "debt_noattack", "text": "Go to %s and win %d fights there without playing an attack.",
+		"key": TALLY_NOATTACK, "supply": DSUPPLY_FIGHTS, "per": 0.2, "floor": 1, "weight": 3},
+	{"id": "debt_chests", "text": "Go to %s and get %d of its lids open.",
+		"key": TALLY_CHESTS, "supply": DSUPPLY_FLOORS, "per": 1.5, "floor": 3, "weight": 1},
+	{"id": "debt_pockets", "text": "Go to %s and find %d of the things it is hiding.",
+		"key": TALLY_POCKETS, "supply": DSUPPLY_FLOORS, "per": 0.7, "floor": 2, "weight": 2},
+	{"id": "debt_ground", "text": "Go to %s and cover %d tiles of it.",
+		"key": TALLY_STEPS, "supply": DSUPPLY_FLOORS, "per": 26.0, "floor": 60, "weight": 1},
+	{"id": "debt_powers", "text": "Go to %s and get %d powers down onto the table.",
+		"key": TALLY_POWERS, "supply": DSUPPLY_FIGHTS, "per": 0.6, "floor": 3, "weight": 2},
+]
+
+static func debt_ids() -> Array:
+	var out: Array = []
+	for row in DEBT_LIST:
+		out.append(String((row as Dictionary)["id"]))
+	return out
+
+static func debt_row(id: String) -> Dictionary:
+	for row in DEBT_LIST:
+		if String((row as Dictionary)["id"]) == id:
+			return row
+	return {}
+
+## How much of its counter a debt wants on this dungeon. Same shape as `errand_threshold`, and
+## the same rule: `floor` is a minimum rather than a fallback.
+static func debt_threshold(id: String, dungeon_id: String) -> int:
+	var row := debt_row(id)
+	if row.is_empty():
+		return 0
+	if bool(row.get("under", false)):
+		return int(row.get("floor", 0))
+	var supply := debt_supply(String(row["supply"]), dungeon_id)
+	return maxi(int(row.get("floor", 1)),
+		int(ceil(float(row.get("per", 1.0)) * float(supply))))
+
+## What the offer says, with the place and the number in it.
+static func debt_text(id: String, dungeon_id: String) -> String:
+	var row := debt_row(id)
+	var d := dungeon(dungeon_id)
+	var place: String = d.name if d != null else dungeon_id
+	if row.is_empty():
+		return place
+	var words := String(row["text"])
+	if not ("%d" in words):
+		return words % place
+	return words % [place, debt_threshold(id, dungeon_id)]
+
+## The entry fee (D205). A debt you can decline for free is one there is never a reason to
+## decline, so before this it was not a choice, it was a button you pressed on the way past.
+##
+## Gold rather than the gate currency, deliberately. A stake paid in progression would make a
+## failed contract cost you a door, which turns a wager into a punishment for trying — and the
+## gate is D178's spine, so anything that moves it wants the simulator run at it rather than a
+## constant chosen here.
+const DEBT_STAKE := 25
+const DEBT_STAKE_PER_DIFF := 12
+
+static func debt_stake(id: String, dungeon_id: String) -> int:
+	var row := debt_row(id)
+	var d := dungeon(dungeon_id)
+	var diff: int = d.difficulty if d != null else 1
+	var weight: int = clampi(int(row.get("weight", 1)), 1, 3)
+	return (DEBT_STAKE + DEBT_STAKE_PER_DIFF * maxi(0, diff - 1)) * weight
+
+## What settling one pays back, on top of the stake returned (D205).
+##
+## Gold AND a pack, and the pack's tier is `weight` — the same number the fee is multiplied by,
+## so the harder contract on the harder place costs more at the door and comes back gilded
+## rather than worn. One number driving both is the whole reason they cannot drift apart.
+##
+## This REPLACES the gate credit D191 paid, and that is a real change to what a debt is for: it
+## was one of three routes to a door and it is now a reward for a wager. `MetaState.gate_credit`
+## still counts credits already banked, so nobody loses a door they have already opened, but
+## nothing adds to them any more.
 const DEBT_GOLD := 40
 const DEBT_GOLD_PER_DIFF := 15
 
-static func debt_text(kind: String, dungeon_id: String) -> String:
+static func debt_gold(id: String, dungeon_id: String) -> int:
+	var row := debt_row(id)
 	var d := dungeon(dungeon_id)
-	return String(DEBT_TEXT.get(kind, "%s")) % (d.name if d != null else dungeon_id)
+	var diff: int = d.difficulty if d != null else 1
+	var weight: int = clampi(int(row.get("weight", 1)), 1, 3)
+	return (DEBT_GOLD + DEBT_GOLD_PER_DIFF * maxi(0, diff - 1)) * weight
 
-static func debt_gold(difficulty: int) -> int:
-	return DEBT_GOLD + DEBT_GOLD_PER_DIFF * maxi(0, difficulty - 1)
+## Which pack a settled debt hands over. Indexed by the row's own weight, so it is proportional
+## to the challenge and — because the fee is that same weight times the dungeon's rate —
+## proportional to what was paid at the door.
+static func debt_pack_tier(id: String) -> String:
+	var row := debt_row(id)
+	var weight: int = clampi(int(row.get("weight", 1)), 1, 3)
+	return String(PACK_TIERS[weight - 1])
 
 ## Was this debt settled by a run that ended like this?
 ##
-## Pure, and given only facts the run already had: whether the boss fell, how deep it got, and
-## whether anything ever caught it in the open. No state of its own, so there is nothing here
-## to keep in step with anything.
-static func debt_met(kind: String, dungeon_id: String, ran: String, cleared: bool,
-		deepest: int, caught: bool) -> bool:
+## Pure, and given the run's own counters plus the two facts that are not counters. One
+## comparison for every row, exactly as `errand_settled` is — D191's three-arm `match` is what
+## this table exists to delete, and it is the shape where row twelve falls through to `false`.
+static func debt_settled(id: String, dungeon_id: String, ran: String,
+		tally: Dictionary) -> bool:
 	if ran != dungeon_id:
 		return false
-	match kind:
-		DEBT_SETTLE:
-			return cleared
-		DEBT_DEEP:
-			var d := dungeon(dungeon_id)
-			return deepest >= iso_floors_for(d.difficulty if d != null else 1)
-		DEBT_UNSEEN:
-			return cleared and not caught
-	return false
+	var row := debt_row(id)
+	if row.is_empty():
+		return false
+	var have := int(tally.get(String(row["key"]), 0))
+	var need := debt_threshold(id, dungeon_id)
+	if bool(row.get("under", false)):
+		return have <= need
+	return have >= need
 
 # --- back doors: the twelve dungeons as a graph, not a list (D190) ---------------
 #
@@ -1330,19 +1617,61 @@ static func debt_met(kind: String, dungeon_id: String, ran: String, cleared: boo
 # already say that, and two tables saying one thing is D34.
 const DEEP_ENTRY_FLOORS := 1
 
-## Can this dungeon be entered by the back door — has anything else in its region been beaten?
+## WHICH neighbour's clear opened this dungeon's back door, or "" (D206).
+##
+## The door is somebody else's doing, and until D206 the screen never said whose: a button
+## appeared on a dungeon the player had not touched, on a visit that followed beating a
+## different one, with nothing on it connecting the two. A mechanic whose cause is invisible
+## reads as a mechanic that is random.
 ##
 ## Deliberately not "has THIS one been beaten". A back door is a way in that somebody else's
 ## clear opened; requiring the dungeon's own clear would make it a replay option, which is
 ## what aspects are for (D187).
-static func deep_entry_open(dungeon_id: String, cleared: Array) -> bool:
+##
+## Iterated in the zone's own order rather than the clear log's, so the answer is a function of
+## the catalogue and not of the order a player happened to beat things in — the same property
+## D22 wants of anything the screen prints twice.
+static func deep_entry_opener(dungeon_id: String, cleared: Array) -> String:
 	var z := zone_of(dungeon_id)
 	if z == null:
-		return false
+		return ""
 	for other in z.dungeons:
 		if String(other) != dungeon_id and String(other) in cleared:
-			return true
-	return false
+			return String(other)
+	return ""
+
+## How many floors a back-door run into this place actually has.
+##
+## The same clamp `TraversalIso.generate()` applies, in the one place both the screen and the
+## model can read it — which is the whole of what D206 fixed. The clamp exists because a
+## one-floor dungeon has no descent and descent is the model, so a place already at
+## `ISO_FLOORS_MIN` cannot be made shorter.
+static func deep_entry_floors(dungeon_id: String) -> int:
+	var d := dungeon(dungeon_id)
+	var full := iso_floors_for(d.difficulty if d != null else 1)
+	return maxi(ISO_FLOORS_MIN, full - DEEP_ENTRY_FLOORS)
+
+## Can this dungeon be entered by the back door — has anything else in its region been beaten,
+## AND would going in that way be a different run?
+##
+## **The second half was missing until D206, and it was not hypothetical: five of the twelve
+## dungeons offered a back door that led to the front one.** `ISO_FLOORS_MIN` is 2 and
+## `iso_floors_for` returns 2 for every difficulty up to 3, so the shortened count clamped
+## straight back to the full one. The button appeared, the line under it promised fewer floors,
+## and pressing it dealt exactly the run the other button dealt. `deep` changes nothing else —
+## it is read in one place, to subtract that floor.
+##
+## Worst of all it was the FIRST one anybody meets: those five are the early dungeons, so the
+## first back door a new player is ever offered was the one that did nothing.
+##
+## Both halves live here rather than on the screen, because a screen that knows something the
+## model does not is how the two disagree (D34). The check is now "is this door real", and
+## `zone_view.gd` asks that question instead of assembling it out of two others.
+static func deep_entry_open(dungeon_id: String, cleared: Array) -> bool:
+	if deep_entry_opener(dungeon_id, cleared) == "":
+		return false
+	var d := dungeon(dungeon_id)
+	return deep_entry_floors(dungeon_id) < iso_floors_for(d.difficulty if d != null else 1)
 
 # --- floor states: a stone that takes something (D188) ---------------------------
 #
@@ -1484,17 +1813,341 @@ static func aspect_line(a: String) -> String:
 # run-deck card would re-open the dilution question D80/D81 closed, and a relic would be free
 # strength outside the deck. Failing one costs nothing at all — an errand is never a
 # run-ender, so there is no version of this that can end a run badly.
-const ERRAND_THOROUGH := "thorough"
-const ERRAND_UNSEEN := "unseen"
-const ERRAND_PUSHED := "pushed"
-const ERRANDS := [ERRAND_THOROUGH, ERRAND_UNSEEN, ERRAND_PUSHED]
-## What each one says, in the register of `resources/events/`: plain words, concrete nouns,
-## and never the word "quest".
-const ERRAND_TEXT := {
-	ERRAND_THOROUGH: "Leave no lid shut on this floor.",
-	ERRAND_UNSEEN: "Go down off this floor without being caught in the open.",
-	ERRAND_PUSHED: "This floor is holding something back. Find it.",
-}
+# --- what an errand can ask about: the tally bus (D203) --------------------------
+#
+# D184 shipped three errands as three constants and a three-arm `match`, and three is the
+# only size that shape survives. The catalogue below is fifty-odd, so the conditions are
+# DATA — one row each, naming a counter and how much of it — and the counters themselves are
+# a dictionary the combat engine fills at chokepoints it already had.
+#
+# **The counters live in the engine, not in the scene**, for the reason `combat_engine.gd`
+# opens with: the engine drives the headless simulator too, so a tally kept in `combat.gd`
+# would be a fact about the game that `tools/sim_balance.gd` cannot see. That is D124 and
+# D180's shape exactly — a thing the game reads and the instrument does not.
+#
+# Fight-scoped, summed floor-wide, and reset when you descend. `peak_*` take a maximum
+# rather than a sum: "twenty block at once" is a different ask from "twenty block in total"
+# and the second is nearly free.
+const TALLY_DAMAGE := "damage"          ## damage landed on enemies
+const TALLY_BLOCK := "block"            ## block gained, before anything eats it
+const TALLY_POISON := "poison"          ## poison stacks applied
+const TALLY_VULN := "vulnerable"        ## vulnerable stacks applied
+const TALLY_WEAK := "weak"              ## weak stacks applied
+const TALLY_STRENGTH := "strength"      ## strength gained
+const TALLY_DEX := "dexterity"          ## dexterity gained
+const TALLY_THORNS := "thorns"          ## thorns gained
+const TALLY_HEAL := "heal"              ## HP healed back
+const TALLY_HURT := "hurt"              ## HP actually lost
+const TALLY_KILLS := "kills"            ## enemies put down
+const TALLY_CARDS := "cards"            ## cards played
+const TALLY_ATTACKS := "attacks"        ## ATTACK cards played
+const TALLY_SKILLS := "skills"          ## SKILL cards played
+const TALLY_POWERS := "powers"          ## POWER cards played
+const TALLY_ENERGY := "energy"          ## energy spent
+const TALLY_TURNS := "turns"            ## turns taken
+const TALLY_DRAWS := "draws"            ## cards drawn
+const TALLY_EXHAUST := "exhaust"        ## cards exhausted
+const TALLY_POWER_USES := "power_uses"  ## the equipped Power fired
+const TALLY_AOE := "aoe"                ## cards played that hit everything
+const TALLY_MULTI := "multi"            ## multi-hit cards played
+const TALLY_OVERKILL := "overkill"      ## damage spent on enemies already dead
+const TALLY_FIGHTS := "fights"          ## fights won
+const TALLY_PEAK_BLOCK := "peak_block"          ## most block held at one time
+const TALLY_PEAK_TURN := "peak_turn"            ## most damage in one turn
+const TALLY_PEAK_POISON := "peak_poison"        ## deepest poison stack on one enemy
+const TALLY_PEAK_HAND := "peak_hand"            ## most cards played in one turn
+const TALLY_PEAK_STRENGTH := "peak_strength"    ## highest strength reached
+const TALLY_FLAWLESS := "flawless"      ## fights won without losing a point of HP
+const TALLY_SWIFT := "swift"            ## fights won inside ERRAND_SWIFT_TURNS
+const TALLY_NOATTACK := "noattack"      ## fights won without playing an ATTACK
+const TALLY_NOSKILL := "noskill"        ## fights won without playing a SKILL
+const TALLY_NOPOWER := "nopower"        ## fights won without firing the equipped Power
+## The floor's own bookkeeping, tallied by `traversal_iso.gd` rather than by a fight.
+const TALLY_CHESTS := "chests"          ## lids opened
+const TALLY_POCKETS := "pockets"        ## sealed pockets opened
+const TALLY_KEYS := "keys"              ## keys picked up off the floor
+const TALLY_STEPS := "steps"            ## tiles stepped on
+const TALLY_ROOMS := "rooms"            ## distinct chambers entered
+const TALLY_TOLLS := "tolls"            ## toll questions answered right
+const TALLY_SHAKEN := "shaken"          ## hunters shaken off rather than fought
+const TALLY_SEEN := "seen"              ## times caught in the open
+## Two facts about a whole run rather than counters anything ticks. Injected at the moment a
+## debt is judged (D205), so that "finish it" and "get to the bottom of it" are rows in the
+## table like everything else instead of the two arms of a `match` that would otherwise survive.
+const TALLY_CLEARED := "cleared"        ## the boss fell
+const TALLY_DEPTH := "depth"            ## deepest floor reached, counting from 1
+
+## Counters that measure DECLINING content, which no errand and no debt may ever ask for.
+##
+## This is D184's central rule made checkable, and it exists because the rule was broken the
+## first time the catalogue was written. `shaken` counts hunters broken away from rather than
+## fought — the crawl's priced decline — and an errand paying for five of them pays the player
+## to remove five budgeted fights from the floor. That is a SKIP, and D88's whole lesson is
+## that a skip is a difficulty change no budget assertion can see: the encounter count stays
+## perfect while the dungeon quietly costs less than its rating says.
+##
+## It survived the direction assertion, which is the part worth writing down. "A walker that
+## takes everything settles it, a walker that takes nothing does not" is a test for *payouts
+## for turning up*, and `shaken` passes it cleanly — shaking off five hunters is emphatically
+## doing something. **Declining content and doing nothing are different failures, and only one
+## of them is visible in the counters.** So the property is declared here and asserted, rather
+## than left to whoever writes row forty-seven to remember.
+##
+## The counter stays: it is true, and the floor is entitled to know it. What is forbidden is
+## paying for it.
+const TALLY_DECLINES := [TALLY_SHAKEN]
+
+## Every key above. `tests/test_traversal.gd` walks THIS, not a hand-kept list beside it —
+## a counter the catalogue asks about and the engine never fills is a lie the player cannot
+## check, and the only way that stays impossible is if the check discovers its own subjects
+## (D180). Same reason `combatant.gd` stopped keeping a private list of its own statuses.
+const TALLIES := [
+	TALLY_DAMAGE, TALLY_BLOCK, TALLY_POISON, TALLY_VULN, TALLY_WEAK, TALLY_STRENGTH,
+	TALLY_DEX, TALLY_THORNS, TALLY_HEAL, TALLY_HURT, TALLY_KILLS, TALLY_CARDS,
+	TALLY_ATTACKS, TALLY_SKILLS, TALLY_POWERS, TALLY_ENERGY, TALLY_TURNS, TALLY_DRAWS,
+	TALLY_EXHAUST, TALLY_POWER_USES, TALLY_AOE, TALLY_MULTI, TALLY_OVERKILL, TALLY_FIGHTS,
+	TALLY_PEAK_BLOCK, TALLY_PEAK_TURN, TALLY_PEAK_POISON, TALLY_PEAK_HAND,
+	TALLY_PEAK_STRENGTH, TALLY_FLAWLESS, TALLY_SWIFT, TALLY_NOATTACK, TALLY_NOSKILL,
+	TALLY_NOPOWER, TALLY_CHESTS, TALLY_POCKETS, TALLY_KEYS, TALLY_STEPS, TALLY_ROOMS,
+	TALLY_TOLLS, TALLY_SHAKEN, TALLY_SEEN, TALLY_CLEARED, TALLY_DEPTH,
+]
+## The ones that take a maximum instead of a sum.
+const TALLY_PEAKS := [
+	TALLY_PEAK_BLOCK, TALLY_PEAK_TURN, TALLY_PEAK_POISON, TALLY_PEAK_HAND,
+	TALLY_PEAK_STRENGTH,
+]
+## A fight counts as `swift` if it is over by the end of this turn.
+const ERRAND_SWIFT_TURNS := 4
+
+# --- errands: a thing the floor asks, and the floor pays for (D184, moved in D203) -------
+#
+# **Every condition still asks for MORE, never less, and that is still a hard rule.** The
+# obvious errands all pull the other way — "leave the chests alone", "reach the stairs in
+# twenty turns", "take no damage" — and every one of them pays a player for declining
+# budgeted content. That is a SKIP, and D88's whole lesson is that a skip is a difficulty
+# change no budget assertion can see: the encounter count stays perfect while the dungeon
+# quietly costs less than its rating says.
+#
+# D203 draws the line one notch finer, because fifty errands cannot all be additions.
+# **Constraining HOW you win is not the same as paying you to decline the fight.** `noattack`
+# still makes you kill everything on the floor; it just refuses you the obvious card to do it
+# with. Nothing is skipped, no encounter goes unfought, and the budget is untouched — the
+# fight gets HARDER, which is the opposite of the failure mode. What stays banned is any row
+# whose settled state contains *less content than its unsettled state*, and the assertion in
+# `tests/test_traversal.gd` is written as exactly that: a walker that takes everything must be
+# able to settle every row, and a walker that takes nothing must settle none of them.
+#
+# **Thresholds are functions of the floor, never constants.** Every fight walks (D197), so
+# how much damage a floor can supply is a fact about how many hunters were dealt to it —
+# "deal 200 damage here" is free on a fat floor and impossible on a thin one, and the second
+# is the D184 lie (an errand nobody can settle) wearing arithmetic. Each row names a SUPPLY,
+# the floor measures its own, and the threshold is a fraction of it. That is also why the
+# numbers below are ratios rather than damage figures: they scale with depth for free,
+# because the supply does.
+#
+# Reward is GOLD, which is the pack/gold channel the plan reserves for optional content: a
+# run-deck card would re-open the dilution question D80/D81 closed, and a relic would be free
+# strength outside the deck. Failing one costs nothing at all — an errand is never a
+# run-ender, so there is no version of this that can end a run badly.
+
+## What a row measures its threshold against. `_errand_supply` in `traversal_iso.gd` answers
+## each of these for the floor being built, and a row whose supply is zero is never handed out.
+const SUPPLY_FIGHTS := "fights"     ## hunters dealt to this floor
+const SUPPLY_HP := "hp"             ## total enemy HP standing on it
+const SUPPLY_DAMAGE := "damage"     ## what those enemies will swing for, per turn
+const SUPPLY_CHESTS := "chests"     ## lids on it
+const SUPPLY_POCKETS := "pockets"   ## sealed pockets in it
+const SUPPLY_KEYS := "keys"         ## keys lying on it
+const SUPPLY_TILES := "tiles"       ## walkable tiles
+const SUPPLY_ROOMS := "rooms"       ## chambers
+const SUPPLY_TOLLS := "tolls"       ## toll-shut pockets
+const SUPPLIES := [
+	SUPPLY_FIGHTS, SUPPLY_HP, SUPPLY_DAMAGE, SUPPLY_CHESTS, SUPPLY_POCKETS, SUPPLY_KEYS,
+	SUPPLY_TILES, SUPPLY_ROOMS, SUPPLY_TOLLS,
+]
+
+## The catalogue. One row per errand:
+##
+##   id     — stable, saved, never reused for a different ask
+##   text   — what the stone says, in the register of `resources/events/`: plain words,
+##            concrete nouns, and never the word "quest". A `%d` is filled with the
+##            threshold the floor worked out; a row with no `%d` is asking for a thing
+##            rather than an amount.
+##   key    — which counter in TALLIES settles it
+##   supply — which SUPPLY sizes it
+##   per    — the threshold, as a fraction of that supply
+##   floor  — the smallest threshold worth asking for; also the answer when `per` rounds to 0
+##   needs  — the least supply a floor must have before it may be handed this row at all
+##
+## Read the `per` column as "what fraction of what is here". 0.6 of the floor's HP is most of
+## a floor's fights; 0.15 of its damage is one good block turn. They are deliberately soft:
+## an errand that needs a perfect floor is an errand that reads as a tax.
+const ERRAND_LIST := [
+	# --- what you did to them ------------------------------------------------------
+	{"id": "damage", "text": "Deal %d damage on this floor.",
+		"key": TALLY_DAMAGE, "supply": SUPPLY_HP, "per": 0.6, "floor": 20, "needs": 1},
+	{"id": "damage_deep", "text": "Take this floor apart. %d damage, no less.",
+		"key": TALLY_DAMAGE, "supply": SUPPLY_HP, "per": 0.95, "floor": 40, "needs": 2},
+	{"id": "kills", "text": "Put %d of the things down here.",
+		"key": TALLY_KILLS, "supply": SUPPLY_FIGHTS, "per": 1.0, "floor": 1, "needs": 1},
+	{"id": "kills_all", "text": "Leave nothing walking. %d of them.",
+		"key": TALLY_KILLS, "supply": SUPPLY_FIGHTS, "per": 2.0, "floor": 2, "needs": 2},
+	{"id": "overkill", "text": "Waste %d damage on the already-dead.",
+		"key": TALLY_OVERKILL, "supply": SUPPLY_HP, "per": 0.1, "floor": 6, "needs": 1},
+	{"id": "poison", "text": "Put %d poison into this floor.",
+		"key": TALLY_POISON, "supply": SUPPLY_FIGHTS, "per": 6.0, "floor": 6, "needs": 1},
+	{"id": "poison_stack", "text": "Rot one of them to %d poison at once.",
+		"key": TALLY_PEAK_POISON, "supply": SUPPLY_FIGHTS, "per": 4.0, "floor": 5, "needs": 1},
+	{"id": "vulnerable", "text": "Open them up: %d vulnerable.",
+		"key": TALLY_VULN, "supply": SUPPLY_FIGHTS, "per": 3.0, "floor": 3, "needs": 1},
+	{"id": "weak", "text": "Take the strength out of them: %d weak.",
+		"key": TALLY_WEAK, "supply": SUPPLY_FIGHTS, "per": 3.0, "floor": 3, "needs": 1},
+	{"id": "burst", "text": "Land %d damage inside a single turn.",
+		"key": TALLY_PEAK_TURN, "supply": SUPPLY_HP, "per": 0.3, "floor": 12, "needs": 1},
+	{"id": "aoe", "text": "Hit them all at once, %d times.",
+		"key": TALLY_AOE, "supply": SUPPLY_FIGHTS, "per": 1.5, "floor": 2, "needs": 1},
+	{"id": "multi", "text": "Strike %d times over, not once hard.",
+		"key": TALLY_MULTI, "supply": SUPPLY_FIGHTS, "per": 2.0, "floor": 2, "needs": 1},
+
+	# --- what you did to yourself ---------------------------------------------------
+	{"id": "block", "text": "Raise %d block on this floor.",
+		"key": TALLY_BLOCK, "supply": SUPPLY_DAMAGE, "per": 3.0, "floor": 15, "needs": 1},
+	{"id": "block_wall", "text": "Stand behind %d block at one time.",
+		"key": TALLY_PEAK_BLOCK, "supply": SUPPLY_DAMAGE, "per": 1.6, "floor": 10, "needs": 1},
+	{"id": "strength", "text": "Get %d strength into your arm here.",
+		"key": TALLY_STRENGTH, "supply": SUPPLY_FIGHTS, "per": 2.0, "floor": 2, "needs": 1},
+	{"id": "strength_peak", "text": "Carry %d strength at once.",
+		"key": TALLY_PEAK_STRENGTH, "supply": SUPPLY_FIGHTS, "per": 1.5, "floor": 2, "needs": 1},
+	{"id": "dexterity", "text": "Get %d dexterity into your hands here.",
+		"key": TALLY_DEX, "supply": SUPPLY_FIGHTS, "per": 1.5, "floor": 2, "needs": 1},
+	{"id": "thorns", "text": "Make yourself %d thorns' worth of trouble to touch.",
+		"key": TALLY_THORNS, "supply": SUPPLY_FIGHTS, "per": 2.0, "floor": 2, "needs": 1},
+	{"id": "heal", "text": "Put %d health back into yourself before you go down.",
+		"key": TALLY_HEAL, "supply": SUPPLY_DAMAGE, "per": 1.0, "floor": 6, "needs": 1},
+	{"id": "hurt", "text": "Wear %d damage and keep going.",
+		"key": TALLY_HURT, "supply": SUPPLY_DAMAGE, "per": 1.5, "floor": 8, "needs": 1},
+
+	# --- how you played it ----------------------------------------------------------
+	{"id": "cards", "text": "Play %d cards on this floor.",
+		"key": TALLY_CARDS, "supply": SUPPLY_FIGHTS, "per": 8.0, "floor": 8, "needs": 1},
+	{"id": "attacks", "text": "Play %d attacks here.",
+		"key": TALLY_ATTACKS, "supply": SUPPLY_FIGHTS, "per": 4.0, "floor": 4, "needs": 1},
+	{"id": "skills", "text": "Play %d skills here.",
+		"key": TALLY_SKILLS, "supply": SUPPLY_FIGHTS, "per": 3.0, "floor": 3, "needs": 1},
+	{"id": "powers", "text": "Get %d powers down onto the table.",
+		"key": TALLY_POWERS, "supply": SUPPLY_FIGHTS, "per": 1.0, "floor": 1, "needs": 1},
+	{"id": "energy", "text": "Spend %d energy on this floor.",
+		"key": TALLY_ENERGY, "supply": SUPPLY_FIGHTS, "per": 8.0, "floor": 8, "needs": 1},
+	{"id": "draws", "text": "Draw %d cards here.",
+		"key": TALLY_DRAWS, "supply": SUPPLY_FIGHTS, "per": 12.0, "floor": 12, "needs": 1},
+	{"id": "exhaust", "text": "Burn %d cards out of the fight for good.",
+		"key": TALLY_EXHAUST, "supply": SUPPLY_FIGHTS, "per": 2.0, "floor": 2, "needs": 1},
+	{"id": "big_turn", "text": "Get %d cards down inside one turn.",
+		"key": TALLY_PEAK_HAND, "supply": SUPPLY_FIGHTS, "per": 2.0, "floor": 4, "needs": 1},
+	{"id": "power_uses", "text": "Call on what you carry %d times.",
+		"key": TALLY_POWER_USES, "supply": SUPPLY_FIGHTS, "per": 2.0, "floor": 2, "needs": 1},
+	{"id": "turns", "text": "Stand in it for %d turns of fighting.",
+		"key": TALLY_TURNS, "supply": SUPPLY_FIGHTS, "per": 5.0, "floor": 5, "needs": 1},
+
+	# --- how the fights ended -------------------------------------------------------
+	# These constrain METHOD, never content: every one of them still requires the fight to
+	# be fought and won. See the note above on why that is not a skip.
+	{"id": "flawless", "text": "Win %d fights here without losing a point of health.",
+		"key": TALLY_FLAWLESS, "supply": SUPPLY_FIGHTS, "per": 0.5, "floor": 1, "needs": 1},
+	{"id": "swift", "text": "Finish %d fights here inside four turns.",
+		"key": TALLY_SWIFT, "supply": SUPPLY_FIGHTS, "per": 0.5, "floor": 1, "needs": 1},
+	{"id": "noattack", "text": "Win %d fights here without playing an attack.",
+		"key": TALLY_NOATTACK, "supply": SUPPLY_FIGHTS, "per": 0.34, "floor": 1, "needs": 1},
+	{"id": "noskill", "text": "Win %d fights here without playing a skill.",
+		"key": TALLY_NOSKILL, "supply": SUPPLY_FIGHTS, "per": 0.34, "floor": 1, "needs": 1},
+	{"id": "nopower", "text": "Win %d fights here without calling on what you carry.",
+		"key": TALLY_NOPOWER, "supply": SUPPLY_FIGHTS, "per": 0.5, "floor": 1, "needs": 1},
+	{"id": "fights", "text": "Win %d fights on this floor.",
+		"key": TALLY_FIGHTS, "supply": SUPPLY_FIGHTS, "per": 1.0, "floor": 1, "needs": 1},
+
+	# --- what you did with the floor ------------------------------------------------
+	# The three D184 shipped, plus the rest of what the floor already counts. `thorough`,
+	# `unseen` and `pushed` keep their ids: they are in saved runs.
+	{"id": "thorough", "text": "Leave no lid shut on this floor.",
+		"key": TALLY_CHESTS, "supply": SUPPLY_CHESTS, "per": 1.0, "floor": 1, "needs": 1},
+	{"id": "pushed", "text": "This floor is holding something back. Find it.",
+		"key": TALLY_POCKETS, "supply": SUPPLY_POCKETS, "per": 1.0, "floor": 1, "needs": 1},
+	{"id": "pockets_all", "text": "Find every last thing this floor is hiding. %d of them.",
+		"key": TALLY_POCKETS, "supply": SUPPLY_POCKETS, "per": 1.0, "floor": 2, "needs": 2},
+	{"id": "chests_some", "text": "Get %d lids open here.",
+		"key": TALLY_CHESTS, "supply": SUPPLY_CHESTS, "per": 0.6, "floor": 1, "needs": 2},
+	{"id": "keys", "text": "Pick up %d keys off this floor.",
+		"key": TALLY_KEYS, "supply": SUPPLY_KEYS, "per": 1.0, "floor": 1, "needs": 1},
+	{"id": "tolls", "text": "Answer %d of this floor's questions right.",
+		"key": TALLY_TOLLS, "supply": SUPPLY_TOLLS, "per": 1.0, "floor": 1, "needs": 1},
+	{"id": "steps", "text": "Cover %d tiles of this floor.",
+		"key": TALLY_STEPS, "supply": SUPPLY_TILES, "per": 0.55, "floor": 12, "needs": 20},
+	{"id": "rooms", "text": "Put your head into %d of this floor's chambers.",
+		"key": TALLY_ROOMS, "supply": SUPPLY_ROOMS, "per": 0.6, "floor": 2, "needs": 3},
+	# There is no `shaken` row, and there was one until the assertion for TALLY_DECLINES was
+	# written. "Shake three of them off rather than fight" pays the player to remove three
+	# budgeted fights from the floor, which is the exact skip D88 says no budget assertion can
+	# see. It read as a fine errand and passed the direction check. See TALLY_DECLINES.
+
+	# `unseen` is the one row whose counter must stay at zero, so it is the one row the
+	# threshold arithmetic cannot express. It is kept as data anyway — with `per` 0 and a
+	# `floor` of 0 it reads "TALLY_SEEN must not exceed 0", which is the same comparison
+	# every other row makes, rather than a special case in `_errand_met` (D184's `match` is
+	# exactly what this table exists to delete).
+	{"id": "unseen", "text": "Go down off this floor without being caught in the open.",
+		"key": TALLY_SEEN, "supply": SUPPLY_FIGHTS, "per": 0.0, "floor": 0, "needs": 1,
+		"under": true},
+]
+
+## Ids only, in catalogue order. `errandplan` validates against this on load, so a row
+## deleted from the table is dropped from an old save rather than crashing it.
+static func errand_ids() -> Array:
+	var out: Array = []
+	for row in ERRAND_LIST:
+		out.append(String((row as Dictionary)["id"]))
+	return out
+
+## The row itself, or an empty dictionary. Every reader goes through here rather than
+## indexing ERRAND_LIST, so there is one definition of "is this a real errand".
+static func errand_row(id: String) -> Dictionary:
+	for row in ERRAND_LIST:
+		if String((row as Dictionary)["id"]) == id:
+			return row
+	return {}
+
+## How much of its counter this errand wants, given what the floor has to give.
+##
+## `floor` is a minimum rather than a fallback: a row whose fraction rounds to two on a thin
+## floor still asks for its floor value, because an errand worth less than its own gold is a
+## button rather than an ordinance. The one exception is an `under` row, whose threshold is a
+## ceiling and is meant to be zero.
+static func errand_threshold(id: String, supply: int) -> int:
+	var row := errand_row(id)
+	if row.is_empty():
+		return 0
+	if bool(row.get("under", false)):
+		return int(row.get("floor", 0))
+	return maxi(int(row.get("floor", 1)), int(ceil(float(row.get("per", 1.0)) * float(supply))))
+
+## Is this errand settled by these counts? One comparison for every row in the table —
+## `under` rows want their counter at or below the threshold, everything else at or above.
+##
+## Takes the THRESHOLD, not the supply, and that distinction is load-bearing. The threshold is
+## worked out once when the floor is built and kept, because the floor changes while you walk
+## it: lids get opened, pockets get pushed, hunters die. Re-deriving the number here from a
+## supply measured at the stairs would ask for a fraction of what is LEFT rather than of what
+## was there — and "open 60% of the lids" against the still-shut ones is settled by opening
+## none of them. Passing the supply in was the first version of this function and that is the
+## bug it had.
+static func errand_settled(id: String, tally: Dictionary, need: int) -> bool:
+	var row := errand_row(id)
+	if row.is_empty():
+		return false
+	var have := int(tally.get(String(row["key"]), 0))
+	if bool(row.get("under", false)):
+		return have <= need
+	return have >= need
+
 ## Which floors carry one. Not every floor: an ordinance on all of them is a checklist, and
 ## the point is that a floor sometimes asks something of you and sometimes does not.
 const ERRAND_PCT := 55
@@ -1505,8 +2158,21 @@ const ERRAND_GOLD_PER_DIFF := 7
 static func errand_gold(difficulty: int) -> int:
 	return ERRAND_GOLD + ERRAND_GOLD_PER_DIFF * maxi(0, difficulty - 1)
 
-static func errand_text(id: String) -> String:
-	return String(ERRAND_TEXT.get(id, ""))
+## What the ledger says, with the floor's own number in it. Takes the THRESHOLD for the same
+## reason `errand_settled` does — the words the player reads and the comparison at the stairs
+## have to be the same number, and the only way that cannot drift is if both are handed it
+## rather than each working it out (D34).
+##
+## A row with no `%d` is asking for a thing rather than an amount and is returned as written:
+## formatting it anyway is a crash in GDScript, not a no-op.
+static func errand_text(id: String, need: int = 0) -> String:
+	var row := errand_row(id)
+	if row.is_empty():
+		return ""
+	var words := String(row["text"])
+	if not ("%d" in words):
+		return words
+	return words % need
 
 ## How often a pocket is shut with a LOCK instead of hidden behind a mark (D185).
 ##
@@ -2077,7 +2743,13 @@ static func all_zones() -> Array:
 ## The zone a dungeon belongs to, or null.
 # --- builds (deck archetypes) ---
 const BUILD_DIR := "res://resources/builds/"
-const BUILDS := ["poison", "thorns", "strength", "fortress", "swarm", "tempo", "vampire"]
+## D204 added "exhaust": the one archetype the new mechanics created rather than
+## deepened. The other seven already existed as tags on cards that happened to share a
+## keyword; this one is a genuine engine — a card that burns your hand, and three that
+## are paid by the count — and a build the Cards screen does not name is a build the
+## player has to reverse-engineer from twenty card faces.
+const BUILDS := ["poison", "thorns", "strength", "fortress", "swarm", "tempo", "vampire",
+	"exhaust"]
 
 static func build(id: String) -> BuildData:
 	return _cached(BUILD_DIR + id + ".tres") as BuildData

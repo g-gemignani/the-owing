@@ -101,11 +101,14 @@ func _init() -> void:
 	# keep the target alive so the card's rider effects are observable
 	e3.enemies[0].max_hp = 500
 	e3.enemies[0].hp = 500
-	e3.hand.append(_card("stave_in"))
+	# Salt the Wound rather than Stave In, which carried the Vulnerable rider until D204
+	# rebuilt it as an X-cost card. What is being asserted is the ENGINE applying a card's
+	# status; the card only has to be one that still has one.
+	e3.hand.append(_card("salt_the_wound"))
 	e3.energy = 3
-	e3.play_card(_find(e3.hand, "stave_in"))
+	e3.play_card(_find(e3.hand, "salt_the_wound"))
 	if e3.enemy.vulnerable <= 0:
-		fails += 1; print("FAIL bash did not apply Vulnerable")
+		fails += 1; print("FAIL salt_the_wound did not apply Vulnerable")
 	e3.hand.append(_card("put_the_fear"))
 	e3.energy = 3
 	e3.play_card(_find(e3.hand, "put_the_fear"))

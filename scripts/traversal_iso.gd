@@ -66,6 +66,17 @@ const KEY := -4
 ## it is outside `content` and outside `quota`, so a floor holding one still costs what its
 ## difficulty says. Standing on it does nothing; the OPTION beside it is the decision.
 const SHRINE := -5
+## A ledger left open on a stand: where the floor's errand is written, and the only place it
+## can be taken (D203). Terrain like `KEY` and `SHRINE`, negative for the same reason — it is
+## outside `content` and outside `quota`, so a floor holding one still costs what its
+## difficulty says.
+##
+## **Not called a shrine, though it stands in one.** `SHRINE` above is D188's stone, and two
+## features one letter apart in the same `match` is the kind of collision that reads fine and
+## resolves wrong. A ledger is the better noun anyway: the game is called The Owing, the debt
+## at the overworld is written down, and an errand is a small debt written down in the same
+## hand.
+const LEDGER := -6
 
 ## Grid steps, and the screen direction each one reads as once the floor is drawn
 ## at an angle. The arrows are the projected directions, not compass ones: a floor
@@ -152,19 +163,51 @@ var landmark_kind: int = 0
 ## the unresolved count does not include one, so the greedy walker cannot see a pocket and
 ## the required path is exactly what it was.
 var pockets: Array = []
-## This floor's errand, or "" (D184). Decided per DUNGEON at `generate()` like everything
-## else, held per floor in `errandplan`, and judged the moment the stairs are taken.
+## This floor's errand, or "" (D184, rebuilt in D203). Decided per DUNGEON at `generate()`
+## like everything else, held per floor in `errandplan`, written on a ledger the floor stands
+## somewhere, and judged the moment the stairs are taken.
 var errand: String = ""
-## What the floor has done toward it. Two flags and a count, all of them things the model was
-## already in a position to know — the plan's rule for a debt's conditions applies here too:
-## if a condition needs new bookkeeping, it is the wrong condition.
-var errand_seen: bool = false      ## caught in the open on this floor
-## ...and ever, anywhere in this dungeon (D191). A debt asks about the RUN, not the floor, and
-## `errand_seen` is reset every time you descend — so the run-scoped fact needs its own flag
-## rather than a reader remembering to check before the reset.
+## Has the ledger been read? An errand is not in force until it is TAKEN, which is the whole
+## of what D203 moved: an ordinance that applies because you arrived is a status line, and one
+## you walked over to and picked up is a decision.
+var errand_taken: bool = false
+## How much of its counter this floor's errand wants — worked out once, when the floor is
+## built, from what the floor actually has to give (`_errand_supply`). Held rather than
+## recomputed so the number on the ledger and the number at the stairs cannot disagree: that
+## is D34's shape, and a threshold that drifts between the ask and the judging is the worst
+## version of it, because the player read the first one.
+var errand_need: int = 0
+## Everything the floor and its fights have counted since you arrived, keyed by `Balance.TALLIES`
+## (D203). Replaces D184's two flags and a count: fifty errands cannot each have their own
+## field, and the rule those fields were written under still holds — a condition that needs
+## bookkeeping the model was not already in a position to do is the wrong condition. What is
+## new is that combat does some of the counting, merged in by the view when a fight is won.
+var errand_tally: Dictionary = {}
+## The same counters, for the whole DESCENT, never reset (D205).
+##
+## A debt asks about the run the way an errand asks about the floor, so it wants the identical
+## bus with a different lifetime — which is why this is a second dictionary written by the same
+## two chokepoints rather than a second set of counters written by a second set of hooks. One
+## place decides what "damage dealt" means; two places decide how long the answer lasts.
+##
+## Kept HERE rather than in `MetaState` because it is run state and dies with the run: a
+## traversal owns no meta resources (D13), and `GameState.clear_run()` is where it is handed
+## over, exactly as `caught_ever` already is.
+var run_tally: Dictionary = {}
+## Caught in the open ever, anywhere in this dungeon (D191). A debt asks about the RUN, not the
+## floor, and the floor's own `seen` count is reset every time you descend — so the run-scoped
+## fact needs its own flag rather than a reader remembering to check before the reset.
 var caught_ever: bool = false
-var errand_chests: int = 0         ## chests still shut on this floor
-var errand_pushed: bool = false    ## a wall pushed on this floor
+## Where this floor's ledger stands, or -1. Placed like a site, off the route, preferring a
+## chamber whose role is `shrine` (D203).
+var ledger: int = -1
+## Did the step just taken read the ledger? Reported and never saved, exactly as `picked_key`,
+## `errand_paid` and `toll_result` are: the model knows what happened and the view owns the log.
+var errand_read: bool = false
+## Chambers already put a foot in, for the `rooms` errand. A set rather than a count because
+## the ask is DISTINCT chambers — counting entries would make it settleable by stepping in and
+## out of one doorway, which is the pacing loop this file has been bitten by twice.
+var _room_entered: Dictionary = {}
 ## Was the errand settled by the descent just taken? Reported exactly as `picked_key` is and
 ## never saved: a traversal owns no run resources (D13), so the gold is paid by whoever owns
 ## the purse and this is the only channel that can tell them.
@@ -413,22 +456,74 @@ func _plan_chests(diff: int) -> void:
 ## Which floors ask something of you (D184). Rolled with the rest of the dungeon, so a floor's
 ## ordinance is a fact about the place rather than something that appears when you arrive.
 ##
-## The `pushed` errand is only ever given to a floor that actually HAS a pocket. An ordinance
-## nobody can settle is not a hard errand, it is a lie, and the floor knows at planning time
-## whether it planned one — which is the whole reason `_plan_pockets` runs first.
+## An errand is only ever given to a floor that can discharge it. An ordinance nobody can
+## settle is not a hard errand, it is a lie — and since D203 the check is generic rather than
+## one `if` per condition: every row names a SUPPLY and a `needs`, the floor answers how much
+## of that supply it was dealt, and a row asking for more than the floor has is not in the pool.
+##
+## Two of the nine supplies are only knowable here — hunters and pockets are dealt at
+## `generate()` — and the rest (lids, keys, tiles, chambers, tolls) are facts about a floor
+## that does not exist yet. So the pool below filters on what the PLAN knows, and `_build_floor`
+## drops an errand whose built floor turned out thinner than its plan promised. Both halves are
+## needed: filtering only at build time would leave a floor with no errand far too often,
+## because the roll would already have been spent on an impossible one.
 func _plan_errands() -> void:
 	errandplan = []
 	for f in floors:
 		if randi() % 100 >= Balance.ERRAND_PCT:
 			errandplan.append("")
 			continue
-		var pool: Array = []
-		for e in Balance.ERRANDS:
-			if String(e) == Balance.ERRAND_PUSHED \
-					and (f >= pocketplan.size() or (pocketplan[f] as Array).is_empty()):
-				continue
-			pool.append(String(e))
+		var pool := errand_pool(f)
 		errandplan.append(String(pool[randi() % pool.size()]) if not pool.is_empty() else "")
+
+## Which errands floor `f` could be handed, given what the plan dealt it.
+##
+## Split out of `_plan_errands` so `tests/test_traversal.gd` can ask the PLANNER which rows it
+## would consider rather than working it out again beside it — two places deciding "can this
+## floor carry this errand" is D34's shape, and the version of it that hurts is the one where
+## the test's copy is the more generous: it would assert coverage of rows the game never offers
+## and pass. The suite reads this and asserts every row turns up in some floor's pool, which is
+## a deterministic claim about reachability rather than a sampled claim about luck.
+func errand_pool(f: int) -> Array:
+	var pool: Array = []
+	for row in Balance.ERRAND_LIST:
+		var r: Dictionary = row
+		if int(_planned_supply(String(r["supply"]), f)) < int(r.get("needs", 1)):
+			continue
+		pool.append(String(r["id"]))
+	return pool
+
+## How much of a supply floor `f` was DEALT, as far as `generate()` can know. Anything the
+## plan cannot see answers with the largest value it could turn out to be, so the pool stays
+## generous and `_build_floor` does the honest narrowing — the alternative is a planner that
+## refuses rows the floor would in fact have supported.
+func _planned_supply(kind: String, f: int) -> int:
+	var fights: int = (roam[f] as Array).size() if f < roam.size() else 0
+	match kind:
+		Balance.SUPPLY_FIGHTS, Balance.SUPPLY_HP, Balance.SUPPLY_DAMAGE:
+			return fights
+		Balance.SUPPLY_POCKETS:
+			return (pocketplan[f] as Array).size() if f < pocketplan.size() else 0
+		Balance.SUPPLY_CHESTS:
+			return (chestplan[f] as Array).size() if f < chestplan.size() else 0
+		Balance.SUPPLY_KEYS:
+			return int(keyplan[f]) if f < keyplan.size() else 0
+		Balance.SUPPLY_TOLLS:
+			# A toll is rolled when the pocket is carved, not when it is planned, so the most
+			# this floor could hold is one per planned pocket.
+			return (pocketplan[f] as Array).size() if f < pocketplan.size() else 0
+	# Tiles and chambers: the exact number is a fact about a plate that has not been carved yet,
+	# so answer with the CEILING — the most the floor could turn out to have — and let
+	# `_build_floor` do the honest narrowing.
+	#
+	# It has to be the ceiling of the right quantity. Returning `ISO_GRID` here was a bug worth
+	# keeping the note for: that is the grid's EDGE, 12, and a floor has up to 12x12 tiles, so
+	# every row wanting more than twelve tiles was silently ineligible for ever. The catalogue
+	# test caught it as "`steps` is never rolled" — which is the whole reason that assertion
+	# walks the catalogue instead of naming rows.
+	if kind == Balance.SUPPLY_TILES:
+		return Balance.ISO_GRID * Balance.ISO_GRID
+	return Balance.ISO_GRID
 
 func _plan_pockets() -> void:
 	pocketplan = []
@@ -483,6 +578,11 @@ func _build_floor(d: int) -> void:
 	pockets = []
 	sites = []
 	shrine = -1
+	ledger = -1
+	# Reset HERE and nowhere else. `errand_tally` is wiped in `_build_floor`, which runs on
+	# every descent; this one is wiped only when a dungeon is generated, which is what makes it
+	# the run's clock rather than the floor's (D205).
+	run_tally = {}
 	floor_state = Balance.ASPECT_NONE
 	var n_cells := w * h
 	props.resize(n_cells)
@@ -583,6 +683,35 @@ func _build_floor(d: int) -> void:
 	# written to catch.
 	_place_keys((int(keyplan[depth]) if depth < keyplan.size() else 0)
 		+ _locked_mouths(), carved)
+
+	# This floor's ordinance, and the state it is judged on (D184, D203). Sized off the tiles
+	# actually laid down rather than off the plan: a chest that found no ground to stand on is
+	# a chest the player cannot open, and an errand that asked for it would be unsettleable
+	# through no fault of theirs. So it has to happen after everything the floor holds is
+	# standing on it, and before the dressing — which is the same window `_place_keys` uses,
+	# and for the same reason.
+	errand = String(errandplan[depth]) if depth < errandplan.size() else ""
+	errand_taken = false
+	errand_tally = {}
+	errand_need = 0
+	_room_entered = {}
+	if int(room_of[pos]) >= 0:
+		_room_entered[int(room_of[pos])] = true
+	if errand != "":
+		var row := Balance.errand_row(errand)
+		var have := _errand_supply(String(row.get("supply", Balance.SUPPLY_FIGHTS)))
+		# ...and an errand asking for every lid on a floor with no lids is settled by turning
+		# up, which is not an errand. Dropped rather than swapped: the floors that ask are meant
+		# to be some of them, and one fewer is the honest outcome. This is D184's `thorough`
+		# special case generalised — every row is checked the same way, so a row added to the
+		# catalogue is protected the day it lands rather than the day somebody remembers it.
+		if have < int(row.get("needs", 1)):
+			errand = ""
+		else:
+			errand_need = Balance.errand_threshold(errand, have)
+	# The ledger goes down only if there is something written in it (D203).
+	_place_ledger(carved, dist)
+
 	# ...and the dressing goes down after even the pockets, which is what lets its own rule
 	# be absolute: nothing decorative can land on a tile that holds something, because by
 	# now everything that holds something is already there (D176).
@@ -592,23 +721,6 @@ func _build_floor(d: int) -> void:
 	for i in enc.size():
 		if int(enc[i]) >= 0:
 			content += 1
-
-	# This floor's ordinance, and the state it is judged on (D184). Counted off the tiles
-	# actually laid down rather than off the plan: a chest that found no ground to stand on
-	# is a chest the player cannot open, and an errand that asked for it would be unsettleable
-	# through no fault of theirs.
-	errand = String(errandplan[depth]) if depth < errandplan.size() else ""
-	errand_seen = false
-	errand_pushed = false
-	errand_chests = 0
-	for i in enc.size():
-		if int(enc[i]) == Enc.TREASURE and not _in_pocket(i):
-			errand_chests += 1
-	# ...and an errand asking for every lid on a floor with no lids is settled by turning up,
-	# which is not an errand. Dropped rather than swapped: the floors that ask are meant to be
-	# some of them, and one fewer is the honest outcome.
-	if errand == Balance.ERRAND_THOROUGH and errand_chests == 0:
-		errand = ""
 
 	walked[pos] = true
 	_reveal_around(pos)
@@ -1187,27 +1299,81 @@ func _open_pocket(k: int) -> void:
 	_room_cells = []
 	_build_light()
 
-## Has this floor's ordinance been settled (D184)?
+# --- the tally: what the floor has counted since you arrived (D203) --------------------
+#
+# Two entry points, one for each kind of counter, and both of them go through here rather than
+# writing `errand_tally` directly — so the peak/sum distinction is decided in ONE place. A
+# `peak_*` key summed instead of maxed is an errand that reads "stand behind 40 block" and is
+# settled by blocking 8 five times, which is a different and far easier ask wearing the same
+# words.
+
+## Add to a running count, on both clocks. The floor's is wiped when you descend and the run's
+## is not — everything else about them is the same, which is the point of writing them here.
+func _tick(key: String, n: int = 1) -> void:
+	if n <= 0:
+		return
+	errand_tally[key] = int(errand_tally.get(key, 0)) + n
+	run_tally[key] = int(run_tally.get(key, 0)) + n
+
+## Raise a high-water mark, on both clocks.
 ##
-## Every clause reads state the model was already keeping. That is the constraint the plan
-## puts on a debt's conditions and it applies just as hard here: a condition needing new
-## bookkeeping is the wrong condition, because bookkeeping kept only for one feature is
-## bookkeeping that goes stale the first time something else moves.
+## The run's peak is the max over the whole descent rather than the max of the floors' peaks,
+## and those are the same number — which is only true because this takes the raw value rather
+## than folding the floor's peak in at the stairs. Folding would have been the obvious way to
+## write it and would have been wrong on the floor where the peak is set after a descent.
+func _peak(key: String, n: int) -> void:
+	if n > int(errand_tally.get(key, 0)):
+		errand_tally[key] = n
+	if n > int(run_tally.get(key, 0)):
+		run_tally[key] = n
+
+## Fold a finished fight's counters into the floor's (D203).
+##
+## Called by the view when a combat is won, because a traversal never reaches into a fight and
+## a fight never reaches into the floor — the same seam D13 draws for gold and HP. The engine
+## counts what happened inside the fight; this is the only door those numbers come through.
+func merge_tally(from: Dictionary) -> void:
+	for k in from:
+		var key := String(k)
+		if not (key in Balance.TALLIES):
+			continue
+		if key in Balance.TALLY_PEAKS:
+			_peak(key, int(from[k]))
+		else:
+			_tick(key, int(from[k]))
+
+## Has this floor's ordinance been settled (D184, D203)?
+##
+## One comparison for every row in the catalogue, because the catalogue says which counter and
+## how much. D184's three-arm `match` was correct at three rows and is unwritable at fifty —
+## and worse than unwritable, it is the shape where row forty-one silently returns `false` from
+## the fallthrough and nobody notices, which is exactly the class of bug `tests/test_relic.gd`
+## was rewritten to make impossible (D180).
+##
+## An errand that was never TAKEN is never settled, whatever the counters say. That is the
+## whole of what the ledger buys: the floor's gold is for a thing you agreed to do, so a player
+## who walks past the ledger and clears the floor anyway has not settled anything — they simply
+## never took it on.
 func _errand_met() -> bool:
-	match errand:
-		Balance.ERRAND_THOROUGH:
-			return errand_chests == 0
-		Balance.ERRAND_UNSEEN:
-			return not errand_seen
-		Balance.ERRAND_PUSHED:
-			return errand_pushed
-	return false
+	if errand == "" or not errand_taken:
+		return false
+	return Balance.errand_settled(errand, errand_tally, errand_need)
 
 ## What this floor is asking, or "" — for the status line. Says the ordinance and never
 ## whether it is currently met: an errand that ticked itself green as you walked would turn
 ## a thing you are doing into a checklist you are filling in.
+##
+## Silent until the ledger is read. Before that the floor is not asking anything — there is a
+## book somewhere with something written in it, and finding out what is the errand's first half.
 func errand_line() -> String:
-	return Balance.errand_text(errand) if errand != "" else ""
+	if errand == "" or not errand_taken:
+		return ""
+	return Balance.errand_text(errand, errand_need)
+
+## What the ledger says, for the moment it is read. Same words, no `taken` gate — this is the
+## call that tells the player what they have just agreed to.
+func ledger_line() -> String:
+	return Balance.errand_text(errand, errand_need) if errand != "" else ""
 
 ## The answer to a toll, worked out from the floor RIGHT NOW (D186).
 ##
@@ -1391,6 +1557,154 @@ func _place_shrine(carved: Array, dist_from_entry: PackedInt32Array) -> void:
 		return
 	enc[best] = SHRINE
 	shrine = best
+
+## How much of a supply this BUILT floor has to give (D203).
+##
+## The number an errand's threshold is a fraction of, so every row scales with depth for free:
+## a floor five rungs down stands more HP and swings harder, and "deal 60% of what is here"
+## says so without a single per-dungeon constant.
+##
+## The two combat supplies are priced at ratio 1.0 rather than at the run's real deck power.
+## That is deliberate and it errs in the safe direction: enemy HP rises with `power_ratio`, so
+## a strong deck meets more HP than this estimate and settles the errand sooner. The other way
+## round — sizing the ask off a ratio the floor cannot know at build time — is an errand that
+## gets harder because you got better, which is the one thing a reward for playing well must
+## never do.
+func _errand_supply(kind: String) -> int:
+	var diff: int = dungeon.difficulty if dungeon != null else 1
+	match kind:
+		Balance.SUPPLY_FIGHTS:
+			return mons.size()
+		Balance.SUPPLY_HP:
+			var hp := 0
+			for m in mons:
+				var tier: int = Balance.Tier.ELITE if int(m["type"]) == Enc.ELITE \
+					else Balance.Tier.NORMAL
+				hp += Balance.enemy_max_hp(diff, tier, 1.0)
+			return hp
+		Balance.SUPPLY_DAMAGE:
+			var dmg := 0
+			for m in mons:
+				var tier2: int = Balance.Tier.ELITE if int(m["type"]) == Enc.ELITE \
+					else Balance.Tier.NORMAL
+				dmg += Balance.enemy_damage(diff, tier2, 1.0, 1)
+			return dmg
+		Balance.SUPPLY_CHESTS:
+			var lids := 0
+			for i in enc.size():
+				# Chests inside an unopened pocket do not count: a lid you cannot reach without
+				# first finding the pocket is not a lid this floor is offering you (D182).
+				if int(enc[i]) == Enc.TREASURE and not _in_pocket(i):
+					lids += 1
+			return lids
+		Balance.SUPPLY_POCKETS:
+			return pockets.size()
+		Balance.SUPPLY_KEYS:
+			var ks := 0
+			for i in enc.size():
+				if int(enc[i]) == KEY:
+					ks += 1
+			return ks
+		Balance.SUPPLY_TOLLS:
+			var ts := 0
+			for p in pockets:
+				if String((p as Dictionary).get("toll", "")) != "":
+					ts += 1
+			return ts
+		Balance.SUPPLY_TILES:
+			var tiles := 0
+			for i in enc.size():
+				if int(enc[i]) != WALL:
+					tiles += 1
+			return tiles
+		Balance.SUPPLY_ROOMS:
+			return room_role.size()
+	return 0
+
+## Stand the floor's ledger somewhere, off the route, the way a site is — but WANTING the
+## lit room (D203).
+##
+## This is the one placement in the file that reads `room_role`, and that is a deliberate
+## amendment to the rule stated above `_dress_floor`: the dressing was made free of balance
+## consequence *by construction*, by nothing outside it ever reading what it wrote. A ledger
+## that prefers a shrine reads it. What keeps the guarantee intact is that role decides only
+## WHICH off-route tile of several equally-off-route tiles gets the ledger — never whether the
+## floor has one, never how far it is, never what it asks. Take the preference out and the
+## floor is identical in every number the budget cares about; it just puts its ledger somewhere
+## less worth walking to.
+##
+## The preference is real and not decorative. A shrine is the only role that outbids everything
+## for a light (`ISO_ROOM_DRESSING`), so the errand is written in the one room on the floor you
+## can read from the doorway — which is the same trick D172 plays with a chest standing in the
+## light of its own tier.
+func _place_ledger(carved: Array, dist_from_entry: PackedInt32Array) -> void:
+	ledger = -1
+	if errand == "" or dist_from_entry.size() != enc.size():
+		return
+	var exit_cell := -1
+	for i in enc.size():
+		if _is_exit(i):
+			exit_cell = i
+	if exit_cell < 0:
+		return
+	var to_exit := _dist_from(exit_cell)
+	var span := int(dist_from_entry[exit_cell])
+	if span <= 0:
+		return
+	var taken := {}
+	for m in mons:
+		taken[int(m["cell"])] = true
+	# Two passes over the same tiles, and the second one is why the errand can be trusted to
+	# exist. The first insists on `SITE_OFF_PATH`, exactly as a site and the stone do. The
+	# second drops that one requirement and keeps every other.
+	#
+	# The relaxation is not a nicety: a tight floor — a short corridor spine with the stairs
+	# near the entrance — offers no tile two steps off its own route, and the first pass alone
+	# left three floors in a full sweep carrying an errand with nowhere to read it. That is the
+	# D184 lie in the exact shape D203 could newly introduce: an ordinance that cannot be
+	# discharged, this time because the ask is unreachable rather than because the floor is
+	# thin. A ledger on the route is a slightly worse ledger; no ledger is a broken errand.
+	var best := -1
+	for relaxed in [false, true]:
+		var best_score := -1
+		for c in carved:
+			var i := int(c)
+			if int(enc[i]) != EMPTY or i == pos or int(room_of[i]) < 0 or taken.has(i):
+				continue
+			var de := int(dist_from_entry[i])
+			var dx := int(to_exit[i])
+			if de < 0 or dx < 0:
+				continue
+			var off := de + dx - span
+			if off < Balance.SITE_OFF_PATH and not relaxed:
+				continue
+			var crowded := false
+			for nb in _neighbours(i):
+				if int(enc[nb]) >= 0 or _is_exit(nb) or int(enc[nb]) == KEY \
+						or int(enc[nb]) == SHRINE:
+					crowded = true
+					break
+			if crowded:
+				continue
+			# The lit room wins over a tile that is merely further off the route. Weighted
+			# rather than filtered: a floor whose shrine happens to sit ON the way to the stairs
+			# still gets a ledger, it just gets it somewhere else — a preference that could fail
+			# to place is a feature that goes missing on the floors it looks worst on.
+			var score := off + (Balance.ISO_GRID if room_role_at(i % w, i / w) == "shrine" else 0)
+			if score > best_score:
+				best_score = score
+				best = i
+		if best >= 0:
+			break
+	# A floor with nowhere at all to stand one keeps no errand. Dropped rather than shipped
+	# unreadable: an ask the player can never be told about is worse than a floor that asks
+	# nothing, because the gold at the stairs would be unreachable and unexplained.
+	if best < 0:
+		errand = ""
+		errand_need = 0
+		return
+	enc[best] = LEDGER
+	ledger = best
 
 ## Pockets on this floor nobody has pushed open yet (D182).
 ##
@@ -2438,6 +2752,8 @@ func _describe(n: int) -> String:
 			return "A key"
 		SHRINE:
 			return "A standing stone"
+		LEDGER:
+			return "An open ledger"
 	if e == Enc.TREASURE and chest_of.has(n):
 		# The tier IS the lock, so naming it names what the chest wants (D172).
 		return "%s chest" % Balance.PACK_TIER_NAME.get(String(chest_of[n]), "Worn")
@@ -2472,7 +2788,7 @@ func _catch(caught: int) -> Dictionary:
 	# `ambush` is a PRICE, reported and not applied: a traversal never touches run resources
 	# (D13). Caught in the open is also the one thing the `unseen` errand asks you to avoid
 	# (D184), and the model is what knows it happened.
-	errand_seen = true
+	_tick(Balance.TALLY_SEEN)
 	caught_ever = true
 	pending = {"type": int(m["type"]), "cell": pos, "mon": caught, "ambush": true}
 	if String(m.get("enemy", "")) != "":
@@ -2530,6 +2846,7 @@ func select(i: int) -> Dictionary:
 	_invalidate()
 	picked_key = false
 	errand_paid = ""
+	errand_read = false
 	toll_result = ""
 	shrine_paid = ""
 	if i < 0 or i >= opts.size():
@@ -2573,7 +2890,8 @@ func select(i: int) -> Dictionary:
 		toll_result = "right" if right else "wrong"
 		if right:
 			_open_pocket(int(o["pocket"]))
-			errand_pushed = true
+			_tick(Balance.TALLY_POCKETS)
+			_tick(Balance.TALLY_TOLLS)
 		else:
 			pk["missed"] = true
 		var asked := _dist_from(pos)
@@ -2595,6 +2913,7 @@ func select(i: int) -> Dictionary:
 		if shed >= 0 and shed < mons.size():
 			mons.remove_at(shed)
 		avoided += 1
+		_tick(Balance.TALLY_SHAKEN)
 		var field0 := _dist_from(pos)
 		_reveal_around(pos, field0)
 		return _floor_moves(field0)
@@ -2603,7 +2922,7 @@ func select(i: int) -> Dictionary:
 		steps += 1
 		floor_steps += 1
 		_open_pocket(int(o["pocket"]))
-		errand_pushed = true
+		_tick(Balance.TALLY_POCKETS)
 		# One flood, used twice, exactly as the break-away does — and taken AFTER the opening,
 		# so the reveal and the hunters both see the floor the push just made, the guard the
 		# push just released included.
@@ -2627,6 +2946,17 @@ func select(i: int) -> Dictionary:
 		_build_floor(depth + 1)
 		return {}
 
+	# Covering ground is counted before the step is taken, so a tile already walked does not
+	# count twice: `steps` is turns and this is GROUND, and an errand asking you to cover half
+	# a floor must not be settleable by pacing between two tiles (D203). That is not a
+	# hypothetical — it is the exact loop the greedy walker fell into twice in this file.
+	if not bool(walked[target]):
+		_tick(Balance.TALLY_STEPS)
+		var into := int(room_of[target])
+		if into >= 0 and not _room_entered.has(into):
+			_room_entered[into] = true
+			_tick(Balance.TALLY_ROOMS)
+
 	pos = target
 	steps += 1
 	floor_steps += 1
@@ -2638,6 +2968,15 @@ func select(i: int) -> Dictionary:
 	if was == KEY:
 		enc[pos] = EMPTY
 		picked_key = true
+		_tick(Balance.TALLY_KEYS)
+
+	# Reading the ledger takes the errand on (D203). The tile goes bare afterwards: an
+	# ordinance is taken once, and a book you can keep re-reading is a button.
+	if was == LEDGER:
+		enc[pos] = EMPTY
+		ledger = -1
+		errand_taken = true
+		errand_read = true
 
 	var field := _dist_from(pos)
 	_reveal_around(pos, field)
@@ -2697,7 +3036,7 @@ func clear_pending() -> void:
 	if not optional:
 		cleared += 1
 		if kind_of == Enc.TREASURE:
-			errand_chests = maxi(0, errand_chests - 1)
+			_tick(Balance.TALLY_CHESTS)
 	pending = {}
 	# A fight used to be LOUD, and winning one woke everything within earshot. Nothing on this
 	# floor is asleep any more (D197), so noise had nothing left to do: the rule it encoded —
@@ -2764,10 +3103,23 @@ func _save() -> Dictionary:
 		# one that forgot which were open would seal a room they are standing in.
 		"pockets": pockets, "pocketplan": pocketplan, "sites": sites,
 		# The errand and its progress are run state: a resumed floor has to still be owed the
-		# same thing, and has to remember that you were already caught once on it (D184).
+		# same thing, has to remember that you were already caught once on it (D184), and has to
+		# remember whether you had TAKEN it — a resume that handed back an untaken errand would
+		# quietly refund the walk to the ledger, and one that handed back a taken one you never
+		# took would pay you for a floor you had not agreed to (D203).
+		#
+		# `errand_need` is saved rather than recomputed for the same reason it is held rather
+		# than remeasured: by the time a run is resumed the floor has been half-stripped, so a
+		# threshold worked out again on load would be a fraction of what is left.
 		"aspect": aspect, "deep": deep, "caught_ever": caught_ever, "floor_state": floor_state, "shrine": shrine,
-		"errand": errand, "errandplan": errandplan, "errand_seen": errand_seen,
-		"errand_chests": errand_chests, "errand_pushed": errand_pushed}
+		"errand": errand, "errandplan": errandplan, "errand_taken": errand_taken,
+		"errand_need": errand_need, "errand_tally": errand_tally, "ledger": ledger,
+		"room_entered": _room_entered.keys(),
+		# The run's clock, which a debt is judged on at the end (D205). Saved for the same
+		# reason the floor's is and with more at stake: a resumed run that started its run
+		# counters again would fail a debt the player had already discharged, and fail it
+		# silently, because a debt says what it wants and never says how far along it is.
+		"run_tally": run_tally}
 
 func _load(d: Dictionary) -> void:
 	w = int(d.get("w", Balance.ISO_GRID))
@@ -2974,17 +3326,36 @@ func _load(d: Dictionary) -> void:
 		var si := int(sc)
 		if si >= 0 and si < enc.size():
 			sites.append(si)
+	# Checked against the catalogue on the way in, the way a cast creature and a pocket's prize
+	# already are: an errand id this build no longer has would otherwise be an ordinance with no
+	# words and no condition, unsettleable for ever. Dropped to "" rather than swapped — a
+	# resumed floor quietly asking something DIFFERENT from what the player read is worse than
+	# one asking nothing.
+	var known := Balance.errand_ids()
 	errandplan = []
 	for e in d.get("errandplan", []):
-		errandplan.append(String(e) if String(e) in Balance.ERRANDS else "")
+		errandplan.append(String(e) if String(e) in known else "")
 	while errandplan.size() < floors:
 		errandplan.append("")
 	errand = String(d.get("errand", ""))
-	if not (errand in Balance.ERRANDS):
+	if not (errand in known):
 		errand = ""
-	errand_seen = bool(d.get("errand_seen", false))
-	errand_pushed = bool(d.get("errand_pushed", false))
-	errand_chests = maxi(0, int(d.get("errand_chests", 0)))
+	errand_taken = bool(d.get("errand_taken", false))
+	errand_need = maxi(0, int(d.get("errand_need", 0)))
+	errand_tally = {}
+	for k in d.get("errand_tally", {}):
+		if String(k) in Balance.TALLIES:
+			errand_tally[String(k)] = maxi(0, int(d["errand_tally"][k]))
+	run_tally = {}
+	for rk in d.get("run_tally", {}):
+		if String(rk) in Balance.TALLIES:
+			run_tally[String(rk)] = maxi(0, int(d["run_tally"][rk]))
+	ledger = int(d.get("ledger", -1))
+	if ledger < 0 or ledger >= enc.size() or int(enc[ledger]) != LEDGER:
+		ledger = -1
+	_room_entered = {}
+	for r in d.get("room_entered", []):
+		_room_entered[int(r)] = true
 	pocketplan = []
 	for row in d.get("pocketplan", []):
 		var prizes: Array = []

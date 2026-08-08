@@ -229,6 +229,43 @@ static func card_tooltip(c: CardData, live_damage: int = -1, live_block: int = -
 		lines.append("Refunds 1 Energy if it kills something.")
 	if c.block_per_card_in_hand > 0:
 		lines.append("Grants %d extra Block for each other card in your hand." % c.block_per_card_in_hand)
+	# --- D204: the long form of what the face has to abbreviate -------------------
+	#
+	# The face says "+4 per earlier card" because it has 116px and a 14px readability
+	# floor to respect (see CardData.effect_text). This is where "this turn" gets said,
+	# and it is the load-bearing half of every one of these rules: an enabler that
+	# expires with the turn and a payoff that counts the whole fight look identical in
+	# four words, and the player has to be able to tell them apart somewhere.
+	var unit := "damage" if c.type == CardData.Type.ATTACK else "Block"
+	if c.per_card_played > 0:
+		lines.append("Gains %d %s for each card you played earlier THIS TURN." % [
+			c.per_card_played, unit])
+	if c.damage_per_debuff > 0:
+		lines.append("Deals %d extra damage per stack of Vulnerable or Weak on the target." %
+			c.damage_per_debuff)
+	if c.per_exhausted > 0:
+		lines.append("Gains %d %s for every card exhausted so far THIS FIGHT, including any this card exhausts — counting up to %d of them." % [
+			c.per_exhausted, unit, Balance.EXHAUST_TALLY_CAP])
+	if c.damage_per_energy > 0:
+		lines.append("Spends every Energy left after paying for it, and deals %d extra damage per Energy spent." %
+			c.damage_per_energy)
+	elif c.spend_all_energy:
+		lines.append("Spends every Energy left after paying for it.")
+	if c.bonus_if_hand_empty > 0:
+		lines.append("Gains %d %s if it is the last card in your hand." % [
+			c.bonus_if_hand_empty, unit])
+	if c.block_per_thorns > 0:
+		lines.append("Grants %d extra Block per point of Thorns you are wearing." % c.block_per_thorns)
+	if c.empower_next > 0:
+		lines.append("The next Attack you play this turn deals %d extra damage. Lost if the turn ends first." %
+			c.empower_next)
+	if c.discount_next > 0:
+		lines.append("The next card you play this turn costs %d less Energy, never below 0. Lost if the turn ends first." %
+			c.discount_next)
+	if c.repeat_previous:
+		lines.append("Resolves the card you played immediately before it again, for free. Nothing if it is your first card of the turn.")
+	if c.exhaust_hand:
+		lines.append("Exhausts every other card in your hand: they leave the fight, not the discard.")
 	if c.lifesteal:
 		lines.append("Heals you for the damage it deals.")
 	if blk > 0:

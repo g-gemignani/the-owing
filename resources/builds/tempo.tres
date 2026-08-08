@@ -7,4 +7,4 @@ script = ExtResource("1")
 id = "tempo"
 name = "The Quick Hand"
 description = "Small cards, played often, adding up."
-cards = PackedStringArray("read_ahead", "focus", "see_it_coming", "kick", "in_and_out", "thrown_iron", "rally", "nick", "jab", "cheap_shot", "abyssal_gift")
+cards = PackedStringArray("read_ahead", "focus", "see_it_coming", "kick", "in_and_out", "thrown_iron", "rally", "nick", "jab", "cheap_shot", "abyssal_gift", "grinding_down", "last_word")

@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "blight_bloom"
 name = "Blight Bloom"
-description = "Apply 4 Poison to ALL enemies."
-cost = 2
+description = "Apply 2 Poison to ALL enemies. The next Attack you play this turn deals +5."
+empower_next = 5
+cost = 1
 type = 1
 rarity = 2
 level = 1
-apply_poison = 4
+apply_poison = 2
 aoe = true

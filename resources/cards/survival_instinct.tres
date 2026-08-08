@@ -6,9 +6,10 @@
 script = ExtResource("1")
 id = "survival_instinct"
 name = "Survival Instinct"
-description = "Gain 10 Block."
+description = "Gain 6 Block, +11 if it empties your hand."
+bonus_if_hand_empty = 11
 cost = 1
 type = 1
 rarity = 1
 level = 1
-block = 10
+block = 6

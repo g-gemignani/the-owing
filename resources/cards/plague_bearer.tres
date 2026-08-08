@@ -6,11 +6,11 @@
 script = ExtResource("1")
 id = "plague_bearer"
 name = "Plague Bearer"
-description = "Apply 4 Poison to ALL enemies. Exhaust."
-cost = 1
+description = "Apply 3 Poison to ALL enemies. Resolve the card you played before it again."
+repeat_previous = true
+cost = 2
 type = 1
 rarity = 2
 level = 1
+apply_poison = 3
 aoe = true
-apply_poison = 4
-exhaust = true

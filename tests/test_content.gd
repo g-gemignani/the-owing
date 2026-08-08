@@ -278,11 +278,17 @@ func _init() -> void:
 
 	# --- the README's numbers are claims, and a claim nobody re-checks goes stale ---
 	#
-	# The front page carries a `tests-N suites` badge and a "39 suites" row, and the
-	# badge is a hand-written string on shields.io — there is no service counting them
-	# for us. So the count is asserted HERE, against the same globs `tests/run.sh`
-	# actually runs. Add a suite and this fails until the badge is corrected, which is
-	# the only mechanism that has ever kept a number in this repo honest (D141).
+	# Any suite count the front page states is a hand-written number — there is no service
+	# counting them for us — so it is asserted HERE, against the same globs `tests/run.sh`
+	# actually runs. A wrong number fails the build, which is the only mechanism that has
+	# ever kept a number in this repo honest (D141).
+	#
+	# It looks for the CLAIM WHEREVER IT IS rather than demanding one exact string in one
+	# exact place. The old version required the literal badge `tests-42%20suites`, so when
+	# D207 rewrote the README for players and dropped the developer badge row, a page whose
+	# every number was correct failed the suite. **An assertion that a fact is stated in a
+	# particular sentence is an assertion about the prose, not about the fact.** What matters
+	# is that no wrong count is printed anywhere; where it is printed is the writer's business.
 	var suites := 0
 	var td := DirAccess.open("res://tests")
 	if td == null:
@@ -301,12 +307,22 @@ func _init() -> void:
 		else:
 			var text := readme.get_as_text()
 			readme.close()
-			# both the badge (URL-encoded) and the prose row
-			for claim in ["tests-%d%%20suites" % suites, "%d suites" % suites]:
-				if text.find(claim) == -1:
+			# Every "N suites" and "N test suites" on the page, badge or prose, URL-encoded
+			# or not. Each one must be the real count.
+			var claim_re := RegEx.new()
+			claim_re.compile("(\\d+)(%20| )(test(%20| ))?suites")
+			var claims := 0
+			for hit in claim_re.search_all(text):
+				claims += 1
+				if int(hit.get_string(1)) != suites:
 					fails += 1
-					print("FAIL README does not say '%s' — there are %d suites now" % [
-						claim, suites])
+					print("FAIL README claims %s suites — there are %d" % [
+						hit.get_string(1), suites])
+			# ...and the page must make the claim somewhere. Without this, deleting the
+			# sentence passes, which is the assertion quietly opting out of its own job.
+			if claims == 0:
+				fails += 1
+				print("FAIL README states no suite count at all — there are %d" % suites)
 			# A per-release download counter cannot survive a rolling release: the release
 			# object is deleted and recreated on every green push, and the counts go with
 			# it, so the badge reads "downloads since the last commit" — usually 0, and

@@ -38,6 +38,18 @@ func outgoing_block(base: int) -> int:
 		return 0
 	return maxi(0, base + dexterity)
 
+## HP this combatant has actually lost, ever, this fight — through block, through poison,
+## through anything (D203). Kept HERE rather than differenced by the engine because the two
+## places HP goes down are this method and `end_turn`, and a caller subtracting before-and-after
+## around a turn has to get every early return right: `end_turn` has three, and the fight ends
+## on two of them. A counter at the point of loss cannot miss one.
+##
+## Saved, because the fight's tally is only folded into the floor's when the fight is WON: a
+## combat quit halfway and resumed would otherwise come back reporting that nothing had touched
+## you, and `flawless` — an errand that pays for winning without losing a point — would settle
+## itself on a fight that had already cost half the health bar.
+var taken: int = 0
+
 ## Take a hit. `amount` is the attacker's already-modified output; this applies
 ## the *defender's* vulnerability, then block absorption.
 func take_damage(amount: int) -> void:
@@ -50,6 +62,7 @@ func take_damage(amount: int) -> void:
 	block = max(0, block - incoming)
 	if remaining > 0:
 		hp = max(0, hp - remaining)
+		taken += remaining
 
 ## Damage this combatant would suffer from `amount` right now (for UI/AI intent).
 func predicted_damage(amount: int) -> int:
@@ -78,6 +91,7 @@ func end_turn() -> int:
 	if poison > 0:
 		dot = poison
 		hp = max(0, hp - dot)
+		taken += dot
 		poison -= 1
 	vulnerable = max(0, vulnerable - 1)
 	weak = max(0, weak - 1)
@@ -98,6 +112,7 @@ func end_turn() -> int:
 
 func save_state() -> Dictionary:
 	return {
+		"taken": taken,
 		"name": name, "hp": hp, "max_hp": max_hp, "block": block,
 		"vulnerable": vulnerable, "weak": weak, "strength": strength,
 		"dexterity": dexterity, "poison": poison, "thorns": thorns,
@@ -109,6 +124,7 @@ func load_state(d: Dictionary) -> void:
 	hp = int(d.get("hp", hp))
 	max_hp = int(d.get("max_hp", max_hp))
 	block = int(d.get("block", 0))
+	taken = maxi(0, int(d.get("taken", 0)))
 	vulnerable = int(d.get("vulnerable", 0))
 	weak = int(d.get("weak", 0))
 	strength = int(d.get("strength", 0))

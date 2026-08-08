@@ -50,6 +50,37 @@ var player_block_last_turn: int = 0
 ## re-trigger every turn after its condition stays true.
 var rules_fired: Array = []
 
+# --- the tally: what this fight did, for the floor's errand (D203) --------------------
+#
+# Kept HERE and not in `combat.gd` for the reason this file opens with: the engine drives the
+# headless simulator as well as the scene, so a counter kept in the scene is a fact about the
+# game `tools/sim_balance.gd` cannot see. That is precisely the hole D124 found for draw and
+# D180 found again for relics — a thing the game reads and the instrument does not — and it is
+# cheaper to not dig it than to fill it in two years later.
+#
+# Fight-scoped. `combat.gd` hands it to the floor when the fight is WON, and a lost fight ends
+# the run anyway.
+var tally: Dictionary = {}
+## Damage landed since this turn began, for `peak_turn`.
+var turn_damage: int = 0
+## What this fight has and has not done, for the rows that ask about the SHAPE of a win rather
+## than an amount. Set as they happen and read once, at the win.
+var played_attack: bool = false
+var played_skill: bool = false
+var fired_power: bool = false
+
+## Add to a running count.
+func _t(key: String, n: int = 1) -> void:
+	if n <= 0:
+		return
+	tally[key] = int(tally.get(key, 0)) + n
+
+## Raise a high-water mark. Separate from `_t` because a peak summed is a different and much
+## easier ask wearing the same words — "stand behind 40 block" settled by blocking 8 five times.
+func _pk(key: String, n: int) -> void:
+	if n > int(tally.get(key, 0)):
+		tally[key] = n
+
 ## Relic triggers already spent this fight, keyed "relicIndex:effectIndex".
 ## ON_HP_BELOW_PCT must fire once as you cross the line, not every turn after it.
 var relic_fired: Dictionary = {}
@@ -60,6 +91,30 @@ var extra_draw: int = 0
 ## Not persisted in `save_state()`: it is a message in flight, and a fight resumed
 ## on a later session should not open by announcing a draw lost before lunch.
 var draws_lost: int = 0
+
+# --- what the D204 combo cards read ------------------------------------------
+#
+# Three of these are per TURN and one is per COMBAT, and the split is the design:
+# an enabler you did not cash in this turn is gone, so the cards that set a turn up
+# have to be played in the same turn as the card that collects — while the exhaust
+# tally is the fight's whole history and only ever grows.
+#
+## Damage owed to the next attack this turn (`empower_next`). Spent the moment one
+## lands, before the same resolve can grant a new one.
+var next_attack_bonus: int = 0
+## Energy off the next card this turn (`discount_next`). Read through `play_cost`.
+var next_card_discount: int = 0
+## The card played immediately before the one being played, this turn only. What
+## `repeat_previous` echoes.
+var previous_card: CardData = null
+## Cards that have left this combat for good — exhausted by their own rule or burned
+## out of a hand. The ammunition `per_exhausted` collects.
+var exhausted_this_combat: int = 0
+## Energy the X-cost card currently being played will spend, stashed before the pool
+## moves so the face and the resolution read one number. -1 when nothing is mid-play.
+var x_energy: int = -1
+## True only while `play_card` is inside `_resolve`. See `cards_played_before()`.
+var resolving_play: bool = false
 
 var dungeon: int = 1
 var tier: int = Balance.Tier.NORMAL
@@ -107,6 +162,19 @@ func setup(deck: Array[CardData], hp: int, max_hp: int, p_dungeon: int, p_tier: 
 		extra_draw += r.extra_draw
 		player.strength += r.start_strength
 		player.dexterity += r.start_dexterity
+
+	tally = {}
+	turn_damage = 0
+	played_attack = false
+	played_skill = false
+	fired_power = false
+	# D204: fight-scoped like the tally above, and reset in the same place for the same
+	# reason. `start_turn()` clears the per-turn carriers, but the exhaust count belongs
+	# to the whole combat — and an engine instance that is set up twice would otherwise
+	# open its second fight holding the first one's ammunition.
+	exhausted_this_combat = 0
+	x_energy = -1
+	resolving_play = false
 
 	roster_override = p_roster
 	named_boss = p_boss
@@ -287,18 +355,29 @@ func living_enemies() -> int:
 
 func start_turn() -> void:
 	turn += 1
+	_t(Balance.TALLY_TURNS)
+	turn_damage = 0
 	# Block expires inside player.begin_turn() below, so capture it first: a relic
 	# that pays out on wasted Block needs to know how much was wasted.
 	var expiring: int = 0 if player.retain_block else player.block
 	energy = Balance.MAX_ENERGY + bonus_energy
 	power_used = false
 	cards_played_this_turn = 0
+	# D204: the three per-turn combo carriers expire with the turn, exactly like Block.
+	# An enabler you did not cash in is gone, which is what forces a combo deck to
+	# assemble its turn rather than bank a discount over three of them.
+	next_attack_bonus = 0
+	next_card_discount = 0
+	previous_card = null
 	player.begin_turn()  # block expires here unless a retain_block power is active
 	# start_block relics re-apply every turn's opening, after block expiry
 	for r in relics:
 		if r.start_block > 0:
 			player.gain_block(player.outgoing_block(r.start_block))
 	draw_cards(Balance.HAND_SIZE + extra_draw)
+	# After the start_block relics and the draw, so a relic's opening block counts toward the
+	# wall the player is asked to stand behind — it is block they are genuinely standing behind.
+	_pk(Balance.TALLY_PEAK_BLOCK, player.block)
 	retarget()
 	var relic_msg := _fire_relics(RelicData.Trigger.ON_TURN_START)
 	var expired_msg := _fire_relics(RelicData.Trigger.ON_BLOCK_EXPIRED, expiring)
@@ -331,6 +410,10 @@ func draw_cards(n: int) -> void:
 		if draw_pile.is_empty():
 			break
 		hand.append(draw_pile.pop_back())
+		# Counted here rather than at the call sites, for the same reason the D120 cap is
+		# written here: this is the ONE way a card gets into a hand, so a draw errand cannot
+		# miss a source, and a draw the cap ate does not count — the player did not get it.
+		_t(Balance.TALLY_DRAWS)
 
 ## What the log owes the player about a draw the cap ate, and a reset of the count.
 ##
@@ -351,11 +434,75 @@ func take_draw_notice() -> String:
 		return "Hand full at %d — the draw stays in the pile." % Balance.MAX_HAND_SIZE
 	return "Hand full at %d — %d draws stay in the pile." % [Balance.MAX_HAND_SIZE, n]
 
+## What this card costs RIGHT NOW: its levelled cost, less any discount standing.
+##
+## Every read of a price during a fight goes through here, for exactly the reason
+## every read of a card's damage goes through `card_damage` (D50). A discount the
+## player was promised has to apply at the place the game checks affordability AND on
+## the badge that quotes the price, or the two disagree and one of them is lying.
+func play_cost(card: CardData) -> int:
+	return maxi(0, card.eff_cost() - next_card_discount)
+
+## How many cards will have left this combat for good once `card` has resolved.
+##
+## PROJECTED rather than counted, and the projection is the whole point: the card face
+## reads `per_exhausted` before the card is played, so a Cull that advertises 4 Block
+## and then grants 14 is the D50 lie in a new costume. The face and `_resolve` both
+## call this while the hand is still intact and the tally has not moved, so the two
+## cannot disagree — which is why `play_card` does its exhaust bookkeeping afterwards.
+func projected_exhausted(card: CardData) -> int:
+	var n := exhausted_this_combat
+	if card.exhaust_hand:
+		n += maxi(0, hand.size() - (1 if card in hand else 0))
+	if card.exhaust:
+		n += 1
+	# Capped, and the cap is why the payoffs can be priced at all — see
+	# Balance.EXHAUST_TALLY_CAP for the numbers that made it necessary. Applied HERE
+	# rather than to `exhausted_this_combat` itself, because the raw count is also the
+	# fight's history and a ceiling on the reward is not a ceiling on the fact.
+	return mini(n, Balance.EXHAUST_TALLY_CAP)
+
+## Will playing `card` leave your hand empty? The card itself is counted out, because
+## it is on its way to the discard: "the last card in your hand" is what the player
+## means by it, and what the face has to promise.
+func hand_empties(card: CardData) -> bool:
+	if card.exhaust_hand:
+		return true
+	return hand.size() - (1 if card in hand else 0) <= 0
+
+## Energy an X-cost card spends: whatever is left over after paying for it.
+##
+## `play_card` stashes this before the cost comes out of the pool. Without the stash
+## the face and the resolution disagree by the card's own cost, because `_resolve`
+## runs after the energy has been paid — a two-energy gap on the one card whose whole
+## number is the energy.
+## How many cards were played BEFORE the card currently being asked about.
+##
+## One function because it is one question asked from two moments, and the two used to
+## answer it differently. `cards_played_this_turn` is bumped before `_resolve` runs, so
+## a card mid-resolution is already in the count and a card being drawn on the face is
+## not — which made the tempo mechanic disagree with itself: on your third card Nick's
+## face showed +0 and then dealt +5 (a D50 lie, in the one mechanic whose entire
+## content is a count). Every reader of "how far into the turn is this" comes here.
+##
+## A Power is deliberately not counted as a card by `play_card`'s sibling `use_power`,
+## and it does not set the flag either, so this still reads "before it" for one too.
+func cards_played_before() -> int:
+	return maxi(0, cards_played_this_turn - (1 if resolving_play else 0))
+
+func x_energy_for(card: CardData) -> int:
+	if not card.spend_all_energy:
+		return 0
+	if x_energy >= 0:
+		return x_energy
+	return maxi(0, energy - play_cost(card))
+
 func can_play(card: CardData) -> bool:
-	# eff_cost / eff_hp_cost, not the authored fields: levels buy both of these
-	# DOWN, and a card the player has paid to make cheaper has to actually be
-	# cheaper at the one place the game checks whether it can be afforded.
-	if card.eff_cost() > energy:
+	# play_cost / eff_hp_cost, not the authored fields: levels buy both of these
+	# DOWN and a discount buys the first one down again, and a card the player has
+	# been promised is cheaper has to actually be cheaper at the one place the game
+	# checks whether it can be afforded.
+	if play_cost(card) > energy:
 		return false
 	# an HP cost must never be lethal: paying it has to leave you alive
 	if card.eff_hp_cost() > 0 and player.hp <= card.eff_hp_cost():
@@ -439,7 +586,7 @@ func _apply_relic_effect(r: RelicData, ei: int, amount: int) -> String:
 func can_use_power() -> bool:
 	if power == null or power_used or over():
 		return false
-	if power.eff_cost() > energy:
+	if play_cost(power) > energy:
 		return false
 	# an HP cost must never be lethal, same rule as a card
 	return not (power.eff_hp_cost() > 0 and player.hp <= power.eff_hp_cost())
@@ -449,6 +596,12 @@ func use_power() -> String:
 		return ""
 	energy -= power.eff_cost()
 	power_used = true
+	_t(Balance.TALLY_POWER_USES)
+	_t(Balance.TALLY_ENERGY, power.eff_cost())
+	fired_power = true
+	# NOT counted as a card: `_resolve` is shared with `play_card` for the effects, but a Power
+	# is the one thing you carry rather than something in the deck, and an errand asking for
+	# twenty cards must not be settleable partly by an ability that costs no card at all.
 	var msg := _resolve(power)
 	# a power that draws can hit the cap too — D120
 	msg = (msg + " " + take_draw_notice()).strip_edges()
@@ -458,18 +611,70 @@ func use_power() -> String:
 func play_card(card: CardData) -> String:
 	if not can_play(card):
 		return ""
-	energy -= card.eff_cost()
+	# D204: every price is read off the PRE-PAYMENT pool, which is the state the card
+	# face the player clicked was drawn from. Three of them — the discounted cost, the
+	# energy an X-cost card is about to spend, and the card it is about to echo — stop
+	# being answerable the moment anything below runs, so they are all taken here.
+	var paid := play_cost(card)
+	var echo: CardData = previous_card if card.repeat_previous else null
+	x_energy = maxi(0, energy - paid) if card.spend_all_energy else -1
+	energy -= paid
+	if card.spend_all_energy:
+		energy = 0            # the rest of the turn IS the card; x_energy holds how much
+	# spent by this card whether or not the card grants a fresh one further down
+	next_card_discount = 0
 	cards_played_this_turn += 1
+	# What was played, before it resolves — a card that kills the last enemy still got played.
+	_t(Balance.TALLY_CARDS)
+	_t(Balance.TALLY_ENERGY, paid)   # what left the pool, discount and all
+	match card.type:
+		CardData.Type.ATTACK:
+			_t(Balance.TALLY_ATTACKS)
+			played_attack = true
+		CardData.Type.SKILL:
+			_t(Balance.TALLY_SKILLS)
+			played_skill = true
+		CardData.Type.POWER:
+			_t(Balance.TALLY_POWERS)
+	if card.aoe:
+		_t(Balance.TALLY_AOE)
+	if card.hits > 1:
+		_t(Balance.TALLY_MULTI)
+	_pk(Balance.TALLY_PEAK_HAND, cards_played_this_turn)
+	resolving_play = true
 	var msg := _resolve(card)
+	# D204: ...and then the last thing again. Outside `_resolve` on purpose. The echo is
+	# a second RESOLUTION, not an item in this card's effect list, and keeping it here is
+	# what makes the three rules it needs true for free: it pays no energy, it moves no
+	# pile, and it cannot itself echo, because echoing is something `play_card` does and
+	# nothing is playing the echoed card.
+	if echo != null:
+		msg += "Again — " + _resolve(echo)
+	resolving_play = false
 	hand.erase(card)
 	var fired := _fire_relics(RelicData.Trigger.ON_CARDS_PLAYED, cards_played_this_turn)
 	if fired != "":
 		msg += " " + fired
+	# D204: burn the rest of the hand, AFTER the erase above so the card doing the
+	# burning is not in what it burns — and after `_resolve`, so that everything which
+	# read `projected_exhausted()` (the face included) was looking at the same intact
+	# hand. Move this earlier and Cull starts paying out on a tally it has already moved.
+	if card.exhaust_hand and not hand.is_empty():
+		var burned := hand.size()
+		exhausted_this_combat += burned
+		for _i in burned:
+			_t(Balance.TALLY_EXHAUST)
+		hand.clear()
+		msg += "Burned %d card%s out of your hand. " % [burned, "" if burned == 1 else "s"]
 	# exhausted cards leave the combat entirely instead of returning to the discard
 	if not card.exhaust:
 		discard_pile.append(card)
 	else:
+		exhausted_this_combat += 1
+		_t(Balance.TALLY_EXHAUST)
 		msg += "(exhausted) "
+	previous_card = card
+	x_energy = -1
 	# AFTER the relic fire, because both the card's own draw and an ON_CARDS_PLAYED
 	# relic's draw can be eaten by the cap and the player is owed one line either way.
 	var lost := take_draw_notice()
@@ -508,8 +713,26 @@ func card_base_damage(card: CardData) -> int:
 		base += card.damage_per_thorns * player.thorns
 	if card.bonus_vs_debuffed > 0 and foe != null and (foe.vulnerable > 0 or foe.weak > 0):
 		base += card.bonus_vs_debuffed
-	if card.combo_at > 0 and cards_played_this_turn >= card.combo_at:
+	# `+ 1` counts the card being asked about, on top of the ones before it. See
+	# `cards_played_before()` for why this is not `cards_played_this_turn` any more.
+	if card.combo_at > 0 and cards_played_before() + 1 >= card.combo_at:
 		base += card.combo_bonus
+	if card.damage_per_debuff > 0 and foe != null:
+		base += card.damage_per_debuff * (foe.vulnerable + foe.weak)
+	if card.damage_per_energy > 0:
+		base += card.damage_per_energy * x_energy_for(card)
+	# The three shared axes (see CardData's D204 block) pay in the card's own currency,
+	# and `base > 0` is what decides which. A card with no damage of its own is a skill
+	# whose bonus belongs to `card_block_bonus` below; scaling from zero here would hand
+	# Rally a damage roll it does not have and an attack animation to go with it.
+	if base > 0:
+		base += card.per_card_played * cards_played_before()
+		base += card.per_exhausted * projected_exhausted(card)
+		if card.bonus_if_hand_empty > 0 and hand_empties(card):
+			base += card.bonus_if_hand_empty
+		# LAST, and only onto a swing that is actually happening: an empowered attack
+		# spends the bonus, and a card that deals no damage must not eat it.
+		base += next_attack_bonus
 	return base
 
 ## Block this card actually grants, after Dexterity and anything it reads.
@@ -520,8 +743,20 @@ func card_block_bonus(card: CardData) -> int:
 	var bonus := 0
 	if card.block_per_card_in_hand > 0:
 		bonus += card.block_per_card_in_hand * maxi(0, hand.size() - 1)
-	if card.combo_at > 0 and card.eff_block() > 0 and cards_played_this_turn >= card.combo_at:
+	if card.combo_at > 0 and card.eff_block() > 0 and cards_played_before() + 1 >= card.combo_at:
 		bonus += card.combo_bonus
+	# D204. Thorns you are already wearing, converted — a thorns deck buying a guard
+	# with what it has instead of paying for Block twice.
+	if card.block_per_thorns > 0:
+		bonus += card.block_per_thorns * player.thorns
+	# ...and the block half of the three shared axes. Gated on the card having Block of
+	# its own, which is the mirror of the `base > 0` gate in `card_base_damage`: between
+	# them each axis is counted once, on whichever side the card actually pays out.
+	if card.eff_block() > 0:
+		bonus += card.per_card_played * cards_played_before()
+		bonus += card.per_exhausted * projected_exhausted(card)
+		if card.bonus_if_hand_empty > 0 and hand_empties(card):
+			bonus += card.bonus_if_hand_empty
 	return bonus
 
 ## What one hit actually leaves the player's hands as: Strength added, Weak applied.
@@ -564,10 +799,23 @@ func _resolve(card: CardData) -> String:
 				if tgt.is_dead():
 					break
 				var dealt := player.outgoing_damage(base_dmg)
-				total += tgt.predicted_damage(dealt)
+				var landed: int = tgt.predicted_damage(dealt)
+				# Damage the target could not absorb because it did not have the HP: what an
+				# `overkill` errand asks you to waste. Measured before the hit, because
+				# afterwards the difference between "killed it exactly" and "hit it for triple"
+				# is gone — the corpse is at 0 either way.
+				_t(Balance.TALLY_OVERKILL, maxi(0, landed - tgt.hp))
+				total += landed
 				tgt.take_damage(dealt)
+		# Damage LANDED, not damage swung: what an enemy's block ate never reached it, and an
+		# errand asking for 200 damage means 200 off their bars.
+		_t(Balance.TALLY_DAMAGE, total)
+		turn_damage += total
+		_pk(Balance.TALLY_PEAK_TURN, turn_damage)
 		if card.lifesteal and total > 0:
+			var before_heal := player.hp
 			player.hp = mini(player.max_hp, player.hp + total)
+			_t(Balance.TALLY_HEAL, player.hp - before_heal)
 			msg += "Drained %d. " % total
 		if not targets.is_empty():
 			var who: String = "all enemies" if card.aoe else String(targets[0].name)
@@ -579,6 +827,7 @@ func _resolve(card: CardData) -> String:
 				if not e.get_meta("counted_dead", false):
 					e.set_meta("counted_dead", true)
 					killed = true
+					_t(Balance.TALLY_KILLS)
 				msg += "%s dies! " % e.name
 				var onkill := _fire_relics(RelicData.Trigger.ON_KILL)
 				if onkill != "":
@@ -587,18 +836,28 @@ func _resolve(card: CardData) -> String:
 		if killed and card.energy_on_kill:
 			energy += 1
 			msg += "Energy +1. "
+		# D204: the empowered swing has landed, so the bonus is spent. HERE rather than
+		# further down is what lets an attack empower the attack AFTER it without
+		# empowering itself: this card's damage was computed at the top of the function,
+		# this clears what it used, and the grant below then arms the next one.
+		next_attack_bonus = 0
 		retarget()
 
 	if card.double_block:
 		var extra := player.block
 		player.gain_block(extra)
+		_t(Balance.TALLY_BLOCK, extra)
 		msg += "Block doubled to %d. " % player.block
 	if card.eff_block() > 0 or card_block_bonus(card) > 0:
 		var blk := card_block(card)
 		player.gain_block(blk)
+		_t(Balance.TALLY_BLOCK, blk)
 		msg += "Block +%d. " % blk
+	_pk(Balance.TALLY_PEAK_BLOCK, player.block)
 	if card.eff_heal() > 0:
+		var pre_heal := player.hp
 		player.hp = mini(player.max_hp, player.hp + card.eff_heal())
+		_t(Balance.TALLY_HEAL, player.hp - pre_heal)
 		msg += "Healed %d. " % card.eff_heal()
 	if card.energy_gain > 0:
 		energy += card.energy_gain
@@ -614,13 +873,20 @@ func _resolve(card: CardData) -> String:
 		debuff_targets.append(foe)
 	elif foe != null:
 		debuff_targets.append(foe)
+	# Counted PER TARGET, so an AoE debuff that lands on four enemies is four times the work —
+	# which it is. The alternative (counting the card once) would make a status errand a
+	# question about how many cards you own rather than about what you did to the floor.
 	for tgt in debuff_targets:
 		if card.eff_vulnerable() > 0:
 			tgt.vulnerable += card.eff_vulnerable()
+			_t(Balance.TALLY_VULN, card.eff_vulnerable())
 		if card.eff_weak() > 0:
 			tgt.weak += card.eff_weak()
+			_t(Balance.TALLY_WEAK, card.eff_weak())
 		if card.eff_poison() > 0:
 			tgt.poison += card.eff_poison()
+			_t(Balance.TALLY_POISON, card.eff_poison())
+			_pk(Balance.TALLY_PEAK_POISON, tgt.poison)
 	if card.eff_vulnerable() > 0:
 		msg += "Vulnerable %d. " % card.eff_vulnerable()
 	if card.eff_weak() > 0:
@@ -631,16 +897,31 @@ func _resolve(card: CardData) -> String:
 	# --- self buffs ---
 	if card.eff_strength() > 0:
 		player.strength += card.eff_strength()
+		_t(Balance.TALLY_STRENGTH, card.eff_strength())
+		_pk(Balance.TALLY_PEAK_STRENGTH, player.strength)
 		msg += "Strength +%d. " % card.eff_strength()
 	if card.eff_dexterity() > 0:
 		player.dexterity += card.eff_dexterity()
+		_t(Balance.TALLY_DEX, card.eff_dexterity())
 		msg += "Dexterity +%d. " % card.eff_dexterity()
 	if card.eff_thorns() > 0:
 		player.thorns += card.eff_thorns()
+		_t(Balance.TALLY_THORNS, card.eff_thorns())
 		msg += "Thorns +%d. " % card.eff_thorns()
 	if card.retain_block:
 		player.retain_block = true
 		msg += "Block now persists between turns! "
+	# --- D204 enablers: what this card leaves behind for the next one --------------
+	#
+	# After the damage block above has already spent whatever was standing, so a card
+	# can be both halves of a combo — Whetted Edge swings for its own 5 and then arms
+	# the +6 for the swing after it, rather than paying itself.
+	if card.empower_next > 0:
+		next_attack_bonus += card.empower_next
+		msg += "Next Attack +%d. " % card.empower_next
+	if card.discount_next > 0:
+		next_card_discount += card.discount_next
+		msg += "Next card costs %d less. " % card.discount_next
 	if card.grows > 0:
 		card.growth += card.grows
 		msg += "(grows +%d) " % card.grows
@@ -822,11 +1103,30 @@ func save_state() -> Dictionary:
 		"power_used": power_used,
 		"cards_played_last_turn": cards_played_last_turn,
 		"player_block_last_turn": player_block_last_turn,
+		# D204 combo state. Mid-turn, all of it: D22's whole point is that a fight going
+		# badly cannot be rolled back, and a reload that quietly refunded a spent discount
+		# or wiped an owed +6 would be a partial retry of the turn — the save scum this
+		# file exists to remove, in miniature. `previous_card` rides as an id and is
+		# re-found in the discard on the way back in; if the fight has moved it, the echo
+		# target is honestly gone rather than guessed at.
+		"next_attack_bonus": next_attack_bonus,
+		"next_card_discount": next_card_discount,
+		"previous_card": previous_card.id if previous_card != null else "",
+		"exhausted_this_combat": exhausted_this_combat,
 		"rules_fired": rules_fired,
 		"relic_fired": relic_fired,
 		"draw": _cards_to_state(draw_pile),
 		"hand": _cards_to_state(hand),
 		"discard": _cards_to_state(discard_pile),
+		# The errand tally is fight state and outlives a quit (D203). A resumed fight that
+		# started its counters again would quietly halve what the floor's errand was owed —
+		# and silently, because the errand is judged at the stairs and never says whether it
+		# is currently met. `taken` rides on the combatant's own save for the same reason.
+		"tally": tally,
+		"turn_damage": turn_damage,
+		"played_attack": played_attack,
+		"played_skill": played_skill,
+		"fired_power": fired_power,
 	}
 
 ## Restore a combat exactly. `relics` is re-supplied by the caller (it lives in
@@ -846,6 +1146,9 @@ func load_state(d: Dictionary, catalog: Dictionary, p_relics: Array = []) -> voi
 	power_used = bool(d.get("power_used", false))
 	cards_played_last_turn = int(d.get("cards_played_last_turn", 0))
 	player_block_last_turn = int(d.get("player_block_last_turn", 0))
+	next_attack_bonus = int(d.get("next_attack_bonus", 0))
+	next_card_discount = int(d.get("next_card_discount", 0))
+	exhausted_this_combat = int(d.get("exhausted_this_combat", 0))
 	relic_fired = d.get("relic_fired", {}).duplicate()
 	rules_fired = []
 	for entry in d.get("rules_fired", []):
@@ -880,9 +1183,64 @@ func load_state(d: Dictionary, catalog: Dictionary, p_relics: Array = []) -> voi
 			"value": int(it.get("value", 0)),
 		})
 
+	tally = {}
+	for k in d.get("tally", {}):
+		# Checked against the catalogue on the way in, the way the archetype above is: a
+		# counter this build no longer has is dropped rather than carried as dead weight the
+		# floor would then try to compare against.
+		if String(k) in Balance.TALLIES:
+			tally[String(k)] = maxi(0, int(d["tally"][k]))
+	turn_damage = maxi(0, int(d.get("turn_damage", 0)))
+	played_attack = bool(d.get("played_attack", false))
+	played_skill = bool(d.get("played_skill", false))
+	fired_power = bool(d.get("fired_power", false))
+
 	draw_pile = _cards_from_state(d.get("draw", []), catalog)
 	hand = _cards_from_state(d.get("hand", []), catalog)
 	discard_pile = _cards_from_state(d.get("discard", []), catalog)
+
+	# AFTER the piles, because the echo target is a card IN one of them and has to exist
+	# before it can be pointed at. An id rather than a position: a discard pile is
+	# reshuffled by any draw that empties the draw pile, so an index would come back
+	# pointing at a different card, which is worse than coming back pointing at nothing.
+	previous_card = null
+	var prev_id := String(d.get("previous_card", ""))
+	if prev_id != "":
+		for c in discard_pile:
+			if c.id == prev_id:
+				previous_card = c
+				break
+
+## What this fight did, for the floor's errand (D203).
+##
+## The running counters plus the five facts that can only be known at the end. Built here
+## rather than accumulated as the fight goes, because "won without playing an attack" is not a
+## thing that happens at a moment — it is a property of the whole fight, and a flag set
+## optimistically at turn one and cleared later is a flag that is wrong for most of the fight.
+##
+## `hurt` is read off the combatant's own counter for the same reason it lives there: the three
+## early returns in `end_turn` are exactly the paths a before-and-after difference would miss.
+func fight_tally() -> Dictionary:
+	var out := tally.duplicate()
+	out[Balance.TALLY_HURT] = player.taken
+	if not won():
+		return out
+	out[Balance.TALLY_FIGHTS] = 1
+	if player.taken == 0:
+		out[Balance.TALLY_FLAWLESS] = 1
+	if turn <= Balance.ERRAND_SWIFT_TURNS:
+		out[Balance.TALLY_SWIFT] = 1
+	if not played_attack:
+		out[Balance.TALLY_NOATTACK] = 1
+	if not played_skill:
+		out[Balance.TALLY_NOSKILL] = 1
+	# A run with no Power equipped wins every fight without firing one, and that is a real
+	# thing the player chose at the deck builder rather than a loophole: the equipped slot is
+	# a whole deckbuilding decision (D80), and leaving it empty costs throughput everywhere
+	# else. `power_ratio` already prices it.
+	if not fired_power:
+		out[Balance.TALLY_NOPOWER] = 1
+	return out
 
 func won() -> bool:
 	return living_enemies() == 0

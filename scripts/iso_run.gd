@@ -845,6 +845,11 @@ func _draw_floor() -> void:
 			if e2 == TraversalIso.KEY:
 				_draw_key(c2, t)
 				continue
+			if e2 == TraversalIso.LEDGER:
+				# Not in the tall-terrain gate below: a lectern is short enough that it cannot
+				# eclipse the player, which is the whole reason it was drawn short.
+				_draw_ledger(c2, t)
+				continue
 			if e2 == TraversalIso.SHRINE:
 				# Tall terrain, so it obeys the same gate as the rock (D192). A slab nearly a
 				# tile high in the row in front of the player was drawn before her and came
@@ -1410,6 +1415,50 @@ func _draw_shrine(centre: Vector2, t: Vector2, alpha: float = 1.0) -> void:
 	# the hollow: what has been worn into it by whatever has been done here before
 	floor_view.draw_circle(centre + Vector2(0, -t.y * 0.46), t.x * 0.045,
 		Color(0.18, 0.17, 0.22, alpha))
+
+## A ledger open on a stand: where this floor's errand is written (D203).
+##
+## Deliberately SHORT — about half the standing stone — so it is not tall terrain and does not
+## join the `near_front` occlusion list. That is a drawing decision made for a reading reason:
+## the ledger wants to be legible from across the room it stands in, and the thing that makes
+## the stone need occlusion handling (a slab nearly a tile high) is exactly what would hide the
+## ledger behind the furniture of a busy store. A lectern reads at a glance and never eclipses
+## anybody.
+##
+## The open pages are the brightest thing in the drawing on purpose: on a shrine tile they
+## catch the room's own light (`ISO_ROOM_DRESSING` gives a shrine the highest light weight),
+## which is the same trick a chest standing in the light of its own tier plays (D172).
+func _draw_ledger(centre: Vector2, t: Vector2, alpha: float = 1.0) -> void:
+	var wood := Color(0.42, 0.32, 0.24, alpha)
+	var page := Color(0.90, 0.86, 0.74, alpha)
+	var ink := Color(0.20, 0.17, 0.15, alpha)
+	floor_view.draw_colored_polygon(_diamond(centre + Vector2(0, t.y * 0.04), t * 0.34),
+		Color(0.05, 0.05, 0.08, 0.40 * alpha))
+	# the stand: a narrow trestle, wider at the foot than at the desk
+	var stand := PackedVector2Array([
+		centre + Vector2(-t.x * 0.07, t.y * 0.02),
+		centre + Vector2(-t.x * 0.04, -t.y * 0.30),
+		centre + Vector2(t.x * 0.04, -t.y * 0.30),
+		centre + Vector2(t.x * 0.07, t.y * 0.02)])
+	floor_view.draw_colored_polygon(stand, wood)
+	# the book: two pages tilted toward the camera off a spine in the middle
+	var spine := centre + Vector2(0, -t.y * 0.34)
+	var left := PackedVector2Array([
+		spine, spine + Vector2(-t.x * 0.19, -t.y * 0.06),
+		spine + Vector2(-t.x * 0.17, -t.y * 0.17), spine + Vector2(0, -t.y * 0.10)])
+	var right := PackedVector2Array([
+		spine, spine + Vector2(t.x * 0.19, -t.y * 0.06),
+		spine + Vector2(t.x * 0.17, -t.y * 0.17), spine + Vector2(0, -t.y * 0.10)])
+	floor_view.draw_colored_polygon(left, page)
+	floor_view.draw_colored_polygon(right, page)
+	floor_view.draw_line(spine, spine + Vector2(0, -t.y * 0.10), ink, UITheme.px(1.5))
+	# a couple of written lines, so it reads as a thing with something IN it
+	for k in 2:
+		var dy := -t.y * (0.09 + 0.035 * float(k))
+		floor_view.draw_line(spine + Vector2(-t.x * 0.14, dy),
+			spine + Vector2(-t.x * 0.03, dy - t.y * 0.02), ink, UITheme.px(1.0))
+		floor_view.draw_line(spine + Vector2(t.x * 0.03, dy - t.y * 0.02),
+			spine + Vector2(t.x * 0.14, dy), ink, UITheme.px(1.0))
 
 ## An iron ring lying in the floor.
 func _draw_prop_ring(centre: Vector2, t: Vector2, ink: Color) -> void:
@@ -2149,6 +2198,14 @@ func _on_pick(i: int) -> void:
 			GameState.keys += 1
 			Audio.play("treasure")
 			log_label.text = "A key, down here where nothing else is. You take it."
+		elif tv.errand_read:
+			# The ledger, read — which is the moment the errand starts (D203). It says what is
+			# asked and stops there: no "0 of 4" beside it, ever. An errand that ticks itself
+			# green as you walk is a checklist you are filling in rather than a thing you are
+			# doing, and that rule is why this line and `errand_line()` are the only two places
+			# the ask is ever printed.
+			Audio.play("treasure")
+			log_label.text = "A ledger, open on a stand. %s" % tv.ledger_line()
 		elif tv.errand_paid != "":
 			# The floor's ordinance, settled, and PAID here: the model reports and the caller
 			# pays, exactly as it does for a key (D13/D184). Gold rather than a card, because
@@ -2175,7 +2232,7 @@ func _on_pick(i: int) -> void:
 		# front of them, and continuing to walk through it because a key is still down
 		# is the one way this feature could cost them a run. Picking something up is one
 		# of those stops — a thing that happened deserves the beat it takes to read.
-		walk_more = tv.depth == from_floor and not tv.picked_key \
+		walk_more = tv.depth == from_floor and not tv.picked_key and not tv.errand_read \
 			and tv.threats().size() <= from_threats.size()
 		_begin_walk(tv, from_cell, from_floor, from_threats)
 		GameState.autosave()

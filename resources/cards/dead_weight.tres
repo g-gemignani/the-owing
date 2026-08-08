@@ -6,9 +6,10 @@
 script = ExtResource("1")
 id = "dead_weight"
 name = "Dead Weight"
-description = "Deal 14 damage."
+description = "Deal 4 damage. Resolve the card you played before it again."
+repeat_previous = true
 cost = 2
 type = 0
 rarity = 0
 level = 1
-damage = 14
+damage = 4

@@ -6,10 +6,10 @@
 script = ExtResource("1")
 id = "pressure"
 name = "Pressure"
-description = "Deal 6 damage 3 times."
-cost = 2
+description = "Deal 4 damage, +3 for each stack of Vulnerable or Weak on the target."
+damage_per_debuff = 3
+cost = 1
 type = 0
 rarity = 1
 level = 1
-damage = 6
-hits = 3
+damage = 4

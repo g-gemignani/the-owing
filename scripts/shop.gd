@@ -147,14 +147,20 @@ func _refresh() -> void:
 		var price: int = Balance.card_price(card.rarity, GameState.dungeon)
 		var row := _stall_row(stock_box)
 
-		# illustration first, then the symbol that actually states what it does
-		var art := TextureRect.new()
-		art.texture = PixelArt.card_art(card.id, Icons.card_family(card))
-		art.custom_minimum_size = Vector2(UITheme.px(ART_SIDE), UITheme.px(ART_SIDE))
-		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		art.modulate = Icons.rarity_colour(card.rarity)
-		row.add_child(art)
+		# The illustration is the way into the full card, exactly as it is in the
+		# collection and the deck builder — `UI.inspect_thumb` rather than the plain
+		# TextureRect that used to sit here (D205). This was the one screen that listed
+		# cards and could not show you one, which is the worst place for that to be true:
+		# it is the only list where the decision costs gold and is not reversible, and the
+		# row's 600px of clipped text is all the player had to spend it on.
+		#
+		# The note is the price, because that is this screen's own question. The
+		# collection's note is copies and levels; the shop's is what this costs and
+		# whether you can afford it, so the answer is on the card being weighed.
+		var note := "Costs %d gold. You have %d." % [price, GameState.available_gold()]
+		if entry["sold"]:
+			note = "Already bought this visit."
+		UI.inspect_thumb(row, card, UITheme.px(ART_SIDE), note)
 		var pic := TextureRect.new()
 		pic.texture = Icons.tex(Icons.for_card(card))
 		pic.custom_minimum_size = Vector2(UITheme.px(SYM_SIDE), UITheme.px(SYM_SIDE))
@@ -162,9 +168,11 @@ func _refresh() -> void:
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(pic)
-		_line(row, "%s  %s  %s" % [
+		# ...and so is the text (D205). This cell is `clip_text` at 600px, so on the
+		# wordiest cards it is the row that says least and the one most worth clicking.
+		UI.inspect_text(_line(row, "%s  %s  %s" % [
 			card.name, CardData.rarity_badge(card.rarity), card.effect_text()],
-			Icons.rarity_colour(card.rarity))
+			Icons.rarity_colour(card.rarity)), card, note)
 		UI.hoverable(row, Icons.card_tooltip(card))
 
 		var buy := _action(row)

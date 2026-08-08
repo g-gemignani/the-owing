@@ -93,6 +93,81 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 ## +N Block for each OTHER card still in your hand.
 @export var block_per_card_in_hand: int = 0
 
+# --- cards that read the OTHER CARDS (D204) ------------------------------------
+#
+# D66 taught a card to read the FIGHT: the poison already in the wound, the spikes
+# you are wearing, the third card of the turn. What it could not do is make a card
+# read ANOTHER CARD, so for a hundred cards the only way to author a new one was to
+# pick an existing shape and move its number. Grouped by the axes the engine reads,
+# the catalogue had four plain-Block cards, three plain-damage, three damage+grows,
+# four flat-Strength, six AoE-poison and five heal-attacks — twenty cards whose
+# whole difference from a neighbour was a scalar and a rarity.
+#
+# `test_distinct.gd` passed on every one of them, and it was right to: none is
+# strictly dominated, because each is bigger than the one below it. Domination is
+# the wrong instrument for this. "Never the wrong pick" is not "worth picking" — a
+# reward screen offering Brace, Sidestep and Survival Instinct is three sizes of
+# the same decision, and the deckbuilder has nothing to build.
+#
+# These are the second vocabulary, and the axis they all share is that the card is
+# worth what the REST of your turn is worth. Two shapes, and a build needs both:
+#
+#   ENABLERS  spend a card to make the next one better
+#     empower_next     the swing after this one lands harder
+#     discount_next    the card after this one is cheaper
+#     exhaust_hand     burn the hand, to be collected by the payoffs below
+#
+#   PAYOFFS   read what you have already spent this turn or this fight
+#     per_card_played    the fourth card of a turn is worth more than the first
+#     per_exhausted      everything you have burned this combat is ammunition
+#     damage_per_debuff  scales with the stack, where bonus_vs_debuffed was a flag
+#     damage_per_energy  spend what is left of the turn in one hit
+#     bonus_if_hand_empty  the last card in your hand
+#     block_per_thorns   turns the thorns you are wearing into a shield
+#     repeat_previous    do the last thing again
+#
+# Every one is priced in `power_value()` below, and the same rule applies as in D17
+# and D66: an unpriced mechanic means enemy scaling falls behind the decks using it.
+# `test_mechanics.gd` asserts the price of each, by stripping the field and checking
+# the number moves.
+
+## The next Attack you play THIS TURN deals +N. Spent by the next damaging card, and
+## the granting card's own damage is computed before it lands, so an attack can
+## empower the one after it without empowering itself.
+@export var empower_next: int = 0
+## The next card you play THIS TURN costs N less. Never below 0.
+@export var discount_next: int = 0
+## +N per card played BEFORE this one this turn, to damage and to Block alike.
+##
+## Not `combo_at`, which is a threshold — a card that turns on at your third and is
+## flat after it. This is linear, so a chain of cheap cards keeps feeding it, and the
+## 0-cost cards nobody built around become the setup for the card at the end.
+@export var per_card_played: int = 0
+## +N per stack of Vulnerable or Weak on the target, damage only.
+## The scaling half of `bonus_vs_debuffed`, which pays a flat bonus for any stack at
+## all and so cannot tell one Vulnerable from six.
+@export var damage_per_debuff: int = 0
+## +N per card exhausted this combat, to damage and to Block alike. Counts what THIS
+## card is about to exhaust as well, or the face would under-report itself.
+@export var per_exhausted: int = 0
+## Exhaust every other card in your hand. A cost that is also the ammunition for
+## `per_exhausted` — the pair is the build.
+@export var exhaust_hand: bool = false
+## Resolve the card you played immediately before this one again, for free. Does not
+## chain: a repeat cannot repeat.
+@export var repeat_previous: bool = false
+## Spend all the Energy left after paying for this card, and deal `damage_per_energy`
+## for each point spent. The X-cost payoff for everything that gives Energy back.
+@export var spend_all_energy: bool = false
+@export var damage_per_energy: int = 0
+## +N if this card empties your hand, to damage and to Block alike. The mirror of
+## `block_per_card_in_hand`: one pays you for holding cards, this one for spending
+## them, and a deck cannot chase both.
+@export var bonus_if_hand_empty: int = 0
+## +N Block per point of Thorns you are wearing. Lets a thorns deck convert what it
+## has already built into a guard, instead of buying Block a second time.
+@export var block_per_thorns: int = 0
+
 ## The player-facing word for a rarity, for cards, relics and powers alike.
 ##
 ## The enum key was being printed straight into labels — "Abyssal Gift [RARE] Lv1/15"
@@ -173,8 +248,50 @@ func effect_text(live_damage: int = -1, live_block: int = -1) -> String:
 		parts.append("+1 Energy on kill")
 	if block_per_card_in_hand > 0:
 		parts.append("+%d Block per card held" % block_per_card_in_hand)
+	# D204: cards that read the other cards. Same rule as the block above — the live
+	# number already contains these, and the SENTENCE is what makes it a card you plan
+	# a turn around, so both are printed. Payoffs first, then the enablers, then the
+	# costs, because that is the order the player resolves them in.
+	#
+	# TERSE, and measurably so: `tests/CardTextTest.tscn` shrinks a face to fit a
+	# 116px card and fails below 14px, and the first draft of these lines wrote Sanguine
+	# Feast down to 11px — a card that solved its own overflow by becoming unreadable.
+	# The full sentences live in `Icons.card_tooltip`, which is the long form and has a
+	# whole hover to spend. "this turn" in particular is dropped here and stated there:
+	# it is true of every one of these and costs nine characters on each.
+	if per_card_played > 0:
+		parts.append("+%d per earlier card" % per_card_played)
+	if damage_per_debuff > 0:
+		parts.append("+%d per debuff stack" % damage_per_debuff)
+	# The cap is on the face, not only in the hover: a rule line that reads "+2 per
+	# exhausted" against a live number that stopped climbing four cards ago is a card
+	# disagreeing with itself, which is the whole of D50.
+	if per_exhausted > 0:
+		parts.append("+%d per exhausted (max %d)" % [per_exhausted, Balance.EXHAUST_TALLY_CAP])
+	# One clause, not two. "+6 per Energy spent" plus "Spends all your Energy" says the
+	# same thing twice and was most of the overflow.
+	if damage_per_energy > 0:
+		parts.append("Spend all Energy: +%d each" % damage_per_energy)
+	elif spend_all_energy:
+		parts.append("Spends all your Energy")
+	if bonus_if_hand_empty > 0:
+		parts.append("+%d on an empty hand" % bonus_if_hand_empty)
+	if block_per_thorns > 0:
+		parts.append("+%d Block per Thorns" % block_per_thorns)
+	if empower_next > 0:
+		parts.append("Next Attack +%d" % empower_next)
+	if discount_next > 0:
+		parts.append("Next card -%dE" % discount_next)
+	if repeat_previous:
+		parts.append("Repeat your last card")
+	if exhaust_hand:
+		parts.append("Burn your hand")
+	# "Lifesteal" rather than a sentence, and it is the genre's own word: `Glossary`
+	# exists to teach the vocabulary, and spending 21 characters of a 116px card face
+	# re-explaining a keyword it already defines is what pushed Sanguine Feast under the
+	# readability floor. The full sentence is still in the hover.
 	if lifesteal:
-		parts.append("Heal for damage dealt")
+		parts.append("Lifesteal")
 	if double_block:
 		parts.append("Double Block")
 	if blk > 0:
@@ -527,6 +644,37 @@ func _power_value_uncached() -> float:
 		dmg += float(combo_bonus) * (0.6 if combo_at <= 3 else 0.35)
 	if energy_on_kill:
 		dmg += 6.0                              # a conditional slice of energy_gain
+	# --- D204: what the REST of the turn is worth -----------------------------
+	#
+	# Averages again, for the reason the block above gives, and deliberately
+	# conservative multiples rather than ceilings. The ceiling of `per_card_played`
+	# is a nine-card turn; charging every deck that holds the card for a turn almost
+	# none of them will assemble is the D17 mistake pointing the other way.
+	#
+	# ~1.6 cards land before a given card in a three-energy turn once there is cheap
+	# setup to feed it. A debuff deck sits on 3-5 stacks and they decay, so this prices
+	# under poison's 3.5. An X-cost card played at one energy spends the other two.
+	#
+	# `per_exhausted` is the one priced against a HARD ceiling rather than an average,
+	# and that is the whole reason `Balance.EXHAUST_TALLY_CAP` exists: an exhaust deck
+	# sits AT its cap for most of a fight, so an average is the wrong shape of estimate
+	# — the honest number is the ceiling, discounted only for the turns before it gets
+	# there. Two thirds of the cap. Uncapped there was no right answer at all: the card
+	# was worth more on turn five than on turn three and `power_value` is one number.
+	dmg += 2.2 * float(damage_per_debuff)
+	dmg += 2.0 * float(damage_per_energy)
+	# Damage on a LATER card, worth slightly less than damage now: it needs an attack
+	# to follow it, and a turn that ends first wasted the whole thing.
+	dmg += 0.8 * float(empower_next)
+	# Three of the D204 axes pay a card's OWN currency — damage on an attack, Block on
+	# a skill (see CombatEngine.card_block_bonus) — so which rate they are charged at
+	# depends on the card holding them. Charging Block at the damage rate is not a
+	# rounding error: Block is priced at 0.65 for a measured reason, and inflating a
+	# guard's price makes enemies hit harder than the deck it inflated can answer,
+	# which is the failure D124 caught in the other direction.
+	var shared := 1.6 * float(per_card_played) \
+		+ float(per_exhausted) * float(Balance.EXHAUST_TALLY_CAP) * 0.67 \
+		+ 0.35 * float(bonus_if_hand_empty)   # conditional on a hand you emptied
 	# Block is priced BELOW damage on purpose. Damage does double duty: it removes
 	# enemy HP *and* thereby shortens the fight, which prevents damage in turn.
 	# Block only mitigates, and with escalation a longer fight is a worse fight.
@@ -536,6 +684,35 @@ func _power_value_uncached() -> float:
 	var v := dmg + float(eff_block()) * BLOCK_VALUE
 	# ~4 other cards in a typical hand, at the same discount Block gets everywhere
 	v += float(block_per_card_in_hand) * 4.0 * BLOCK_VALUE
+	# ...and the shared D204 axes at whichever rate the card actually pays in.
+	v += shared * (1.0 if damage > 0 or hits > 1 or damage_per_energy > 0 else BLOCK_VALUE)
+	# A discount is Energy, and Energy is priced at 15 a point (`energy_gain` below) —
+	# but a discount is only worth anything if there is a card after it worth playing,
+	# and it can never take a cost below zero, so it prices at two thirds of the real
+	# thing rather than at parity.
+	v += float(discount_next) * 10.0
+	# One more resolution of whatever you played last, free. Priced against the deck
+	# baseline rather than against its ceiling: the ceiling is the biggest card in the
+	# deck and the average is an ordinary one.
+	if repeat_previous:
+		v += 14.0
+	# Burning your hand was priced as a cost (-4.0) and that is the wrong sign, which
+	# the pricing model itself said out loud: Cull came out at 1.2 power — a hair above
+	# the "every card must be priced" floor, and straight through it the moment anything
+	# else about the card moved. A number that fragile is a modelling error, not a tight
+	# balance.
+	#
+	# It is not a cost, because of WHAT gets burned. A hand-burner is played when the
+	# cards it destroys are worth less than what it grants — that is the decision, and it
+	# is available every turn — so in practice it spends cards the turn had no use for and
+	# hands back a payoff. Charging it as a loss made `power_ratio` read an exhaust deck
+	# as weaker than a plain one, so enemy scaling under-reacted to the build: the D17
+	# unpriced-mechanic failure, arrived at by over-charging the enabler instead of
+	# forgetting the payoff. Priced as the mild enabler it is, at `retain`'s premium.
+	if exhaust_hand:
+		v += 2.0
+	# Thorns decks sit on 8-14 (see the note above), at the Block discount.
+	v += float(block_per_thorns) * 8.0 * BLOCK_VALUE
 	# debuffs are worth roughly the damage they enable/prevent over their duration
 	var debuff := eff_vulnerable() * 2.0 + eff_weak() * 2.0
 	# Permanent self-buffs compound: +1 Strength is +1 on EVERY attack for the rest

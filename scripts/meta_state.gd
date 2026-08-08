@@ -77,7 +77,7 @@ static func delete_slot(s: int) -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 ## Bump when the save shape changes, and add a step to _migrate().
 ## Saves written before versioning existed have no "version" key and read as 0.
-const SAVE_VERSION := 10
+const SAVE_VERSION := 11
 ## The run lives in its own file beside the meta save. They change at wildly
 ## different rates — meta only when the player gains something permanent, the run
 ## on every card played — so writing them together meant rewriting the whole
@@ -366,16 +366,23 @@ var clear_counts: Dictionary = {}
 ## the cleared ones out when it prices the credit, so this stays a plain honest log of where
 ## you have been rather than a scoreboard that has to be kept consistent with the other one.
 var depth_records: Dictionary = {}
-## The three debts on the table, and the one taken (D191). Each is
-## {"kind": String, "dungeon": String}; `debt_taken` is {} when nothing is owed.
+## The one debt taken, or {} when nothing is owed (D191, D205).
+## {"kind": String, "dungeon": String, "stake": int} — the stake rides along so what is handed
+## back on settling is what was actually paid, rather than what the table says it would cost
+## today. A rate that changed between taking and settling would otherwise short or overpay a
+## contract already in hand, and difficulty rates do change.
 ##
-## Offers are held rather than rolled on sight, because a list that re-rolled every time the
-## hub was opened would not be a choice, it would be a slot machine — and the whole point is
-## that the player decides which dungeon is next by deciding which debt to take.
-var debt_offers: Array = []
+## There is no `debt_offers` any more. What a dungeon offers is derived from the place and its
+## clear count (`debt_on`), so there is no list to hold, nothing to re-roll, and no flag whose
+## job is to stop the hub being a slot machine.
 var debt_taken: Dictionary = {}
-## Gate currency earned by settling them. A third route beside clears and depth (D178), kept
-## as its own number so what a debt is worth can be read and changed without touching either.
+## Gate credit banked by debts settled under D191's rules, when a debt paid a door.
+##
+## **Nothing adds to this any more.** D205 pays packs and gold instead, which makes a debt a
+## wager rather than one of D178's three routes to a gate. It is still counted in
+## `gate_credit()` and still saved, because a player who opened a door with a contract must not
+## find it shut again after an update — a migration that takes progression away is worse than
+## one that leaves a vestigial number in the file.
 var debt_credits: int = 0
 var highest_dungeon: int = 1
 var gold: int = 0  # persistent currency; earned in combat, partly lost on death
@@ -419,7 +426,6 @@ func new_save(kit: String = "blade", persist: bool = true) -> void:
 	cleared_dungeons = []
 	clear_counts = {}
 	depth_records = {}
-	debt_offers = []
 	debt_taken = {}
 	debt_credits = 0
 	packs = []
@@ -648,62 +654,74 @@ func gate_credit() -> int:
 	return clear_count() + Balance.depth_credit(depth_records, cleared_dungeons) \
 		+ maxi(0, debt_credits)
 
-## Put three debts on the table, if the table is empty (D191).
+## What this dungeon is offering, or "" (D205).
 ##
-## Regenerated only when it is empty, never on sight: a list that re-rolled every time the hub
-## was opened would be a slot machine rather than a choice. Places are drawn from what the
-## player can actually reach — a debt naming a dungeon behind a gate is a debt nobody can
-## settle, which is the shape of every unsettleable ordinance this batch has had to fix.
-func offer_debts() -> Array:
-	if not debt_offers.is_empty() or not debt_taken.is_empty():
-		return debt_offers
-	var open_places: Array = []
-	for did in Balance.DUNGEONS:
-		var dd := Balance.dungeon(did)
-		if dd != null and dungeon_unlocked(dd):
-			open_places.append(did)
-	if open_places.is_empty():
-		return debt_offers
-	var seen := {}
-	var guard := 0
-	while debt_offers.size() < Balance.DEBT_OFFERS and guard < 60:
-		guard += 1
-		var kind := String(Balance.DEBTS[randi() % Balance.DEBTS.size()])
-		var place := String(open_places[randi() % open_places.size()])
-		var key := "%s/%s" % [kind, place]
-		if seen.has(key):
-			continue
-		seen[key] = true
-		debt_offers.append({"kind": kind, "dungeon": place})
-	mark_meta_dirty()
-	return debt_offers
+## Derived, never stored: `Balance.debt_for` is a function of the place and how many times you
+## have beaten it, so the offer is stable across a hundred visits, changes when you clear the
+## place, and needs no table to keep in step with anything. `debt_offers` and `offer_debts()`
+## are gone — a stored list of offers had to be re-rolled on some trigger and not on others,
+## and "only when it is empty" was a flag whose whole job was to stop the hub being a slot
+## machine (D22). A pure function cannot be a slot machine.
+func debt_on(dungeon_id: String) -> String:
+	return Balance.debt_for(dungeon_id, times_cleared(dungeon_id))
 
-## Take one, and clear the table. One at a time: a player carrying three debts is a player
-## with a checklist, and the decision this exists for is *which one*.
-func take_debt(index: int) -> void:
-	if index < 0 or index >= debt_offers.size() or not debt_taken.is_empty():
-		return
-	debt_taken = (debt_offers[index] as Dictionary).duplicate()
-	debt_offers = []
-	mark_meta_dirty()
+## Can this offer be taken right now? One debt at a time — a player carrying three has a
+## checklist, and the decision this exists for is *which one* — and the fee has to be payable.
+func can_take_debt(dungeon_id: String) -> bool:
+	if not debt_taken.is_empty():
+		return false
+	var kind := debt_on(dungeon_id)
+	if kind == "":
+		return false
+	return gold >= Balance.debt_stake(kind, dungeon_id)
 
-## Settle the debt against a run that has just ended, whichever way it ended (D191).
+## Take on what this place is offering, and pay at the door (D205).
+##
+## The stake is spent HERE rather than reported for a caller to pay, which is the opposite of
+## how the run's own prices work (D13) — and correctly so: this is meta gold changing hands at
+## the hub, with no run in existence yet to owe it to. The run-owns-nothing rule is about a
+## traversal reaching into `GameState`, and there is no traversal here.
+func take_debt(dungeon_id: String) -> bool:
+	if not can_take_debt(dungeon_id):
+		return false
+	var kind := debt_on(dungeon_id)
+	gold -= Balance.debt_stake(kind, dungeon_id)
+	debt_taken = {"kind": kind, "dungeon": dungeon_id,
+		"stake": Balance.debt_stake(kind, dungeon_id)}
+	mark_meta_dirty()
+	return true
+
+## Settle the debt against a run that has just ended, whichever way it ended (D191, D205).
 ##
 ## Called from `GameState.clear_run()`, the one place every ending meets — the same hook the
 ## depth log uses, and for the same reason: hooking the endings individually is how the next
 ## one gets written and quietly records nothing.
 ##
-## Returns the gold owed, or 0. The gold is the CALLER's to pay, because MetaState is where it
-## lands and the run is what earned it.
-func settle_debt(ran: String, cleared: bool, deepest: int, caught: bool) -> int:
+## Takes the run's own counters (D203's bus on the run clock) plus the two facts that are not
+## counters, and folds those two in here rather than making the traversal pretend to tick them.
+##
+## Returns what is owed: {"gold": int, "pack": String} with an empty pack when nothing settled.
+## The gold is the CALLER's to pay, because MetaState is where it lands and the run is what
+## earned it — and a FAILED debt returns nothing at all, which is where the stake goes.
+func settle_debt(ran: String, cleared: bool, deepest: int, run_tally: Dictionary) -> Dictionary:
 	if debt_taken.is_empty():
-		return 0
-	if not Balance.debt_met(String(debt_taken.get("kind", "")),
-			String(debt_taken.get("dungeon", "")), ran, cleared, deepest, caught):
-		return 0
-	var dd := Balance.dungeon(String(debt_taken.get("dungeon", "")))
-	var owed: int = Balance.debt_gold(dd.difficulty if dd != null else 1)
-	debt_credits += 1
+		return {"gold": 0, "pack": ""}
+	var kind := String(debt_taken.get("kind", ""))
+	var place := String(debt_taken.get("dungeon", ""))
+	var facts := run_tally.duplicate()
+	facts[Balance.TALLY_CLEARED] = 1 if cleared else 0
+	facts[Balance.TALLY_DEPTH] = maxi(0, deepest)
+	if not Balance.debt_settled(kind, place, ran, facts):
+		# Only cleared when the run was AT the place named. A debt is not discharged by going
+		# somewhere else, and it is not forfeited by it either — otherwise a player who took a
+		# contract and then went to buy cards somewhere easier would lose the stake to an
+		# errand they never attempted.
+		if ran == place:
+			debt_taken = {}
+			mark_meta_dirty()
+		return {"gold": 0, "pack": ""}
+	var owed := {"gold": Balance.debt_gold(kind, place) + int(debt_taken.get("stake", 0)),
+		"pack": Balance.debt_pack_tier(kind)}
 	debt_taken = {}
 	mark_meta_dirty()
 	return owed
@@ -1056,7 +1074,7 @@ func _write_meta() -> void:
 		"difficulty": difficulty,
 		"cleared_dungeons": cleared_dungeons, "clear_counts": clear_counts,
 		"depth_records": depth_records,
-		"debt_offers": debt_offers, "debt_taken": debt_taken,
+		"debt_taken": debt_taken,
 		"debt_credits": debt_credits,
 		"packs": packs,
 		"highest_dungeon": highest_dungeon, "gold": gold,
@@ -1123,6 +1141,25 @@ func _backup_save(text: String, from_version: int) -> void:
 ## idempotent: missing keys get defaults, unknown ids are dropped on apply.
 func _migrate(data: Dictionary, from_version: int) -> Dictionary:
 	var d := data.duplicate(true)
+	if from_version < 11:
+		# v10 stored three rolled offers and paid a settled debt in GATE CREDIT (D191). D205
+		# derives the offer from the dungeon and pays packs and gold instead.
+		#
+		# The offers are dropped rather than converted: there is nothing to convert them into,
+		# since a dungeon's offer is now a function of the dungeon. `_apply` simply stops
+		# reading the key.
+		d.erase("debt_offers")
+		# A debt already in hand is KEPT and carries a zero stake, because it was taken for
+		# free. Settling it pays this build's gold and pack and returns a stake of nothing,
+		# which is exactly right — refunding today's fee for a contract nobody paid for would
+		# be inventing gold out of a version bump.
+		var held = d.get("debt_taken", {})
+		if held is Dictionary and not (held as Dictionary).is_empty():
+			(held as Dictionary)["stake"] = 0
+			d["debt_taken"] = held
+		# `debt_credits` is left alone on purpose. Nothing adds to it any more, but it is still
+		# counted toward a gate: a player who opened a door by settling contracts under the old
+		# rules must not find it shut again because the payout changed.
 	if from_version < 10:
 		# v9 predates debts (D191). Nothing to carry and nothing to invent: the offers are
 		# rolled when the hub is first opened with an empty table, and a save that never had a
@@ -1273,20 +1310,19 @@ func _apply(parsed: Dictionary) -> void:
 	for id in parsed.get("depth_records", {}):
 		if id in Balance.DUNGEONS:
 			depth_records[id] = maxi(0, int(parsed["depth_records"][id]))
-	# The debts, filtered against the real catalogues on the way in, the way every other id in
+	# The debt, filtered against the real catalogue on the way in, the way every other id in
 	# this function is: a debt naming a dungeon or a kind this build no longer has would be one
-	# nobody can settle and nobody can drop (D191).
-	debt_offers = []
-	for o in parsed.get("debt_offers", []):
-		var od: Dictionary = o
-		if String(od.get("kind", "")) in Balance.DEBTS \
-				and String(od.get("dungeon", "")) in Balance.DUNGEONS:
-			debt_offers.append({"kind": String(od["kind"]), "dungeon": String(od["dungeon"])})
+	# nobody can settle and nobody can drop (D191). `debt_offers` is not read at all any more —
+	# a v10 save's stored offers are simply dropped, because what a dungeon offers is now
+	# derived from the dungeon (D205).
 	debt_taken = {}
 	var dt = parsed.get("debt_taken", {})
-	if dt is Dictionary and String(dt.get("kind", "")) in Balance.DEBTS \
+	if dt is Dictionary and String(dt.get("kind", "")) in Balance.debt_ids() \
 			and String(dt.get("dungeon", "")) in Balance.DUNGEONS:
-		debt_taken = {"kind": String(dt["kind"]), "dungeon": String(dt["dungeon"])}
+		# A v10 debt was taken for free, so it carries no stake and gets none back. Defaulting
+		# to today's rate would refund gold that was never paid.
+		debt_taken = {"kind": String(dt["kind"]), "dungeon": String(dt["dungeon"]),
+			"stake": maxi(0, int(dt.get("stake", 0)))}
 	debt_credits = maxi(0, int(parsed.get("debt_credits", 0)))
 
 	highest_dungeon = int(parsed.get("highest_dungeon", 1))

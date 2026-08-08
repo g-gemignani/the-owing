@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "iron_lung"
 name = "Iron Lung"
-description = "Heal 15. Gain 8 Block."
-cost = 2
+description = "Heal 6. The next card you play this turn costs 2 less. Exhaust."
+discount_next = 2
+cost = 1
 type = 1
 rarity = 1
 level = 1
-heal = 15
-block = 8
+heal = 6
+exhaust = true

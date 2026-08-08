@@ -52,7 +52,11 @@ func _init() -> void:
 		# rate-compare only repeatable cards: a one-shot is not a rate
 		if c.exhaust or c.hp_cost > 0:
 			continue
-		sums[c.rarity] += c.power_value() / maxf(1.0, float(c.cost))
+		# Balance.card_energy_cost, not `c.cost`: an X-cost card is authored at 1 and
+		# consumes the whole turn, and the two readings put it at either end of its own
+		# rarity band. The rule has one owner (D204) so the ladder here and the ratchet
+		# in `Balance.deck_cost` cannot disagree about the same card.
+		sums[c.rarity] += c.power_value() / maxf(1.0, Balance.card_energy_cost(c))
 		counts[c.rarity] += 1
 	var prev_avg := 0.0
 	for r in NAMES.size():

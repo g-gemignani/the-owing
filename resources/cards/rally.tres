@@ -6,10 +6,10 @@
 script = ExtResource("1")
 id = "rally"
 name = "Rally"
-description = "Gain 6 Block. Draw 2."
+description = "Gain 5 Block, +4 for each card you played before it this turn."
+per_card_played = 4
 cost = 1
 type = 1
 rarity = 1
 level = 1
-block = 6
-draw = 2
+block = 5

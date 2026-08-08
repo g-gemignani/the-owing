@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="BuildData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/build_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "exhaust"
+name = "The Burnt Hand"
+description = "Spend the cards themselves. What is gone is what makes the next one hurt."
+cards = PackedStringArray("cull", "red_mind", "lifedrain", "bandage", "focus", "see_it_coming", "kick", "abyssal_gift", "shut_out", "decapitate")

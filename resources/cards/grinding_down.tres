@@ -6,10 +6,10 @@
 script = ExtResource("1")
 id = "grinding_down"
 name = "Grinding Down"
-description = "Deal 10 damage. Permanently +4 this combat."
-cost = 2
+description = "Deal 3 damage, +4 for each card you played before it this turn."
+per_card_played = 4
+cost = 1
 type = 0
 rarity = 2
 level = 1
-damage = 10
-grows = 4
+damage = 3

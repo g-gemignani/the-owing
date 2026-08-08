@@ -1027,7 +1027,7 @@ func _iso() -> void:
 		_add("iso/foe/%s_s.png" % aid, "128x192",
 			"**%s**, walking down-left toward the camera. The same creature as `enemies/%s.png`, turned onto the diagonal." % [nm, aid])
 		_add("iso/foe/%s_n.png" % aid, "128x192",
-			"**%s**, walking up-right away from the camera, seen from behind and above." % [nm, aid])
+			"**%s**, walking up-right away from the camera, seen from behind and above." % nm)
 
 	_section("Tier 8b — isometric furniture",
 		"What a tile IS, read off the floor before you walk into it.",

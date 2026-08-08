@@ -1,280 +1,183 @@
 # The Owing
 
-[![ci](https://github.com/g-gemignani/the-owing/actions/workflows/ci.yml/badge.svg)](https://github.com/g-gemignani/the-owing/actions/workflows/ci.yml)
-[![tests](https://img.shields.io/badge/tests-42%20suites-brightgreen)](#tests)
 [![latest build](https://img.shields.io/github/release-date-pre/g-gemignani/the-owing?label=latest%20build&color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
-[![platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS%20%7C%20Android-brightgreen)](#play-it)
-[![Godot](https://img.shields.io/badge/Godot-4.7-478cbf)](https://godotengine.org)
+[![platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-brightgreen)](#get-it)
 [![licence](https://img.shields.io/badge/licence-Apache_2.0-brightgreen)](LICENSE)
 
-A deckbuilding roguelike with a persistent RPG meta layer, built in Godot 4.7
-(GDScript). Slay-the-Spire-shaped combat — but what you carry between runs is a
-*collection* you grow, fuse and spend, and a run you lose costs you most of it.
+**A card game about debt.** You go down into a place with a deck of cards, you fight your way
+to whatever is at the bottom of it, and if you make it out alive you keep what you found. If
+you don't, you lose almost all of it.
+
+It is free, there is nothing to buy inside it, and it does not need the internet.
 
 ![The Cinder Knight, the boss of the Slag Pits](docs/screenshots/CombatBoss.webp)
 
-<sub>**The Cinder Knight**, the named finale of the Slag Pits — and you were told his
-name, and what he does, on the screen where you picked the dungeon.</sub>
-
-## Play it
-
-No build step. Every green push to `main` publishes a fresh binary for every
-platform that builds, under [one permanent link](https://github.com/g-gemignani/the-owing/releases/tag/latest) —
-so these are always the newest commit, not the last time somebody remembered to cut a
-release.
-
-| | download | first run |
-|---|---|---|
-| **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-linux-x86_64.zip) (65 MB) | `chmod +x TheOwing.x86_64 && ./TheOwing.x86_64` |
-| **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-windows-x86_64.zip) (74 MB) | SmartScreen warns once → *More info* → *Run anyway* |
-| **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (95 MB) | `xattr -dr com.apple.quarantine "The Owing.app"`, then open it |
-| **Android** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) (89 MB) | Android 7.0+, 32- or 64-bit. `adb install`, or copy it over and allow unknown sources. **If it says "App not installed", uninstall the old copy first** — see below |
-| **iOS** | *not in the release yet* | the build exists and is currently red — see below |
-
-**There is no downloads badge, and there cannot be one.** GitHub counts downloads per
-release *object*, and this channel deletes and recreates its release on every green push — so
-the counter starts at zero several times a day and the number a badge would show is "downloads
-since the last commit", which is not a number anybody wants. Measured rather than assumed: the
-release object was three hours old and read 0 across all four assets, after real downloads
-(D158).
-
-**"App not installed" when you already have it.** Android identifies an app by the key that
-signed it, not by its version, so a build signed with a different key is a different app
-claiming the same name and the installer refuses it — without ever mentioning signatures. If
-this repository has no `ANDROID_KEYSTORE_BASE64` secret, CI generates a throwaway key per
-build and that refusal is guaranteed: uninstall the old copy, then install the new one. With
-the secret set (`tools/make_release_key.sh` makes the key and prints the three secrets to
-create), every build installs over the last one, and each release's notes say which of the two
-it was (D157).
-
-The links never change and always serve the newest build: the `latest` release is deleted and
-recreated on every green push to `main`, so the URL is permanent and the file behind it is
-whatever `main` is now. That is deliberate, and it is also why **every build tells you which
-one it is** — the title screen carries `v0.1.0+<date>.<commit>` in the corner and Settings
-spells it out under *Build*. Quote that string in a bug report; the filenames cannot.
-
-Nothing here is code-signed by a paid identity and nothing here will be. The Android key
-above only decides whether two builds count as the same app — it does not make either one
-trusted — and **the .ipa will not install as-is**, because iOS runs signed code only. On
-**NixOS** the Linux binary needs `steam-run`, or a `patchelf --set-interpreter`; see
-[BUILD.md](BUILD.md).
-
-**iOS is wired up and not yet working.** `build-ios` runs on every push, is allowed to
-fail so it cannot hold up the other four, and is failing at `xcodebuild` today — so the
-release carries four platforms, not five, and says so on its own page. When it goes
-green the asset appears here with no further change. It will be **unsigned** when it
-does: iOS runs signed code only, so it is for re-signing with Sideloadly, AltStore or
-your own Xcode account.
-
-The Android build is **untested on real hardware** — nobody has run this on a phone
-yet, and text size at phone DPI is the most likely thing to be wrong (D65).
-
-**How old a phone will take it?** Android 7.0 (2016) is the floor, and it is Godot
-4.7's floor rather than a choice here — the engine's own build pins `minSdk 24`. Above
-that line the APK is deliberately broad: it carries both 32-bit and 64-bit ARM, and it
-treats Vulkan as optional and falls back to OpenGL ES 3.0, so a phone with no Vulkan
-driver still runs it. Until build 22 the APK was 64-bit only and every 32-bit phone
-refused it with *"app not compatible"* (D170).
-
-> **Status: playable prototype, fully painted.** All 310 art files are in — 27
-> backdrops, 35 enemy plates, an illustration for every one of the 100 cards, and a
-> frame kit that is *computed* rather than drawn. 42 test suites, including one that
-> walks every screen and every dungeon asserting the player always has something to
-> press. The systems are the point; the pictures now stop them looking unfinished.
+<sub>**The Cinder Knight**, waiting at the bottom of the Slag Pits — and you were told his name,
+and what he does, before you chose to go down there.</sub>
 
 ---
 
-## The loop
+## Get it
 
-**1. Pick a fight you can see the shape of.** Difficulty is a choice, made up front —
-every dungeon names its boss and its exclusive cards *before* you commit, so going
-deeper is a decision and never a surprise.
+Pick your machine, download, open. There is no installer and no account.
 
-**2. Crawl it.** One traversal model: a painted isometric building of rooms and
-corridors over several floors, explored a tile at a time. A chamber is revealed whole
-the moment you step into it; a corridor gives you two tiles and no more. Things walk
-the floor and take a step whenever you do — and a fight is loud, so *where* you choose
-to have one matters.
+<!-- BEGIN GENERATED DOWNLOADS -- tools/readme_downloads.sh -->
+
+| | download | opening it |
+|---|---|---|
+| **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-windows-x86_64.zip) (77 MB) | Unzip and run **TheOwing.exe**. Windows shows a blue "unrecognised app" box the first time — click **More info**, then **Run anyway** |
+| **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (98 MB) | Unzip, then **right-click the app and choose Open** (not double-click) so macOS offers you the Open button |
+| **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-linux-x86_64.zip) (68 MB) | Unzip, then run `TheOwing.x86_64`. If it will not start, mark it executable first: `chmod +x TheOwing.x86_64` |
+| **Android phone or tablet** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) (91 MB) | Copy it to your phone and tap it. Android 7 or newer. If it says *App not installed*, delete the older copy first |
+
+<sub>Sizes read from the current build by `tools/readme_downloads.sh` — not typed here,
+because typed ones were three megabytes stale and nobody could tell (D207).</sub>
+<!-- END GENERATED DOWNLOADS -->
+
+**Your computer will probably warn you the first time.** That is expected and it is not about
+this game specifically: Windows and macOS show that warning for anything not bought from a
+company with a paid publishing certificate, which this isn't. The steps above get past it. On
+Android the same thing takes the form of allowing an app from outside the Play Store.
+
+**It is a prototype.** It is playable start to finish, but it is one person's project, it
+updates several times a day, and things will change under you. Your saved progress lives on
+your own machine and nothing is uploaded anywhere.
+
+---
+
+## What you actually do
+
+**Choose where to go.** Every place tells you how hard it is, what the thing at the bottom is
+called and what it does, and which cards only exist down there. You are never surprised into a
+difficulty you did not pick.
+
+**Take on a debt, if you fancy the risk.** Each door will make you an offer — pay some gold up
+front and it wants something particular of you down there. Clear the place. Or reach the
+bottom whatever it costs. Or get through without ever being caught in the open. Manage it and
+you get your money back with interest and a sealed pack of cards. Fail and the money is gone.
+
+**Go down.** The dungeon is a building, drawn from above at an angle — rooms, corridors, several
+floors — and you explore it a tile at a time. Step into a room and you see the whole room. Step
+into a corridor and you see almost nothing.
+
+**Everything in there is walking toward you.** Nothing waits on a square for you to bump into
+it. From the moment you arrive on a floor, the things on it are coming, and if you dawdle they
+start moving twice for your once. When something reaches you, you can fight it — or shake it
+off, which costs you health and costs you the turn everything *else* spends getting closer.
 
 | | |
 |---|---|
 | ![Choosing a dungeon](docs/screenshots/ZoneView.webp) | ![The isometric crawl](docs/screenshots/IsoRunExplored.webp) |
-| **The boss is named before you commit.** | **A floor is a building, not a field.** |
+| **You know what is down there before you go.** | **A floor is a building, not a board.** |
 
-**3. Fight.** Telegraphed intents, and many of the 35 archetypes *react* to what you
-did last turn rather than rolling from a table. Every card carries its own
-illustration and the level band it has earned.
+**Fight with your deck.** Each turn you draw a hand and spend energy playing cards — hit things,
+raise a guard, poison them, make yourself stronger. Enemies tell you what they intend to do
+before they do it, so a turn is a puzzle rather than a gamble. Some of them watch what you did
+last turn and change their minds.
 
-**4. Bank it, or lose it.** Everything found in a run sits in escrow. Beat the boss and
-it is yours permanently; die and you forfeit most of it. Between runs you fuse
-duplicates into levels, buy and level Powers and Relics, and unlock deeper zones.
+**Look around while you are down there.** Chests, keys lying in far corners, walls that are not
+walls if you notice the mark on them, and a stone that will change the rest of the floor for a
+price. Some floors leave an open ledger somewhere with a job written in it — deal this much
+damage here, get every chest open, win a fight without ever playing an attack — and settling it
+pays.
 
 | | |
 |---|---|
 | ![Inspecting a card mid-fight](docs/screenshots/CombatHover.webp) | ![A sealed chest](docs/screenshots/Chest.webp) |
-| **Cards are inspected in place, mid-turn.** | **What you walk to is a chest, with its own lock.** |
+| **Cards can be read mid-turn, in place.** | **A chest shows you what kind of lock it has.** |
+
+**Then get out.** Everything you picked up is held, not banked. Beat the thing at the bottom and
+it is permanently yours. Die on the way and you forfeit most of it. That is the whole tension of
+the game: the deeper you push, the more you are carrying, and the more a bad turn costs.
+
+**Between runs, you build.** Duplicate cards fuse into stronger versions. Gold buys relics and
+powers. Beating places opens new ones — and sometimes opens a back way into a neighbouring
+place, one floor shorter with all the same fights packed into it.
+
+| | |
+|---|---|
 | ![The collection](docs/screenshots/Collection.webp) | ![Powers](docs/screenshots/Powers.webp) |
-| **The collection is the progression.** | **One Power equipped per run, fired every turn.** |
+| **The collection is the progress.** | **One power carried per run, usable every turn.** |
 
-<sub>Captures are generated, not curated: `tools/screenshots.gd` boots every screen at the
-shipped 1280x720 and `tools/readme_shots.gd` picks and downsamples the seven above. Both
-are re-run when anything visual lands, so these cannot quietly go stale. The number of
-captures is not written here on purpose — it was wrong in three places at once (D196).</sub>
+---
 
-## What's in it
+## How much of it is there
 
-|                |                                                                |
-|----------------|----------------------------------------------------------------|
-| Cards          | 100, five rarities, levelled by fusing duplicates              |
-| Enemies        | 35 archetypes with telegraphed intents; many react to you      |
-| Bosses         | 12 — one per dungeon, named and announced before you commit    |
-| Relics         | 30                                                             |
-| Powers         | 10 — one equipped per run, fires once every turn               |
-| Events         | 20                                                             |
-| Dungeons       | 12 across 5 zones, difficulty 1 to 8                           |
-| Traversal      | one model: an isometric crawl, walked by all 12 dungeons       |
-| Art            | 310 files, the list closed — see [ART.md](ART.md)              |
-| Tests          | 42 suites, including a playability integration test            |
+| | |
+|---|---|
+| Cards | 100, each with its own illustration, each levellable |
+| Enemies | 35 kinds, plus 12 named bosses — one per dungeon |
+| Places | 12 dungeons across 5 regions, from gentle to genuinely hard |
+| Relics and powers | 30 relics, 10 powers |
+| Things to find | events, chests, hidden rooms, riddles, altars |
+| Jobs and debts | 46 floor jobs and 16 debts, drawn from what you actually did |
 
-Every piece of that is a `.tres` file plus one catalogue line. Adding more is a data
-task, not a code task — see [CONTRIBUTING.md](CONTRIBUTING.md).
+A full run takes somewhere between fifteen minutes and an hour, depending on how deep the place
+is and how much of it you decide to turn over.
 
-## Running it from source
+---
 
-If you only want to *play* it, take a binary from [Play it](#play-it) above — this
-section is for working on it.
+## If something goes wrong
 
-Needs **Godot 4.7**. Either put it on `PATH`, or:
+**Tell me which build it was.** Every copy stamps its own version in the corner of the title
+screen, and Settings spells it out under *Build*. That string identifies the exact code you were
+running; the filename doesn't, because the download link always points at the newest build.
+Then [open an issue](https://github.com/g-gemignani/the-owing/issues).
 
-```bash
-GODOT=/path/to/godot ./run.sh
-```
+Known rough edges, so you don't waste time reporting them:
 
-There is a Nix flake if you want a pinned toolchain — Godot, plus a JDK because `keytool`
-signs the Android key:
+* **Android has never been tested on a real phone.** It installs and runs, but text size on a
+  small screen is the most likely thing to be wrong.
+* **There is no iPhone or iPad version yet.** The build exists and does not currently work.
+* **On NixOS**, the Linux build needs `steam-run` — see [BUILD.md](BUILD.md).
 
-```bash
-nix develop --command godot
-```
+---
 
-See [BUILD.md](BUILD.md) for building distributables and running them on each platform.
+## Working on it
 
-## Tests
+This part is for developers; if you only want to play, everything you need is above.
+
+The game is built in **Godot 4.7** in GDScript, and all of its content is data files rather than
+code, so adding a card or an enemy is a data task. There are 42 test suites, including one that
+walks every screen and every dungeon checking the player always has something to press.
 
 ```bash
-tests/run.sh              # everything, in parallel
-tests/run.sh softlock     # filter by name
-GODOT=/path/to/godot tests/run.sh
+./run.sh                 # play it from source (needs Godot 4.7 on PATH, or set GODOT=)
+tests/run.sh             # run everything, in parallel
 ```
 
-Two kinds live in `tests/`:
+| | |
+|---|---|
+| [AGENTS.md](AGENTS.md) | what the game is and the rules that keep changes from breaking it |
+| [DESIGN.md](DESIGN.md) | every decision, what was measured, and what broke — the real documentation |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | how to add content |
+| [BUILD.md](BUILD.md) | building and running on each platform |
+| [ART.md](ART.md) | what it should look like, and every asset |
 
-* `test_*.gd` — headless script tests (`godot --script`).
-* `*Test.tscn` — **scene** tests. Some properties only exist once a tree has actually
-  been built (`mouse_filter`, wrapped line counts, scaled rects), and autoloads are not
-  registered in a `--script` run.
+Two things are worth knowing before changing anything. **`scripts/balance.gd` is the only place
+tuning lives**, so the game and the headless simulator cannot drift apart — a duplicated table
+once made the first dungeon unplayable. And **tuning is measured, not guessed**:
+`tools/sim_balance.gd` auto-plays fights and reports completion rates, and several designs that
+read well on paper were reverted when the numbers came back.
 
-`tests/test_compile.gd` checks that every script and scene root compiles, and
-`tests/PlayableTest.tscn` walks every screen and every dungeon asserting the player
-always has something to press. Both exist because a black screen once shipped and
-survived five green runs: `--import` does not compile scripts, and `load()` returns a
-non-null Resource for a script that failed to parse.
-
-**There is no coverage badge, and that is deliberate.** GDScript has no line-coverage
-instrumentation — no `gcov`, no `coverage.py`, nothing the engine exposes — so any
-percentage on this page would be a number somebody typed. Everything in the badge row
-above is either read live from GitHub or asserted by a test: the `42 suites` count is
-checked against the globs `tests/run.sh` actually runs, by `tests/test_content.gd`, so
-adding a suite fails the build until the badge is corrected.
-
-Tests are sandboxed away from real save data, and the runner fails if any test leaves a
-file behind. That is not paranoia: a test once overwrote a real `settings.json`, and a
-debug harness destroyed someone's in-progress run.
-
-## How the code is organised
-
-```
-scripts/     game code — one file per screen or system
-resources/   all content as .tres data: cards, enemies, relics, powers, events,
-             dungeons, zones, builds
-scenes/      thin .tscn wrappers; screens build their UI in code
-assets/      art and audio; see the licence note at the bottom
-tests/       42 suites + tests/run.sh
-tools/       diagnostics and generators, not shipped
-docs/        the README's screenshots; nothing in the game loads them
-DESIGN.md    the reasoning behind every decision, and every mistake
-```
-
-Three ideas run through all of it.
-
-**`scripts/balance.gd` is the single source of truth for tuning.** Every constant and
-formula lives there so the game and the headless simulator cannot drift apart. A
-duplicated lookup table elsewhere once went stale and made the first dungeon literally
-unplayable; the tests now reject private copies of shared tables.
-
-**Tuning is measured, not guessed.** `tools/sim_balance.gd` auto-plays fights and
-reports run completion per build per dungeon:
-
-```bash
-godot --headless --script tools/sim_balance.gd
-```
-
-Several designs that read fine on paper were reverted after the numbers came back.
-Enemies that punish blocking dropped defensive builds from 74% to 32% completion before
-being retuned. Fusion was measured making the player too strong too fast. Enemy scaling
-once made a *maxed* deck perform worse than a merely good one.
-
-**Anything with an output is generated from the thing it describes.** The art shopping
-list (`tools/art_manifest.gd` → [ART_ASSETS.md](ART_ASSETS.md)), the UI frame kit
-(`tools/gen_ui_kit.gd`), the six combat effects, and the screenshots above are all
-produced by a script rather than maintained by hand — because a document that can
-disagree with the code eventually will.
-
-## Design notes
-
-[DESIGN.md](DESIGN.md) is long, and it is the actual documentation: every decision this
-project has made, each with what was tried, what was measured, and what broke. It opens
-with a generated index, because the entries are not in numeric order and the file is past
-eleven thousand lines. (The range used to be written out here and was two years stale —
-D196.) If you only read three:
-
-* **D36, the difficulty ratchet** and **D38, enemies that react** — two cases where the
-  obvious design was wrong and the simulator said so.
-* **D88 and D94** — three traversal models lost a measured bake-off to a fourth, and
-  were deleted once nothing could reach them.
-* **D140** — a resumed dungeon rendered as an empty void for a day, because
-  `JSON.stringify` does not fail on a type it cannot write; it writes `str()` of it.
+---
 
 ## Licence
 
 Code is [Apache 2.0](LICENSE).
 
-Everything under `assets/art/` — the title illustration, the 27 backdrops, the 35 enemy
-plates, the 100 card illustrations and the generated frame kit — is generated for this
-project and is **not** CC0; see `assets/art/README.md`. So are the five looping music
-tracks in `assets/audio/music/`; see their `PROVENANCE.txt`.
+The art under `assets/art/` — the title illustration, the 27 backdrops, the 35 enemy plates, the
+100 card illustrations and the computed frame kit — was generated for this project and is **not**
+CC0; see `assets/art/README.md`. The five music loops are ours too; see their `PROVENANCE.txt`.
+All sound effects and music come out of one synthesiser built for this game
+(`tools/audio_voices.py`), replacing three bought sound packs that made it sound like three
+different games.
 
-The two typefaces are the exception: they were downloaded, and both are under the **SIL
-Open Font License 1.1** — [Cinzel](https://github.com/NDISCOVER/Cinzel) by Natanael Gama
-for headings and card names, and [Fira Sans](https://github.com/mozilla/Fira) by Carrois
-Corporate & Edenspiekermann for everything else. Each ships its upstream `OFL.txt` in
-`assets/art/fonts/`, with the versions and hashes in that directory's `PROVENANCE.txt`.
+Two typefaces were downloaded and are under the **SIL Open Font License 1.1** —
+[Cinzel](https://github.com/NDISCOVER/Cinzel) by Natanael Gama for headings, and
+[Fira Sans](https://github.com/mozilla/Fira) by Carrois Corporate & Edenspiekermann for
+everything else. Each ships its own `OFL.txt` in `assets/art/fonts/`.
 
-What is left in `assets/pixel/` is **CC0** by [Kenney](https://kenney.nl) — 1-Bit Pack
-(the card sheet) and Pattern Pack Pixel (the five zone tiles). Each pack's original
-licence file ships in the directory holding its assets. Kenney's work is public domain and
-requires no attribution; it is given here because it is deserved.
-
-Four packs that used to be here are gone rather than unattributed: Tiny Dungeon supplied
-the enemy sprites until generated plates replaced them (D89), UI Pack RPG Expansion
-supplied the frames until `tools/gen_ui_kit.gd` computed them (D83), and Interface Sounds,
-RPG Audio and Music Jingles supplied the sound effects until `tools/gen_sfx.py` replaced
-all 23 with one synthesised set (D150) — three packs at three sample rates over a
-generated score is what made the game sound like three games.
-
-All the audio is now ours, and all of it comes out of one instrument:
-`tools/audio_voices.py` holds the voices, the tuning and the room, and `tools/gen_music.py`
-(five loops) and `tools/gen_sfx.py` (24 effects) both import it. Both were rewritten in D173
-from physical models — a plucked string, bowed strings, a choir, struck metal, frame drums —
-because the first synthesised set was uniform and was a chiptune. Provenance and the
-measurements that gate every run sit beside the files in `assets/audio/`.
+The pixel art in `assets/pixel/` is **CC0** by [Kenney](https://kenney.nl) — 1-Bit Pack and
+Pattern Pack Pixel. Kenney's work is public domain and needs no attribution; it is given here
+because it is deserved.

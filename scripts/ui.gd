@@ -1042,7 +1042,16 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# title got squeezed to 8px, wrapped to 441px tall, and shoved the description
 	# clean off the bottom of a 211px card. Every region is placed by hand against
 	# the card's known size, so nothing can be pushed anywhere.
-	var cost := _card_label(holder, str(card.eff_cost()), Color(1.0, 0.86, 0.45))
+	# `play_cost` inside a fight, `eff_cost` outside one. A standing discount (D204) is
+	# money, and a badge that keeps quoting the undiscounted price while `can_play` charges
+	# the discounted one is the D50 disagreement moved onto the one number the player
+	# reads before spending: the card would look unaffordable and play anyway. Tinted
+	# green when it is reduced, because a 1 where a 2 was needs to say why.
+	var shown_cost: int = live.play_cost(card) if live != null else card.eff_cost()
+	var cost_tint := Color(1.0, 0.86, 0.45)
+	if shown_cost < card.eff_cost():
+		cost_tint = Color(0.60, 1.0, 0.62)
+	var cost := _card_label(holder, str(shown_cost), cost_tint)
 	# The bed is kept rather than dropped because a crowded card narrows this badge to
 	# what the next card leaves of it, and the plate has to move with the numeral —
 	# see `lay_rest` and CARD_NAME_MIN_W.
@@ -1455,6 +1464,46 @@ static func inspect_thumb(parent: Node, card: CardData, side: float,
 	b.pressed.connect(func(): inspect_card(b, card, null, note))
 	parent.add_child(b)
 	return b
+
+## The card's own TEXT is the second way in, and on a list row it is the obvious one.
+##
+## `inspect_thumb` above put the gesture on a 28px picture at the far left of the row,
+## which is the smallest target in it and not the part anyone is reading. The name and
+## the rules text are what the eye is on when the question "what does this actually do"
+## arrives, and clicking them did nothing — so the affordance existed at the one place
+## the player was not looking. Both now open the same card, in all three screens that
+## list cards (D205).
+##
+## Takes a Label the caller has already built and sized rather than building one, because
+## every one of these lists is a fixed-width column grid: `W_NAME` in the collection,
+## `ROW_LABEL_W` in the shop, each measured against its own screen and each relying on
+## `clip_text` to make the width a floor (D95). A helper that created the label would
+## have to be told all of that back, and the first thing it would break is the column.
+##
+## `MOUSE_FILTER_STOP` and the cursor are the whole affordance on a text cell — there is
+## no border to brighten — and the tooltip says so in words, for the same reason
+## `inspect_thumb`'s does: a gesture nobody is told about is not a feature. The tooltip
+## deliberately REPLACES whatever the row was going to say on hover, because the row's
+## tooltip is `Icons.card_tooltip` and this cell now leads somewhere that shows the same
+## reading at four times the size.
+static func inspect_text(label: Label, card: CardData, note: String = "") -> Label:
+	if label == null or card == null:
+		return label
+	label.mouse_filter = Control.MOUSE_FILTER_STOP
+	label.mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	label.tooltip_text = "%s — click to see the whole card" % card.name
+	label.gui_input.connect(func(ev: InputEvent) -> void:
+		var mb := ev as InputEventMouseButton
+		# LEFT or RIGHT, because a card face answers to a right-click everywhere else in
+		# the game (`card_button`) and a player who has learned that gesture should not
+		# find it dead on a list row.
+		if mb == null or not mb.pressed:
+			return
+		if mb.button_index != MOUSE_BUTTON_LEFT and mb.button_index != MOUSE_BUTTON_RIGHT:
+			return
+		label.accept_event()
+		inspect_card(label, card, null, note))
+	return label
 
 ## One card in a WANT-LIST: its effect symbol, its name, and whether it is yours.
 ##

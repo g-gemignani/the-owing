@@ -275,80 +275,193 @@ func _init() -> void:
 	print("  (info: depth credit is %d of a gate at most, %d floors each, deepest gate %d)" % [
 		Balance.GATE_DEPTH_CREDIT_MAX, Balance.GATE_DEPTH_FLOORS_PER_CREDIT, deepest_gate])
 
-	# --- debts are observed, never imposed (D191) ---------------------------------
+	# --- debts are observed, never imposed, and now they are a wager (D191, D205) ------
 	#
 	# The rule that keeps this out of the scaling model is that a debt is a condition OBSERVED
 	# during a run, never a modifier ON it — so the assertions are about what settles one and
 	# what it pays, and there is deliberately nothing here about the run being different.
+	#
+	# Like the errand check in `test_traversal.gd`, this walks `Balance.DEBT_LIST` rather than
+	# naming the rows it knows about. D191's three could be listed; a table cannot, and a table
+	# whose test lists three rows is a table with three tested rows.
 	Meta.writes_disabled = false
 	var md = Meta.new()
 	md.new_save()
 	for did5 in Balance.DUNGEONS:
-		md.mark_cleared(did5)      # open everything, so the offers can name anywhere
-	var offers: Array = md.offer_debts()
-	if offers.size() != Balance.DEBT_OFFERS:
+		md.mark_cleared(did5)      # open everything, so every place can make an offer
+	var debt_ids: Array = Balance.debt_ids()
+
+	# Every row must be well formed, must scale with the place, and must be settleable by a run
+	# that did everything and by no run that did nothing.
+	var seen_debt := {}
+	for row in Balance.DEBT_LIST:
+		var r: Dictionary = row
+		var rid := String(r["id"])
+		if seen_debt.has(rid):
+			fails += 1; print("FAIL two debts share the id '%s'" % rid)
+		seen_debt[rid] = true
+		if not (String(r["key"]) in Balance.TALLIES):
+			fails += 1
+			print("FAIL debt '%s' counts '%s', which nothing tallies" % [rid, String(r["key"])])
+		if not (String(r["supply"]) in Balance.DSUPPLIES):
+			fails += 1
+			print("FAIL debt '%s' is sized against '%s', which nothing measures" % [
+				rid, String(r["supply"])])
+		if clampi(int(r.get("weight", 0)), 1, 3) != int(r.get("weight", 0)):
+			fails += 1
+			print("FAIL debt '%s' has weight %d, outside the three pack tiers" % [
+				rid, int(r.get("weight", 0))])
+		# **No row may pay for declining content.** This is D184's rule, and the errand
+		# catalogue broke it once — a `shaken` row paid the player for shaking hunters off,
+		# which removes budgeted fights. It passed the settled-by-everything check, because
+		# declining content and doing nothing are different failures.
+		if String(r["key"]) in Balance.TALLY_DECLINES:
+			fails += 1
+			print("FAIL debt '%s' pays for '%s', which is content declined" % [
+				rid, String(r["key"])])
+		var probe := String(Balance.DUNGEONS[0])
+		if Balance.debt_text(rid, probe) == "":
+			fails += 1; print("FAIL debt '%s' has no words on it" % rid)
+		if not (Balance.dungeon(probe).name in Balance.debt_text(rid, probe)):
+			fails += 1; print("FAIL debt '%s' does not name the place it is about" % rid)
+		var need := Balance.debt_threshold(rid, probe)
+		if need <= 0 and not bool(r.get("under", false)):
+			fails += 1; print("FAIL debt '%s' asks for nothing" % rid)
+		var maximal := {}
+		var minimal := {}
+		for tk in Balance.TALLIES:
+			maximal[String(tk)] = 0 if bool(r.get("under", false)) else 999999
+			minimal[String(tk)] = 999999 if bool(r.get("under", false)) else 0
+		if not Balance.debt_settled(rid, probe, probe, maximal):
+			fails += 1; print("FAIL debt '%s' cannot be settled by a run that did everything" % rid)
+		if Balance.debt_settled(rid, probe, probe, minimal):
+			fails += 1; print("FAIL debt '%s' settles itself for a run that did nothing" % rid)
+		if Balance.debt_settled(rid, probe, String(Balance.DUNGEONS[1]), maximal):
+			fails += 1; print("FAIL debt '%s' settled against the wrong dungeon" % rid)
+		# ...and a harder place must ask more, or the row is a constant wearing a formula.
+		if not bool(r.get("under", false)):
+			var easiest := ""
+			var hardest := ""
+			var lo := 99
+			var hi := -1
+			for did7 in Balance.DUNGEONS:
+				var dd7 := Balance.dungeon(did7)
+				if dd7 == null:
+					continue
+				if dd7.difficulty < lo:
+					lo = dd7.difficulty; easiest = did7
+				if dd7.difficulty > hi:
+					hi = dd7.difficulty; hardest = did7
+			if easiest != "" and hardest != "" \
+					and Balance.debt_threshold(rid, hardest) < Balance.debt_threshold(rid, easiest):
+				fails += 1
+				print("FAIL debt '%s' asks LESS of the harder place (%d vs %d)" % [
+					rid, Balance.debt_threshold(rid, hardest),
+					Balance.debt_threshold(rid, easiest)])
+
+	# The offer is DERIVED, so it cannot drift and cannot re-roll on sight (D22/D205).
+	for did8 in Balance.DUNGEONS:
+		var first: String = md.debt_on(did8)
+		if first == "":
+			fails += 1; print("FAIL %s offers no debt at all" % did8)
+		if md.debt_on(did8) != first:
+			fails += 1; print("FAIL %s's offer changed just for being looked at" % did8)
+		if not (first in debt_ids):
+			fails += 1; print("FAIL %s offers '%s', which is not in the catalogue" % [did8, first])
+	# ...and every row must be reachable from SOME place at SOME clear count, or it is a row
+	# nobody will ever be offered. Swept over the same function the screen calls.
+	var offered := {}
+	for did9 in Balance.DUNGEONS:
+		for tc in 24:
+			offered[Balance.debt_for(did9, tc)] = true
+	if offered.size() < debt_ids.size():
+		var never: Array = []
+		for nid in debt_ids:
+			if not offered.has(String(nid)):
+				never.append(String(nid))
 		fails += 1
-		print("FAIL the table offers %d debts, expected %d" % [
-			offers.size(), Balance.DEBT_OFFERS])
-	for o in offers:
-		var od: Dictionary = o
-		if not (String(od.get("kind", "")) in Balance.DEBTS):
-			fails += 1; print("FAIL a debt of no known kind is on the table")
-		if not (String(od.get("dungeon", "")) in Balance.DUNGEONS):
-			fails += 1; print("FAIL a debt names a place that is not a dungeon")
-		if Balance.debt_text(String(od["kind"]), String(od["dungeon"])) == "":
-			fails += 1; print("FAIL a debt with no words on it")
-	# asking again must not re-roll: a table that changed on sight is a slot machine
-	var again: Array = md.offer_debts()
-	if again != offers:
-		fails += 1; print("FAIL the debts on the table changed just for being looked at")
-	# take one, and the table clears
-	md.take_debt(0)
+		print("FAIL %d debts are never offered anywhere: %s" % [never.size(), ", ".join(never)])
+
+	# The wager: the fee is taken at the door, comes back on settling, and is gone on failing.
+	var place := String(Balance.DUNGEONS[0])
+	var kind: String = md.debt_on(place)
+	var fee: int = Balance.debt_stake(kind, place)
+	md.gold = 0
+	if md.can_take_debt(place):
+		fails += 1; print("FAIL a debt could be taken with no gold to pay for it")
+	md.gold = fee + 100
+	if not md.take_debt(place):
+		fails += 1; print("FAIL a debt that could be afforded was refused")
+	if md.gold != 100:
+		fails += 1; print("FAIL the stake was not taken at the door (%d left, expected 100)" % md.gold)
 	if md.debt_taken.is_empty():
 		fails += 1; print("FAIL taking a debt left nothing owed")
-	if not md.debt_offers.is_empty():
-		fails += 1; print("FAIL the table still has debts on it after one was taken")
-	md.take_debt(0)
-	if md.debt_offers.size() > 0:
+	var other := String(Balance.DUNGEONS[1])
+	if md.can_take_debt(other):
 		fails += 1; print("FAIL a second debt could be taken while one was owed")
-	# ...and it settles only against the run it named
-	var took: Dictionary = md.debt_taken.duplicate()
-	var place := String(took["dungeon"])
-	var wrong := ""
-	for did6 in Balance.DUNGEONS:
-		if did6 != place:
-			wrong = did6
-			break
-	if md.settle_debt(wrong, true, 9, false) != 0:
+
+	# It settles only against the run it named, and going somewhere else neither settles nor
+	# forfeits it — a contract must survive a trip to the shop.
+	var full := {}
+	for tk2 in Balance.TALLIES:
+		full[String(tk2)] = 999999
+	full[Balance.TALLY_SEEN] = 0
+	var elsewhere: Dictionary = md.settle_debt(other, true, 9, full)
+	if int(elsewhere.get("gold", 0)) != 0:
 		fails += 1; print("FAIL a debt settled against the wrong dungeon")
-	var before_credit: int = md.debt_credits
-	var paid: int = md.settle_debt(place, true, 9, false)
-	if paid <= 0:
-		fails += 1; print("FAIL settling the debt paid nothing")
-	if md.debt_credits != before_credit + 1:
-		fails += 1; print("FAIL settling the debt paid no gate credit")
+	if md.debt_taken.is_empty():
+		fails += 1; print("FAIL going somewhere else forfeited the debt")
+	var owed_now: Dictionary = md.settle_debt(place, true, 99, full)
+	if int(owed_now.get("gold", 0)) < fee:
+		fails += 1; print("FAIL settling paid back less than the stake")
+	if not (String(owed_now.get("pack", "")) in Balance.PACK_TIERS):
+		fails += 1; print("FAIL settling paid no pack")
+	if String(owed_now.get("pack", "")) != Balance.debt_pack_tier(kind):
+		fails += 1; print("FAIL the pack is not the tier the contract promised")
 	if not md.debt_taken.is_empty():
 		fails += 1; print("FAIL the debt is still owed after being settled")
-	if md.settle_debt(place, true, 9, false) != 0:
+	if int(md.settle_debt(place, true, 99, full).get("gold", 0)) != 0:
 		fails += 1; print("FAIL a settled debt paid twice")
-	# every kind has to be met by SOMETHING and refused by something, or it is decoration
-	for kind in Balance.DEBTS:
-		var any_yes := Balance.debt_met(String(kind), place, place, true, 9, false)
-		var any_no := Balance.debt_met(String(kind), place, place, false, 0, true)
-		if not any_yes:
-			fails += 1; print("FAIL '%s' cannot be settled by a perfect run" % kind)
-		if any_no:
-			fails += 1; print("FAIL '%s' is settled by a run that did nothing" % kind)
-	# and the credit reaches the gate, or a debt is a side quest rather than a route
+
+	# ...and a FAILED debt at the named place costs the stake and clears.
+	md.gold = fee
+	md.take_debt(place)
+	var empty := {}
+	for tk3 in Balance.TALLIES:
+		empty[String(tk3)] = 0
+	empty[Balance.TALLY_SEEN] = 999
+	var lost: Dictionary = md.settle_debt(place, false, 1, empty)
+	if int(lost.get("gold", 0)) != 0:
+		fails += 1; print("FAIL a failed debt still paid out")
+	if not md.debt_taken.is_empty():
+		fails += 1; print("FAIL a failed debt is still owed")
+	if md.gold != 0:
+		fails += 1; print("FAIL the stake came back from a debt that was not settled")
+
+	# A pack tier must rise with the weight, or "proportional to the challenge" is decoration.
+	var by_weight := {}
+	for row2 in Balance.DEBT_LIST:
+		var r2: Dictionary = row2
+		by_weight[int(r2.get("weight", 1))] = Balance.debt_pack_tier(String(r2["id"]))
+	for wkey in by_weight:
+		var want_tier := String(Balance.PACK_TIERS[clampi(int(wkey), 1, 3) - 1])
+		if String(by_weight[wkey]) != want_tier:
+			fails += 1
+			print("FAIL weight %d pays a %s pack, expected %s" % [int(wkey), by_weight[wkey], want_tier])
+
+	# Gate credit already banked under D191 still counts, or an update shuts a door somebody
+	# already opened.
 	var mgate = Meta.new()
 	mgate.new_save()
 	var base_gate: int = mgate.gate_credit()
 	mgate.debt_credits = 2
 	if mgate.gate_credit() != base_gate + 2:
-		fails += 1; print("FAIL debt credit does not reach the gate")
+		fails += 1; print("FAIL gate credit banked by an old debt stopped counting")
 	Meta.writes_disabled = true
-	print("  (info: %d debt kinds, %d offered at a time, +1 gate credit and %d gold at d1)" % [
-		Balance.DEBTS.size(), Balance.DEBT_OFFERS, Balance.debt_gold(1)])
+	print("  (info: %d debts over %d counters; d1 fee %d, pays %d + a %s pack)" % [
+		debt_ids.size(), Balance.TALLIES.size(), fee,
+		Balance.debt_gold(kind, place),
+		Balance.PACK_TIER_NAME.get(Balance.debt_pack_tier(kind), "Worn")])
 
 	if fails == 0:
 		print("META TEST: PASS (persistence + fusion + deck build + packs)")

@@ -210,6 +210,29 @@ func _in_a_fight(list: Node) -> void:
 			CombatScreen.CHIP_GOOD if bool(spec[2]) else CombatScreen.CHIP_BAD)
 	_entry(body, "Pierce", ("A share of an incoming hit that Block never sees. It grows with depth, "
 		+ "and it is the reason a wall of Block cannot be the whole answer down there."), "pierce")
+	_entry(body, "Lifesteal", ("The card heals you for the damage it actually landed — after the "
+		+ "target's Block took its share, not before."))
+	# --- D204: the words the card faces abbreviate --------------------------------
+	#
+	# These are here because a 116px card face cannot afford the sentence (see
+	# CardData.effect_text, which is measured against a 14px floor), so "+4 per earlier
+	# card" and "Next card -1E" are all the face gets to say. Unlike everything above
+	# them these are NOT genre grammar the player arrives knowing — no other game words
+	# them this way — so the abbreviation has to resolve somewhere the player can look
+	# it up, and this is that place. Ordered enablers-then-payoffs, the same pairing the
+	# cards are built as.
+	_entry(body, "Setting up", ("Some cards are worth nothing on their own and make the NEXT one "
+		+ "better: a bigger Attack, or a cheaper card. Both last until the end of the turn "
+		+ "and no longer — an enabler you did not cash in is wasted, so a combo has to be "
+		+ "assembled inside one turn rather than banked across three."))
+	_entry(body, "Collecting", ("The other half. A card can be worth more for every earlier card "
+		+ "you played this turn, every stack of Vulnerable or Weak on the target, every card "
+		+ "exhausted so far this fight, every Energy it spends, or for being the last card in "
+		+ "your hand. Cheap cards stop being filler once something is counting them."))
+	_entry(body, "Exhausted", ("A card that leaves the fight rather than the discard pile: you will "
+		+ "not draw it again this combat. Some cards burn your whole hand on purpose, because "
+		+ "others are paid by the count — up to %d of them, so the reward arrives early and "
+		+ "then stops climbing.") % Balance.EXHAUST_TALLY_CAP)
 	# The last three rows carry no symbol on purpose. There is a painting for every
 	# status above them and none for a telegraph, a turn count or a cycle — and the
 	# nearest thing on the sheet, the sword, means "attack", which is not what any of

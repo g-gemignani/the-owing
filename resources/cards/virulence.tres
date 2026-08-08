@@ -6,9 +6,11 @@
 script = ExtResource("1")
 id = "virulence"
 name = "Virulence"
-description = "Apply 7 Poison."
-cost = 1
-type = 1
+description = "Deal 6 damage to ALL enemies, +2 for each Poison on your target."
+damage_per_poison = 2
+cost = 2
+type = 0
 rarity = 2
 level = 1
-apply_poison = 7
+damage = 6
+aoe = true

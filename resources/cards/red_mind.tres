@@ -6,9 +6,10 @@
 script = ExtResource("1")
 id = "red_mind"
 name = "Red Mind"
-description = "Gain 5 Strength."
+description = "Deal 8 damage, +3 for each card exhausted this combat."
+per_exhausted = 3
 cost = 2
-type = 2
+type = 0
 rarity = 3
 level = 1
-gain_strength = 5
+damage = 8

@@ -6,10 +6,10 @@
 script = ExtResource("1")
 id = "last_word"
 name = "Last Word"
-description = "Deal 20 damage. Exhaust."
-cost = 3
+description = "Deal 11 damage, +16 if it empties your hand."
+bonus_if_hand_empty = 16
+cost = 2
 type = 0
 rarity = 2
 level = 1
-damage = 20
-exhaust = true
+damage = 11

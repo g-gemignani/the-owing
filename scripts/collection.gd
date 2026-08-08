@@ -598,6 +598,10 @@ func _build_row(id: String) -> void:
 	name_lbl.clip_text = true
 	name_lbl.text = "%s %s" % [card.name, CardData.rarity_badge(card.rarity)]
 	row.add_child(name_lbl)
+	# The name opens the card too, not only the thumbnail (D205). Same `note`, so the two
+	# ways in are the same door: whichever half of the row you clicked, you are told how
+	# many copies this deck is asking for and what the next level buys.
+	UI.inspect_text(name_lbl, card, note)
 
 	# What the card does, and what the next level BUYS, in one cell. The buttons out
 	# to the right have always quoted the price; the benefit was left for the player

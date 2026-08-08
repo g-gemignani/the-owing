@@ -134,13 +134,18 @@ func _init() -> void:
 		var relic_hp0 := 0
 		for r0 in profile.get("relics", []):
 			relic_hp0 += r0.bonus_max_hp
-		print("%s  (%d cards, ratio %.2f, %d clears, %d HP, %d relics, power %s)" % [
+		print("%s  (%d cards, ratio %.2f, %d clears, %d HP, %d relics, power %s)%s" % [
 			profile["name"], deck.size(),
 			Balance.power_ratio(deck, profile.get("relics", []), prof_power),
 			int(profile.get("clears", 0)),
 			Balance.max_hp_for(int(profile.get("clears", 0)), relic_hp0),
 			(profile.get("relics", []) as Array).size(),
-			prof_power.name if prof_power != null else "none"])
+			prof_power.name if prof_power != null else "none",
+			# Said out loud, because relics-below-clears is now a FAULT everywhere else
+			# (D208) and a row that is allowed to look like the bug has to announce that
+			# it is deliberate. Otherwise the next reader fixes it back.
+			"  [instrument: fixed relic set]" if bool(profile.get("fixed_relics", false))
+				else ""])
 		for dungeon_id in profile["dungeons"]:
 			if not _wanted(dungeon_id, String(profile["name"])):
 				continue
@@ -808,8 +813,67 @@ func _profiles() -> Array:
 	out.append({
 		"name": "Thorns build (Lv15)",
 		"clears": 5, "power_level": 2,
-		"deck": _deck({"hack": 3, "cover": 4, "riposte": 3, "sharp_ground": 2, "bristle": 1, "iron_will": 2, "survival_instinct": 2}, 15),
+		# Bramble Armour rather than Survival Instinct (D204): the thorns build's own
+		# payoff, and the row has to hold the mechanic or it cannot price it.
+		"deck": _deck({"hack": 3, "cover": 4, "riposte": 3, "sharp_ground": 2, "bristle": 1, "iron_will": 2, "bramble_armour": 2}, 15),
 		"dungeons": ["slag_pits", "abyssal_stair", "the_maw"],
+		"hp_mult": 1.0,
+	})
+	# --- the two archetypes D204 created, and the reason they are here at all ------
+	#
+	# AGENTS.md states the rule these rows exist to satisfy: check that a profile
+	# actually HOLDS the thing you changed. D124 is the standing example — twelve
+	# profiles with no draw relic between them reported "no measurable effect" for a
+	# hand cap that fires on 77% of a real draw build's fights. A combo mechanic is
+	# worse in that respect than a relic, because its whole value is in the sequence: a
+	# deck that holds one enabler and no payoff measures it at zero and looks like proof.
+	out.append({
+		"name": "Combo build (Lv15)",
+		"clears": 5, "power_level": 2,
+		# Enablers AND payoffs, in the same deck, at a ratio a player would actually
+		# assemble. The cheap cards are the point rather than filler — they are what
+		# Grinding Down and Last Word are counting.
+		"deck": _deck({"nick": 3, "jab": 2, "read_ahead": 2, "whetted_edge": 2,
+			"grinding_down": 2, "rally": 2, "last_word": 1, "cover": 2}, 15),
+		"dungeons": ["foundry", "sunken_vault", "drowned_market"],
+		"hp_mult": 1.0,
+	})
+	out.append({
+		"name": "Exhaust build (Lv15)",
+		"clears": 5, "power_level": 2,
+		# Cull is the engine: it burns the hand, and the three payoffs are paid by the
+		# count. The 0-cost exhausting cards feed the same tally on their way past.
+		# ONE epic, matching its peers. The first draft held two Red Minds, and an epic at
+		# Lv15 is near its own cap (`LEVEL_RATE_BY_RARITY` is 5.70 there): a traced Maw boss
+		# fight had it hitting for 190 a card while `per_exhausted` had contributed nothing
+		# at all, and the row cleared d8 at 98% on five clears. That was a deck two rarities
+		# richer than the Thorns and AoE rows it is read beside — the profile was the finding,
+		# not the cards, and a row that is not the player it claims to be answers a question
+		# nobody asked.
+		# No Lifedrain, deliberately, even though the exhaust BUILD names it. The Vampire
+		# row below is what that card belongs to for measuring purposes: lifesteal turns out
+		# to be the strongest axis in the instrument by a distance, and one copy of it in
+		# here is one variable too many. This row exists to answer what `per_exhausted` and
+		# `exhaust_hand` are worth, so it holds those and nothing that would answer for them.
+		"deck": _deck({"hack": 3, "cover": 3, "cull": 2, "red_mind": 1, "decapitate": 1,
+			"focus": 2, "see_it_coming": 1, "kick": 1, "bandage": 2}, 15),
+		"dungeons": ["slag_pits", "sunken_vault", "the_maw"],
+		"hp_mult": 1.0,
+	})
+	out.append({
+		# NOT a D204 archetype, and that is why it is here. The Exhaust row above was
+		# drafted holding two Lifedrains and cleared d8 at 98% on five clears; a traced
+		# boss fight showed why, and it was nothing to do with `per_exhausted` — a 1-cost
+		# lifesteal card at Lv15 was landing 91 damage and healing 91 of it, twice a turn.
+		# `leech`, `exsanguinate` and `sanguine_feast` have all been in the catalogue for
+		# a hundred decisions and `Balance.BUILDS` has named a vampire build the whole
+		# time, and there has never been a row that holds one. The finding belongs to
+		# lifesteal, so it gets its own row rather than living inside somebody else's.
+		"name": "Vampire build (Lv15)",
+		"clears": 5, "power_level": 2,
+		"deck": _deck({"hack": 3, "cover": 4, "leech": 3, "lifedrain": 2, "bite": 2,
+			"iron_lung": 1, "second_heart": 1}, 15),
+		"dungeons": ["sunken_vault", "drowned_market", "the_maw"],
 		"hp_mult": 1.0,
 	})
 	out.append({
@@ -921,6 +985,13 @@ func _profiles() -> Array:
 		"hp_mult": 1.0,
 		"relics": _relics(["crown_of_thorns", "bone_charm", "duelists_glove",
 			"field_kit", "reliquary_heart", "weighted_soles", "lucky_penny"]),
+		# Exempt from the progression dressing (D208): this row is an INSTRUMENT, not a
+		# player. Its whole value is that the seven relics in it are the only ones in it —
+		# the paragraph above turns on "these seven carry no `bonus_max_hp` between them",
+		# and topping it up to eight would put max HP into the one row built to prove a
+		# trigger fires without one. What it measures is a relic; what it costs is that its
+		# clears figure describes a player who would be wearing more.
+		"fixed_relics": true,
 	})
 	out.append({
 		# The other half of D180: a relic whose whole effect is between fights. Healing
@@ -936,6 +1007,12 @@ func _profiles() -> Array:
 		"dungeons": ["foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 		"relics": _relics(["healing_idol", "surgeons_thread", "iron_ration"]),
+		# Exempt for the same reason as the row above (D208), and more sharply: the claim
+		# in this comment is that every per-fight column reads like an unrelic'd deck and
+		# only RUN moves. One flat relic from the ladder falsifies that sentence, and the
+		# sentence is the check — it is how a reader can tell the heal is being delivered
+		# between fights rather than smuggled in inside one.
+		"fixed_relics": true,
 	})
 	out.append({
 		"name": "Late (Lv40 + 6 relics)",
@@ -966,6 +1043,14 @@ func _profiles() -> Array:
 		"dungeons": ["foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 	})
+	# Every row is dressed in the relics its clears have already paid for (D208). Applied
+	# here rather than written into each row so that a profile added later cannot forget:
+	# the omission this fixes was in eleven of fifteen rows, which is what a rule kept by
+	# hand looks like once there are enough of them.
+	for p in out:
+		if bool(p.get("fixed_relics", false)):
+			continue
+		p["relics"] = _worn_relics(int(p.get("clears", 0)), p.get("relics", []))
 	return out
 
 ## One reward card from this dungeon's pool, at the level the player's cards sit at.
@@ -1045,6 +1130,85 @@ func _relics(ids: Array) -> Array:
 		if r != null:
 			out.append(r)
 	return out
+
+## The relics a player standing here would already be WEARING (D208).
+##
+## D180 fixed how relics are *applied* and left untouched how many the profiles hold. Every
+## boss beaten hands one out — `combat.gd` calls `MetaState.grant_relic(Tier.BOSS)` on the
+## clear, unconditionally — and relics are permanent, explicitly not lost on death. So a
+## player with eight clears wears at least eight relics, and this table held rows of three,
+## five and six clears with **none at all**.
+##
+## The two halves of one progression disagreed inside a single profile: `clears` was already
+## growing the HP bar through `Balance.max_hp_for`, so the report paid the player for their
+## clears in hit points and took the relics those same clears handed them back off again.
+##
+## A FLOOR and not an estimate. Elites drop into escrow too and a repeat clear grants again,
+## so a real player at this depth wears more than this; one per distinct clear is the count
+## that cannot be argued down. Erring low keeps the fix from being a gift.
+func _worn_relics(clears: int, held: Array) -> Array:
+	var out: Array = held.duplicate()
+	var ids := {}
+	for r in out:
+		ids[String(r.id)] = true
+	for id in _relic_ladder():
+		if out.size() >= clears:
+			break
+		if ids.has(id):
+			continue
+		var r := load(Balance.RELIC_DIR + String(id) + ".tres") as RelicData
+		if r != null:
+			out.append(r)
+			ids[id] = true
+	return out
+
+## The ORDER relics arrive in, rolled once against the boss table's own weights.
+##
+## Read out of `MetaState.RELIC_CATALOG` rather than restated here — the catalogue is the
+## only list of what the game can actually hand out, and a hand-kept copy is the D89/D180
+## coverage bug lying in wait for the thirty-first relic. MetaState is an autoload, so a
+## headless `--script` run has no instance of it; the constant is read off the GDScript
+## itself, which is the same list by the same name.
+##
+## Seeded, so two runs of this report measure the same player rather than differing by
+## whatever the loadout roll did (D120's noise floor is 0.4 points; a different relic set is
+## a much larger difference wearing the same clothes). Drawn WITHOUT replacement and taken
+## from the front, so a deeper profile's set contains a shallower one's: relics accumulate,
+## and a ladder that did not nest could hand Endgame a weaker set than Late and break the
+## monotonicity `tests/test_balance.gd` checks for.
+const RELIC_LADDER_SEED := 4180
+static var _ladder: Array = []
+
+static func _relic_ladder() -> Array:
+	if not _ladder.is_empty():
+		return _ladder
+	var ms := load("res://scripts/meta_state.gd") as GDScript
+	var catalog: Dictionary = ms.get_script_constant_map().get("RELIC_CATALOG", {})
+	var pool: Array = catalog.keys()
+	pool.sort()                       # the roll decides the order, not the file system
+	var rng := RandomNumberGenerator.new()
+	rng.seed = RELIC_LADDER_SEED
+	var wtbl: Array = Balance.WEIGHTS[Balance.Tier.BOSS]
+	var guard := 0
+	while not pool.is_empty() and guard < 200:
+		guard += 1
+		var weights: Array = []
+		var total := 0
+		for id in pool:
+			var r := load(String(catalog[id])) as RelicData
+			var w: int = int(wtbl[clampi(r.rarity if r != null else 0, 0, wtbl.size() - 1)])
+			weights.append(w)
+			total += w
+		var roll := rng.randi_range(0, maxi(1, total) - 1)
+		var pick: int = pool.size() - 1
+		for i in pool.size():
+			roll -= int(weights[i])
+			if roll < 0:
+				pick = i
+				break
+		_ladder.append(String(pool[pick]))
+		pool.remove_at(pick)
+	return _ladder
 
 func _deck(loadout: Dictionary, level: int = 1) -> Array[CardData]:
 	var deck: Array[CardData] = []
@@ -1203,9 +1367,9 @@ func _play_draw(eng: CombatEngine) -> void:
 func _draw_is_worth_it(eng: CombatEngine, c: CardData) -> bool:
 	if eng.hand.size() >= Balance.MAX_HAND_SIZE:
 		return false
-	if c.eff_cost() <= 0:
+	if eng.play_cost(c) <= 0:
 		return true
-	return _energy_the_rest_of_the_hand_can_use(eng, c) < eng.energy - c.eff_cost()
+	return _energy_the_rest_of_the_hand_can_use(eng, c) < eng.energy - eng.play_cost(c)
 
 ## What the rest of the hand could already spend this turn. Costs are summed rather
 ## than fitted to a knapsack because the question is whether the hand REACHES the
@@ -1215,7 +1379,7 @@ func _energy_the_rest_of_the_hand_can_use(eng: CombatEngine, skip: CardData) -> 
 	var total := 0
 	for c in eng.hand:
 		if c != skip:
-			total += c.eff_cost()
+			total += int(_live_cost(eng, c))
 	return total
 
 ## True if the enemy can be killed with the energy in hand this turn.
@@ -1226,14 +1390,21 @@ func _try_lethal(eng: CombatEngine) -> bool:
 	# greedy by damage per energy
 	var pool := eng.hand.duplicate()
 	pool.sort_custom(func(a, b):
-		return float(a.eff_damage()) / maxf(1.0, a.eff_cost()) > float(b.eff_damage()) / maxf(1.0, b.eff_cost()))
+		return float(eng.card_damage(a)) / _live_cost(eng, a) \
+			> float(eng.card_damage(b)) / _live_cost(eng, b))
+	# The plan is priced against the CURRENT board, so a card that gets better for
+	# being played third (`per_card_played`, `empower_next`) is undercounted here. That
+	# is the safe direction and deliberately left alone: this pass only decides whether
+	# to COMMIT to lethal, so undercounting declines a kill that would have worked,
+	# while overcounting spends the whole hand and blocks nothing.
 	for c in pool:
-		if c.eff_damage() > 0 and c.eff_cost() <= budget:
-			budget -= c.eff_cost()
+		var live_cost := _live_cost(eng, c)
+		if eng.card_damage(c) > 0 and live_cost <= float(budget):
+			budget -= int(live_cost)
 			plan.append(c)
 			var foe0 := eng.current_target()
 			if foe0 != null:
-				total += foe0.predicted_damage(eng.player.outgoing_damage(c.eff_damage()))
+				total += foe0.predicted_damage(eng.card_damage(c))
 	var foe := eng.current_target()
 	if foe == null or total < foe.hp:
 		return false
@@ -1302,7 +1473,7 @@ func _spend_rest(eng: CombatEngine) -> void:
 		again = false
 		for c in eng.hand.duplicate():
 			if eng.can_play(c) and c.eff_vulnerable() > 0 and eng.enemy.vulnerable == 0 \
-					and eng.enemy.hp > eng.player.outgoing_damage(c.eff_damage()) * 2:
+					and eng.enemy.hp > eng.card_damage(c) * 2:
 				eng.play_card(c); again = true; break
 		if again:
 			continue
@@ -1316,16 +1487,75 @@ func _spend_rest(eng: CombatEngine) -> void:
 			eng.play_card(blk); again = true
 
 ## Best affordable card by (damage or block) per energy spent.
+## What a card is worth, and what it costs, IF PLAYED RIGHT NOW.
+##
+## Every pass in this driver used to read `eff_damage()` / `eff_block()` / `eff_cost()`
+## — the card's authored numbers — and that made this instrument blind to every
+## conditional mechanic in the game, the D66 axes as well as the D204 ones. Split read
+## as 4 damage into a target holding six Poison; Grinding Down read as 3 on the fifth
+## card of a turn; Stave In read as a 1-cost 3-damage bargain and then swallowed the
+## whole pool. A deck built on any of them measured as weak, and the reason was not the
+## deck: the player driving it could not see what it was holding.
+##
+## That is D124 restated — an instrument that cannot play the build cannot price it —
+## and it is the reason these two functions exist rather than a fourth inlined copy of
+## `eff_damage()`. `card_damage` and `card_block` are the same functions the card FACE
+## reads, so the driver now sees exactly what a player would see, and `Balance` owns the
+## rule that an X-cost card costs the turn rather than its authored 1.
+func _live_value(eng: CombatEngine, c: CardData, want_damage: bool) -> int:
+	return eng.card_damage(c) if want_damage else eng.card_block(c)
+
+func _live_cost(eng: CombatEngine, c: CardData) -> float:
+	# `play_cost` for the discount, `card_energy_cost` for the X card. Both matter: a
+	# discounted card that still prices at its authored cost is passed over, and an X
+	# card that prices at 1 is picked first and ends the turn.
+	if c.spend_all_energy:
+		return maxf(1.0, Balance.card_energy_cost(c))
+	return maxf(1.0, float(eng.play_cost(c)))
+
+## A hand-burner is played LAST, or not at all.
+##
+## `exhaust_hand` prices its own payoff off the hand it is about to destroy, so
+## `_best_by_value` reads Cull as the most Block per energy anything in the hand offers
+## and opens every single turn with it — burning the cards the rest of the turn was
+## going to be made of. That is not a player, it is the same compulsion `_draw_is_worth_it`
+## documents one screen up.
+##
+## Measured before this guard, at 120 trials: the Exhaust build's NORMAL fights at the
+## Slag Pits ran 8.9 turns and won 78%, against 4.5 turns and 100% for the Thorns build
+## in the same dungeon on the same progression. The deck was not weak. The driver was
+## throwing it away, and would have reported that as a verdict on the cards.
+##
+## The rule is a COMPARISON, and the first draft of it was not. "Never while anything else
+## is affordable" swung the policy the whole way to the other end: with three energy and a
+## hand of 0- and 1-cost cards something is always affordable, so Cull went from being
+## played every turn to never being played at all, and the row reported an exhaust build
+## whose enabler had not fired once. A guard that turns a mechanic off measures the same
+## nothing as a policy that abuses it.
+##
+## So: burn only if the burner out-values the best thing it would destroy. That is the
+## judgement a person makes at the card, it can go either way on the same hand, and it is
+## the same "on merit, and re-read after every play" standard the passes below hold
+## everything else to.
+func _burn_is_worth_it(eng: CombatEngine, c: CardData) -> bool:
+	if not c.exhaust_hand:
+		return true
+	var best_lost := 0
+	for other in eng.hand:
+		if other != c and eng.can_play(other):
+			best_lost = maxi(best_lost, maxi(eng.card_damage(other), eng.card_block(other)))
+	return maxi(eng.card_damage(c), eng.card_block(c)) >= best_lost
+
 func _best_by_value(eng: CombatEngine, want_damage: bool) -> CardData:
 	var best: CardData = null
 	var best_val := 0.0
 	for c in eng.hand:
-		if not eng.can_play(c):
+		if not eng.can_play(c) or not _burn_is_worth_it(eng, c):
 			continue
-		var amount: int = c.eff_damage() if want_damage else c.eff_block()
+		var amount: int = _live_value(eng, c, want_damage)
 		if amount <= 0:
 			continue
-		var val := float(amount) / maxf(1.0, float(c.eff_cost()))
+		var val := float(amount) / _live_cost(eng, c)
 		if val > best_val:
 			best_val = val
 			best = c

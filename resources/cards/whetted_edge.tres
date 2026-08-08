@@ -6,10 +6,10 @@
 script = ExtResource("1")
 id = "whetted_edge"
 name = "Whetted Edge"
-description = "Deal 7 damage. Permanently +2 this combat."
+description = "Deal 5 damage. The next Attack you play this turn deals +6."
+empower_next = 6
 cost = 1
 type = 0
 rarity = 1
 level = 1
-damage = 7
-grows = 2
+damage = 5

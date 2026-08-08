@@ -34,10 +34,33 @@ const BETTER_HIGHER := ["damage", "block", "draw", "hits", "heal", "energy_gain"
 	"apply_vulnerable", "apply_weak", "apply_poison", "gain_thorns", "gain_strength",
 	"gain_dexterity", "retain", "retain_block", "aoe", "damage_per_poison",
 	"damage_per_thorns", "bonus_vs_debuffed", "combo_bonus", "energy_on_kill",
-	"block_per_card_in_hand"]
+	"block_per_card_in_hand",
+	# D204. Every axis the engine reads has to appear in one of these two lists or the
+	# suite goes quietly wrong in BOTH directions at once, which is what happened on the
+	# first run of this batch: a card carrying an unlisted upside reads as an equal on
+	# every axis the list knows, so Whetted Edge was reported as a strictly worse Hack
+	# (its +6 was invisible) and Rally and Bramble Armour were reported as the same card
+	# (their differing axis was invisible). Neither is a card problem. When a mechanic is
+	# added to CardData, it is added here in the same commit.
+	"empower_next", "discount_next", "per_card_played", "damage_per_debuff",
+	"per_exhausted", "repeat_previous", "damage_per_energy", "bonus_if_hand_empty",
+	"block_per_thorns"]
 ## Axes where more is a COST. `exhaust` is here because one use per combat is a real
-## price — it is why Plague Bearer and Blight Bloom can share an effect honestly.
-const BETTER_LOWER := ["hp_cost", "exhaust"]
+## price — it is why Pandemic and Spore Burst can share an effect honestly.
+##
+## `spend_all_energy` joins it: it is the PRICE half of a combo, not the payoff — the
+## rest of your turn, in exchange for what `damage_per_energy` pays out. Counting it as
+## an upside here would charge the player twice and let an X-cost card dominate its way
+## past a genuinely cheaper neighbour.
+##
+## `exhaust_hand` is deliberately in NEITHER list, and that is a claim worth stating
+## rather than an omission. It is not a cost the way exhaust is: it destroys cards the
+## turn had no use for, chosen at the moment of playing, so whether it hurts depends
+## entirely on the hand — `CardData.power_value()` came round to pricing it as a mild
+## enabler for the same reason. And it is not an upside either. Listing it in either
+## direction would let domination be decided by a field whose sign is not fixed, which
+## is how this test would start reporting confident nonsense.
+const BETTER_LOWER := ["hp_cost", "exhaust", "spend_all_energy"]
 
 func _init() -> void:
 	var Meta_ = load("res://scripts/meta_state.gd")
@@ -132,7 +155,12 @@ func _beats(a: CardData, b: CardData) -> bool:
 ## Everything the engine reads off a card, in one string. Name, art and flavour are
 ## deliberately absent: they are what makes two identical cards LOOK different.
 func _signature(c: CardData) -> String:
-	var parts: Array[String] = [str(c.type), str(c.eff_cost()), str(c.combo_at)]
+	# `exhaust_hand` is listed here by hand because it is in neither ranked list above —
+	# see the note on BETTER_LOWER. Identity is a different question from domination: a
+	# field whose sign is not fixed still MAKES two cards different, and leaving it out
+	# would let a hand-burner read as a twin of the plain block card it is nothing like.
+	var parts: Array[String] = [str(c.type), str(c.eff_cost()), str(c.combo_at),
+		"1" if c.exhaust_hand else "0"]
 	for f in BETTER_HIGHER + BETTER_LOWER:
 		parts.append("%.1f" % _num(c.get(f)))
 	return ",".join(parts)

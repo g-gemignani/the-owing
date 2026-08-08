@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "lifedrain"
 name = "Lifedrain"
-description = "Deal 8 damage. Heal 5."
+description = "Deal 6 damage, +2 for each card exhausted this combat. Heal for the damage dealt."
+per_exhausted = 2
 cost = 2
 type = 0
 rarity = 2
 level = 1
-damage = 8
-heal = 5
+damage = 6
+lifesteal = true

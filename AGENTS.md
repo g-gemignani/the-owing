@@ -23,11 +23,20 @@ A **deckbuilding roguelike with a persistent RPG meta layer**, built in Godot 4.
 
 The loop:
 
-1. **Overworld** — take on a debt if you like, then pick a zone and a dungeon. A region opens as a region, so there are
+1. **Overworld** — pick a zone, then a dungeon. Each door offers its own debt, on the row that
+   already names its difficulty, its boss and what it is wearing this time: pay gold at the
+   door and it wants something specific of the run — the place cleared, or the bottom reached,
+   or four hundred damage taken out of it, or three fights won without losing a point of health.
+   Settle it and the stake comes back with gold and a pack whose tier is the size of what was
+   asked; fail and the stake is gone (D191, D205). A region opens as a region, so there are
    usually three doors rather than one, and a gate takes depth in places that beat you as
    well as clears (D178). Difficulty is a *choice*, shown up front, with the boss named
    before you commit.
-2. **Deck builder** — assemble a run deck from your owned cards and equip one Power.
+2. **Deck builder** — assemble a run deck from your owned cards and equip one Power. Cards
+   interact on purpose: a card can make the NEXT one better, or be worth more for what you
+   already spent this turn — the earlier cards played, the debuff stacks on the target, the
+   cards burned out of your hand, the Energy left over, whether it is the last card you hold
+   (D66, D204). A turn is assembled rather than sorted by size.
 3. **Run** — crawl the dungeon: a painted isometric building of rooms and corridors over
    several floors, explored a tile at a time. **Every fight in it walks, and all of them are
    walking toward you from the turn you arrive** (D197) — nothing waits on a tile, nothing
@@ -43,10 +52,17 @@ The loop:
    can only make out from the tile beside it opens a sealed pocket with something in it, and
    usually an elite standing over it (D182, D183) — or a door that wants the key you were
    saving for a chest, or a question whose answer is the room you are standing in (D185,
-   D186). Some floors ask something of you as well (D184), and a place you have already
+   D186). Some floors ask something of you as well, written in a ledger standing in the floor's
+   own lit room — you walk to it to find out what it wants, and reading it is what takes it on
+   (D184, D203). What it asks is drawn from forty-six rows over a counter the fights and the
+   floor both fill, so it can want damage dealt, poison landed, a wall of block, ground covered,
+   or a fight won without playing an attack — and every one of them asks for MORE, never less,
+   because a condition that paid for declining content would be a difficulty dial wearing a
+   quest marker. A place you have already
    beaten reopens wearing a named variation (D187), a stone on the floor will change the rest
    of it for a price (D188), and a neighbour's clear opens a back door into somewhere one
-   floor shorter (D190).
+   floor shorter — the same fights packed into fewer floors, so shorter and denser rather
+   than easier, and only offered where the place can actually get shorter (D190, D206).
    (Three older traversal models — a node graph, a card draw, a dice board — lost to it in
    D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
 4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
@@ -61,10 +77,11 @@ Two-tier state makes this work:
 
 ## Content at a glance
 
-100 cards · 35 enemy archetypes (all painted) · 12 bosses (one named per dungeon) · 30 relics ·
+100 cards · 8 build archetypes · 35 enemy archetypes (all painted) · 12 bosses (one named per
+dungeon) · 30 relics ·
 10 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
-4 pocket prizes · 3 pocket mouths · 3 toll questions · 3 errands · 3 aspects · 3 debts ·
+4 pocket prizes · 3 pocket mouths · 3 toll questions · 46 errands and 16 debts over 44 counters · 3 aspects ·
 24 sound effects · 5 score tracks · 42 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
@@ -90,7 +107,7 @@ effects are drawn at runtime by `scripts/fx.gd`.
    paper were reverted after the numbers came back. When you change anything that
    touches difficulty, run the sim and paste the numbers into the commit.
 
-   **Two things about the instrument, both learned the hard way.** It does not seed its
+   **Three things about the instrument, all learned the hard way.** It does not seed its
    RNG, so *establish the noise floor before believing a delta* — two runs of identical
    code differ by a mean of 0.4 points with one cell swinging 15 (D120). And **check
    that a profile in it actually holds the thing you changed.** Its twelve profiles
@@ -102,6 +119,16 @@ effects are drawn at runtime by `scripts/fx.gd`.
    as "the endgame is brutal" that were the driver burning its turn on a card it could
    not use. **A number the simulator reports about difficulty may be a fact about its
    policy.**
+
+   **And the third: it has to read the numbers the CARD reads (D204).** Every pass in the
+   driver read `eff_damage()` / `eff_block()` / `eff_cost()` — a card's authored numbers —
+   which made it blind to every conditional mechanic in the game, not just the new ones.
+   Split read as 4 damage into a target holding six Poison. An X-cost card read as a
+   1-cost bargain and then ate the whole turn. It now goes through `card_damage`,
+   `card_block` and `play_cost`, the same functions the card face reads. The same pass
+   found a hand-burner the driver played every single turn and then, over-corrected,
+   never at all — **a guard that turns a mechanic off measures the same nothing as a
+   policy that abuses it**, and both readings look like a verdict on the cards.
 
    **That hole was closed for draw and left open everywhere else, and the second half
    cost more than the first (D180).** Two years after D124, the same shape: of thirty
@@ -116,6 +143,47 @@ effects are drawn at runtime by `scripts/fx.gd`.
    own property list and both its enums, so a field or a trigger the game reads and the
    tool does not is a failing test rather than a discovery. Coverage kept by a list of
    what somebody remembered is the D89 art bug in a third costume.
+
+   **And the third instance was not coverage but ARITHMETIC (D208).** With every relic
+   effect finally delivered, the profiles still held the wrong *number* of them: `clears`
+   grew the HP bar through `Balance.max_hp_for` and nothing else, while in the game a boss
+   drops a relic on every clear and relics are never lost. Eleven rows of fifteen wore
+   fewer relics than their clears guarantee — three of them wore none at six clears. Half
+   a progression is a player nobody plays, and dressing them properly moved **42 cells by a
+   mean of +17 points**, one by +81. The matched-progression cells then read 86-100%
+   against a target band of 40-60%: *the tuning had been fitted to a player who owned
+   nothing.* So the check is not only "does a profile hold the thing you changed" but
+   **"is this profile a player the game can produce?"** — every stat on a profile that the
+   game derives from another must be derived here too, or the two halves of one
+   progression disagree inside a single row.
+
+   **And when you retune against it, check the knob is still connected (D209).** The
+   correction above put the report at 86-100%, and the obvious lever —
+   `DIFFICULTIES[*].ratio` — could not bring it back, because `scaling_ratio` clamps the
+   multiplied ratio to the dungeon's ceiling and **it was already a no-op in 25 of 42
+   cells**: three of the four difficulty rungs were the same enemy damage in most of the
+   game. Sweeping it 2.8 -> 12.0 bought five points. A tuning constant that has been
+   clamped away reads exactly like a constant that is correctly set. Sweep a knob to an
+   absurd value before you trust a small move from it; if the game barely notices, you are
+   tuning something the code throws away.
+
+   The lever that did work was `DMG_POWER_K`, because it scales with the PLAYER'S power
+   rather than flat — which is the general rule this project keeps relearning: **a global
+   multiplier cannot tell the middle of the game from its ends.** Flat damage hit the
+   target mean and took the first dungeon from 96% to 23%; a steeper ratio ceiling hit it
+   and cost the deepest cells another 5-23 points. When the walkover is in one region,
+   the fix has to be shaped like that region.
+
+   **And a difficulty rung's multiplier can point the wrong way while reading as bigger.**
+   The retune ended by moving the `ratio` column DOWN (2.8/4.0 to 2.4/3.2), because above
+   about 1.6 a built deck is clamped by `ratio_ceiling` and every further point lands only
+   on the deck too weak to be clamped — the ladder had been punishing the beginner and
+   sliding off the veteran. `tests/test_difficulty.gd` is the guard for that, and it found
+   it in the shipped numbers only because a different change walked into it. Its probe is
+   a single integer damage value that quantises in ~6% steps while asserting a 10% margin,
+   so **it flips on rounding**: 0.095 fails and 0.105 passes. Tune against a probe averaged
+   over rolls, turns and tiers, and never take a value because that guard happened to go
+   green.
 
    And when you add a rule to that policy, **count how often it fires.** The first
    version of the draw gate looked principled and declined nothing at all — 1,498
@@ -282,6 +350,16 @@ effects are drawn at runtime by `scripts/fx.gd`.
   letter beside the arrow it walks (D87) — on the move buttons until D168 deleted them, and
   since then on the pad's keys and in the keyboard legend under the floor. When the control
   that was carrying such a display goes, the display moves; it does not go with it.
+
+- **An affordance has to be on the thing the player is looking at.** "Hold this card up so I
+  can read it" was reachable from a list row's illustration — a 28px square at the far left,
+  the smallest target in the row and not the part anyone is reading. The name and the rules
+  text are where the eye is when that question arrives, and clicking them did nothing; the
+  shop had no way in at all, on the one card list whose decisions cost gold and cannot be
+  undone (D205). Existing is not the same as being found. Ask of any gesture: is it on the
+  element the player is already reading, and does something *say* it is there? And when the
+  answer is a tooltip promising what a click will do, **test the click, not the promise** —
+  a count of affordances passed a handler wired to the wrong mouse button.
 
 - **A control the player aims at must not move under their finger.** The crawl offered one
   move button per exit, rebuilt every step, so its count and its order changed between the
@@ -1088,9 +1166,12 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              docs/screenshots/ as WebP — the front page's pictures are generated
              so they cannot go stale, D141),
              art_manifest.gd (driven by art_docs.sh — see the doc list below),
-             art_docs.sh and design_index.sh (the two documentation generators;
-             both take `--check`, which is how you find out a generated file has
-             drifted without reading it — D196),
+             art_docs.sh, design_index.sh and readme_downloads.sh (the three
+             documentation generators; all take `--check`, which is how you find
+             out a generated file has drifted without reading it — D196.
+             readme_downloads.sh reads the PUBLISHED release's asset sizes, not a
+             local build's, because the table documents what a player downloads;
+             the four typed sizes it replaced were three megabytes low — D207),
              install_backdrops.gd, install_scene_backdrops.gd,
              install_cutouts.gd (mattes/trims/anchors enemies, relics, powers — D90),
              install_sheet.gd (slices an icon-set sheet into its files — D91),
@@ -1123,6 +1204,14 @@ docs/        the README's screenshots, and nothing else. Carries a .gdignore:
              tag never moves off `latest` — the README's download links are only
              stable URLs because of it (D142). actions/setup-godot/ is the shared
              cache-and-install step, and runs on both Linux and macOS
+README.md    the front page, and the ONLY file here written for a PLAYER rather
+             than for whoever works on this. What the game is, how to get it,
+             what you do in it. Keep developer material out of it — it has one
+             short section at the bottom pointing here, and everything that used
+             to be spelled out on it (CI, badges, the flake, the test runner's
+             two file kinds) already lived in these files in more detail (D207).
+             Its download table is GENERATED by tools/readme_downloads.sh from
+             the published release, and its screenshots by tools/readme_shots.gd
 DESIGN.md    the full reasoning, decision by decision. Chapters 1-8 are the
              architecture and the plan; the rest is the log, which is most of
              the 11,600 lines. It opens with a GENERATED index

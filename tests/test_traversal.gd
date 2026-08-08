@@ -1002,9 +1002,101 @@ func _init() -> void:
 	# D88 says is a difficulty change no budget assertion can see. So the shipped set is
 	# checked against that directly: every condition must be settleable by a walker that
 	# takes EVERYTHING, and none may be settleable by one that takes less.
+	# **This check DISCOVERS its subjects.** It walks `Balance.ERRAND_LIST` and
+	# `Balance.TALLIES` rather than naming the errands it knows about, and that is the whole
+	# reason it can be trusted at fifty rows. D184 shipped three and hand-set three flags; the
+	# same suite at fifty would assert three and let forty-seven through, which is D180's relic
+	# hole in a third costume — coverage kept by a list of what somebody remembered.
+	var errand_ids: Array = Balance.errand_ids()
+
+	# Every row must be well-formed before any floor is asked to carry it. A row naming a
+	# counter nothing fills, or a supply nothing measures, is an ordinance that can never be
+	# settled — and it would reach the player as a sentence with a number in it and no way to
+	# make the number happen.
+	var seen_ids := {}
+	for row in Balance.ERRAND_LIST:
+		var r: Dictionary = row
+		var rid := String(r["id"])
+		if seen_ids.has(rid):
+			fails += 1
+			print("FAIL two errands share the id '%s'" % rid)
+		seen_ids[rid] = true
+		if not (String(r["key"]) in Balance.TALLIES):
+			fails += 1
+			print("FAIL errand '%s' counts '%s', which nothing tallies" % [rid, String(r["key"])])
+		if not (String(r["supply"]) in Balance.SUPPLIES):
+			fails += 1
+			print("FAIL errand '%s' is sized against '%s', which nothing measures" % [
+				rid, String(r["supply"])])
+		if String(r["text"]).strip_edges() == "":
+			fails += 1
+			print("FAIL errand '%s' has no words on it" % rid)
+		# A row whose text carries a number must produce that number, and a row whose text does
+		# not must not be silently formatted. `errand_text` returning "" for a real row is the
+		# status line printing an empty phrase.
+		if Balance.errand_text(rid, 7) == "":
+			fails += 1
+			print("FAIL errand '%s' says nothing when asked" % rid)
+		if ("%d" in String(r["text"])) and not ("7" in Balance.errand_text(rid, 7)):
+			fails += 1
+			print("FAIL errand '%s' has a number in it that is not the threshold" % rid)
+
+	# Every counter the engine and the floor can fill must be ASKED for by something, and every
+	# counter a row asks for must be fillable. The first half is the D180 lesson pointed the
+	# other way: a tally nothing reads is dead weight that will rot, and finding out which
+	# should not depend on somebody re-reading the table.
+	var asked_keys := {}
+	for row2 in Balance.ERRAND_LIST:
+		asked_keys[String((row2 as Dictionary)["key"])] = true
+	for tk in Balance.TALLIES:
+		if not asked_keys.has(String(tk)):
+			print("  (info: nothing asks about the '%s' tally yet)" % String(tk))
+
+	# The direction rule, asserted per ROW rather than per floor, and this is the assertion the
+	# whole feature rests on: a walker that takes everything must settle every row, and one that
+	# takes nothing must settle none. Written against the catalogue's own thresholds, so a row
+	# added tomorrow is checked tomorrow.
+	for rid2 in errand_ids:
+		var row3 := Balance.errand_row(rid2)
+		var key := String(row3["key"])
+		var need := Balance.errand_threshold(rid2, 10)
+		# The maximal walker: every counter at more than any row could ask for. `under` rows —
+		# the ones that want a counter to STAY at zero — are maximal at zero, because for them
+		# doing everything means never being caught.
+		var maximal := {}
+		var minimal := {}
+		for tk2 in Balance.TALLIES:
+			maximal[String(tk2)] = 0 if bool(row3.get("under", false)) else 99999
+			minimal[String(tk2)] = 99999 if bool(row3.get("under", false)) else 0
+		if not Balance.errand_settled(rid2, maximal, need):
+			fails += 1
+			print("FAIL '%s' cannot be settled by a player who does everything" % rid2)
+		if Balance.errand_settled(rid2, minimal, need):
+			fails += 1
+			print("FAIL '%s' settles itself for a player who does nothing" % rid2)
+		# ...and the threshold must be a real ask. A row that asks for zero of something is
+		# settled by turning up, which is the payout-for-arriving D184 exists to forbid.
+		if need <= 0 and not bool(row3.get("under", false)):
+			fails += 1
+			print("FAIL '%s' asks for nothing (threshold %d)" % [rid2, need])
+		# ...and it must GROW with the floor. Two floors, one twice the other, must not ask the
+		# same thing — that is what makes a row scale with depth instead of needing a constant
+		# per dungeon, and a row that flat-lines is one somebody wrote as a constant by accident.
+		if not bool(row3.get("under", false)):
+			var small := Balance.errand_threshold(rid2, 4)
+			var large := Balance.errand_threshold(rid2, 400)
+			if large <= small:
+				fails += 1
+				print("FAIL '%s' asks the same of a thin floor and a fat one (%d vs %d)" % [
+					rid2, small, large])
+
+	# ...and now on real floors: an errand is only ever handed to a floor that can discharge it,
+	# it is never in force until the ledger is read, and a floor that carries one stands a ledger
+	# for it to be read from.
 	var errands_seen := {}
 	var errand_floors := 0
-	var errand_settled := 0
+	var no_ledger := 0
+	var lit_ledger := 0
 	for dide in Balance.DUNGEONS:
 		var et := TraversalIso.new()
 		et.generate(Balance.dungeon(dide))
@@ -1015,66 +1107,103 @@ func _init() -> void:
 			if et.errand == "":
 				continue
 			errand_floors += 1
-			# it must say something, or the status line prints an empty phrase
-			if et.errand_line() == "":
+			# The floor must actually hold enough of what the row is sized against. This is
+			# D184's two special cases — no pocket, no lid — generalised to every row, which is
+			# the only version of it that survives the catalogue growing.
+			var frow := Balance.errand_row(et.errand)
+			var have := et._errand_supply(String(frow["supply"]))
+			if have < int(frow.get("needs", 1)):
 				fails += 1
-				print("FAIL %s: an errand with no words on it" % dide)
-			# ...and it must be settleable on the floor that set it. `pushed` on a floor with
-			# no pocket, or `thorough` on a floor with no chest, is not a hard errand, it is
-			# an ordinance nobody can discharge.
-			if et.errand == Balance.ERRAND_PUSHED and et.pockets.is_empty():
+				print("FAIL %s floor %d: '%s' wants %s and the floor has %d" % [
+					dide, fe + 1, et.errand, String(frow["supply"]), have])
+			if et.errand_need <= 0 and not bool(frow.get("under", false)):
 				fails += 1
-				print("FAIL %s floor %d: asked for a pocket on a floor that has none" % [
-					dide, fe + 1])
-			if et.errand == Balance.ERRAND_THOROUGH and et.errand_chests == 0:
-				fails += 1
-				print("FAIL %s floor %d: asked for every lid on a floor with no lids" % [
-					dide, fe + 1])
-			# A walker that takes everything settles it; the state it reads is the state the
-			# model already keeps.
-			et.errand_seen = false
-			et.errand_pushed = not et.pockets.is_empty()
-			et.errand_chests = 0
-			if not et._errand_met():
-				fails += 1
-				print("FAIL %s: '%s' cannot be settled by a player who does everything" % [
-					dide, et.errand])
-			else:
-				errand_settled += 1
-			# ...and a player who does NOTHING must not settle it, or it is a payout for
-			# turning up. `unseen` is the exception and deliberately so: it is settled by not
-			# being caught, which is care rather than avoidance, and the ambush it dodges is
-			# a price that already exists.
-			et.errand_pushed = false
-			et.errand_chests = 1
-			et.errand_seen = true
+				print("FAIL %s floor %d: '%s' asks for nothing" % [dide, fe + 1, et.errand])
+			# An errand that has not been taken says nothing and settles nothing, however well
+			# the floor has been played. That is what the ledger buys (D203).
+			et.errand_taken = false
+			for tk3 in Balance.TALLIES:
+				et.errand_tally[String(tk3)] = 99999
 			if et._errand_met():
 				fails += 1
-				print("FAIL %s: '%s' settles itself for a player who does nothing" % [
-					dide, et.errand])
+				print("FAIL %s floor %d: '%s' paid out without ever being taken on" % [
+					dide, fe + 1, et.errand])
+			if et.errand_line() != "":
+				fails += 1
+				print("FAIL %s floor %d: an untaken errand is talking" % [dide, fe + 1])
+			# ...and once taken, the same floor settles it.
+			et.errand_taken = true
+			if bool(frow.get("under", false)):
+				et.errand_tally[String(frow["key"])] = 0
+			if not et._errand_met():
+				fails += 1
+				print("FAIL %s floor %d: '%s' cannot be settled on the floor that set it" % [
+					dide, fe + 1, et.errand])
+			if et.errand_line() == "":
+				fails += 1
+				print("FAIL %s floor %d: a taken errand with no words on it" % [dide, fe + 1])
+			# A floor that asks something must stand a ledger to ask it FROM, or the errand is
+			# unreachable — the D184 lie in the shape D203 could newly introduce.
+			if et.ledger < 0:
+				no_ledger += 1
+			elif et.room_role_at(et.ledger % et.w, et.ledger / et.w) == "shrine":
+				lit_ledger += 1
+	if no_ledger > 0:
+		fails += 1
+		print("FAIL %d floors ask something with no ledger to ask it from" % no_ledger)
+
 	# Coverage over the PLAN across many dungeons, not over the 33 floors one sweep happens to
-	# lay out — the same correction the tolls needed (D186). `pushed` is only offered to a
-	# floor that planned a pocket and `thorough` is dropped from a floor with no chests, so a
-	# single sweep misses a kind about one run in three while the roll itself is even.
-	var errands_rolled := {}
+	# lay out — the same correction the tolls needed (D186). A row is only offered to a floor
+	# whose plan can supply it, so a single sweep misses rows while the roll itself is even.
+	# Coverage asserted against the PLANNER'S OWN POOL rather than against what a sample of runs
+	# happened to roll, and the difference is the difference between a claim and a coin toss.
+	#
+	# The sampled version was flaky by construction. With N rows sharing each roll, the chance a
+	# perfectly reachable row is missed by luck alone is (1 - eligibility/N)^rolls — for
+	# `pockets_all`, which needs a floor with two pockets and so is eligible on about a fifth of
+	# them, that is one run in thirty even at a generous sample size. A suite that fails for no
+	# reason one morning a month teaches everyone to re-run it, which is worse than not asserting.
+	#
+	# Asking `errand_pool()` instead asserts the thing actually worth asserting — every row is
+	# REACHABLE, there is a floor the planner would consider it for — and asks the planner rather
+	# than working the answer out again beside it, because a test with its own copy of "can this
+	# floor carry this row" is D34's shape and fails in the direction that passes.
+	var pooled := {}
+	var pool_hits := {}
+	var slots := 0
 	for dide2 in Balance.DUNGEONS:
 		for te in 8:
 			var et2 := TraversalIso.new()
 			et2.generate(Balance.dungeon(dide2))
-			for ee in et2.errandplan:
-				if String(ee) != "":
-					errands_rolled[String(ee)] = true
-	if errands_rolled.size() < Balance.ERRANDS.size():
+			for f2 in et2.floors:
+				slots += 1
+				for pid in et2.errand_pool(f2):
+					pooled[String(pid)] = true
+					pool_hits[String(pid)] = int(pool_hits.get(String(pid), 0)) + 1
+	if pooled.size() < errand_ids.size():
+		var missed: Array = []
+		for mid in errand_ids:
+			if not pooled.has(String(mid)):
+				missed.append(String(mid))
 		fails += 1
-		print("FAIL only %d of %d errands are ever rolled" % [
-			errands_rolled.size(), Balance.ERRANDS.size()])
+		print("FAIL %d of %d errands can never be handed to any floor: %s" % [
+			errand_ids.size() - pooled.size(), errand_ids.size(), ", ".join(missed)])
+	# ...and a row the planner would consider only once in a blue moon is worth SAYING so rather
+	# than failing on: rarity is a design choice (two pockets on one floor is meant to be rare),
+	# but a row nobody has decided to make rare should not be able to become rare unnoticed.
+	for rid3 in errand_ids:
+		var hits := int(pool_hits.get(String(rid3), 0))
+		if slots > 0 and hits > 0 and float(hits) / float(slots) < 0.25:
+			print("  (info: '%s' is only offered to %.0f%% of floors)" % [
+				String(rid3), 100.0 * float(hits) / float(slots)])
 	# ...and not every floor, or an ordinance is a checklist entry rather than something a
 	# place sometimes asks of you.
 	if errand_floors >= 33:
 		fails += 1
 		print("FAIL every floor carries an errand")
-	print("  (info: %d of 33 floors carry an errand, %d kinds, all settleable, %d gold at d1)" % [
-		errand_floors, errands_seen.size(), Balance.errand_gold(1)])
+	print("  (info: %d errands in the catalogue over %d counters; %d of 33 floors ask something, %d ledgers in the lit room, %d gold at d1)" % [
+		errand_ids.size(), Balance.TALLIES.size(), errand_floors, lit_ledger,
+		Balance.errand_gold(1)])
 
 	# --- the back door costs the same dungeon (D190) ----------------------------------
 	#
@@ -1152,11 +1281,52 @@ func _init() -> void:
 		if String(o) != first_z:
 			neighbour = String(o)
 			break
-	if neighbour != "" and not Balance.deep_entry_open(first_z, [neighbour]):
+	if neighbour != "" and Balance.deep_entry_floors(first_z) < Balance.iso_floors_for(
+			Balance.dungeon(first_z).difficulty) \
+			and not Balance.deep_entry_open(first_z, [neighbour]):
 		fails += 1
 		print("FAIL clearing a neighbour did not open the back door")
-	print("  (info: back doors walk %.1f moves per encounter, ceiling %.1f, same quota)" % [
-		deep_ratio, Balance.ISO_MOVES_PER_ENCOUNTER_MAX])
+
+	# **A door that is offered must lead somewhere else.** Five of the twelve dungeons offered
+	# one that did not: `ISO_FLOORS_MIN` is 2 and `iso_floors_for` returns 2 up to difficulty 3,
+	# so the shortened count clamped back to the full one and the back door dealt the front
+	# door's run. `deep` is read in exactly one place, to subtract that floor, so nothing else
+	# about the run differed either.
+	#
+	# The suite had the exception written INTO it — the shortness check above is guarded by
+	# `plain.floors > ISO_FLOORS_MIN`, which is the test agreeing not to look at precisely the
+	# cases that were broken. A carve-out for the inputs where a property does not hold is not
+	# a narrower assertion, it is the absence of one, and it hid this for two decisions.
+	var doors := 0
+	var real_doors := 0
+	for did_bd in Balance.DUNGEONS:
+		var everything: Array = []
+		for o2 in Balance.DUNGEONS:
+			if String(o2) != did_bd:
+				everything.append(String(o2))
+		if not Balance.deep_entry_open(did_bd, everything):
+			continue
+		doors += 1
+		var d_bd := Balance.dungeon(did_bd)
+		var full_bd: int = Balance.iso_floors_for(d_bd.difficulty)
+		var short_bd: int = Balance.deep_entry_floors(did_bd)
+		if short_bd >= full_bd:
+			fails += 1
+			print("FAIL %s offers a back door of %d floors against a front door of %d" % [
+				did_bd, short_bd, full_bd])
+		else:
+			real_doors += 1
+		# ...and the number the screen would print has to be the number the model deals, or the
+		# button is advertising a run the generator will not build (D34).
+		var built := TraversalIso.new()
+		built.deep = true
+		built.generate(d_bd)
+		if built.floors != short_bd:
+			fails += 1
+			print("FAIL %s: the back door says %d floors and the model deals %d" % [
+				did_bd, short_bd, built.floors])
+	print("  (info: back doors walk %.1f moves per encounter, ceiling %.1f, same quota; %d of %d dungeons have a real one)" % [
+		deep_ratio, Balance.ISO_MOVES_PER_ENCOUNTER_MAX, real_doors, Balance.DUNGEONS.size()])
 
 	# --- aspects: a place you have cleared is not the same place (D187) ---------------
 	#

@@ -155,16 +155,16 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 | ? | file | size | what it is |
 |---|---|---|---|
-| x | `cards/attack.png` | 320x240 | 28 cards: All You Have, Bite, Cheap Shot, Counterblow, ... |
-| x | `cards/attack_aoe.png` | 320x240 | 5 cards: Black Tide, Clear the Room, Massacre, Reap, ... |
-| x | `cards/attack_multi.png` | 320x240 | 5 cards: Cull, Keep Hitting, Pressure, Sword Dance, ... |
-| x | `cards/block.png` | 320x240 | 18 cards: Anvil Stance, Brace, Bulwark, Cover, ... |
+| x | `cards/attack.png` | 320x240 | 31 cards: All You Have, Bite, Cheap Shot, Counterblow, ... |
+| x | `cards/attack_aoe.png` | 320x240 | 6 cards: Black Tide, Clear the Room, Massacre, Reap, ... |
+| x | `cards/attack_multi.png` | 320x240 | 3 cards: Keep Hitting, Sword Dance, Two Quick |
+| x | `cards/block.png` | 320x240 | 18 cards: Anvil Stance, Brace, Bramble Armour, Bulwark, ... |
 | x | `cards/dexterity.png` | 320x240 | 3 cards: Clear Mind, Light on It, Stone Skin |
 | x | `cards/draw.png` | 320x240 | 4 cards: Abyssal Gift, Kick, Read Ahead, See It Coming |
-| x | `cards/heal.png` | 320x240 | 5 cards: Bandage, Bloodlust, Deep Breath, Second Heart, ... |
-| x | `cards/poison.png` | 320x240 | 12 cards: Blight Bloom, Creeping Death, Noxious Cloud, Pandemic, ... |
-| x | `cards/strength.png` | 320x240 | 6 cards: Focus, Red Mind, Smith's Fury, Something Worse, ... |
-| x | `cards/thorns.png` | 320x240 | 8 cards: Bramble Armour, Bristle, Iron Will, Molten Core, ... |
+| x | `cards/heal.png` | 320x240 | 6 cards: Bandage, Bloodlust, Deep Breath, Iron Lung, ... |
+| x | `cards/poison.png` | 320x240 | 11 cards: Blight Bloom, Creeping Death, Noxious Cloud, Pandemic, ... |
+| x | `cards/strength.png` | 320x240 | 5 cards: Focus, Smith's Fury, Something Worse, Undying, ... |
+| x | `cards/thorns.png` | 320x240 | 7 cards: Bristle, Iron Will, Molten Core, Riposte, ... |
 | x | `cards/vulnerable.png` | 320x240 | 3 cards: Hex, Stumble, Wither |
 | x | `cards/weak.png` | 320x240 | 3 cards: Cold Read, Put the Fear, Smoke Bomb |
 
@@ -179,11 +179,11 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/anvil_stance.png` | 320x240 | **Anvil Stance.** A shield planted on an anvil's flat, braced and immovable. A block card: Gain 8 Block. Gain 1 Dexterity. |
 | x | `cards/bandage.png` | 320x240 | **Bandage.** A strip of stained linen wound tight around a forearm and knotted off. A heal card: Heal 6. Exhaust. |
 | x | `cards/bite.png` | 320x240 | **Bite.** Teeth closing on an armoured forearm, the bite deep enough to draw the arm down. An attack card: Deal 6 damage. Heal 2. |
-| x | `cards/black_tide.png` | 320x240 | **Black Tide.** A black wave rearing across the frame with shapes drowning inside it. An attack aoe card: Deal 9 damage to ALL enemies. |
-| x | `cards/blight_bloom.png` | 320x240 | **Blight Bloom.** A pale flower opening on a corpse-grey stalk, spores lifting off it. A poison card: Apply 4 Poison to ALL enemies. |
+| x | `cards/black_tide.png` | 320x240 | **Black Tide.** A black wave rearing across the frame with shapes drowning inside it. An attack aoe card: Deal 5 damage to ALL enemies, +4 for each card you played before it this turn. |
+| x | `cards/blight_bloom.png` | 320x240 | **Blight Bloom.** A pale flower opening on a corpse-grey stalk, spores lifting off it. A poison card: Apply 2 Poison to ALL enemies. The next Attack you play this turn deals +5. |
 | x | `cards/bloodlust.png` | 320x240 | **Bloodlust.** A wound closing over as the fist above it clenches harder. A heal card: Gain 2 Strength. Heal 8. |
 | x | `cards/brace.png` | 320x240 | **Brace.** Both feet set wide behind a shield jammed against the ground. A block card: Gain 12 Block. |
-| x | `cards/bramble_armour.png` | 320x240 | **Bramble Armour.** A breastplate overgrown with woody bramble, every thorn turned out. A thorns card: Gain 10 Block and 3 Thorns. |
+| x | `cards/bramble_armour.png` | 320x240 | **Bramble Armour.** A breastplate overgrown with woody bramble, every thorn turned out. A block card: Gain 4 Block, +2 Block for each point of Thorns you are wearing. |
 | x | `cards/bristle.png` | 320x240 | **Bristle.** A hide standing its spines straight up along the spine ridge. A thorns card: Gain 9 Thorns. |
 | x | `cards/bulwark.png` | 320x240 | **Bulwark.** A wall of overlapping shield-iron filling the frame, no gap in it anywhere. A block card: Gain 22 Block. Retain. |
 | x | `cards/cheap_shot.png` | 320x240 | **Cheap Shot.** A short knife going in low under a raised guard, from behind. An attack card: Deal 3 damage, +4 if the target is already Vulnerable or Weak. Apply 1 Vulnerable. |
@@ -193,8 +193,8 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/counterblow.png` | 320x240 | **Counterblow.** A blade caught on a bracer and a second blade already coming back the other way. An attack card: Deal 8 damage. Gain 4 Block. |
 | x | `cards/cover.png` | 320x240 | **Cover.** A figure ducked behind a broken slab of masonry, only the helm showing. A block card: Gain 5 block. |
 | x | `cards/creeping_death.png` | 320x240 | **Creeping Death.** A grey rot spreading along a limb, further at the wrist than at the elbow. A poison card: Deal 5 damage. Apply 4 Poison. Permanently +2 this combat. |
-| x | `cards/cull.png` | 320x240 | **Cull.** Three quick cuts laid across a line of shapes, one shape dropping out of the line. An attack multi card: Deal 4 damage 3 times. If it kills, gain 1 Energy. |
-| x | `cards/dead_weight.png` | 320x240 | **Dead Weight.** A blunt iron weight at the end of a slack chain, swung on its own momentum. An attack card: Deal 14 damage. |
+| x | `cards/cull.png` | 320x240 | **Cull.** Three quick cuts laid across a line of shapes, one shape dropping out of the line. A block card: Exhaust your hand. Gain 3 Block, +3 for each card exhausted this combat. |
+| x | `cards/dead_weight.png` | 320x240 | **Dead Weight.** A blunt iron weight at the end of a slack chain, swung on its own momentum. An attack card: Deal 4 damage. Resolve the card you played before it again. |
 | x | `cards/decapitate.png` | 320x240 | **Decapitate.** An axe at the top of its arc above a bowed neck, the stroke not yet begun. An attack card: Deal 26 damage. Exhaust. |
 | x | `cards/deep_breath.png` | 320x240 | **Deep Breath.** A helm lifted off and a long breath taken in cold air. A heal card: Heal 8. Draw 1. |
 | x | `cards/double_down.png` | 320x240 | **Double Down.** A second shield brought up behind the first, the two rims locking. A block card: Double your Block. |
@@ -206,22 +206,22 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/forge_strike.png` | 320x240 | **Forge Strike.** A hammer coming down on a blade laid across the anvil, sparks going up. An attack card: Deal 6 damage. Gain 1 Strength. |
 | x | `cards/gash.png` | 320x240 | **Gash.** One long clean opening cut across dark leather armour, the edges parting. An attack card: Deal 9 damage. |
 | x | `cards/give_ground.png` | 320x240 | **Give Ground.** A shield-bearer stepping back one pace with the shield never dropping. A block card: Gain 6 Block. Retain. |
-| x | `cards/grinding_down.png` | 320x240 | **Grinding Down.** A whetstone worked along an edge that has been worked too many times already. An attack card: Deal 10 damage. Permanently +4 this combat. |
+| x | `cards/grinding_down.png` | 320x240 | **Grinding Down.** A whetstone worked along an edge that has been worked too many times already. An attack card: Deal 3 damage, +4 for each card you played before it this turn. |
 | x | `cards/guard.png` | 320x240 | **Guard.** A high guard held with the shield up under the eyes, nothing showing above it. A block card: Gain 4 Block, +1 per other card in your hand. |
 | x | `cards/hack.png` | 320x240 | **Hack.** A heavy chopping blade buried in a shield rim and being wrenched free. An attack card: Deal 6 damage. |
 | x | `cards/heavy_swing.png` | 320x240 | **Heavy Swing.** A maul at the far end of a full-body swing, the wielder's heels off the ground. An attack card: Deal 8 damage plus 3 per Strength. |
 | x | `cards/hex.png` | 320x240 | **Hex.** A hooked sign cut into the air above a group of dark shapes, glowing faintly. A vulnerable card: Apply 2 Vulnerable to ALL enemies. |
 | x | `cards/in_and_out.png` | 320x240 | **In and Out.** A short blade going in and the same figure already turning away from the wound. An attack card: Deal 4 damage, gain 3 Block. From your second card, +4 to both. |
-| x | `cards/iron_lung.png` | 320x240 | **Iron Lung.** A deep breath drawn behind a closed visor, the chestplate expanding against its straps. A block card: Heal 15. Gain 8 Block. |
+| x | `cards/iron_lung.png` | 320x240 | **Iron Lung.** A deep breath drawn behind a closed visor, the chestplate expanding against its straps. A heal card: Heal 6. The next card you play this turn costs 2 less. Exhaust. |
 | x | `cards/iron_will.png` | 320x240 | **Iron Will.** An iron collar with the spikes pointing inward and the wearer unmoved. A thorns card: Gain 5 Block and 2 Thorns. Retain. |
 | x | `cards/jab.png` | 320x240 | **Jab.** A short straight punch of a blade, thrown without stepping in. An attack card: Deal 4 damage. +3 if the target is debuffed. |
 | x | `cards/keep_hitting.png` | 320x240 | **Keep Hitting.** The same fist landing over and over on the same spot, the dent deepening. An attack multi card: Deal 3 damage twice. Grows +1 per play. |
-| x | `cards/kelp_snare.png` | 320x240 | **Kelp Snare.** Wet black kelp wound around an ankle and pulling tight. A block card: Apply 2 Weak. Gain 4 Block. |
+| x | `cards/kelp_snare.png` | 320x240 | **Kelp Snare.** Wet black kelp wound around an ankle and pulling tight. An attack card: Deal 3 damage, +2 for each stack of Vulnerable or Weak on the target. Apply 1 Weak. |
 | x | `cards/kick.png` | 320x240 | **Kick.** A boot driving a jammed door open, light coming through the gap. A draw card: Gain 1 Energy. Draw 1. Exhaust. |
 | x | `cards/last_stand.png` | 320x240 | **Last Stand.** One shield-bearer alone with the shield still up, everything else in the frame broken. A block card: Double your Block. Gain 2 Dexterity. |
-| x | `cards/last_word.png` | 320x240 | **Last Word.** A duelling blade thrust clean through, hilt-deep, the arm behind it locked straight. An attack card: Deal 20 damage. Exhaust. |
+| x | `cards/last_word.png` | 320x240 | **Last Word.** A duelling blade thrust clean through, hilt-deep, the arm behind it locked straight. An attack card: Deal 11 damage, +16 if it empties your hand. |
 | x | `cards/leech.png` | 320x240 | **Leech.** A dark blade drinking, one thin line of red climbing the steel against gravity. An attack card: Deal 6 damage. Heal for the damage dealt. |
-| x | `cards/lifedrain.png` | 320x240 | **Lifedrain.** A gauntleted hand closed on a ribcage with light draining out between the fingers. An attack card: Deal 8 damage. Heal 5. |
+| x | `cards/lifedrain.png` | 320x240 | **Lifedrain.** A gauntleted hand closed on a ribcage with light draining out between the fingers. An attack card: Deal 4 damage, +3 for each card exhausted this combat. Heal for the damage dealt. |
 | x | `cards/light_on_it.png` | 320x240 | **Light on It.** A boot resting on a stretched rope, the rope barely dipping. A dexterity card: Gain 3 Dexterity (permanent). |
 | x | `cards/massacre.png` | 320x240 | **Massacre.** A wide killing arc that has already finished, the shapes on both sides falling away. An attack aoe card: Deal 14 damage to ALL enemies. Exhaust. |
 | x | `cards/molten_core.png` | 320x240 | **Molten Core.** A hollow chest cavity glowing furnace-orange behind a cage of iron ribs. A thorns card: Deal 2 damage per Thorns you have. Gain 3 Thorns. |
@@ -229,20 +229,20 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/noxious_cloud.png` | 320x240 | **Noxious Cloud.** A low yellow-green fog rolling across flagstones at knee height. A poison card: Apply 3 Poison and 1 Weak to ALL enemies. |
 | x | `cards/old_debt.png` | 320x240 | **Old Debt.** A tally stick snapped in two, its notched half driven into a table like a blade. An attack card: Pay 5 HP. Deal 16 damage. |
 | x | `cards/pandemic.png` | 320x240 | **Pandemic.** A dead field of stalks all bent the same way, every one of them blackened. A poison card: Apply 8 Poison to ALL enemies. Exhaust. |
-| x | `cards/plague_bearer.png` | 320x240 | **Plague Bearer.** A hooded figure walking away, leaving a trail of dying ground behind it. A poison card: Apply 4 Poison to ALL enemies. Exhaust. |
+| x | `cards/plague_bearer.png` | 320x240 | **Plague Bearer.** A hooded figure walking away, leaving a trail of dying ground behind it. A poison card: Apply 3 Poison to ALL enemies. Resolve the card you played before it again. |
 | x | `cards/plague_heart.png` | 320x240 | **Plague Heart.** A swollen black heart in a nest of veins, pulsing and feeding the veins. A poison card: Apply 8 Poison to ALL enemies. Gain 4 Strength. Exhaust. |
-| x | `cards/pressure.png` | 320x240 | **Pressure.** A blade held against a breastplate and leaned on, the metal beginning to give. An attack multi card: Deal 6 damage 3 times. |
+| x | `cards/pressure.png` | 320x240 | **Pressure.** A blade held against a breastplate and leaned on, the metal beginning to give. An attack card: Deal 4 damage, +3 for each stack of Vulnerable or Weak on the target. |
 | x | `cards/put_the_fear.png` | 320x240 | **Put the Fear.** A helm turned slowly toward the viewer and a figure backing out of frame. A weak card: Apply 3 Weak. |
-| x | `cards/rally.png` | 320x240 | **Rally.** A hand pulling another fighter back onto their feet by the wrist. A block card: Gain 6 Block. Draw 2. |
+| x | `cards/rally.png` | 320x240 | **Rally.** A hand pulling another fighter back onto their feet by the wrist. A block card: Gain 5 Block, +4 for each card you played before it this turn. |
 | x | `cards/ram.png` | 320x240 | **Ram.** A shield turned edge-on and driven forward as the weapon itself. An attack card: Deal damage equal to your Block. |
-| x | `cards/read_ahead.png` | 320x240 | **Read Ahead.** A finger held on a line partway down a page already turning. A draw card: Draw 2. Exhaust. |
+| x | `cards/read_ahead.png` | 320x240 | **Read Ahead.** A finger held on a line partway down a page already turning. A draw card: Draw 1. The next card you play this turn costs 1 less. Exhaust. |
 | x | `cards/reap.png` | 320x240 | **Reap.** A long scythe drawn level through a standing crop of dark shapes. An attack aoe card: Deal 7 damage to ALL enemies. |
-| x | `cards/red_mind.png` | 320x240 | **Red Mind.** A helm with red light behind both eye slits and nothing human in it. A strength card: Gain 5 Strength. |
+| x | `cards/red_mind.png` | 320x240 | **Red Mind.** A helm with red light behind both eye slits and nothing human in it. An attack card: Deal 8 damage, +5 for each card exhausted this combat. |
 | x | `cards/riposte.png` | 320x240 | **Riposte.** A blade turned aside onto a spiked bracer, the attacker's hand torn on it. A thorns card: Deal 4 damage, +1 per Thorns. Gain 3 Thorns. |
 | x | `cards/riptide.png` | 320x240 | **Riptide.** A backwash of dark water dragging several figures off their feet at once. An attack aoe card: Deal 4 damage twice to ALL enemies. If it kills, gain 1 Energy. |
 | x | `cards/rot_touch.png` | 320x240 | **Rot Touch.** A bare fingertip pressed to skin, the grey spreading out from the contact. A poison card: Deal 5 damage. Apply 2 Poison. |
 | x | `cards/salt_the_wound.png` | 320x240 | **Salt the Wound.** A fistful of coarse grey salt scattered across an open cut. An attack card: Deal 7 damage. Apply 2 Vulnerable. |
-| x | `cards/sanguine_feast.png` | 320x240 | **Sanguine Feast.** A goblet of cut stone brimming and running over, held in an armoured fist. An attack card: Deal 10 damage. Heal for the damage dealt. |
+| x | `cards/sanguine_feast.png` | 320x240 | **Sanguine Feast.** A goblet of cut stone brimming and running over, held in an armoured fist. An attack card: Spend all your remaining Energy. Deal 4 damage, +6 per Energy spent. Heal for the damage dealt. |
 | x | `cards/scrape.png` | 320x240 | **Scrape.** A rusted nail drawn across a forearm, the scratch already going dark at its edges. A poison card: Deal 2 damage, +1 per Poison on the target. Apply 1 Poison. |
 | x | `cards/second_heart.png` | 320x240 | **Second Heart.** A second heart beating in an opened ribcage, lit from within. A heal card: Heal 30. Gain 1 Energy. Exhaust. |
 | x | `cards/see_it_coming.png` | 320x240 | **See It Coming.** A blow seen an instant early, the eye wide and the head already moving. A draw card: Draw 3. Exhaust. |
@@ -258,11 +258,11 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/spiked_guard.png` | 320x240 | **Spiked Guard.** A shield with a ring of spikes worked through its face, one already bloodied. A thorns card: Gain 7 Block and 2 Thorns. |
 | x | `cards/split.png` | 320x240 | **Split.** A blistered pod bursting and throwing wet spores out both sides. A poison card: Deal 4 damage, +1 per Poison on the target. Apply 3 Poison. |
 | x | `cards/spore_burst.png` | 320x240 | **Spore Burst.** A puffball crushed underfoot, its cloud going up around the boot. A poison card: Apply 2 Poison to ALL enemies. |
-| x | `cards/stave_in.png` | 320x240 | **Stave In.** A war pick punching a hole clean through a breastplate and staying there. An attack card: Deal 10 damage. Apply 2 Vulnerable. |
+| x | `cards/stave_in.png` | 320x240 | **Stave In.** A war pick punching a hole clean through a breastplate and staying there. An attack card: Spend all your remaining Energy. Deal 3 damage, +6 for each Energy spent. |
 | x | `cards/stitch.png` | 320x240 | **Stitch.** A curved needle drawing catgut through the lips of a cut. A heal card: Heal 12. |
 | x | `cards/stone_skin.png` | 320x240 | **Stone Skin.** A forearm turning to dressed grey stone, the joins showing at the knuckles. A dexterity card: Gain 5 Dexterity. |
 | x | `cards/stumble.png` | 320x240 | **Stumble.** A foot catching on a raised flagstone, the body already past its balance. A vulnerable card: Apply 1 Vulnerable. |
-| x | `cards/survival_instinct.png` | 320x240 | **Survival Instinct.** A forearm thrown up over the face before the mind has caught up. A block card: Gain 10 Block. |
+| x | `cards/survival_instinct.png` | 320x240 | **Survival Instinct.** A forearm thrown up over the face before the mind has caught up. A block card: Gain 6 Block, +11 if it empties your hand. |
 | x | `cards/sword_dance.png` | 320x240 | **Sword Dance.** One figure mid-turn with three blade arcs closing around it like a shell. An attack multi card: Deal 3 damage 3 times. If it kills, gain 1 Energy. |
 | x | `cards/take_it.png` | 320x240 | **Take It.** A blow landing square on a braced shoulder, the bearer not moving. A block card: Gain 7 Block. Draw 1. |
 | x | `cards/thorn_crown.png` | 320x240 | **Thorn Crown.** A circlet of black iron thorns, the points turned in toward the wearer. A thorns card: Gain 14 Thorns. Exhaust. |
@@ -270,8 +270,8 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/two_quick.png` | 320x240 | **Two Quick.** Two short thrusts thrown so fast their arcs overlap into one shape. An attack multi card: Deal 6 damage twice. |
 | x | `cards/undying.png` | 320x240 | **Undying.** A skeletal hand closing on a sword grip and pulling itself upright. A strength card: Gain 4 Strength, 4 Dexterity. Exhaust. |
 | x | `cards/venom_fang.png` | 320x240 | **Venom Fang.** One hollow fang, a single drop hanging off the point of it. A poison card: Apply 5 Poison. |
-| x | `cards/virulence.png` | 320x240 | **Virulence.** Black veins running visibly outward under skin, faster than they should. A poison card: Apply 7 Poison. |
-| x | `cards/whetted_edge.png` | 320x240 | **Whetted Edge.** An edge held up to the light, one bright hairline running its whole length. An attack card: Deal 7 damage. Permanently +2 this combat. |
+| x | `cards/virulence.png` | 320x240 | **Virulence.** Black veins running visibly outward under skin, faster than they should. An attack aoe card: Deal 6 damage to ALL enemies, +2 for each Poison on your target. |
+| x | `cards/whetted_edge.png` | 320x240 | **Whetted Edge.** An edge held up to the light, one bright hairline running its whole length. An attack card: Deal 5 damage. The next Attack you play this turn deals +6. |
 | x | `cards/wither.png` | 320x240 | **Wither.** A hand shrivelling around its own grip, the weapon loosening in it. A vulnerable card: Apply 2 Weak and 2 Vulnerable. |
 | x | `cards/work_up.png` | 320x240 | **Work Up.** A back and shoulders swelling under a leather harness, the straps going tight. A strength card: Gain 3 Strength (permanent). |
 

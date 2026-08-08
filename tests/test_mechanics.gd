@@ -196,16 +196,10 @@ func _init() -> void:
 	if _card("reap").power_value() <= _card("execute").power_value() * 0.5:
 		fails += 1; print("FAIL AoE priced too low")
 	# exhaust is a real cost, so an exhausting card must price BELOW its raw damage
-	var fin := _card("last_word")
+	var fin := _card("decapitate")
 	if fin.power_value() >= float(fin.eff_damage()):
 		fails += 1; print("FAIL exhaust discount not applied: %.1f vs %d dmg" % [
 			fin.power_value(), fin.eff_damage()])
-
-	if fails == 0:
-		print("MECHANICS TEST: PASS (multi-hit, AoE, exhaust, retain, hand cap, poison, thorns, block-scaling, grows, heal, energy)")
-	else:
-		print("MECHANICS TEST: FAIL (%d)" % fails)
-	quit()
 
 	# --- cards that read the fight (D66) ------------------------------------------
 	#
@@ -249,28 +243,33 @@ func _init() -> void:
 		fails += 1; print("FAIL shiv is worth the same as the first card of a turn")
 
 	# swarm: a kill pays an energy back
+	#
+	# Sword Dance rather than Cull, which carried this mechanic until D204 turned it
+	# into the exhaust build's enabler. Any energy_on_kill card proves the ENGINE rule;
+	# pointing at one that has since been given a different identity is how a green
+	# suite ends up asserting nothing, which is the note on `bandage` above.
 	var ek := _fight(cond)
 	ek.enemies[0].max_hp = 6
 	ek.enemies[0].hp = 6
-	var cull := _card("cull")
+	var swarm := _card("sword_dance")
 	ek.energy = 3
-	ek.hand.append(cull)
+	ek.hand.append(swarm)
 	var e_before: int = ek.energy
-	ek.play_card(cull)
+	ek.play_card(swarm)
 	if not ek.enemies[0].is_dead():
-		print("  (info: cull did not kill a 6hp enemy, skipping the refund check)")
-	elif ek.energy != e_before - cull.cost + 1:
+		print("  (info: sword_dance did not kill a 6hp enemy, skipping the refund check)")
+	elif ek.energy != e_before - swarm.cost + 1:
 		fails += 1
-		print("FAIL cull killed and did not refund energy: %d -> %d (cost %d)" % [
-			e_before, ek.energy, cull.cost])
+		print("FAIL sword_dance killed and did not refund energy: %d -> %d (cost %d)" % [
+			e_before, ek.energy, swarm.cost])
 	# ...and NOT when nothing dies
 	var ek2 := _fight(cond)
-	var cull2 := _card("cull")
+	var swarm2 := _card("sword_dance")
 	ek2.energy = 3
-	ek2.hand.append(cull2)
-	ek2.play_card(cull2)
-	if ek2.energy != 3 - cull2.cost:
-		fails += 1; print("FAIL cull refunded energy without a kill")
+	ek2.hand.append(swarm2)
+	ek2.play_card(swarm2)
+	if ek2.energy != 3 - swarm2.cost:
+		fails += 1; print("FAIL sword_dance refunded energy without a kill")
 
 	# fortress: a fuller hand is a bigger shield
 	var eh := _fight(cond)
@@ -282,17 +281,212 @@ func _init() -> void:
 	if eh.card_block(gd) <= alone:
 		fails += 1; print("FAIL guard ignores the cards in your hand")
 
+	# --- cards that read the OTHER CARDS (D204) -----------------------------------
+	#
+	# Same two obligations as the D66 block above — move the number, and be priced —
+	# plus a third that only this batch has: the face and the resolution must agree.
+	# Every one of these mechanics is a count of something the player can see, so a
+	# card that shows one number and delivers another is not a rounding error, it is
+	# the mechanic failing at the only job it has.
+
+	# enabler: the swing AFTER the empowering one is the one that gets it
+	var eN := _fight(cond)
+	var edge := _card("whetted_edge")
+	var follow := _card("gash")
+	var solo: int = eN.card_damage(follow)
+	eN.energy = 3
+	eN.hand.append(edge)
+	eN.hand.append(follow)
+	var edge_face: int = eN.card_damage(edge)
+	eN.play_card(edge)
+	if eN.next_attack_bonus != edge.empower_next:
+		fails += 1; print("FAIL whetted_edge did not arm the next attack: %d" % eN.next_attack_bonus)
+	if eN.card_damage(follow) != solo + edge.empower_next:
+		fails += 1; print("FAIL the empowered follow-up did not get the bonus: %d vs %d" % [
+			eN.card_damage(follow), solo + edge.empower_next])
+	if edge_face != eN.player.outgoing_damage(edge.eff_damage()):
+		fails += 1; print("FAIL whetted_edge empowered ITSELF — %d" % edge_face)
+	eN.play_card(follow)
+	if eN.next_attack_bonus != 0:
+		fails += 1; print("FAIL the empower bonus was not spent by the attack that used it")
+
+	# enabler: a discount is real money at the place affordability is checked
+	var eD := _fight(cond)
+	var prep := _card("read_ahead")
+	var dear := _card("brace")
+	eD.energy = 1
+	eD.hand.append(prep)
+	eD.hand.append(dear)
+	if eD.can_play(dear):
+		fails += 1; print("FAIL a 2-cost card was affordable on 1 energy before the discount")
+	eD.play_card(prep)
+	if eD.play_cost(dear) != dear.eff_cost() - prep.discount_next:
+		fails += 1; print("FAIL the discount did not reach play_cost: %d" % eD.play_cost(dear))
+	if not eD.can_play(dear):
+		fails += 1; print("FAIL the discount did not make the card affordable")
+	var pool: int = eD.energy
+	eD.play_card(dear)
+	if eD.energy != pool - (dear.eff_cost() - prep.discount_next):
+		fails += 1; print("FAIL the discount was quoted but not charged: pool %d -> %d" % [
+			pool, eD.energy])
+	if eD.next_card_discount != 0:
+		fails += 1; print("FAIL the discount survived the card that spent it")
+
+	# payoff: the fourth card of a turn is worth more than the first, and the FACE says so
+	var eP := _fight(cond)
+	var grind := _card("grinding_down")
+	eP.hand.append(grind)
+	var turn_open: int = eP.card_damage(grind)
+	eP.cards_played_this_turn = 3
+	var fourth: int = eP.card_damage(grind)
+	if fourth != turn_open + grind.per_card_played * 3:
+		fails += 1; print("FAIL grinding_down does not read the turn: %d then %d" % [turn_open, fourth])
+	# ...and the block half of the same axis, on a card that pays in Block
+	var eB := _fight(cond)
+	var rly := _card("rally")
+	eB.hand.append(rly)
+	var b_first: int = eB.card_block(rly)
+	eB.cards_played_this_turn = 2
+	if eB.card_block(rly) != b_first + rly.per_card_played * 2:
+		fails += 1; print("FAIL rally does not read the turn")
+	# a skill must not acquire a damage roll from a shared axis (see card_base_damage)
+	if eB.card_base_damage(rly) != 0:
+		fails += 1; print("FAIL rally deals %d damage it does not have" % eB.card_base_damage(rly))
+
+	# payoff: scales with the STACK, where bonus_vs_debuffed only sees the flag
+	var eV := _fight(cond)
+	var press := _card("pressure")
+	var undebuffed: int = eV.card_damage(press)
+	eV.enemies[0].vulnerable = 2
+	eV.enemies[0].weak = 1
+	if eV.card_damage(press) != undebuffed + press.damage_per_debuff * 3:
+		fails += 1; print("FAIL pressure does not count the stacks")
+
+	# payoff: the exhaust tally, and the projection that keeps Cull's face honest
+	var eX := _fight(cond)
+	var burn := _card("cull")
+	eX.hand = [burn, _card("hack"), _card("hack"), _card("hack")]
+	var promised: int = eX.card_block(burn)
+	if promised <= eX.player.outgoing_block(burn.eff_block()):
+		fails += 1; print("FAIL cull's face does not count the hand it is about to burn")
+	eX.energy = 3
+	eX.play_card(burn)
+	if eX.exhausted_this_combat != 3:
+		fails += 1; print("FAIL cull burned %d cards, expected 3" % eX.exhausted_this_combat)
+	if not eX.hand.is_empty():
+		fails += 1; print("FAIL cull left %d cards in hand" % eX.hand.size())
+	if eX.player.block != promised:
+		fails += 1; print("FAIL cull promised %d Block and delivered %d" % [
+			promised, eX.player.block])
+	# ...and a later payoff collects the same tally
+	var drain := _card("lifedrain")
+	eX.hand.append(drain)
+	if eX.card_damage(drain) <= eX.player.outgoing_damage(drain.eff_damage()):
+		fails += 1; print("FAIL lifedrain ignores the cards already exhausted")
+
+	# payoff: X-cost spends the pool, and quotes what it is about to spend
+	var eE := _fight(cond)
+	var xc := _card("stave_in")
+	eE.energy = 3
+	eE.hand.append(xc)
+	var quoted: int = eE.card_damage(xc)
+	if quoted != eE.player.outgoing_damage(xc.eff_damage() + xc.damage_per_energy * 2):
+		fails += 1; print("FAIL stave_in quoted %d, which is not 3 energy less its cost" % quoted)
+	var xhp: int = eE.enemies[0].hp
+	eE.play_card(xc)
+	if eE.energy != 0:
+		fails += 1; print("FAIL stave_in left %d energy unspent" % eE.energy)
+	if xhp - eE.enemies[0].hp != quoted:
+		fails += 1; print("FAIL stave_in quoted %d and dealt %d" % [quoted, xhp - eE.enemies[0].hp])
+
+	# payoff: the last card in your hand
+	var eH := _fight(cond)
+	var lastw := _card("last_word")
+	eH.hand = [lastw, _card("hack")]
+	var held: int = eH.card_damage(lastw)
+	eH.hand = [lastw]
+	if eH.card_damage(lastw) != held + lastw.bonus_if_hand_empty:
+		fails += 1; print("FAIL last_word does not know it is the last card")
+
+	# payoff: thorns already worn, converted to Block
+	var eT := _fight(cond)
+	var bram := _card("bramble_armour")
+	eT.hand.append(bram)
+	var bare_blk: int = eT.card_block(bram)
+	eT.player.thorns = 6
+	if eT.card_block(bram) <= bare_blk:
+		fails += 1; print("FAIL bramble_armour ignores the Thorns it is wearing")
+
+	# payoff: the echo resolves the previous card, and cannot chain
+	var eR := _fight(cond)
+	var setup := _card("gash")
+	var echo := _card("dead_weight")
+	eR.energy = 3
+	eR.hand = [setup, echo]
+	eR.play_card(setup)
+	var mid: int = eR.enemies[0].hp
+	eR.energy = 3
+	eR.play_card(echo)
+	var swung: int = mid - eR.enemies[0].hp
+	var expect: int = eR.player.outgoing_damage(echo.eff_damage()) \
+		+ eR.player.outgoing_damage(setup.eff_damage())
+	if swung != expect:
+		fails += 1; print("FAIL dead_weight dealt %d, expected its own hit plus the echo (%d)" % [
+			swung, expect])
+	# an echo with nothing behind it is the card alone, not a crash
+	var eR2 := _fight(cond)
+	var lone := _card("dead_weight")
+	eR2.energy = 3
+	eR2.hand = [lone]
+	if eR2.play_card(lone) == "":
+		fails += 1; print("FAIL dead_weight was unplayable as the first card of a turn")
+
+	# the per-turn carriers expire with the turn, like Block
+	var eW := _fight(cond)
+	eW.next_attack_bonus = 9
+	eW.next_card_discount = 2
+	eW.previous_card = _card("hack")
+	eW.end_turn()
+	if eW.next_attack_bonus != 0 or eW.next_card_discount != 0 or eW.previous_card != null:
+		fails += 1; print("FAIL the combo carriers survived the turn they belonged to")
+
+	# An `exhaust_hand` card must not also draw: `play_card` burns the hand AFTER
+	# `_resolve`, so the cards it drew would go straight into the fire. Asserted rather
+	# than commented, because the card that breaks it reads perfectly well on paper.
+	for id in load("res://scripts/meta_state.gd").new().CATALOG:
+		var c := _card(id)
+		if c.exhaust_hand and c.eff_draw() > 0:
+			fails += 1
+			print("FAIL %s both burns the hand and draws — the draw is burned with it" % id)
+
 	# ...and every one of them must cost the deck something in priced power
 	for pair in [["split", "damage_per_poison"], ["riposte", "damage_per_thorns"],
 			["shoulder", "bonus_vs_debuffed"], ["nick", "combo_bonus"],
-			["cull", "energy_on_kill"], ["guard", "block_per_card_in_hand"]]:
+			["sword_dance", "energy_on_kill"], ["guard", "block_per_card_in_hand"],
+			["whetted_edge", "empower_next"], ["read_ahead", "discount_next"],
+			["grinding_down", "per_card_played"], ["rally", "per_card_played"],
+			["pressure", "damage_per_debuff"], ["red_mind", "per_exhausted"],
+			["stave_in", "damage_per_energy"], ["last_word", "bonus_if_hand_empty"],
+			["bramble_armour", "block_per_thorns"], ["plague_bearer", "repeat_previous"]]:
 		var real := _card(String(pair[0]))
 		var stripped := _card(String(pair[0]))
-		stripped.set(String(pair[1]), 0 if String(pair[1]) != "energy_on_kill" else false)
+		stripped.set(String(pair[1]), false if typeof(real.get(String(pair[1]))) == TYPE_BOOL else 0)
 		if real.power_value() <= stripped.power_value():
 			fails += 1
 			print("FAIL %s is not priced for %s — enemy scaling will fall behind it" % [
 				pair[0], pair[1]])
+
+	# LAST, and that is a fix rather than a style. The summary and the `quit()` used to
+	# sit two thirds of the way up this function, above the D66 block — and `quit()` in a
+	# SceneTree only REQUESTS a quit, so everything below it ran, printed its FAIL lines
+	# into a report that had already declared PASS, and was counted by nobody. Every
+	# check has to be above the line that reports the count.
+	if fails == 0:
+		print("MECHANICS TEST: PASS (multi-hit, AoE, exhaust, retain, hand cap, poison, "
+			+ "thorns, block-scaling, grows, heal, energy, and the D204 combo axes)")
+	else:
+		print("MECHANICS TEST: FAIL (%d)" % fails)
+	quit()
 
 func _card(id: String) -> CardData:
 	return (load(DIR + id + ".tres") as CardData).duplicate()

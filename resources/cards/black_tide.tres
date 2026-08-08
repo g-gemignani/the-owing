@@ -6,10 +6,11 @@
 script = ExtResource("1")
 id = "black_tide"
 name = "Black Tide"
-description = "Deal 9 damage to ALL enemies."
+description = "Deal 5 damage to ALL enemies, +4 for each card you played before it this turn."
+per_card_played = 4
 cost = 2
 type = 0
 rarity = 1
 level = 1
-damage = 9
+damage = 5
 aoe = true

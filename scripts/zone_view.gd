@@ -49,19 +49,39 @@ const POOL_WIDTH := 290.0
 const ICON := 26.0
 const MISSING_DIM := 0.34
 
+## Held so the screen can rebuild itself in place. Taking a debt spends gold and changes what
+## every OTHER row on this screen may offer — one debt at a time — so the whole list has to be
+## redrawn, not just the row that was pressed (D205).
+var zone: ZoneData = null
+var purse: Label = null
+
 func _ready() -> void:
 	var z := Balance.zone(GameState.current_zone) if GameState.current_zone != "" else null
 	if z == null:
 		call_deferred("_back")
 		return
+	zone = z
 	var col := UI.screen(self, z.name, "", "", false, z.id)
 	UI.label(col, z.description)
-	UI.label(col, "Gold %d    Relics %d    Cleared %d/%d" % [
-		MetaState.gold, MetaState.relics.size(),
-		MetaState.clear_count(), Balance.DUNGEONS.size()])
+	purse = UI.label(col, "")
 	list = UI.scroll(col)
 	UI.exit_button(col, "Back to the world", func(): _back())
-	_fill(z)
+	_refresh()
+
+## Redraw the purse and every row. Cheap enough to do wholesale: this screen holds one region's
+## dungeons, and the alternative — patching the pressed row and remembering which other rows a
+## purchase invalidated — is the kind of bookkeeping that goes stale the first time a fifth
+## state is added to `_debt_offer`.
+func _refresh() -> void:
+	if zone == null:
+		return
+	if purse != null:
+		purse.text = "Gold %d    Relics %d    Cleared %d/%d" % [
+			MetaState.gold, MetaState.relics.size(),
+			MetaState.clear_count(), Balance.DUNGEONS.size()]
+	for c in list.get_children():
+		c.queue_free()
+	_fill(zone)
 
 func _fill(z: ZoneData) -> void:
 	for did in z.dungeons:
@@ -109,18 +129,107 @@ func _fill(z: ZoneData) -> void:
 		# The back door, when somebody else's clear in this region has opened one (D190). A
 		# second button rather than a toggle, because it is a different run: the same dungeon
 		# one floor shorter, with everything it owed you packed into what is left.
-		if unlocked and Balance.deep_entry_open(d.id, MetaState.cleared_dungeons):
-			UI.button(box, "    ...or in by the back door: %d floors, the same reckoning" % [
-				maxi(Balance.ISO_FLOORS_MIN,
-					Balance.iso_floors_for(d.difficulty) - Balance.DEEP_ENTRY_FLOORS)],
-				func(): _enter(d.id, true), 34.0)
+		if unlocked:
+			_back_door(box, d)
+		if unlocked:
+			_debt_offer(box, d)
 		_cards_here(box, d)
 		var gap := Control.new()
 		gap.custom_minimum_size = Vector2(0, UITheme.px(10))
 		box.add_child(gap)
 	_region_pool(z)
 
-## What this door is worth to a collection: how much of its pool you already hold,
+## The second way in, when a neighbour's clear has opened one (D190, reworded in D206).
+##
+## The old line was `...or in by the back door: 5 floors, the same reckoning`, and it failed in
+## three ways at once — all of them worst at the exact moment the door appears, which is the
+## visit after you beat something.
+##
+##   It never said WHY it was there. The button turns up on a dungeon you have not touched,
+##   because you beat a different one. Nothing on it connected the two, so a door opening
+##   somewhere you were not looking read as the screen changing its mind.
+##
+##   "The same reckoning" is opaque. It is trying to say the thing that actually matters — the
+##   whole budget is still in there, packed into fewer floors, so this is SHORTER AND DENSER
+##   rather than easier (D190) — and no player is getting that from the word "reckoning". A
+##   back door that reads as "the easy way in" is a lie about what is behind it.
+##
+##   And `5 floors` is not a comparison. The number only means something beside the number it
+##   replaces, which is the front door's — the same reason `_route_line` prints what you have
+##   as well as what is needed, and the same reason the sealed rows print the remainder rather
+##   than the total.
+##
+## A button and an indented line under it, which is the shape this screen already uses for the
+## aspect and for the debt: the button is what you would be doing, the line is the terms.
+func _back_door(box: VBoxContainer, d: DungeonData) -> void:
+	# One question, asked of the one thing that can answer it. `deep_entry_open` now means "is
+	# this door real" rather than "has a neighbour fallen" — a place already at the floor
+	# minimum cannot be made shorter, so it has no back door to offer however many of its
+	# neighbours are beaten (D206).
+	if not Balance.deep_entry_open(d.id, MetaState.cleared_dungeons):
+		return
+	var opener := Balance.deep_entry_opener(d.id, MetaState.cleared_dungeons)
+	var full: int = Balance.iso_floors_for(d.difficulty)
+	var short: int = Balance.deep_entry_floors(d.id)
+	var od := Balance.dungeon(opener)
+	UI.button(box, "    ...or in by the back door: %d floors instead of %d" % [short, full],
+		func(): _enter(d.id, true), 34.0)
+	var terms := UI.label(box, "        %s falling opened it. Every fight it owed you is still in there, packed into one floor fewer — shorter, not easier." % (
+		od.name if od != null else opener))
+	terms.add_theme_color_override("font_color", Color(0.70, 0.82, 1.0))
+
+## What this place will forgive, and what it wants at the door for it (D205).
+##
+## On the dungeon's own row, which is the entire point of moving it here: the row already names
+## the difficulty, the aspect it is wearing and the boss waiting at the bottom, so a debt is one
+## more thing to weigh about THIS place before pressing it — rather than a contract taken a
+## screen earlier about a dungeon that screen could not show.
+##
+## Four states, and each says the thing a player actually needs at that moment:
+##
+##   owed here      — you are already carrying this one. Say so, and do not offer it again.
+##   owed elsewhere — you are carrying somebody else's. Say WHERE, because the reason this
+##                    door is not offering is standing in another region and is otherwise
+##                    invisible from here.
+##   too dear       — the fee is named and so is the shortfall. A button that is merely
+##                    greyed out is a rule the player has to reverse-engineer (D178's lesson
+##                    about the sealed rows: an alternative you cannot see does not exist).
+##   on offer       — the ask, the fee, and what comes back, in that order.
+func _debt_offer(box: VBoxContainer, d: DungeonData) -> void:
+	var held: Dictionary = MetaState.debt_taken
+	if not held.is_empty():
+		if String(held.get("dungeon", "")) == d.id:
+			var mine := UI.label(box, "    Owed here: %s" % Balance.debt_text(
+				String(held.get("kind", "")), d.id))
+			mine.add_theme_color_override("font_color", Color(0.95, 0.78, 0.45))
+		else:
+			var other := Balance.dungeon(String(held.get("dungeon", "")))
+			var away := UI.label(box, "    You already owe %s. One at a time." % (
+				other.name if other != null else String(held.get("dungeon", ""))))
+			away.add_theme_color_override("font_color", Color(0.70, 0.70, 0.78))
+		return
+	var kind := MetaState.debt_on(d.id)
+	if kind == "":
+		return
+	var fee: int = Balance.debt_stake(kind, d.id)
+	var pays: int = Balance.debt_gold(kind, d.id)
+	var tier: String = Balance.debt_pack_tier(kind)
+	if MetaState.gold < fee:
+		var poor := UI.label(box, "    It would take %d gold at the door for a debt. You have %d." % [
+			fee, MetaState.gold])
+		poor.add_theme_color_override("font_color", Color(0.70, 0.70, 0.78))
+		return
+	# The fee is named on the button and the payout underneath, because they are different
+	# kinds of fact: one is spent the instant you press, and the other is a thing you might
+	# not come back with. Putting them on one line read as a price tag.
+	UI.button(box, "    ...or take on a debt for %d gold: %s" % [
+		fee, Balance.debt_text(kind, d.id)],
+		func(): MetaState.take_debt(d.id); _refresh(), 34.0)
+	var terms := UI.label(box, "        Settle it and you get your %d back, %d gold on top, and a %s pack. Fail and the %d is gone." % [
+		fee, pays, Balance.PACK_TIER_NAME.get(tier, "Worn"), fee])
+	terms.add_theme_color_override("font_color", Color(0.70, 0.82, 1.0))
+
+## What this door is worth to a collection: how much of your pool you already hold,
 ## and the cards that exist nowhere else, drawn out.
 ##
 ## The count covers the WHOLE pool — the region's cards plus this dungeon's own —

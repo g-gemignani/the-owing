@@ -2039,6 +2039,16 @@ func _log(msg: String) -> void:
 func _win() -> void:
 	GameState.combat_state = {}   # the fight is over; nothing to resume
 	GameState.hp = eng.player.hp  # persist HP for the next fight
+	# What the fight did, handed to the floor that asked for it (D203). Here rather than inside
+	# the engine because a fight never reaches into the floor and a floor never reaches into a
+	# fight — the same seam D13 draws for gold and HP, and this is the one door through it.
+	#
+	# On the WIN only. A fight you lost ends the run, and a fight you are still in has not
+	# finished telling the truth about itself: `noattack` and `flawless` are properties of a
+	# completed fight, and folding a partial one in would settle them early.
+	var tv := GameState.traversal as TraversalIso
+	if tv != null:
+		tv.merge_tally(eng.fight_tally())
 	# relic: heal after victory
 	var relic_heal := MetaState.relic_bonus("heal_after_combat")
 	if relic_heal > 0:

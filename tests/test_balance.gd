@@ -161,10 +161,22 @@ func _init() -> void:
 		for needed in [["_power_of(profile)", "the equipped Power"],
 				["dd.boss", "the dungeon's named boss"],
 				["_reward_card(", "cards won during the run"],
-				["Balance.effective_gate(", "the clears a dungeon requires"]]:
+				["Balance.effective_gate(", "the clears a dungeon requires"],
+				# D208. `clears` grew the HP bar and nothing else, so eleven of fifteen
+				# profiles were paid for their clears in hit points and stripped of the
+				# relics the same clears hand out — a boss drops one on every clear and
+				# relics are never lost. Half a progression is a player nobody plays.
+				["_worn_relics(", "the relics a profile's clears have already paid for"]]:
 			if sim.find(String(needed[0])) == -1:
 				fails += 1
 				print("FAIL the simulator does not model %s" % needed[1])
+		# ...and that it is WIRED IN, not merely defined. `_worn_relics` present but
+		# called from nowhere passes the check above while every profile stays as naked
+		# as it was — the same silent pass D180's first guard had, where writing ABOUT
+		# the fix satisfied a check meant to see the code do it.
+		if sim.find("p[\"relics\"] = _worn_relics(") == -1:
+			fails += 1
+			print("FAIL the simulator defines _worn_relics but never dresses a profile in it")
 
 	# --- reward must climb at least as fast as risk ---
 	#

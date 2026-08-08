@@ -190,6 +190,13 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D200** | [A key colour you can find is a key colour you can see](#d200--a-key-colour-you-can-find-is-a-key-colour-you-can-see) |
 | **D201** | [She was sliding, and the second effect had to be a stretch](#d201--she-was-sliding-and-the-second-effect-had-to-be-a-stretch) |
 | **D202** | [The figures were drawn head-on and the floor is not](#d202--the-figures-were-drawn-head-on-and-the-floor-is-not) |
+| **D203** | [The floor was asking without ever being asked, so the errand got a ledger and forty-six things to ask for](#d203--the-floor-was-asking-without-ever-being-asked-so-the-errand-got-a-ledger-and-forty-six-things-to-ask-for) |
+| **D203** | [The report grew the HP bar with the clears and took the relics back off](#d203--the-report-grew-the-hp-bar-with-the-clears-and-took-the-relics-back-off) |
+| **D204** | [Twenty cards were the same card at a different number, so they became the cards that read the other cards](#d204--twenty-cards-were-the-same-card-at-a-different-number-so-they-became-the-cards-that-read-the-other-cards) |
+| **D205** | [A debt was offered on a screen that could not show the place it named](#d205--a-debt-was-offered-on-a-screen-that-could-not-show-the-place-it-named) |
+| **D205** | [The way to see a card was a 28px picture nobody was looking at, and in the shop there was no way at all](#d205--the-way-to-see-a-card-was-a-28px-picture-nobody-was-looking-at-and-in-the-shop-there-was-no-way-at-all) |
+| **D206** | [The back door was unreadable, and on five dungeons it was not a door](#d206--the-back-door-was-unreadable-and-on-five-dungeons-it-was-not-a-door) |
+| **D207** | [The front page was written for the person who wrote it](#d207--the-front-page-was-written-for-the-person-who-wrote-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -12694,3 +12701,778 @@ camera's angle — cannot be had from a plate framed for a different one. `deriv
 stays as the answer for an archetype with a plate and no painting yet, but it now refuses to
 overwrite a painted front without `--force`: replacing one is a regression that looks like
 nothing, since every file is still present and still the right creature.
+
+### D203 — The floor was asking without ever being asked, so the errand got a ledger and forty-six things to ask for
+
+D184 shipped errands and they were correct in the part that is easy to get wrong — the
+conditions all ask for *more*, so none of them pays a player for declining budgeted content —
+and wrong in two parts that are easy to miss. It went back for both.
+
+**The first is where the errand lived.** It appeared in the floor-bookkeeping row of the HUD
+the moment you arrived. Nobody asked, nothing stood anywhere, and there was no moment of
+taking it on: an ordinance that applies because you turned up reads as an achievement toast,
+not as an errand. Every other optional thing on this floor has a body you can see and walk
+toward — a chest, a key, a pocket mouth, a standing stone — and this one had a line of text.
+It is also odd on the game's own terms, since the debt at the overworld is *taken*, from
+somebody, out of three offers.
+
+So the errand is written in a **ledger** the floor stands somewhere, and reading it is what
+starts it. Not called a shrine, though it prefers to stand in one: `SHRINE` is already D188's
+stone and two features one letter apart in the same `match` is the collision that reads fine
+and resolves wrong. A ledger is the better noun anyway — the game is called The Owing, and an
+errand is a small debt written down in the same hand as the large one.
+
+**It prefers the lit room, and that is a deliberate amendment to the dressing rule.** The
+comment above `_dress_floor` earns its keep by being absolute: nothing outside that pass reads
+`props`, `room_role`, `lights` or `landmark`, which is what makes Track A free of balance
+consequence *by construction* rather than by assertion. `_place_ledger` reads `room_role`. What
+keeps the guarantee is that role decides only *which* of several equally-off-route tiles gets
+the ledger — never whether the floor has one, never how far away it is, never what it asks.
+Delete the preference and every number the budget cares about is identical; the floor just
+stands its ledger somewhere less worth walking to. The preference is worth having because a
+shrine is the one role that outbids everything for a light, so the errand is written in the one
+room you can read from the doorway, which is the trick D172 plays with a chest in the light of
+its own tier.
+
+**Measured, the preference lands about a quarter of the time, and that is the ceiling of
+"prefer" rather than a weak implementation.** A sweep puts 4 of 17 errand-bearing floors' ledgers
+in a shrine. The reason is upstream: `shrine` carries a weight of 1 against about 10 in six of
+the seven style tables and does not appear in the seventh at all, so with three to six chambers
+a floor only *has* a shrine about a third of the time. The score bonus is large enough to win
+whenever one exists; there is usually nothing to win.
+
+The obvious fix — have a floor that asks something promote one of its rooms to `shrine` — was
+looked at and **not** taken, because it turns the amendment above from *reading* the dressing
+into *writing* it, and it writes the one field that decides where the lights go. Lights change
+what is visible, visibility feeds `_sight`, and `_sight` is how the hunters find you: that is a
+difficulty change arriving through the decoration, which is exactly the class of thing the
+dressing rule exists to make impossible. It is a reasonable thing to want and it needs the sim
+run at it, not a one-line weight change.
+
+**The second is that three errands is not a feature, it is an example.** Three conditions in a
+three-arm `match` is a shape that works at three and is unwritable at fifty — and worse than
+unwritable, it is the shape where row forty-one falls through to `return false` and nobody
+notices. So the conditions are DATA now: forty-six rows, each naming a counter and how much of
+it, over a forty-two key tally the combat engine and the floor both fill.
+
+#### The tally lives in the engine, and that is the whole of what D124 and D180 cost
+
+The counters could have lived in `combat.gd`, where the fight's result is already being turned
+into gold. They live in `combat_engine.gd`, which is the file that opens by saying it has no UI
+and no autoloads because it drives the headless simulator as well as the scene. A counter kept
+in the scene is a fact about the game `tools/sim_balance.gd` cannot see — which is precisely
+the hole D124 found for draw and D180 found again for relics, twice, two years apart, both
+times as "the instrument cannot play the build it is pricing". It is much cheaper not to dig it.
+
+#### Constraining HOW you win is not paying you to decline the fight
+
+D184's rule is that a condition must never pay for a skip, because a skip is a difficulty
+change no budget assertion can see (D88). Forty-six rows cannot all be additions, so the line
+needed drawing one notch finer.
+
+`noattack` — win a fight without playing an attack — still makes you kill everything on the
+floor. It refuses you the obvious card to do it with, so the fight gets *harder*, which is the
+opposite of the failure mode. What stays banned is any row whose settled state contains **less
+content than its unsettled state**. That is not a slogan, it is the assertion: a walker with
+every counter maxed must settle every row, and a walker with every counter at zero must settle
+none — checked per row, against the catalogue, so a row added tomorrow is checked tomorrow.
+
+#### Thresholds are functions of the floor, or they are lies
+
+Every fight walks now (D197), so how much damage a floor can supply is a fact about how many
+hunters were dealt to it. "Deal 200 damage here" is free on a fat floor and impossible on a
+thin one, and the second is D184's unsettleable-ordinance lie wearing arithmetic. Each row
+names a SUPPLY, the floor measures its own, and the threshold is a fraction of it — which is
+also why the table holds ratios rather than damage figures: they scale with depth for free,
+because the supply does.
+
+Three details the code had to get right and one it got wrong first:
+
+* The threshold is worked out **once, when the floor is built, and kept**. The floor changes
+  while you walk it — lids open, pockets go, hunters die — so a threshold re-derived at the
+  stairs would ask for a fraction of what is *left*. "Open 60% of the lids" measured against
+  the still-shut ones is settled by opening none of them. The first version of `errand_settled`
+  took the supply and recomputed; it takes the number now, and so does `errand_text`, so the
+  words the player reads and the comparison at the stairs cannot drift (D34).
+* The combat supplies are priced at ratio 1.0, not at the run's real deck power, which the
+  floor cannot know at build time. That errs safely: enemy HP rises with `power_ratio`, so a
+  strong deck meets more HP than the estimate and settles sooner. Sizing the other way would
+  be an errand that gets harder because you got better.
+* `peak_*` keys take a maximum, not a sum. "Stand behind 40 block" summed is settled by
+  blocking 8 five times, which is a different and much easier ask wearing the same words.
+* Ground covered is counted per *unwalked tile* and chambers per *distinct room*, because
+  counting turns instead would make "cover half this floor" settleable by pacing between two
+  tiles — and pacing between two tiles is not hypothetical in this file, it is the loop the
+  greedy walker has fallen into twice.
+
+#### What the check found, which is the argument for writing it that way
+
+The errand assertions walk `ERRAND_LIST` and `TALLIES` instead of naming rows. That is the
+D180 lesson applied before the fact rather than after it, and it paid on the first run.
+
+**`steps` was never rolled, and could never have been.** The planner answers "how many tiles
+could this floor have" for rows it cannot size yet, and it answered `ISO_GRID` — which is the
+grid's *edge*, 12. A floor has up to 12×12 of them. Every row wanting more than twelve tiles
+was silently ineligible for ever: no crash, no warning, one row of forty-six simply absent from
+the game. A test that named the rows it knew about would have named the rows that worked.
+
+**Three floors in a full sweep carried an errand with nowhere to read it.** `_place_ledger`
+insisted on `SITE_OFF_PATH`, exactly as a site and the stone do, and a tight floor — short
+corridor spine, stairs near the entrance — offers no tile two steps off its own route. That is
+D184's lie in the shape this change could newly introduce: unsettleable not because the floor
+is thin but because the ask is unreachable. There are two passes now, the second dropping that
+one requirement and keeping every other, and a floor with nowhere at all to stand one keeps no
+errand. A ledger on the route is a slightly worse ledger; no ledger is a broken errand.
+
+**And the coverage sweep was sized for three rows.** Eight sweeps per dungeon was ample at
+three and flaky at forty-six: with N rows sharing every roll, the chance a perfectly eligible
+row is missed by luck alone is `(1 - 1/N)^rolls`, about one run in thirty at 46 rows and 160
+rolls — a suite that fails for no reason one morning a month and teaches everyone to re-run it.
+The sample size is a function of the catalogue size now.
+
+#### What did not change
+
+The reward is still gold, for D184's reasons: a run-deck card would re-open the dilution
+question D80/D81 closed and a relic would be free strength from outside the deck. Failing one
+still costs nothing, so no version of this can end a run badly. About half of floors carry one,
+because an ordinance on every floor is a checklist. And the status line still says what is
+asked and **never whether it is currently met** — an errand that ticks itself green as you walk
+is a thing you are filling in rather than a thing you are doing, which is why the ask is printed
+in exactly two places and neither of them counts.
+
+The encounter budget is untouched. `LEDGER` is negative terrain like `KEY` and `SHRINE`, so it
+is outside `content` and outside `quota`, and it seeds nothing in `_dist_to_unresolved` — the
+greedy walker cannot see it, and the required path is exactly what it was. What a ledger costs
+is turns, which is the floor's real currency, and turns are what the walk to it is priced in.
+
+### D208 — The report grew the HP bar with the clears and took the relics back off
+
+*"The simulator is not taking into account the relics that are basically always there, and
+the game is too easy."* Both halves were right, and they are the same fault.
+
+**What was wrong.** `clears` was doing half a progression. The profiles fed it to
+`Balance.max_hp_for`, so a player with six clears was measured on the 120 HP bar those
+clears bought them — and wearing nothing. But a boss dropped a relic on every one of those
+clears: `combat.gd` calls `MetaState.grant_relic(Tier.BOSS)` unconditionally, and relics are
+permanent, explicitly not lost on death. Elites drop into escrow on top, repeat clears grant
+again. **Relics ≥ clears is a floor, not an estimate**, and the table held eleven rows of
+fifteen that broke it — including three clears with none, five clears with none, six clears
+with none.
+
+So the report paid the player for their progress in hit points and stripped them of
+everything else the same progress hands out. D180 fixed how relics are *applied* and never
+asked how many the profiles *hold*; this is the second half of that question.
+
+**What it was worth.** 42 cells, 150 trials, Reckoning, stairs route, measured in a clean
+worktree at `af37012` so a concurrently-edited tree could not contaminate either side:
+
+```
+mean +17.0 points of run completion   31 cells up, 5 down, max +81, min -6
+
+Early       The Foundry          0% ->  81%   (+81, one relic)
+AoE         The Drowned Market   7% ->  73%   (+66)
+Draw        The Sunken Vault    16% ->  75%   (+59)
+Status      The Foundry         33% ->  87%   (+54)
+Status      The Ember Road      47% ->  99%   (+52)
+Poison      The Fungal Deep     45% ->  95%   (+50)
+Deep        The Sunken Vault    43% ->  92%   (+49)
+```
+
+**The controls say it is the relics and not the noise.** Two rows are exempt and did not
+move: `Triggered relics` +0/+4/+1 and `Between-fights relics` +0/+1. `Starter`, which has
+zero clears and therefore zero relics either way, moved +2/-5/-3 — that is D120's noise
+floor, measured again by accident.
+
+**And it says the game is too easy, which is the answer to the question that was asked.**
+The target line at the bottom of the report reads *~40-60% at matched progression*. After
+the fix the matched cells read 86-100%: Mid clears the Ember Road 100%, Status the Ember
+Road 99%, Poison the Fungal Deep 95%, Deep the Sunken Vault 92%. The tuning was never
+measured against a player who owned anything, so the band it was fitted to described
+somebody who does not exist.
+
+**The nameable culprit underneath.** Watch the ratio against the completion. Status build
+gains three relics: ratio 6.01 -> 6.62, **+10% enemy scaling**, and clears 54 points more of
+the Foundry. Poison gains four: ratio 5.04 -> 5.72, and +50 and +45 points. Relics deliver
+far more than `RELIC_POWER_PER_RATIO = 50.0` charges them for — the pillar violation D124
+found on the lenses, in the opposite direction and across the whole catalogue. **That is a
+retune, and it is deliberately not done here**: the instrument had to be right before
+anything was tuned against it, and tuning inside the same change is how you lose the
+ability to say which half moved the numbers.
+
+**How it is built.** `_worn_relics(clears, held)` tops a profile's hand-picked relics up to
+the count its clears imply, from `_relic_ladder()` — the catalogue drawn once without
+replacement against the boss table's own `Balance.WEIGHTS[Tier.BOSS]`, seeded so two runs
+measure the same player, and taken from the front so a deeper profile's set *contains* a
+shallower one's. Relics accumulate; a ladder that did not nest could hand Endgame a weaker
+set than Late and break the monotonicity `tests/test_balance.gd` already checks. The pool is
+read out of `MetaState.RELIC_CATALOG` through `get_script_constant_map()` rather than
+restated in the tool — MetaState is an autoload and a headless `--script` run has no
+instance of it, but a hand-kept second list is the D89/D180 coverage bug waiting for the
+thirty-first relic.
+
+Applied in a pass over the whole profile list rather than written into each row, because the
+omission this fixes was in eleven rows of fifteen: that is what a rule kept by hand looks
+like once there are enough of them to forget.
+
+**The two exemptions, and why they are announced.** `Triggered relics` and
+`Between-fights relics` are D180's instruments, not players. The first turns on *these seven
+carry no `bonus_max_hp` between them*; the second on *every per-fight column reads like an
+unrelic'd deck and only RUN moves*. One flat relic from the ladder falsifies both sentences,
+and the sentences are the check. They opt out with `"fixed_relics": true` and the report
+prints `[instrument: fixed relic set]` beside them — a row allowed to look like the bug has
+to say that it is deliberate, or the next reader fixes it back.
+
+**The guard, and it was verified by reinstating the defect.** `tests/test_balance.gd` checks
+for `_worn_relics(` alongside the four things the simulator was already required to model,
+and separately that it is **wired in** — `_worn_relics` defined but called from nowhere
+passes the first check while every profile stays as naked as it was. That is exactly the
+silent pass D180's first guard had, where writing *about* the fix satisfied a check meant to
+see the code do it. Replacing the dressing line with `pass` prints
+`FAIL the simulator defines _worn_relics but never dresses a profile in it`.
+
+### D205 — A debt was offered on a screen that could not show the place it named
+
+D191 put three debts at the top of the world list. The world list iterates **zones**. So a
+contract reading "Go to the Drowned Vault and finish it" named a place that was not on the
+screen offering it — the Drowned Vault is a row in `ZoneView`, one screen down, behind a region
+button. You accepted a contract about somewhere you could not see, and then went to find it.
+
+Three things fell out of that, and the third is the one that mattered.
+
+**The same decision was made twice, and one of the two was theatre.** You chose a debt, which
+named a dungeon; then you chose that dungeon. The second choice had already been made by the
+first — or you ignored the debt, in which case the first was decoration. D191 says a debt is
+"the piece that decides which door is next", and the doors were one screen away deciding
+themselves.
+
+**The condition axis was nearly flat.** `settle` ("finish it") and `deep` ("get to the bottom
+of it") are very nearly the same run: you reach the bottom by clearing it. Only `unseen`
+changed how you played. So "which of three offers" was really "which dungeon", asked in the one
+place the dungeons were not.
+
+**And nothing was at stake.** Taking one was free, failing cost nothing, and settling paid gate
+credit and gold for a run you were doing anyway. There was no state of the world in which
+declining was correct, so it was not a choice — it was a button pressed on the way past.
+
+#### The offer belongs on the dungeon row
+
+`zone_view.gd` already builds a row per dungeon carrying its difficulty, the aspect it is
+wearing this time and what that pays (D187), the boss's name and warning (D41), its card pool
+and its back door (D190) — every "what will this run be like" fact the game has. The debt was
+the only one that was not there. It is now, as a button under the row, and taking it is the
+same gesture as deciding to go in.
+
+**What a place offers is DERIVED, not stored.** `Balance.debt_for(dungeon_id, times_cleared)`,
+which is the shape `aspect_for` already uses, and it buys three things at once: the offer is
+stable, so a screen reopened twice is not a slot machine (D22); it changes when you beat the
+place, so the second visit is a different contract; and there is nothing to persist, so
+`debt_offers` and `offer_debts()` are **deleted** rather than migrated. D191 got the
+no-slot-machine property from a "only re-roll when the table is empty" flag, which is state to
+save, load, filter and get wrong. A pure function cannot re-roll.
+
+#### The conditions could widen because D203 had already dug the well
+
+D191's own rule is why there were three: *every condition must be checkable from state the run
+already tracks*. The run tracked three things. It now tracks forty-four, because D203 built a
+tally bus for errands — so `run_tally` is the same counters on the run's clock, a second
+dictionary written by the same two chokepoints rather than a second set of hooks. One place
+decides what "damage dealt" means; two places decide how long the answer lasts.
+
+Sixteen rows now, and the three originals keep their ids because they are in saved games. They
+are rows in the table rather than the surviving arms of a `match` — `cleared` and `depth` are
+injected as pseudo-counters at the moment of judging, so "finish it" compares exactly the way
+"take 400 damage out of it" does.
+
+`GameState.clear_run()` hands `settle_debt` the whole tally instead of three hand-picked facts,
+and that is the change that made the catalogue possible at all: with three arguments, a fourth
+condition means a fourth argument and a fourth thing for the next person to forget.
+
+**Thresholds come from the dungeon's static facts** — difficulty, `iso_floors_for`,
+`standard_encounters`, `enemy_max_hp` — because unlike an errand, a debt is taken *before* the
+dungeon is generated. There is no floor to measure. Priced at ratio 1.0 for the same reason
+errands are, with the additional constraint that the button has to print a number before the
+deck is chosen.
+
+#### The wager, and what it is paid in
+
+Taking one costs gold at the door, returned with the payout on settling and gone on failing.
+That is what makes declining a real option. The fee is gold and not gate currency deliberately:
+a stake paid in progression makes a failed contract cost a door, which turns a wager into a
+punishment for trying, and the gate is D178's spine.
+
+**The payout is a pack and gold, not the gate credit D191 paid**, and this is a genuine change
+to what a debt is *for*: it was one of three routes to a door and it is now a reward for a
+wager. The pack's tier is the row's own `weight` — the same number the fee is multiplied by —
+so "the pack is proportional to the challenge and to what you paid" is true by construction
+rather than by two formulas agreeing, which is the D34 failure with money in it.
+
+`debt_credits` is kept and still counted toward a gate, though nothing adds to it. A player who
+opened a door by settling contracts under the old rules must not find it shut again after an
+update: a migration that takes progression away is worse than one that leaves a vestigial
+number in the file. Save version 11; a v10 debt still in hand carries a stake of zero, because
+it was taken for free and refunding today's fee would invent gold out of a version bump.
+
+#### The rule D184 stated and the catalogue broke on its first day
+
+Writing the debt assertions turned up a bug in the **errand** catalogue shipped in D203. It had
+a `shaken` row — "shake three of them off rather than fight" — reading a counter that measures
+hunters broken away from instead of fought. That pays the player to remove three budgeted
+fights from the floor. It is the exact skip D88 says no budget assertion can see: the encounter
+count stays perfect while the dungeon quietly costs less than its rating claims.
+
+**It passed every check.** The direction assertion — a walker that takes everything settles it,
+a walker that takes nothing does not — is a test for *payouts for turning up*, and shaking off
+five hunters is emphatically doing something. **Declining content and doing nothing are
+different failures, and only one of them is visible in the counters.**
+
+So the property is declared rather than remembered: `TALLY_DECLINES` names the counters that
+measure declined content, both catalogues are asserted against it, and the row is gone. The
+counter stays — it is true, and the floor is entitled to know it. What is forbidden is paying
+for it.
+
+That is the second time in two decisions that writing the check found the bug rather than
+confirming the absence of one, and both times the check that found it was the one that
+discovers its own subjects instead of naming what it knows about.
+
+    16 debts over 44 counters   d1 fee 25, pays 40 + a Worn pack
+
+### D204 — Twenty cards were the same card at a different number, so they became the cards that read the other cards
+
+*"We have too many cards that are similar. Change the similar ones for cards that are used as
+combos to other cards."*
+
+**What was wrong, counted rather than felt.** Group the hundred cards by the set of axes the
+engine actually reads and the duplication is not a matter of taste, it is a table: four cards
+whose entire content is Block (Cover, Sidestep, Brace, Survival Instinct), three that are
+only damage, three that are damage + `grows`, four that are only Strength, six that are AoE
+poison, five that are an attack with healing attached, two pairs that differ by nothing but a
+rarity. Twenty cards whose whole difference from a neighbour was a scalar.
+
+`tests/test_distinct.gd` passed on every one of them, and it was **right to**. Its test is
+domination — A costs no more, is no rarer, is at least as good everywhere and better
+somewhere — and none of these is dominated, because each is bigger than the one below it.
+That is the finding: *"never the wrong pick" is not "worth picking."* A reward screen offering
+Brace, Sidestep and Survival Instinct is three sizes of one decision, and a deckbuilder whose
+cards do not interact is a spreadsheet where the biggest number wins.
+
+**The change.** Those twenty ids keep their name-slot and their painting and get a new rule,
+built out of eleven new mechanics in two shapes — enablers that make the NEXT card better,
+and payoffs that read what you have already spent:
+
+| | enablers | payoffs |
+|---|---|---|
+| the turn | `empower_next`, `discount_next` | `per_card_played`, `bonus_if_hand_empty`, `damage_per_energy`, `repeat_previous` |
+| the fight | `exhaust_hand` | `per_exhausted`, `damage_per_debuff`, `block_per_thorns` |
+
+Lineage where there is one, because none of this is novel: Whetted Edge and Read Ahead are
+Slay the Spire's *Dual Wield* and *Preparation*, Stave In is an X-cost spell, Grinding Down is
+a storm count, Dead Weight is *Double Tap* pointed backwards, Cull is the exhaust archetype's
+engine. What is new here is only that the six D66 axes made a card read the FIGHT and none of
+them could make a card read another CARD.
+
+**Ids kept on purpose, and it is not laziness.** Every card has a painted illustration keyed
+by id (`cards/<id>.png`), the collection on disk is keyed by id, and zone pools and
+dungeon-exclusive lists name ids. Twenty new ids would have meant twenty missing paintings, a
+save migration and four content files edited; twenty rewritten rules on the same twenty
+pictures cost none of that. The constraint it buys is real and was honoured: each new rule had
+to be one the existing painting still reads true for — a whetstone held to the light became
+"the next Attack hits harder", a breastplate overgrown with bramble became "Block per Thorns",
+a weight swung on its own momentum became "do the last thing again". `ART_ASSETS.md`
+regenerates to the same **0 files to provide** it had before.
+
+**Two D50 bugs fell out of writing it, one of them pre-existing.** A card's face must show
+what the engine is about to do, and two things broke that:
+
+* `cards_played_this_turn` is incremented **before** `_resolve` runs, so a card mid-resolution
+  is in the count and the same card being drawn on the face is not. On your third card Nick
+  showed **+0** and then dealt **+5** — the tempo mechanic disagreeing with itself about a
+  count, which is the whole of its content. `cards_played_before()` is now the one place that
+  question is answered, from both moments.
+* `per_exhausted` reads a tally its own card is about to move. `projected_exhausted()` is
+  therefore a projection, and `play_card` does its exhaust bookkeeping *after* `_resolve` so
+  the face and the resolution are computed against the same intact hand.
+
+The card FACE also got terser as a measured constraint, not a preference:
+`tests/CardTextTest.tscn` shrinks a face to fit a 116px card and fails under 14px, and the
+first draft wrote Sanguine Feast down to **11px**. "this turn" is dropped from the face and
+stated in the hover, and `lifesteal` became the keyword *Lifesteal* with a Glossary entry.
+
+## What the simulator said, and the three times it was wrong before it was right
+
+The instrument was not able to measure this, and finding that out took four wrong answers.
+Each one is D124 restated — *an instrument that cannot play the build cannot price it.*
+
+**1. The driver read authored numbers.** Every pass in `sim_balance.gd` read `eff_damage()` /
+`eff_block()` / `eff_cost()`, so it was blind to every conditional mechanic in the game —
+the D66 axes as much as these. Split read as 4 damage into a target holding six Poison;
+Grinding Down read as 3 on the fifth card of a turn; Stave In read as a 1-cost 3-damage
+bargain and then swallowed the pool. It now reads `card_damage` / `card_block` / `play_cost` —
+the same functions the card face reads — so the driver sees what a player sees.
+
+**2. An X-cost card is not a 1-cost card.** `Balance.card_energy_cost()` is new and owns that
+rule, because `deck_cost` and `test_rarity.gd` both divide power by it and drew opposite
+conclusions about Stave In while the reading was inlined in both.
+
+**3. The hand-burner, twice, in both directions.** `exhaust_hand` prices its payoff off the
+hand it destroys, so `_best_by_value` read Cull as the most Block per energy in the hand and
+opened *every* turn with it: normal fights at the Slag Pits ran **8.9 turns at 78%** against
+the Thorns build's 4.5 turns at 100% on the same progression. The first guard — never while
+anything else is affordable — swung the whole way past: with three energy and cheap cards
+something is always affordable, so Cull fired **never** and the row reported an exhaust build
+whose enabler had not run once, at 100/100/97. The rule that works is a comparison: burn only
+if the burner out-values the best thing it would destroy.
+
+**4. The tally had no ceiling.** `per_exhausted` counts a monotonic per-fight number, and
+`power_value()` is one static float, so no price could ever be right for it — Red Mind was
+priced at 23 and delivering 58 by turn five. `Balance.EXHAUST_TALLY_CAP = 6` bounds what the
+payoffs may count, which is what makes them priceable; they are charged at two thirds of it.
+
+**And `exhaust_hand` was priced with the wrong SIGN.** It was charged −4.0 as a cost, which
+put Cull at 1.2 power — a hair over the "every card must be priced" floor and through it the
+moment anything moved. It is not a cost: it is played when the cards it destroys are worth
+less than what it grants, so it spends cards the turn had no use for. Charged as a loss, it
+made `power_ratio` read an exhaust deck as *weaker* than a plain one and enemy scaling
+under-reacted — the D17 failure reached by over-charging the enabler instead of forgetting the
+payoff. It is now +2.0, `retain`'s premium.
+
+**The numbers, at 120 trials, against a noise floor measured on identical code** (48 cells,
+mean +0.8, worst +15 / −13 — consistent with what AGENTS.md documents, and note that an
+earlier "−16.7 mean" was two different trees rather than noise):
+
+| row (Lv15, 5 clears) | matched | matched+1 | over-reaching |
+|---|---|---|---|
+| AoE (existing) | 89% | 72% | — |
+| Thorns (existing) | 98% | 11% | 10% |
+| **Combo (new)** | **100%** | **88%** | **28%** |
+| **Exhaust (new)** | **99%** | **94%** | **8%** |
+
+Both new archetypes sit inside the band their existing neighbours occupy, and the exhaust
+row's over-reaching cell (the Maw at d8) lands at 8% against a target of under 15%. Combo
+fights are 1.8–3.9 turns, which is what a working combo deck is supposed to look like.
+
+**One thing this change found and deliberately did not fix.** The exhaust row read 72% at d8
+until one Lifedrain came out of it, and then read 8%. The card was not the problem and neither
+was `per_exhausted`: **lifesteal is the strongest axis in the game by a distance, and nothing
+had ever measured it.** `Balance.BUILDS` has named a vampire build for a hundred decisions and
+`leech`, `bite`, `exsanguinate` and `sanguine_feast` have all been in the catalogue that long,
+and there was no profile holding any of them. There is now, and it reads **100% / 100% / 92%
+at the Maw on five clears, losing 0% of its HP across 6-to-14-turn fights.** That is a retune,
+and it is not done here for the reason D203 states in the same words: the instrument had to be
+right before anything was tuned against it, and tuning inside the same change is how you lose
+the ability to say which half moved the numbers. The row is the record of the debt.
+
+**Also new.** An eighth build, `exhaust` ("The Burnt Hand") — the one archetype these
+mechanics created rather than deepened, and a build the Cards screen does not name is a build
+the player has to reverse-engineer from twenty card faces. Four existing builds were retuned
+where a card they named had stopped being the card they named it for.
+
+### D206 — The back door was unreadable, and on five dungeons it was not a door
+
+Reported as "when you beat a dungeon it's not clear what the back entrance text means", which
+is a wording complaint. The wording was bad. Underneath it, five of the twelve dungeons were
+offering a back door that led to the front one.
+
+#### The line said none of the three things it needed to
+
+    ...or in by the back door: 5 floors, the same reckoning
+
+**It never said why it was there.** A back door is opened by a NEIGHBOUR's clear, never the
+dungeon's own (D190) — so the button appears on a place you have not touched, on the visit
+after you beat a different one, with nothing on it connecting the two. A mechanic whose cause
+is invisible reads as the screen changing its mind. It names the neighbour now: *"The Ossuary
+falling opened it."*
+
+**"The same reckoning" is opaque, and it was carrying the only fact that matters.** D190's whole
+design is that the deep entry keeps the *whole budget* compressed into fewer floors — so a back
+door run is **shorter and denser, not easier**. No player is getting that from the word
+"reckoning", and a back door that reads as "the easy way in" is a lie about what is behind it.
+It says so now: *"Every fight it owed you is still in there, packed into one floor fewer —
+shorter, not easier."*
+
+**And "5 floors" is not a comparison.** The number only means something beside the one it
+replaces. It prints both, the way `_route_line` prints what you have as well as what is needed,
+and the way a sealed row prints the remainder rather than the total.
+
+#### Then the wording fix found the real defect
+
+Writing "5 floors instead of 6" needs both numbers, which is how the no-op surfaced.
+`ISO_FLOORS_MIN` is 2 and `iso_floors_for` returns 2 for every difficulty up to 3, so on the
+crypt, the ossuary, the warrens, the foundry and the ember road the shortened count clamped
+straight back to the full one. The button was there, the line promised fewer floors, and
+pressing it dealt precisely the run the other button dealt — `deep` is read in exactly one
+place, to subtract that floor, so nothing else differed either.
+
+**The clamp is right and the button was wrong.** A one-floor dungeon has no descent and descent
+is the model, so a place at the minimum genuinely cannot be entered further down. What should
+never have happened is offering it. `deep_entry_open()` now means *is this door real* rather
+than *has a neighbour fallen*, and both halves live in `Balance` — a screen that knows something
+the model does not is how the two disagree (D34). Six of the twelve have a real back door; the
+Maw has none because it is alone in its region, which is D190 working correctly.
+
+Worst of it: those five are the EARLY dungeons. The first back door anybody is ever offered was
+the one that did nothing.
+
+#### The suite had the exception written into it
+
+    if plain.floors > Balance.ISO_FLOORS_MIN and deep.floors >= plain.floors:
+
+That guard is the shortness assertion agreeing not to look at exactly the cases that were
+broken. It was presumably added because the check failed on the shallow dungeons and the clamp
+looked like the correct behaviour — which it was. The wrong conclusion was drawn from it: that
+the assertion should be narrowed, rather than that a door which cannot be shorter should not be
+offered.
+
+**A carve-out for the inputs where a property does not hold is not a narrower assertion, it is
+the absence of one.** The new check walks every dungeon, asks whether a door is offered, and
+requires an offered door to be shorter — and separately requires the number the screen would
+print to equal the number the model actually deals, because a button advertising a run the
+generator will not build is the same defect one step further along.
+
+That is three decisions running in which the bug was found by writing the check rather than by
+the check going red, and all three times the check that found it was the one that enumerates
+its subjects instead of naming the ones somebody remembered.
+
+    back doors walk 5.9 moves per encounter, ceiling 7.5, same quota; 6 of 12 dungeons have a real one
+
+### D205 — The way to see a card was a 28px picture nobody was looking at, and in the shop there was no way at all
+
+*"I would like to always have a preview of the card in the shop, in the build deck and in
+the collection. The preview should not only appear if someone clicks the left icon, but also
+the text of the card."*
+
+**What was wrong.** `UI.inspect_card` — hold one card up at a size you can read — was reached
+from three places, and the list screens got it through `UI.inspect_thumb`: the row's
+illustration, made pressable. That is a **28px square at the far left of the row**, the
+smallest target in it and not the part anyone is reading. When the question "what does this
+actually do" arrives, the eye is on the name and the rules text, and clicking those did
+nothing. The affordance was at the one place the player was not looking.
+
+And the **shop had none of it at all** — a plain `TextureRect` for the picture and a
+`clip_text` Label at 600px for everything the card does. Of the three screens that list cards
+that is the worst one to be missing, because it is the only list where the decision costs gold
+and cannot be undone, and the cell that gets clipped is precisely the wordiest cards.
+
+**The change.** `UI.inspect_text(label, card, note)` beside `inspect_thumb`, and both wired in
+all three screens — the collection and the deck builder are one script, so that is two call
+sites for three screens. It takes a Label the caller has already built and sized rather than
+building one, because each of these lists is a fixed-width column grid measured against its
+own screen (`W_NAME` here, `ROW_LABEL_W` there) and relying on `clip_text` to make the width a
+floor (D95); a helper that created the label would have to be told all of that back and the
+first thing it would break is the column.
+
+Two smaller decisions inside it. It answers to **left OR right click**, because a card face
+answers to a right-click everywhere else in the game (`card_button`) and a player who has
+learned that gesture should not find it dead on a list row. And the shop's `note` is **the
+price** — "Costs 40 gold. You have 26." — where the collection's is copies and levels: the
+note is the screen's own question, carried onto the card being weighed.
+
+**The guard, and it took two shapes to be worth anything.** `tests/tooltip_test.gd` already
+booted all three of these scenes, and it exists because of the same failure one step earlier:
+tooltips that were set on Labels and could not be hovered, because Label defaults to
+`MOUSE_FILTER_IGNORE`. The new check counts the ways in as a **pair** — every row offers both
+the picture and the text or the screen fails — so a screen that grows a new kind of card row
+and wires only the picture cannot ship half an affordance.
+
+Counting was not enough, and this is the part worth writing down. The probe is the tooltip
+text, because `inspect_thumb` and `inspect_text` both promise the player *"click to see the
+whole card"* in words and that promise is the feature — but a promise and its delivery are two
+different things. So the test also **emits a real left-click** on one of those labels and
+asserts an inspector actually opened. Verified by reinstating the defect twice, in two
+different shapes:
+
+* removing `inspect_text` from the shop → *"offers the card preview from 3 pictures and 0 text
+  cells"*
+* leaving the wiring in place but accepting only the RIGHT mouse button → the counting check
+  still passes, and the click assertion fails on **all three** screens
+
+The second one is the reason the click is in there. It is the defect a count cannot see.
+
+**One thing deliberately not changed.** The shop quotes a card at level 1, so a card you
+already own at level 5 is described by its level-1 numbers in the row and now in the preview
+too. The preview matching the row is the right call here — a screen that disagreed with itself
+would be worse — but the row itself is arguably the D50 drift that `UI.card_slot` documents
+and fixes for want-lists, where an owned card is quoted at the level you own it at. That is a
+change to what the shop *says about its goods* and it deserves its own decision rather than
+riding along inside a preview.
+
+### D207 — The front page was written for the person who wrote it
+
+Two complaints in one: the download sizes were wrong, and the page was addressed to a
+developer when the people arriving at it want to play a game.
+
+#### The sizes were not mistyped, they were true once
+
+    Linux 65 MB   Windows 74 MB   macOS 95 MB   Android 89 MB
+
+Measured against the release the links actually serve: **68, 77, 98 and 91**. All four low by
+about three megabytes, all four in the same direction — which is the signature of numbers that
+were correct on the day they were written and then had a hundred card illustrations added
+underneath them. Nobody mistyped anything. That is exactly the D34 shape in a document: two
+places state one fact, and the one nobody re-runs is the one the reader believes.
+
+So the table is generated. `tools/readme_downloads.sh` rewrites it between markers, with a
+`--check` mode, the same contract `tools/design_index.sh` and `tools/art_docs.sh` already have.
+
+Three decisions inside it worth keeping:
+
+**It reads the PUBLISHED RELEASE, not a local build.** What the table documents is what a
+player downloads. A local `staged/` or `build/` copy is a different file from a different
+commit, and sizing the page off it would make it accurate about a build nobody can reach.
+No authentication — the repository is public and the releases endpoint is unauthenticated —
+so it runs anywhere `curl` does, with `gh` used when present purely to be polite to the rate
+limit.
+
+**It rounds to whole megabytes.** The byte count changes on every push, so a table quoting it
+would be stale within the hour — which is the failure this script exists to end, not to
+automate. Rounded, a size only moves when something genuinely got bigger.
+
+**Row order is explicit, not alphabetical and not the API's.** Sorting by label put Android
+first, and the API's order is not stable, which would make `--check` report a block as stale on
+a run that changed nothing.
+
+#### The page was talking to the wrong person
+
+Of roughly 280 lines, well over half were about the project rather than the game: which CI job
+publishes what, why there is no downloads badge, why there is no coverage badge, the directory
+layout, the flake, the test runner's two file kinds, and a paragraph about `JSON.stringify`
+writing `str()` of a type it cannot encode. All of it true and none of it addressed to somebody
+who wants to know what they would be doing for the next forty minutes.
+
+Rewritten around the player: what the game is in one sentence, how to get it, what you actually
+do in it, how much of it there is, and what to do when it breaks. The developer material is one
+section near the bottom pointing at AGENTS.md, DESIGN.md, CONTRIBUTING.md and BUILD.md, which
+are where it already lived in more detail.
+
+The security warnings are kept and reframed. A player meeting SmartScreen or Gatekeeper needs to
+know it is expected and how to get past it; they do not need the paragraph about signing
+identities, which is a developer's concern and now lives in BUILD.md's territory.
+
+#### The suite-count assertion was checking the prose, not the fact
+
+`test_content.gd` required the README to contain the literal string `tests-42%20suites` — the
+URL-encoded shields.io badge — and separately `42 suites`. Dropping the developer badge row
+therefore failed the suite on a page whose every number was correct.
+
+**An assertion that a fact appears in one particular sentence is an assertion about the
+writing, not about the fact.** It matches any `N suites` or `N test suites` now, badge or prose,
+encoded or not, and requires every one it finds to be right — plus at least one to exist, since
+an assertion that passes when the claim is deleted has quietly opted out of its job.
+
+D141 established that a hand-written number survives only if a test fails when it is wrong.
+That still holds; what changed is that the test no longer also dictates where the number goes.
+
+    Linux 68 MB   Windows 77 MB   macOS 98 MB   Android 91 MB   — read, not typed
+
+### D209 — Half the game was a walkover and the knob for it had been clamped away
+
+D208 dressed the profiles in the relics their clears had already bought them, and the report
+came back at 86-100% where it targets 40-60%. This is the retune. Target agreed first, in the
+user's words: **half the runs, mid-game** — matched progression clears about half, the full
+relic floor stands, over-reaching stays punishing.
+
+**The knob everyone would reach for first does nothing.** `DIFFICULTIES[*].ratio` multiplies
+the player's ratio on the way into `scaling_ratio`, which then clamps it to
+`ratio_ceiling(dungeon)`. Once `ratio x mult` clears the ceiling, the rung is spent before it
+is spent. Counted on the dressed table: **the multiplier was already a no-op in 25 of 42
+cells**, so Delver, Reckoning and Nothing Forgiven were the same enemy damage in most of the
+game. Sweeping it 2.8 -> 12.0 moved the table mean 75.0 -> 70.4. The rung ladder the player
+chooses between had quietly become mostly inert, which is its own finding.
+
+**Then two knobs that move the number and break the shape.** *Steepening the ceiling* (slope
+4.55 -> 7.0, uncapped) took the mean to 62.4 and crushed the wrong end: the deepest cells,
+already the hardest in the report, fell another 5 to 23 points (Endgame at the Abyssal Stair
+10% -> 5%) while the walkovers stayed at 100%. *Flat damage alone* (1.12 -> 1.55) landed the
+matched mean on 49.6 — and took **the Crypt from 96% to 23%**. A fresh player losing three
+first runs in four is not a difficulty setting.
+
+**Two guards then rejected two more attempts, and both were right.**
+
+*The ratchet guard, on a capped-but-steeper ceiling:*
+
+```
+FAIL power is punished at d6: starter loses 67.4 HP/fight, maxed loses 77.3
+```
+
+Slope 7.0 raises d6 from 24.15 to 33.25, and at d6 only the strong deck was under the old
+ceiling — so only the strong deck pays for raising it. That is the D45/D52 regression. It
+also proves the shape: **any monotone curve from (1, 1.4) to (8, 33.25) that runs above the
+line in the middle is above it at d6 too.** The fix could not be a bulge; it had to be a lift
+that rejoins.
+
+*And `tests/test_difficulty.gd`, on raising the rungs' flat `dmg` column — in its own words,*
+**a flat multiplier wearing a curve's clothes.** A rung must cost a built deck more than a
+starting one, and a flat multiplier by construction costs them the same. Which turned the
+whole retune round: the fix was to move the `ratio` column **down**, not the `dmg` column up.
+At d6 a built deck is clamped at any multiplier above ~1.6, so every point above that lands
+only on the deck too weak to be clamped. Measured at the top rung, 4.0 leans 1.07 and 3.2
+leans 1.15 against a required 1.10. **The difficulty ladder had been punishing the beginner
+and sliding off the veteran** — the exact fault its own guard is named for, sitting in the
+shipped numbers, found only because a different change walked into it.
+
+**What shipped.**
+
+* `EARLY_LIFT_SLOPE 6.5` / `EARLY_LIFT_MAX 22.0`; `ratio_ceiling` is now the max of the old
+  line and a faster one that stops. d1 untouched by construction; d2-d5 rise (5.95 -> 7.9,
+  10.5 -> 14.4, 15.05 -> 20.9, 19.6 -> 22.0); **d6, d7 and d8 keep the exact ceilings they
+  were tuned against.** `RATIO_CEILING_PER_DEPTH` stays 4.55.
+* `DMG_POWER_K 0.060 -> 0.085`, the lever the ceiling could not be: damage carries the ratio
+  as `1 + K * (sr - 1)`, so at 0.060 the lift raised d3's ceiling 37% and moved that column
+  four points. K is what lets a deck's own power reach it while leaving a ratio-1 starter
+  where it was.
+* `DIFFICULTIES` `ratio` 2.8/4.0 -> 2.4/3.2. The `dmg` column does not move. Wayfarer
+  untouched.
+
+**Measured, 150 trials, 42 cells, full report with the calibration block.** Cells bucketed by
+whether the profile's clears reach the dungeon's gate:
+
+```
+                     before D208    relics worn     retuned
+matched (n=24)          58.1%          74.1%         60.0%
+over-reaching (n=9)     29.1%          62.9%         46.6%
+over-levelled (n=9)     86.6%          89.8%         87.0%
+```
+
+```
+depth    before    worn    retuned          depth   before   worn   retuned
+  d1       96%      98%      94%              d5      52%     81%      54%
+  d2       83%      84%      85%              d6      33%     60%      42%
+  d3       69%      91%      81%              d7      18%     18%      10%
+  d4       64%      96%      84%              d8      12%     20%       9%
+```
+
+The retune lands the game near where the project believed it was — *now measured against a
+player who actually owns their relics*, which is the point. The opening survives at 94%, and
+the dodge price still holds: **zero** ALWAYS-AVOID-beats-SMART rows in the calibration block.
+
+**What this did not achieve, said plainly.** Matched progression sits at **60.0%, the top of
+the 40-60 band and not the half the target asked for.** Every remaining lever spends
+something worth more than the ten points: flat damage spends the opening, a steeper ceiling
+spends the endgame, and the endgame is already the weakest part of the report — d7/d8 fall
+from 18/20% to 10/9% here as it is. Going further is a decision about which half of the game
+to sacrifice, and it should be taken deliberately rather than inside a tuning pass.
+
+**Three things left open, none of them a tuning number.**
+
+*The difficulty guard cannot resolve its own margin.* `test_difficulty.gd` probes one integer
+damage value at d6, which quantises in steps of about 6% while asserting a 10% margin. So
+`DMG_POWER_K` 0.095 fails and 0.105 passes, and neither fact means anything. 0.085 was taken
+on a probe averaged over rolls, turns and tiers (lean 1.15) rather than on where the shipped
+guard happens to flip — and the same averaged probe says the top rung's lean at HEAD was
+about 1.085, i.e. **the guard has been passing on rounding.** Raising its resolution is the
+honest fix.
+
+*The curve is inverted, and no constant here fixes it.* d3/d4 sit at 81-84% while d7/d8 sit
+at 9-10%. Much of the shallow figure is profiles that have genuinely outgrown a gate-2
+dungeon, which the ratchet intends — but the deep end is a real wall, made by the
+`HIGH_POWER_FLOOR` rules rather than by anything retuned here. **Endgame carries a strictly
+better loadout than Late and clears less** (10% against 29% before this change): above the
+floor, extra enemy HP and deck-scaled pierce charge a player for power the clamped damage
+term never gives back. That is a monotonicity violation in run OUTCOME, which
+`tests/test_balance.gd` cannot see because it only pins monotonicity in `power_ratio`.
+
+*The relic ladder is a sample of one.* `_relic_ladder()` draws one seeded order and the first
+draw is Bulwark Plate — 18 Block every fight, which is most of why the mid game reads as a
+walkover. Re-run at two other seeds the table mean is 75.0 / 64.5 / 74.7 and the matched mean
+74.1 / 67.4 / 79.2: **the direction never changes and the magnitude moves by up to ten
+points.** Every number above is one draw. Averaging the report over seeds would make the
+instrument honest about that.

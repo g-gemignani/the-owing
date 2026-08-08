@@ -6,11 +6,11 @@
 script = ExtResource("1")
 id = "cull"
 name = "Cull"
-description = "Deal 4 damage 3 times. If it kills, gain 1 Energy."
-energy_on_kill = true
-cost = 2
-type = 0
+description = "Exhaust your hand. Gain 2 Block, +1 for each card exhausted this combat."
+per_exhausted = 1
+exhaust_hand = true
+cost = 1
+type = 1
 rarity = 0
 level = 1
-damage = 4
-hits = 3
+block = 2

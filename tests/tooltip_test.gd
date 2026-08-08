@@ -32,6 +32,7 @@ func _ready() -> void:
 
 	for path in SCENES:
 		await _check(path)
+		await _check_preview_reachable(path)
 
 	# the collection specifically must explain each card, not just be hoverable
 	await _check_collection_explains()
@@ -39,7 +40,7 @@ func _ready() -> void:
 	MetaState.writes_disabled = true
 	_purge()
 	if _fails == 0:
-		print("TOOLTIP TEST: PASS (every tooltip is reachable; collection explains each card)")
+		print("TOOLTIP TEST: PASS (every tooltip is reachable, every card row opens from picture and text, collection explains each card)")
 	else:
 		print("TOOLTIP TEST: FAIL (%d)" % _fails)
 	get_tree().quit()
@@ -56,6 +57,73 @@ func _check(path: String) -> void:
 			_fails += 1
 			print("FAIL unreachable tooltip on %s (%s) in %s: %s" % [
 				c.name, c.get_class(), path, c.tooltip_text.get_slice("\n", 0)])
+	inst.queue_free()
+	await get_tree().process_frame
+
+## Every card in every list must be openable from its PICTURE and from its TEXT (D205).
+##
+## Same failure shape as the one this suite was written for, one step along. There the
+## tooltips existed and could not be hovered; here the preview existed and could only be
+## reached from a 28px thumbnail at the far left of the row — not the part anyone is
+## reading — and in the shop it could not be reached at all. That was the worst of the
+## three to be missing: the only card list where the decision costs gold and cannot be
+## undone.
+##
+## Counted as a PAIR rather than as a total, and that is the whole assertion. Both ways in
+## exist for every row or neither does, so a screen that grows a new kind of card row and
+## wires only the picture fails here instead of shipping half an affordance. The probe is
+## the tooltip text, not a node name or a class: `inspect_thumb` and `inspect_text` both
+## promise the player the same thing in words, and that promise is the feature.
+const PREVIEW_PROMISE := "click to see the whole card"
+
+func _check_preview_reachable(path: String) -> void:
+	var scene := load(path) as PackedScene
+	if scene == null:
+		return          # `_check` above has already reported the load failure
+	var inst := scene.instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	var from_picture := 0
+	var from_text := 0
+	for c in _controls(inst):
+		if c.tooltip_text.find(PREVIEW_PROMISE) == -1:
+			continue
+		if c is Label:
+			from_text += 1
+		elif c is Button:
+			from_picture += 1
+	if from_picture == 0 or from_text == 0:
+		_fails += 1
+		print("FAIL %s offers the card preview from %d pictures and %d text cells — a card list has to offer both" % [
+			path, from_picture, from_text])
+	elif from_picture != from_text:
+		_fails += 1
+		print("FAIL %s wired %d pictures but %d text cells: some row offers only one way in" % [
+			path, from_picture, from_text])
+	else:
+		# ...and one of them is CLICKED, because everything above this line is still only
+		# evidence: a tooltip that promises the whole card, on a Label that can be hit. The
+		# promise and the delivery are two different things, and the version of this suite
+		# that only counted tooltips would have passed a handler connected to the wrong
+		# mouse button, or to nothing at all. Emitting the event runs the real chain —
+		# `inspect_text`'s filter, `inspect_card`, the overlay it parents onto the screen.
+		var probe: Label = null
+		for c in _controls(inst):
+			if c is Label and c.tooltip_text.find(PREVIEW_PROMISE) != -1:
+				probe = c as Label
+				break
+		var ev := InputEventMouseButton.new()
+		ev.button_index = MOUSE_BUTTON_LEFT
+		ev.pressed = true
+		probe.gui_input.emit(ev)
+		await get_tree().process_frame
+		if UI._inspecting == null or not is_instance_valid(UI._inspecting):
+			_fails += 1
+			print("FAIL clicking the card text in %s promised the whole card and opened nothing" % path)
+		else:
+			UI._inspecting.queue_free()
+			UI._inspecting = null
+			await get_tree().process_frame
 	inst.queue_free()
 	await get_tree().process_frame
 
