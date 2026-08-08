@@ -355,6 +355,7 @@ Per-dungeon deck (D4): a run deck is built from a chosen loadout at each dungeon
 | `tools/audio_voices.py` | The instrument: tuning, filters, the room, and eight physically-modelled voices. Imported by BOTH audio generators, so "one instrument family" is structural (D173). |
 | `tools/gen_sfx.py` | The 24 sound effects, one voice, measured (D150, rewritten D173). |
 | `tools/rematte_iso.gd` | Re-cuts an installed iso figure whose matte ate it, from the paint still under the mask (D152). Does NOT work on the combat plates — they were trimmed at install and have no field left to sample, so re-cutting inflates every file (D199). |
+| `tools/demagenta.gd` | Takes the chroma key back out of cutouts already installed, by hue rather than by a sampled field, so it needs no memory of how each file was cut (D202). |
 | `tools/derive_iso_fronts.gd` | Cuts each archetype's iso FRONT out of the combat plate it already has, so the floor figure and the arena figure are the same picture by construction (D198). |
 | `scripts/pixel_art.gd` | Authored 16x16 symbol glyphs, the card sheet, and the lookup for every painted asset (backdrops, enemy plates, the UI kit). |
 | `assets/pixel/` | What is left of the CC0 pixel art: the 1-Bit card sheet and five Pattern Pack zone tiles, each with its licence. The Tiny Dungeon enemy sprites went in D89 and the UI RPG frames in D83. |
@@ -12655,6 +12656,35 @@ of it, so no crop has the flat border `BORDER_AGREE` requires, and it refused fo
 visible at the edge any more. `tools/padregion.gd` puts it back, surrounding the crop with the
 same key colour the sheet was drawn on — which is what the matte would have seen had the cell
 been drawn to size.
+
+**The key came back on every silhouette, and the install-time despill could not reach it.**
+After a full install with `--key`, **20,507 key-coloured pixels across 91 of the 97 files** — a
+pink hairline on every figure, plainly visible on the floor. Both halves of the in-pipeline
+repair weaken as the downscale gets harder: it measures a pixel against the field sampled from
+that cell's border, and repaints from a clean neighbour it must find nearby, while a 1408px
+sheet landing at 128x192 shrinks a cell fivefold and LANCZOS mixes key into the silhouette
+faster than a rim-local fix can walk it out.
+
+`tools/demagenta.gd` repairs installed files instead, and it can only do that because its
+detector is a **hue test rather than a distance to a sampled colour**: the key is pure (1,0,1),
+so what identifies it is green sitting far below both other channels while the pixel stays
+saturated. Nothing in this art does that. It is run over a whole directory without knowing
+which field each file was cut against, and it is idempotent — which took one correction, since
+writing a green channel to land *exactly* on the threshold rounds back out in 8-bit and the
+tool rewrote all 97 files on every run.
+
+**The second rule is about where, not how purple.** What the key leaves once diluted is the
+drop shadow the brief told the generator not to draw, tinted mauve — too desaturated for the
+strict test and still a visible smear under a rat. A looser gap cannot work: the mycelial
+lord's violet cap carries **7,300** purple-leaning interior pixels, and draining those would
+ruin the one subject whose colour this genuinely is. A drop shadow lies in the CONTACT BAND at
+the bottom of the canvas and a cap does not.
+
+**And that band is repaired by colour only, never by alpha.** The first version borrowed
+neighbouring paint or cleared what it could not fix, which would have cleared 50-100 pixels
+from the bottom of every sprite — and these are anchored by their FEET, so a repair that can
+nibble the bottom rows moves the stand point on every figure it touches. Lifting green keeps
+the silhouette and the luminance and takes only the cast. Final: **0 key pixels, 0 cleared**.
 
 **What is deliberately given up.** The fronts stop being cut from the plates, so the floor
 figure is no longer the *same picture* as the arena figure — the guarantee that made D198 work.
