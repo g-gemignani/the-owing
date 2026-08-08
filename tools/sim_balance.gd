@@ -169,7 +169,10 @@ func _init() -> void:
 					_tier_short(tier), r["win_rate"] * 100.0, r["avg_turns"], r["hp_lost_pct"] * 100.0]
 			print(line)
 		print("")
-	print("Target: RUN completion ~50-70%% at matched progression; <20%% when over-reaching.")
+	# 50-70 until D197, when the floor stopped letting anything stand still and the game was
+	# asked to be meaner than it was. The band moved with the intent, not to fit the numbers:
+	# a run this deck is matched to should fail about half the time.
+	print("Target: RUN completion ~40-60%% at matched progression; <15%% when over-reaching.")
 	# Said out loud, because a report that does not name its route is a report whose numbers
 	# cannot be compared with another one (D179). Two runs of this tool differ by a mean of
 	# 0.4 points already (D120); a route change is a much larger difference wearing the same

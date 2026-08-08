@@ -221,26 +221,30 @@ var rooms: int = 0      ## chambers on this floor
 var quota: int = 0
 var steps: int = 0        ## turns taken in the dungeon, for the status line
 var floor_steps: int = 0  ## turns taken on THIS floor, for the linger rule
-## Fights slipped past rather than had. Counts for the whole dungeon, not the floor,
+## Hunters shaken off rather than fought. Counts for the whole dungeon, not the floor,
 ## because the price rises with each one and a fresh floor is not a fresh start — the same
 ## shape the old deck model's `avoided` had, and for the same reason.
 var avoided: int = 0
-## How many fights this dungeon offers a slip past, across all its floors. Decided once,
-## at generation, because the PRICE of each dodge is solved from the total (see
+## How many fights this dungeon offers a break-away from, across all its floors. Decided
+## once, at generation, because the PRICE of each is solved from the total (see
 ## `Balance.avoid_cost`) and a price that changed as you resolved encounters would make
-## the first slip cheaper the longer you put it off.
+## the first one cheaper the longer you put it off.
 ##
-## Counted here rather than derived from the mix by anyone who needs it: wanderers come
-## out of the combat budget and cannot be slipped past, and that subtraction happens in
-## `generate` below. Deriving it a second time somewhere else is how the number went
-## stale the first time (D99).
+## Since D197 that is simply every fight the dungeon holds: they all walk, so they can all
+## come within reach, so they can all be declined. It was the standing fights only, with the
+## wanderers subtracted — and counted HERE rather than derived from the mix by whoever needs
+## it, because deriving it a second time somewhere else is how the number went stale the
+## first time (D99). That reason is unchanged and is why this field still exists.
 var dodgeable: int = 0
 var done: bool = false
 
-## Floors, and what is still to be laid out on the ones not yet reached. `plan[i]` is
-## the list of Enc values for floor i and `roam[i]` how many of them walk; both are
-## consumed by `_build_floor`. Held here rather than generated per floor so the whole
+## Floors, and what is still to be laid out on the ones not yet reached. `plan[i]` is the
+## list of Enc values floor i STANDS on tiles and `roam[i]` the list it puts on its feet;
+## both are consumed by `_build_floor`. Held here rather than generated per floor so the whole
 ## dungeon's budget is decided once, up front, and cannot drift as you descend.
+##
+## `roam` holds Enc values and not a count, since D197: every fight walks now, elites
+## included, and a count could only ever have said "this many combats".
 var floors: int = 1
 var depth: int = 0
 var plan: Array = []
@@ -267,8 +271,17 @@ var keyplan: Array = []
 var picked_key: bool = false
 
 ## Things walking the floor. Each is
-## {"cell": int, "type": Enc, "awake": bool, "design": int, "south": bool}.
-## An entry is removed when its fight is won.
+## {"cell": int, "type": Enc, "design": int, "south": bool, "pen": int}.
+## An entry is removed when its fight is won, or when you break away from it.
+##
+## There is no `awake` any more (D197). Every one of these hunts you from the turn the floor
+## is laid down: a monster that had not noticed you was the only thing on this floor that was
+## not playing, and it made the first half of every floor a walk rather than a chase.
+##
+## `pen` is -1 for anything hunting the open floor, or the index of the pocket a guard is
+## penned into (D183). A guard is defined by standing between you and a prize, so it hunts
+## you exactly as hard as anything else and never leaves the room it is guarding — which is
+## how it can both move and still be a wall.
 ##
 ## `design` and `south` are for the VIEW and carry no rules: a stable design per
 ## wanderer so three of them on one floor do not read as one monster cloned, and a
@@ -289,41 +302,19 @@ func generate(p_dungeon) -> void:
 	h = Balance.ISO_GRID
 
 	var budget := standard_encounters(dungeon)
-	# Wanderers come OUT of the combat budget, never on top of it: a dungeon has to
-	# cost what its difficulty says (D14), so this decides how much of the budget
-	# hunts you rather than how much of it there is.
-	var combats := 0
-	var elites := 0
-	for e in budget:
-		if int(e) == Enc.COMBAT:
-			combats += 1
-		elif int(e) == Enc.ELITE:
-			elites += 1
-	var roaming := Balance.iso_wanderers_for(combats)
-	# `Walked` moves one more of the budget onto its feet (D187). Budget-neutral by
-	# arithmetic rather than by assertion: wanderers come OUT of the combat budget and are
-	# never added to it (D14), so this changes how much of the dungeon hunts you and not how
-	# much of it there is. Clamped so it can never take the last standing fight — a floor with
-	# nothing waiting on it is a different model, not a different aspect.
-	if aspect == Balance.ASPECT_CROWDED:
-		# The floor still has to have something WAITING on it — a floor where everything
-		# walks is a different model, not a different aspect. An elite never gets up, so a
-		# dungeon that fields one can put every combat on its feet; one that fields none has
-		# to keep a combat back. The first clamp said `combats - 1` unconditionally, which at
-		# the shipped mixes (three combats, two wanderers) bound every time and the aspect
-		# did nothing at all in eight of twelve dungeons.
-		var floor_keeps: int = 0 if elites > 0 else 1
-		roaming = mini(roaming + Balance.ASPECT_EXTRA_WANDERERS,
-			maxi(0, combats - floor_keeps))
-	for i in roaming:
-		budget.erase(Enc.COMBAT)
-
-	# Everything left in the budget that STANDS on a tile and can be slipped past. The
-	# boss is not in `budget` and can never be dodged; the wanderers were just removed.
-	dodgeable = 0
+	# EVERY fight walks (D197). Nothing in this model waits on a tile to be walked into any
+	# more, so the budget is split in two here — what the floor stands still (rests, shops,
+	# events, chests, the stair, the boss) and what hunts you — rather than a fraction of the
+	# combats being lifted onto their feet. Still out of the same budget and never on top of
+	# it: a dungeon has to cost what its difficulty says (D14).
+	var hunters: Array = []
+	var standing: Array = []
 	for e in budget:
 		if int(e) == Enc.COMBAT or int(e) == Enc.ELITE:
-			dodgeable += 1
+			hunters.append(int(e))
+		else:
+			standing.append(int(e))
+	budget = standing
 
 	var diff: int = dungeon.difficulty if dungeon != null else 1
 	floors = Balance.iso_floors_for(diff)
@@ -338,15 +329,35 @@ func generate(p_dungeon) -> void:
 	# robin after a shuffle keeps every floor mixed — dealing it in order would put
 	# all the combats on floor one and all the shops on the last.
 	budget.shuffle()
+	hunters.shuffle()
 	plan = []
 	roam = []
 	for f in floors:
 		plan.append([])
-		roam.append(0)
+		roam.append([])
 	for i in budget.size():
 		plan[i % floors].append(int(budget[i]))
-	for i in roaming:
-		roam[i % floors] = int(roam[i % floors]) + 1
+	# Dealt round robin like the rest, and the elites land wherever they land. There is no
+	# longer a reason to keep them off the early floors as landmarks: an elite that walks is
+	# not a landmark, it is the thing you can hear coming.
+	for i in hunters.size():
+		(roam[i % floors] as Array).append(int(hunters[i]))
+	# `Walked` puts one more hunter on every floor (D187, rewritten in D197). It is the one
+	# aspect that is no longer budget-neutral — there is nothing standing still left to take
+	# it from — so it is counted into `quota` and paid for in gold like any other optional
+	# difficulty.
+	if aspect == Balance.ASPECT_CROWDED:
+		for f in floors:
+			for k in Balance.ASPECT_EXTRA_WANDERERS:
+				(roam[f] as Array).append(Enc.COMBAT)
+	var roaming := 0
+	for row in roam:
+		roaming += (row as Array).size()
+	# Everything a hunter can be broken away from — which is now every fight in the dungeon.
+	# The boss is not in `budget`, does not walk and can never be declined. Counted after the
+	# aspect, because `Balance.avoid_cost` solves the whole ladder from this number and a
+	# dungeon wearing `Walked` offers more rungs of it.
+	dodgeable = roaming
 	# +1 for the boss, which sits on the last floor and is not in `budget`
 	quota = budget.size() + roaming + 1
 	_plan_chests(diff)
@@ -551,7 +562,7 @@ func _build_floor(d: int) -> void:
 
 	var mine: Array = (plan[depth] as Array).duplicate()
 	_place_spread(mine, carved, [pos, exit_cell])
-	_spawn(int(roam[depth]), carved, dist)
+	_spawn((roam[depth] as Array) if depth < roam.size() else [], carved, dist)
 	_cast_fights()
 	_cast_chests()
 	# Keys go down LAST, so they take the ground nothing else wanted — which is the
@@ -1143,13 +1154,24 @@ func _open_pocket(k: int) -> void:
 	# than reached into. A one-tile pocket has nowhere else to put it.
 	var seat := int(cells[cells.size() - 1])
 	# ...and the guard on the cell before it, which is what "between you and the prize" means
-	# on a grid (D183). It is revealed WITH the pocket and the fight does not start until the
-	# player walks into it: the wager is made with full information or it is not a wager.
+	# on a grid (D183). It is revealed WITH the pocket and the wager is still made with full
+	# information: you see it standing over the prize before you decide to come in.
+	#
+	# It WALKS, since D197 — nothing in this dungeon stands still — but it is penned to the
+	# pocket and never comes out. A guard that left would stop being a guard: the prize behind
+	# it would be free to anyone who opened the wall and waited. Penned, it still has to be
+	# got past, and on three or four tiles there is no getting past it — which is the same
+	# decision D183 wrote, now with the guard taking the first swing.
 	var guard := String(p.get("guard", ""))
 	if guard != "" and cells.size() >= 2:
-		var post := int(cells[cells.size() - 2])
-		enc[post] = Enc.ELITE
-		enemy_of[post] = guard
+		mons.append({
+			"cell": int(cells[cells.size() - 2]),
+			"type": Enc.ELITE,
+			"design": (k + depth) % 4,
+			"south": true,
+			"enemy": guard,
+			"pen": k,
+		})
 	match String(p["prize"]):
 		Balance.POCKET_CHEST:
 			enc[seat] = Enc.TREASURE
@@ -1650,18 +1672,25 @@ func _place_landmark(dist_from_entry: PackedInt32Array) -> void:
 ##
 ## Bosses are left out on purpose: a dungeon's finale is named and fixed, and combat
 ## already resolves it from `DungeonData.boss`.
+##
+## It no longer casts anything onto a TILE, because since D197 no fight stands on one. The
+## `enemy_of` map it used to fill is still read — `enemy_at` answers off it, and a run saved
+## before D197 comes back with fights on its tiles and has to keep drawing them — it simply
+## has nothing on this floor to put in it.
 func _cast_fights() -> void:
 	var normal := Balance.roster_pool(dungeon, Balance.Tier.NORMAL)
 	var elite := Balance.roster_pool(dungeon, Balance.Tier.ELITE)
-	for i in enc.size():
-		var e := int(enc[i])
-		if e == Enc.COMBAT and not normal.is_empty():
-			enemy_of[i] = String(normal[randi() % normal.size()])
-		elif e == Enc.ELITE and not elite.is_empty():
-			enemy_of[i] = String(elite[randi() % elite.size()])
+	# Each hunter off the roster its tier names. An elite cast from the normal pool would be a
+	# normal fight wearing an elite's HP multiplier — the one thing this function exists to
+	# stop.
 	for m in mons:
-		if String(m.get("enemy", "")) == "" and not normal.is_empty():
-			m["enemy"] = String(normal[randi() % normal.size()])
+		if String(m.get("enemy", "")) != "":
+			continue
+		var pool: Array = elite if int(m["type"]) == Enc.ELITE else normal
+		if pool.is_empty():
+			pool = normal
+		if not pool.is_empty():
+			m["enemy"] = String(pool[randi() % pool.size()])
 
 ## Hand this floor's chests the tiers rolled for them in `_plan_chests`.
 ##
@@ -1687,11 +1716,16 @@ func _cast_chests() -> void:
 			chest_of[i] = Balance.roll_pack_tier(Balance.PACK_TREASURE,
 				dungeon.difficulty if dungeon != null else 1)
 
-## Put this floor's wanderers on it, in the far half. Spawning them anywhere would
+## Put this floor's hunters on it, in the far half. Spawning them anywhere would
 ## sometimes drop one on the entrance, which is a fight before the first decision —
-## the one thing every model guarantees you do not get.
-func _spawn(count: int, carved: Array, dist_from_entry: Array) -> void:
-	if count <= 0:
+## the one thing every model guarantees you do not get. It matters more since D197 than it
+## did when they slept: a hunter starts walking toward you on the turn the floor is built,
+## so where it starts is the only head start the player is given.
+##
+## `kinds` is one Enc value per hunter (COMBAT or ELITE), not a count: since D197 the elites
+## walk too, and the tier decides which roster the creature is cast from.
+func _spawn(kinds: Array, carved: Array, dist_from_entry: Array) -> void:
+	if kinds.is_empty():
 		return
 	var reach := 0
 	for c in carved:
@@ -1713,14 +1747,14 @@ func _spawn(count: int, carved: Array, dist_from_entry: Array) -> void:
 	if far_enough.is_empty():
 		return
 	far_enough.shuffle()
-	for k in count:
+	for k in kinds.size():
 		mons.append({
 			"cell": int(far_enough[k % far_enough.size()]),
-			"type": Enc.COMBAT,
-			"awake": false,
+			"type": int(kinds[k]),
 			# vary by floor as well as by index, or every floor fields the same two
 			"design": (k + depth) % 4,
 			"south": true,
+			"pen": -1,
 		})
 
 # --- geometry ------------------------------------------------------------------
@@ -1791,9 +1825,9 @@ func _sight() -> int:
 		return Balance.ASPECT_SIGHT
 	return Balance.ISO_SIGHT
 
-## How many turns on one floor before everything on it knows you are there (D187). `Waking`
-## brings it in, which is pressure out of a rule that wakes what is already counted rather
-## than adding anything to the floor.
+## How many turns on one floor before its hunters take two steps to your one (D187, D197).
+## `Waking` brings it in, which is pressure out of a rule that hurries what is already
+## counted rather than adding anything to the floor.
 func _linger() -> int:
 	if aspect != Balance.ASPECT_WAKING and floor_state != Balance.ASPECT_WAKING:
 		return Balance.ISO_LINGER
@@ -1932,6 +1966,11 @@ func _dist_to_unresolved(skip_exit: bool) -> PackedInt32Array:
 		queue[tail] = i
 		tail += 1
 	for m in mons:
+		# ...and a penned guard seeds nothing, exactly as the prize it stands over does not
+		# (D182): the greedy walker steers by this field, and a guard in it would drag the
+		# required path into every pocket the floor happens to have opened.
+		if int(m.get("pen", -1)) >= 0:
+			continue
 		var c := int(m["cell"])
 		if dist[c] < 0 and int(enc[c]) != WALL:
 			dist[c] = 0
@@ -2019,77 +2058,114 @@ func _reveal_around(i: int, field: PackedInt32Array = PackedInt32Array()) -> voi
 
 # --- the floor takes its turn --------------------------------------------------
 
-## Wake every wanderer within earshot of `cell`. A fight is loud, so where you choose
-## to have one is a decision: clearing a room next to something asleep is no longer
-## free. This is the one place the battle system reaches back into the space.
-func _rouse(cell: int, radius: int) -> void:
-	var dist := _dist_from(cell)
-	for m in mons:
-		var d := int(dist[int(m["cell"])])
-		if d >= 0 and d <= radius:
-			m["awake"] = true
-
-## Every wanderer steps once. Awake ones close on the player; the rest drift.
+## Every hunter on the floor steps toward the player. Every one of them, every turn (D197).
 ##
-## A wanderer never steps ONTO the player: it holds its ground and is returned as the
-## one that caught you. Sharing the tile would mean drawing a monster under the player
-## and, worse, one standing on a tile the player is about to fight something else in —
-## the tile's own encounter resolves first, and the wanderer is still there after,
-## adjacent, waiting.
+## There is no sleeping and no drifting left. A monster that had not noticed you yet was the
+## only thing on this floor not playing the game, and it made the first two thirds of every
+## floor a walk with scenery on it: the wanderers were three quarters asleep at any moment,
+## the standing fights never moved at all, and the whole model's promise — *this is a place
+## and something else is using it* — was kept for about six turns of a forty-turn floor.
 ##
-## Returns the index of the wanderer now engaging the player, or -1.
+## And nothing ever holds its ground. Where a step toward the player is not available — the
+## way is rock, or another hunter is already in it — it takes any step it can rather than
+## waiting for the geometry to improve. The rule is worth the jitter it sometimes costs: a
+## thing that stops moving reads as a thing that has lost interest, and none of these have.
+##
+## A hunter never steps ONTO the player: it holds its ground and is returned as the one that
+## caught you. Sharing the tile would mean drawing a monster under the player and, worse, one
+## standing on a tile the player is about to fight something else in — the tile's own
+## encounter resolves first, and the hunter is still there after, adjacent, waiting.
+##
+## Nor onto each other. It did not matter while most of them were asleep in separate rooms;
+## with every one of them steering for the same tile it matters every turn, because `threats`
+## is keyed by cell and a pile of four monsters was drawn as one.
+##
+## Returns the index of the hunter now engaging the player, or -1.
 func _floor_turn(field: PackedInt32Array = PackedInt32Array()) -> int:
 	var engaging := -1
 	var dist := field if field.size() == enc.size() else _dist_from(pos)
+	# Where everything is, so nothing walks through anything else. Rebuilt per turn rather
+	# than kept, because `mons` is edited from four other places and a cached occupancy grid
+	# is a second copy of a fact (D34).
+	var taken := {}
+	for m in mons:
+		taken[int(m["cell"])] = true
+	# How hurried the floor is. Read once: a floor does not speed up halfway through its own
+	# turn, and asking per monster would let the first mover cross the threshold for the rest.
+	var steps_each := Balance.iso_hunter_steps(floor_steps, _linger())
 	for k in mons.size():
 		var m: Dictionary = mons[k]
-		var here := int(m["cell"])
-		var away := int(dist[here])
-		if away >= 0 and away <= Balance.ISO_WANDER_SENSE:
-			m["awake"] = true
-		if away == 0:
-			# You walked onto it. This is the other half of contact and it has to be
-			# checked FIRST: the awake branch below only closes distance when there is
-			# distance to close, so at zero a wanderer fell through to the drift branch
-			# and stepped politely aside. A greedy walker then chased it round the floor
-			# for ever, because the thing blocking the way on was the thing it could
-			# never catch — 12 runs in 360, the D74 deadlock wearing a new hat.
-			if engaging < 0:
-				engaging = k
-			continue
-		var target := -1
-		if bool(m["awake"]):
-			# one step closer, chosen off the player's own distance field so a wanderer
-			# follows the floor round corners instead of pressing into rock
-			var bestd := away
-			for n in _neighbours(here):
-				if int(enc[n]) == WALL:
-					continue
-				var dn := int(dist[n])
-				if dn >= 0 and dn < bestd:
-					bestd = dn
-					target = n
-		else:
-			var cand: Array = []
-			for n in _neighbours(here):
-				if int(enc[n]) != WALL and n != pos:
-					cand.append(n)
-			if not cand.is_empty():
-				target = int(cand[randi() % cand.size()])
-		if target == pos:
-			# it has reached you: it stays where it is and the fight is the result
-			if engaging < 0:
-				engaging = k
-			continue
-		if target >= 0:
+		for _s in steps_each:
+			if int(dist[int(m["cell"])]) == 0:
+				# You walked onto it. This is the other half of contact and it has to be
+				# checked FIRST: the chase below only closes distance when there is distance
+				# to close, so at zero a hunter fell through to the sidestep and stepped
+				# politely out of the way. A greedy walker then chased it round the floor for
+				# ever, because the thing blocking the way on was the thing it could never
+				# catch — 12 runs in 360, the D74 deadlock wearing a new hat.
+				if engaging < 0:
+					engaging = k
+				break
+			var target := _hunt_step(m, dist, taken)
+			if target == pos:
+				# it has reached you: it stays where it is and the fight is the result
+				if engaging < 0:
+					engaging = k
+				break
+			if target < 0:
+				break        # boxed in by rock and its own kind; nowhere at all to put a foot
+			var here := int(m["cell"])
 			# Facing, for the view only. Both grid axes point AWAY from the viewer on
 			# screen (x is ↘, y is ↙, per DIR_ARROW), so a step whose components sum
 			# positive is a step toward the camera and shows the thing's front.
 			var dx := target % w - here % w
 			var dy := int(target / w) - int(here / w)
 			m["south"] = (dx + dy) > 0
+			taken.erase(here)
+			taken[target] = true
 			m["cell"] = target
 	return engaging
+
+## Where one hunter puts its foot: the player's tile if it has reached them, the neighbour
+## that closes the most distance if there is one, otherwise any neighbour at all, otherwise
+## -1 for a thing with nowhere to go.
+##
+## The chase is steered off the PLAYER's own distance field rather than off a straight line,
+## which is what makes a hunter follow the floor round a corner instead of pressing into the
+## rock between it and you. `dist` is that field; it is already computed once per turn by the
+## caller, and computing it per monster was 40% of a headless run before D99.
+func _hunt_step(m: Dictionary, dist: PackedInt32Array, taken: Dictionary) -> int:
+	var here := int(m["cell"])
+	var pen := int(m.get("pen", -1))
+	var bestd := int(dist[here])
+	var target := -1
+	var loose: Array = []
+	for n in _neighbours(here):
+		if int(enc[n]) == WALL:
+			continue
+		# A guard walks its pocket and never leaves it (D183, D197). Checked before the
+		# player's tile is, so a guard whose pocket the player is standing beside does not
+		# lunge out of the room it exists to hold.
+		if pen >= 0 and _pocket_of(n) != pen:
+			continue
+		if n == pos:
+			return pos
+		if taken.has(n):
+			continue
+		var dn := int(dist[n])
+		if dn >= 0 and dn < bestd:
+			bestd = dn
+			target = n
+		loose.append(n)
+	if target >= 0:
+		return target
+	# Nothing closes the gap, so take a step anyway. Deterministic on state alone — the
+	# lowest free neighbour, not a random one — because D22 wants a restored run to behave
+	# identically, and a coin flip here would make the floor move differently on reload.
+	if loose.is_empty():
+		return -1
+	loose.sort()
+	return int(loose[0])
 
 # --- interface ---
 
@@ -2137,7 +2213,12 @@ func _compute_options() -> Array:
 		# and turn optional content into a gate (D182).
 		if e >= 0 and e != Enc.BOSS and not _is_optional(i):
 			others += 1
-	others += mons.size()   # a wanderer is unfinished business too
+	# A hunter is unfinished business too — but a penned guard is not, for the same reason
+	# nothing else in a pocket is (D182): it would hold the stairs back over content the
+	# dungeon never asked for.
+	for m in mons:
+		if int(m.get("pen", -1)) < 0:
+			others += 1
 	var goal := _dist_to_unresolved(others > 0)
 
 	var out: Array = []
@@ -2177,32 +2258,48 @@ func _compute_options() -> Array:
 			# to present the same list in the same order (D22).
 			"order": rank * 1000000 + (away if away >= 0 else 9999) * 1000 + n,
 		})
-		# ...and, for a fight, the option of not having it. See `_slip_cost`.
-		#
-		# NEVER inside a pocket (D183). This appears by default for every adjacent COMBAT or
-		# ELITE tile, so suppressing it is a deliberate act, and there are two reasons it has
-		# to be. It makes no sense in a dead end: the slip exists to get *past* something, and
-		# beyond a guard there is only the prize and the way back — walking out is the decline
-		# and it is already free. And it would be priced from `dodgeable`, which is solved for
-		# the whole ladder from a count the guard is not in (D99), so offering it here would
-		# charge the ladder's price for a rung the ladder never counted.
-		if (e == Enc.COMBAT or e == Enc.ELITE) and not _is_optional(n):
-			var cost := _slip_cost()
-			out.append({
-				"type": e,
-				"label": "%s  Slip past %s (-%d HP%s)" % [DIR_ARROW[d],
-					String(Balance.NODE_LABEL.get(e, "?")), cost,
-					", rising" if avoided > 0 else ""],
-				"cell": n,
-				"dir": d,
-				"resolves": false,
-				"action": "avoid",
-				"hp_cost": cost,
-				# Ranked BELOW even the way down, so the first button is never "skip the
-				# game". A player leaning on it faces everything, which is also what makes
-				# the headless walkers measure the full budget (D14).
-				"order": 3000000 + n,
-			})
+
+	# ...and, for a hunter that has come within reach, the option of not fighting it. See
+	# `_slip_cost`. This is where the crawl's priced decline moved when nothing was left
+	# standing on a tile to squeeze past (D197): the fights come to you now, so declining one
+	# is something you do to a thing beside you rather than to a tile in front of you.
+	#
+	# NEVER a penned guard (D183). It is the same suppression the tile version needed and both
+	# of its reasons survive intact. It makes no sense in a dead end: the decline exists to get
+	# *past* something, and a guard cannot follow you out of its own pocket — walking away is
+	# the decline and it is already free. And it would be priced from `dodgeable`, which solves
+	# the whole ladder from a count the guard is not in (D99), so offering it would charge the
+	# ladder's price for a rung the ladder never counted.
+	for k in mons.size():
+		var m: Dictionary = mons[k]
+		if int(m.get("pen", -1)) >= 0:
+			continue
+		var mc := int(m["cell"])
+		var md := -1
+		for d4 in DIRS.size():
+			if _step(pos, DIRS[d4]) == mc:
+				md = d4
+		if md < 0:
+			continue
+		var mt := int(m["type"])
+		var cost := _slip_cost()
+		out.append({
+			"type": mt,
+			"label": "%s  Break away from the %s (-%d HP%s)" % [DIR_ARROW[md],
+				String(Balance.NODE_LABEL.get(mt, "?")).to_lower(), cost,
+				", rising" if avoided > 0 else ""],
+			"cell": mc,
+			"dir": md,
+			"resolves": false,
+			"action": "avoid",
+			"mon": k,
+			"hp_cost": cost,
+			# Ranked BELOW even the way down, so the first button is never "skip the game". A
+			# player leaning on it faces everything, which is also what makes the headless
+			# walkers measure the full budget (D14).
+			"order": 3000000 + mc,
+		})
+
 	# ...a stone you may put your hand on (D188). Ranked with the pushes, dead last, for the
 	# same reason: it is optional, the greedy walker presses index 0, and anything a stone
 	# could outrank would put an optional decision into the number that measures the required
@@ -2295,7 +2392,7 @@ func _compute_options() -> Array:
 	out.sort_custom(func(a, b): return int(a["order"]) < int(b["order"]))
 	return out
 
-## What squeezing past a fight costs, instead of having it.
+## What shaking a hunter off costs, instead of fighting it.
 ##
 ## Reuses the already-tuned price (`Balance.avoid_cost`) rather than
 ## inventing one, including its rising shape: the first slip is the one you want, the
@@ -2348,6 +2445,70 @@ func _describe(n: int) -> String:
 		return "Back the way you came"
 	return "Open ground"
 
+## The floor takes its turn after something the player did standing still — a push, an
+## answer, a hand on the stone, a break-away. Returns the ambush to resolve, or {}.
+##
+## One function rather than the four copies this used to be. They had drifted apart once
+## already (the push flooded after opening the pocket, the others before) and every one of
+## them had to be edited when the linger rule changed, which is exactly the shape of bug the
+## crawl keeps paying for: the same six lines written out per caller.
+func _floor_moves(field: PackedInt32Array) -> Dictionary:
+	var caught := _floor_turn(field)
+	return _catch(caught) if caught >= 0 else {}
+
+## The encounter a hunter that has reached you resolves into. The one place it is built, for
+## all four standing turns and the walk.
+func _catch(caught: int) -> Dictionary:
+	var m: Dictionary = mons[caught]
+	# `ambush` is a PRICE, reported and not applied: a traversal never touches run resources
+	# (D13). Caught in the open is also the one thing the `unseen` errand asks you to avoid
+	# (D184), and the model is what knows it happened.
+	errand_seen = true
+	caught_ever = true
+	pending = {"type": int(m["type"]), "cell": pos, "mon": caught, "ambush": true}
+	if String(m.get("enemy", "")) != "":
+		pending["enemy"] = String(m["enemy"])
+	# A guard is a pocket's business, not the dungeon's (D182/D183), whether you walked into
+	# it or it reached you.
+	if int(m.get("pen", -1)) >= 0:
+		pending["optional"] = true
+	return pending
+
+## Put `count` more hunters on a floor that is already being walked (D197). Only the stone's
+## `crowded` state does this; everything else a floor fields is dealt at `generate`.
+##
+## Placed as far from the player as the floor allows rather than in the far half, because
+## "the far half" is measured from an entrance the player may be standing nowhere near — and
+## a monster that materialised beside them would be a price with no decision in it.
+func _spawn_late(count: int, dist_from_player: PackedInt32Array) -> void:
+	var taken := {}
+	for m in mons:
+		taken[int(m["cell"])] = true
+	var normal := Balance.roster_pool(dungeon, Balance.Tier.NORMAL)
+	for k in count:
+		var far := -1
+		var far_d := 0
+		for i in enc.size():
+			if int(enc[i]) != EMPTY or taken.has(i) or _in_pocket(i):
+				continue
+			var d := int(dist_from_player[i])
+			if d > far_d:
+				far_d = d
+				far = i
+		if far < 0:
+			return
+		taken[far] = true
+		mons.append({
+			"cell": far, "type": Enc.COMBAT, "design": (mons.size() + depth) % 4,
+			"south": true, "pen": -1,
+			"enemy": String(normal[randi() % normal.size()]) if not normal.is_empty() else "",
+		})
+		# It is a fight the dungeon did not ask for, so the dungeon now asks for it: the aspect
+		# is priced in gold rather than being budget-neutral (D197), and a quota that did not
+		# count it would let `progress()` read 1.0 with something still walking.
+		quota += 1
+		dodgeable += 1
+
 ## Walk one tile. Returns the encounter to resolve, or {} for a step that was handled
 ## here — open ground, or a descent.
 ##
@@ -2384,18 +2545,13 @@ func select(i: int) -> Dictionary:
 		shrine = -1
 		var lit := _dist_from(pos)
 		_reveal_around(pos, lit)
-		if floor_steps == _linger():
-			_rouse(pos, w * h)
-		var caught_st := _floor_turn(lit)
-		if caught_st >= 0:
-			var ms: Dictionary = mons[caught_st]
-			errand_seen = true
-			caught_ever = true
-			pending = {"type": int(ms["type"]), "cell": pos, "mon": caught_st, "ambush": true}
-			if String(ms.get("enemy", "")) != "":
-				pending["enemy"] = String(ms["enemy"])
-			return pending
-		return {}
+		# ...and one more of the floor gets up, on a floor that asked for it (D197). The only
+		# state a stone sets that has to DO something at the moment it is set: `dark` and
+		# `waking` are read back out of `floor_state` by `_sight` and `_linger`, but a hunter
+		# that does not exist cannot be conjured by a lookup.
+		if floor_state == Balance.ASPECT_CROWDED:
+			_spawn_late(Balance.ASPECT_EXTRA_WANDERERS, lit)
+		return _floor_moves(lit)
 
 	# Answering a toll is a turn spent where you stand, exactly as a push is (D186). Right,
 	# and the pocket opens; wrong, and it shuts for the floor and the price is REPORTED for
@@ -2413,42 +2569,38 @@ func select(i: int) -> Dictionary:
 			pk["missed"] = true
 		var asked := _dist_from(pos)
 		_reveal_around(pos, asked)
-		if floor_steps == _linger():
-			_rouse(pos, w * h)
-		var caught_ask := _floor_turn(asked)
-		if caught_ask >= 0:
-			var ma: Dictionary = mons[caught_ask]
-			errand_seen = true
-			caught_ever = true
-			pending = {"type": int(ma["type"]), "cell": pos, "mon": caught_ask,
-				"ambush": true}
-			if String(ma.get("enemy", "")) != "":
-				pending["enemy"] = String(ma["enemy"])
-			return pending
-		return {}
+		return _floor_moves(asked)
+
+	# Breaking away: the thing that has come for you loses you, and the fight does not happen.
+	# The HP price is reported on the option and paid by whoever owns the HP (D13), exactly as
+	# the deck model's dodge was — this method only takes the hunter off the floor and counts
+	# it. This is the crawl's priced decline, and since D197 it is the only kind there is: the
+	# old version squeezed past a fight STANDING on a tile, and no fight stands on a tile.
+	#
+	# A turn spent where you stand, not a step. Which is most of what makes it a decision —
+	# everything else on the floor closes one tile while you are shaking this one off.
+	if String(o.get("action", "")) == "avoid":
+		steps += 1
+		floor_steps += 1
+		var shed := int(o.get("mon", -1))
+		if shed >= 0 and shed < mons.size():
+			mons.remove_at(shed)
+		avoided += 1
+		var field0 := _dist_from(pos)
+		_reveal_around(pos, field0)
+		return _floor_moves(field0)
 
 	if String(o.get("action", "")) == "push":
 		steps += 1
 		floor_steps += 1
 		_open_pocket(int(o["pocket"]))
 		errand_pushed = true
-		# One flood, used twice, exactly as the slip does — and taken AFTER the opening, so
-		# the reveal and the wanderers both see the floor the push just made.
+		# One flood, used twice, exactly as the break-away does — and taken AFTER the opening,
+		# so the reveal and the hunters both see the floor the push just made, the guard the
+		# push just released included.
 		var pushed := _dist_from(pos)
 		_reveal_around(pos, pushed)
-		if floor_steps == _linger():
-			_rouse(pos, w * h)
-		var caught_push := _floor_turn(pushed)
-		if caught_push >= 0:
-			var mp: Dictionary = mons[caught_push]
-			errand_seen = true
-			caught_ever = true
-			pending = {"type": int(mp["type"]), "cell": pos, "mon": caught_push,
-				"ambush": true}
-			if String(mp.get("enemy", "")) != "":
-				pending["enemy"] = String(mp["enemy"])
-			return pending
-		return {}
+		return _floor_moves(pushed)
 
 	# The stairs are not a move across the floor, they are the end of it: descending
 	# replaces everything, so nothing below this line would mean anything.
@@ -2478,26 +2630,8 @@ func select(i: int) -> Dictionary:
 		enc[pos] = EMPTY
 		picked_key = true
 
-	# Slipping past: you take the tile and the fight does not happen. The HP price is
-	# reported on the option and paid by whoever owns the HP (D13), exactly as the deck
-	# model's dodge is — this method only clears the ground and counts it.
-	if String(o.get("action", "")) == "avoid":
-		enc[pos] = EMPTY
-		enemy_of.erase(pos)
-		avoided += 1
-		# One flood, used twice. Clearing the tile above cannot change it: only WALL
-		# blocks a step, and this tile was already walkable.
-		var field0 := _dist_from(pos)
-		_reveal_around(pos, field0)
-		_floor_turn(field0)
-		return {}
-
 	var field := _dist_from(pos)
 	_reveal_around(pos, field)
-	# Greed wakes the floor. Not extra monsters — that would inflate the encounter
-	# budget — just the ones already counted, which is pressure that cannot cheat.
-	if floor_steps == _linger():
-		_rouse(pos, w * h)
 	var caught := _floor_turn(field)
 
 	if int(enc[pos]) >= 0:
@@ -2520,19 +2654,14 @@ func select(i: int) -> Dictionary:
 			pending["chest"] = String(chest_of[pos])
 		return pending
 	if caught >= 0:
-		var m: Dictionary = mons[caught]
 		# `ambush` is a PRICE, reported and not applied: a traversal never touches run
 		# resources (D13), exactly as the old deck model reported its dodge and let the
-		# caller pay. Whoever owns the HP charges Balance.iso_ambush_cost.
-		# Caught in the open, which is the one thing the `unseen` errand asks you to avoid
-		# (D184). Recorded here rather than where the HP is charged, because the model is what
-		# knows it happened and the charge is somebody else's (D13).
-		errand_seen = true
-		caught_ever = true
-		pending = {"type": int(m["type"]), "cell": pos, "mon": caught, "ambush": true}
-		if String(m.get("enemy", "")) != "":
-			pending["enemy"] = String(m["enemy"])
-		return pending
+		# caller pay. Whoever owns the HP charges Balance.iso_ambush_cost. Built by the same
+		# helper the standing turns use, so a guard caught here is flagged optional exactly as
+		# one caught while you pushed at a wall is — that flag decides whether the fight counts
+		# against `quota`, and getting it right in three places and wrong in the fourth is how
+		# `progress()` would quietly read past 1.0 on a floor with a pocket in it.
+		return _catch(caught)
 	return {}
 
 func clear_pending() -> void:
@@ -2561,9 +2690,10 @@ func clear_pending() -> void:
 		if kind_of == Enc.TREASURE:
 			errand_chests = maxi(0, errand_chests - 1)
 	pending = {}
-	# A fight is loud. Anything else — a shop, a rest, a chest — is not.
-	if kind_of == Enc.COMBAT or kind_of == Enc.ELITE:
-		_rouse(cell, Balance.ISO_NOISE)
+	# A fight used to be LOUD, and winning one woke everything within earshot. Nothing on this
+	# floor is asleep any more (D197), so noise had nothing left to do: the rule it encoded —
+	# where you choose to fight is a decision — is now true of every turn rather than of the
+	# turns after a fight.
 
 ## Never reaches 1.0 on a dungeon whose wanderers you slipped past, which is correct: you
 ## left something down there. `is_complete` is what
@@ -2666,11 +2796,21 @@ func _load(d: Dictionary) -> void:
 		plan.append(row)
 	while plan.size() < floors:
 		plan.append([])
+	# `roam` holds a list of Enc values per floor since D197, where it used to hold a count of
+	# combats. A save from before that comes back as numbers, and the honest reading of an old
+	# "2" is two combats — which is what it laid out then and what it lays out now.
 	roam = []
 	for r in d.get("roam", []):
-		roam.append(int(r))
+		var row: Array = []
+		if r is Array:
+			for e in r:
+				row.append(int(e))
+		else:
+			for k in maxi(0, int(r)):
+				row.append(Enc.COMBAT)
+		roam.append(row)
 	while roam.size() < floors:
-		roam.append(0)
+		roam.append([])
 	# A save written before keys were on the floor has no `keyplan`, and zeroes are the
 	# right answer for it: the floors it already laid out have no keys on them either, so
 	# a resumed run is short of keys rather than restored into a floor it never had.
@@ -2697,10 +2837,13 @@ func _load(d: Dictionary) -> void:
 		mons.append({
 			"cell": int(md.get("cell", 0)),
 			"type": int(md.get("type", Enc.COMBAT)),
-			"awake": bool(md.get("awake", false)),
 			"design": int(md.get("design", 0)),
 			"south": bool(md.get("south", true)),
 			"enemy": String(md.get("enemy", "")),
+			# A save from before D197 has no pen and no guards among its `mons` at all — its
+			# guards are still standing on tiles as ELITE encounters, which resolve exactly as
+			# they did. -1 is the right answer for every monster such a save holds.
+			"pen": int(md.get("pen", -1)),
 		})
 	# JSON has no integer keys: every cell comes back as the STRING "42". Restoring this
 	# without the conversion leaves a dictionary that looks full and answers nothing,

@@ -176,16 +176,18 @@ func _the_floor(list: Node) -> void:
 	var body := _section(list, "The Floor", "It takes a step whenever you do.")
 	_entry(body, "A step is a turn", ("A dungeon is a painted floor walked one tile at a time, and "
 		+ "everything else standing on it moves when you move. Standing still buys nothing."))
-	_entry(body, "Wanderers", ("Some of a floor's fights do not wait in rooms — they walk it looking "
-		+ "for you. They come out of the dungeon's encounter count rather than on top of it, so a "
-		+ "floor that hunts is not a harder floor. It is the same floor, walking."), "skull")
-	_entry(body, "Noise", ("A fight is loud. Anything within %d steps wakes and starts toward the "
-		+ "sound, so where you choose to fight is a decision.") % Balance.ISO_NOISE, "attack")
-	_entry(body, "Caught in the open", ("A wanderer that reaches you swings first: %d%% of your "
+	_entry(body, "Nothing waits", ("Every fight in a dungeon walks it, and all of them are walking "
+		+ "toward you from the moment you arrive. They come out of the encounter count rather "
+		+ "than on top of it: a floor that hunts is not a harder floor, it is the same floor "
+		+ "coming to meet you."), "skull")
+	_entry(body, "Caught in the open", ("Anything that reaches you swings first: %d%% of your "
 		+ "health before a card is played. The price is for being caught, never for walking.") % [
 			roundi(Balance.ISO_AMBUSH_PCT)], "hp")
-	_entry(body, "Lingering", ("Past %d steps on one floor, everything left on it knows where you "
-		+ "are. Greed is timed.") % Balance.ISO_LINGER)
+	_entry(body, "Breaking away", ("A hunter beside you can be shaken off instead of fought, for "
+		+ "health. It costs a turn, and every other thing on the floor spends that turn getting "
+		+ "closer. Each one after the first costs more."), "hp")
+	_entry(body, "Lingering", ("Past %d steps on one floor, everything on it takes two steps to "
+		+ "your one. Greed is timed.") % Balance.ISO_LINGER)
 	# The one rule on this screen that is a PLACE rather than a number. It belongs here
 	# because the alternative is finding it out at a chest that has already stayed shut,
 	# and because "keys are somewhere" is the whole of D167.

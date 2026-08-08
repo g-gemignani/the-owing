@@ -184,6 +184,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D194** | [The rat was fighting alongside somebody else's legs](#d194--the-rat-was-fighting-alongside-somebody-elses-legs) |
 | **D195** | [The Brood-Mother's abdomen was cut out of her and called background](#d195--the-brood-mothers-abdomen-was-cut-out-of-her-and-called-background) |
 | **D196** | [The documentation had drifted in the two ways it warns about, and one of them was in the file that does the warning](#d196--the-documentation-had-drifted-in-the-two-ways-it-warns-about-and-one-of-them-was-in-the-file-that-does-the-warning) |
+| **D197** | [Nothing in the dungeon waits any more](#d197--nothing-in-the-dungeon-waits-any-more) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -12275,3 +12276,142 @@ Reconstructions upsample 4x, which rings every edge and inflates the interior me
 so they over-report refusals and cannot bound the false-positive rate. **The first real
 batch of paintings is what will settle the number**, and the `kept_pockets` line is how it
 will be visible when it does.
+
+### D197 — Nothing in the dungeon waits any more
+
+Every fight in a dungeon now walks it, and all of them are walking toward the player from the
+turn the floor is laid down. The instruction was as blunt as this section title: *all the
+monsters shall try to catch the hero, no one shall stand still.*
+
+#### What the floor actually was before this
+
+Half the combat budget stood on tiles until you walked into it. The other half walked — and
+those slept. A wanderer woke inside `ISO_WANDER_SENSE` (5 steps), when a fight was won within
+`ISO_NOISE` (6 steps), or at `ISO_LINGER` (22 turns on one floor); until then it took a random
+step to a random neighbour. Measured over a floor, the great majority of every monster's
+existence was spent either standing on a tile or drifting, and the model's promise — *this is
+a place and something else is using it* — was kept for a handful of turns out of forty.
+
+#### What replaced it
+
+`mons` lost its `awake` flag; `_rouse` and both of its radii are gone. `_floor_turn` walks
+every hunter every turn, steering off the player's own distance field so the chase follows
+the floor round corners. Nothing holds its ground: where no neighbour closes the gap it takes
+the lowest-indexed free one instead — deterministically, because D22 wants a restored run to
+move identically and a coin flip here would not survive a reload. Hunters no longer walk
+through each other either, which never mattered while they were asleep in separate rooms and
+matters every turn now that all of them steer for the same tile: `threats()` is keyed by cell,
+so a pile of four was drawn as one.
+
+`roam` holds a list of `Enc` values per floor rather than a count of combats, because the
+elites walk too. `plan` keeps what the floor still stands still: rests, shops, events, chests,
+the stair, the boss.
+
+**Lingering changed meaning rather than being deleted.** There is nothing left to wake, so
+past `ISO_LINGER` turns on a floor its hunters take two steps to your one. Same constant, same
+job — greed is timed — and `iso_optional_turn_budget` still derives the completionist ceiling
+from it (D179) without a line changing.
+
+#### The guard had to keep standing between you and the prize while not standing still
+
+A pocket guard (D183) is *defined* by being between you and the loot. A guard that joined the
+hunt would leave the prize free to anyone who opened the wall and waited. So it walks and is
+penned: `mons` entries carry `pen`, -1 for the open floor or the index of the pocket a guard
+may not leave. On three or four tiles there is no getting past it, which is the decision D183
+wrote, now with the guard taking the first swing. Penned hunters are excluded from `others`
+in `_compute_options` and seed nothing in `_dist_to_unresolved`, for exactly the reason
+nothing else in a pocket does (D182): they would hold the stairs back over content the dungeon
+never asked for, and drag the measured required path into every pocket.
+
+#### The priced decline had nothing left to attach to
+
+The slip past (D88/D99) squeezed you into the tile a fight was standing on. No fight stands on
+a tile. It became **break away**: a hunter that has come within reach can be shed for HP, and
+it is a turn spent where you stand, so everything else on the floor closes a tile while you
+do it. Same `avoid_cost` ladder, same `dodgeable` count, same `avoided` counter feeding
+`progress()` — the sim's calibration driver keys off `action == "avoid"` and needed no change.
+It is still ranked below even the stairs so the greedy walker never presses it.
+
+`iso_run.gd` had to stop returning early after paying for one: while a slip was a step past a
+tile it could not produce an encounter, and a break-away can — the very next thing that
+reaches you the same turn is an ambush the screen still has to charge for.
+
+#### It made the game easier, and the report is why
+
+First measurement of the mechanic alone, 120 trials a cell, 42 cells: **67.3% mean completion
+before, 69.3% after.** The floor got meaner and the numbers went the wrong way. The brief was
+to make the game *harder* — the hero is expected to die often — so this was the change failing
+at its own stated purpose, not a tuning nicety.
+
+The cause is arithmetic, not policy. `avoid_cost` divides `AVOID_TOTAL_FRACTION` of a health
+bar by however many rungs the dungeon offers. That count doubled — every combat *and* every
+elite is now declinable — so the first rung fell to about 3 HP of a 60 HP bar, and declining
+also stopped requiring you to reach the thing. The simulator's driver, which is not trying to
+be clever and only trying not to die, went from 0.4 dodges a run to 1.6.
+
+#### The calibration is what set the price, and one bar was not enough
+
+The avoid calibration plays each cell three ways — always face, smart, always avoid — and the
+price is right only when the smart line beats both. At HEAD it was not close: **always-avoid
+lost badly everywhere** (71% against a smart 97% at the Crypt, 38% against 82% at the Warrens,
+52% against 93% at the Foundry), 0 underpriced warnings in 35 cells.
+
+The first fix was `AVOID_TOTAL_FRACTION` 0.70 → 1.00, and it measured **8 underpriced cells in
+37**. A full bar still had not covered it, because of what a decline now BUYS: twice as many
+fights to decline, and each one carries an ambush that declining also dodges. Five fights plus
+five ambushes is comfortably more than one health bar at matched progression, so the whole
+ladder was still profitable to climb to the top.
+
+Three constants ended up moving, all of them at the thing that actually slackened:
+
+- `AVOID_TOTAL_FRACTION` 0.70 → **1.80**. The third rung alone is now 36% of the bar and the
+  fourth is unaffordable in practice.
+- `AVOID_STEP` 1.0 → **2.0**. At 1.80 with the old step the four-rung dungeons — the Maw, the
+  Abyssal Stair, the Rot Gardens — wanted **18% of the bar for the FIRST break-away**, and a
+  decision nobody can afford to take once is as removed as one that is always right (D20).
+  Steepening the climb rather than the entry put those back to 11% while leaving the total
+  where it needs to be. The first is the one you want; the last should be unthinkable.
+- `ISO_AMBUSH_PCT` 7.0 → **10.0**. Being caught was the price of carelessness when most fights
+  stood still and the walkers were asleep four turns in five. It is the price of the model
+  now, and the whole difference between a good and a bad player on this floor is how many of
+  these they eat.
+
+Final: **57.9% mean completion against 67.3% before**, and the calibration back in range — 1
+underpriced and 1 over-dodging in 34 cells, against HEAD's 0 and 2 in 35. The report's own
+target band moved with the intent rather than to fit the numbers: 50-70% at matched
+progression became **40-60%, and <15% when over-reaching**, because the instruction was that
+the hero should be expected to die often.
+
+#### What this did NOT fix, and should not be read as having fixed
+
+The walkover cells did not move. Barricade at the Warrens, Relic at the Warrens and the
+Foundry, and Maxed commons at the Foundry all sat at 100% before and sit at 100% now. That is
+the shape D175 warns about seen from the other side — a change that lands hardest on the deck
+with the least slack and leaves the solved decks exactly where they were. The falls here are
+10-30 points at matched progression and 20 at the Ossuary with a starter deck, which is a real
+difficulty change; it is not a fix for decks that had already solved the game, and nothing in
+this decision addressed those.
+
+#### The `Walked` aspect stopped being budget-neutral, and is priced instead
+
+Its neutrality was arithmetic: a wanderer came *out* of the standing fights, so putting one
+more on its feet moved a fight rather than adding one. There are no standing fights left to
+move. It adds one hunter per floor, that hunter is counted into `quota`, and `ASPECT_GOLD_PCT`
+is what pays for it — which is the rule this block already set for optional difficulty. The
+budget assertion in `tests/test_traversal.gd` now allows exactly the fights the aspect says it
+adds and no others, so a budget drifting on its own is still caught.
+
+The stone's `crowded` state was a **no-op before this** and nobody had noticed: `floor_state`
+is read back out by `_sight` and `_linger` for the other two aspects, but a hunter that does
+not exist cannot be conjured by a lookup, so "more of this floor gets up" got up nothing. It
+spawns one now, as far from the player as the floor allows.
+
+#### What is not yet known
+
+The one underpriced cell left (Ember Road, Status build: smart 41%, always-avoid 48%) is inside
+the noise the harness tolerates and matches the rate HEAD carried in the other direction, but
+it has not been chased. The break-away is priced as a rising ladder solved from `dodgeable`,
+and `dodgeable` is now every fight in the dungeon. Whether a player who breaks away *early and often* can still be
+caught out by the last rung is a question only a human hand answers — the simulator's driver
+prices HP and not loot (it says so itself), and it has never been the right instrument for
+"was this fun to decline".

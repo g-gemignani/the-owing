@@ -686,13 +686,43 @@ const ENCOUNTER_TREASURES := 1
 ## `TraversalIso` counts its own dodgeable fights at generation and hands the number
 ## over; nothing derives it a second time.
 ##
-## `AVOID_STEP` is 1.0, not the old 0.5: the second slip costs twice the first and
-## the third three times it. A steeper climb is what keeps the FIRST rung affordable
-## while the total still reaches the target on a two-rung ladder — at 0.5 a two-dodge
-## dungeon had to charge 28% of the bar up front to reach 70%, past the point where
-## anyone would ever use the first one.
-const AVOID_TOTAL_FRACTION := 0.70
-const AVOID_STEP := 1.0
+## `AVOID_STEP` is 2.0, and each raise of it has come from the same pressure: a steeper climb
+## keeps the FIRST rung affordable while the total still reaches the target on a SHORT ladder.
+## At 0.5 a two-dodge dungeon had to charge 28% of the bar up front to reach 70%, past the
+## point where anyone would ever use the first one, so it went to 1.0. At 1.0 and the D197
+## total of 1.80 the four-rung dungeons — the Maw, the Abyssal Stair, the Rot Gardens — wanted
+## 18% of the bar for the FIRST break-away, and a decision nobody can afford to take once is
+## as removed as one that is always right (D20). At 2.0 the same dungeons open at 11% and the
+## third rung is 56% of a bar, which is the shape this was always meant to have: the first is
+## the one you want, the last should be unthinkable.
+##
+## **0.70 until D197, and the mechanic under it changed shape twice in one edit.** Declining a
+## fight used to mean walking INTO the tile it stood on and squeezing past — you paid HP and
+## you still had to reach the thing. Since every fight walks, declining means shedding
+## something already standing beside you, from wherever you happen to be, and there are twice
+## as many rungs on the ladder because the elites are on it too. `avoid_cost` divides the
+## budget by the rungs, so the same 0.70 came out as a FIRST rung of 3 HP on a 60 HP bar, and
+## the simulator's driver — which is not trying to be clever, only not to die — went from
+## 0.4 dodges a run to 1.6 and completion went UP three points on a change meant to make the
+## floor meaner.
+##
+## **1.80, and the calibration is what picked the number.** A full bar was the first guess and
+## it was not enough: `ALWAYS-AVOID` went from losing badly at HEAD (71% against a smart line
+## of 97% at the Crypt, 38% against 82% at the Warrens) to matching or beating it in four
+## cells, which is D20's dominant strategy — a removed decision — and the exact fault D99 was
+## written about.
+##
+## The arithmetic behind why one bar could not cover it: what a full-dungeon decline now BUYS
+## roughly doubled, because there are twice as many fights to decline and each one carries an
+## ambush (`ISO_AMBUSH_PCT`) that declining also dodges. Five fights plus five ambushes is
+## comfortably more than one health bar at matched progression, so a one-bar ladder was still
+## profitable to climb to the top. At 1.80 the third rung alone is 36% of the bar and the
+## fourth is unaffordable in practice, which is the shape this was always supposed to have.
+##
+## The first rung is still cheap — 12% of the bar — and that is the property the block was
+## tuned for from the start. It is the LAST rungs that have to be unaffordable.
+const AVOID_TOTAL_FRACTION := 1.80
+const AVOID_STEP := 2.0
 
 ## What dodging EVERY fight in this dungeon should cost, as a fraction of a health
 ## bar derived from depth (not from the player, per D13).
@@ -1348,9 +1378,9 @@ static func shrine_gold(difficulty: int) -> int:
 ## What a stone offers, in the register of the events. It names the STATE, because the whole
 ## point is that the player knows what they are buying before they pay for it.
 const SHRINE_LINE := {
-	ASPECT_WAKING: "Put your hand on it and the floor will stir. It pays for the trouble.",
+	ASPECT_WAKING: "Put your hand on it and this floor will close on you sooner. It pays for the trouble.",
 	ASPECT_DARK: "Put your hand on it and the light goes out of this floor. It pays for the trouble.",
-	ASPECT_CROWDED: "Put your hand on it and more of this floor gets up. It pays for the trouble.",
+	ASPECT_CROWDED: "Put your hand on it and one more of this floor gets up. It pays for the trouble.",
 }
 
 static func shrine_line(state: String) -> String:
@@ -1368,16 +1398,16 @@ static func shrine_line(state: String) -> String:
 # game shows you the difficulty and names the boss before you commit (D41). You are told what
 # the Ossuary is like this time, on the row you press.
 #
-# Every aspect here is BUDGET-NEUTRAL by construction, which is what lets them ship without
-# re-opening the attrition model:
+# Two of the three are BUDGET-NEUTRAL by construction, which is what let them ship without
+# re-opening the attrition model. The third stopped being so in D197 and is priced instead:
 #
-#   waking   — the floor rouses sooner. Pressure out of `ISO_LINGER`, which wakes what is
-#              already counted rather than adding anything (the same argument that made
-#              linger the answer to greed in the first place, D77).
+#   waking   — the floor closes in sooner. Pressure out of `ISO_LINGER`, which speeds up
+#              what is already counted rather than adding anything (the same argument that
+#              made linger the answer to greed in the first place, D77).
 #   dark     — sight drops to one. It changes what you KNOW, not what is there.
-#   crowded  — one more wanderer and one fewer thing standing still. The plan's own
-#              suggestion, and it is neutral by arithmetic: wanderers come OUT of the combat
-#              budget (D14), so this moves a fight rather than adding one.
+#   crowded  — one more hunter per floor. The only one that is not budget-neutral, since
+#              D197 left nothing standing to take it from; it is priced instead (see
+#              `ASPECT_EXTRA_WANDERERS`).
 #
 # And it is PRICED. An aspect that adds difficulty adds reward, or it is a tax on replaying —
 # which is the opposite of the point. The pay is gold, on top of the diminishing repeat payout
@@ -1393,14 +1423,22 @@ const ASPECT_NAME := {
 	ASPECT_CROWDED: "Walked",
 }
 const ASPECT_LINE := {
-	ASPECT_WAKING: "it wakes sooner than it should",
+	ASPECT_WAKING: "it closes on you sooner than it should",
 	ASPECT_DARK: "the light is out of it; you will see one step",
-	ASPECT_CROWDED: "more of it is walking, and less of it is waiting",
+	ASPECT_CROWDED: "there is one more of it walking every floor",
 }
 ## What each one does to the numbers the floor already has.
 const ASPECT_LINGER_PCT := 55     ## waking: ISO_LINGER falls to this
 const ASPECT_SIGHT := 1           ## dark: ISO_SIGHT becomes this
-const ASPECT_EXTRA_WANDERERS := 1 ## crowded: this many more, taken from the standing fights
+## crowded: this many more hunters per floor.
+##
+## The one aspect that is NOT budget-neutral, and it stopped being so in D197. Its neutrality
+## was arithmetic — a wanderer came OUT of the standing fights, so moving one more onto its
+## feet moved a fight rather than adding one — and there are no standing fights left to move.
+## What is left is an aspect that adds a fight per floor, which is fine on the terms this
+## block already sets: an aspect that adds difficulty adds reward, and `ASPECT_GOLD_PCT` is
+## the channel. It is counted into `quota`, so a dungeon wearing it asks for more and says so.
+const ASPECT_EXTRA_WANDERERS := 1
 ## Extra gold, as a percentage, for clearing a dungeon wearing one.
 const ASPECT_GOLD_PCT := 25
 
@@ -1637,25 +1675,16 @@ static func iso_family(enemy_id: String) -> String:
 		return "brute"
 	return "caster"
 
-## A fight is loud. Wanderers this many steps away wake up and start hunting, which
-## is what couples the battle system to the space: WHERE you choose to fight matters,
-## and clearing a room next to a sleeping thing is a decision rather than free.
-const ISO_NOISE := 6
-## Steps on one floor after which everything on it knows you are there. Pressure that
+## Steps on one floor after which its hunters take TWO steps to your one. Pressure that
 ## rises with greed, and — unlike spawning extra monsters — it cannot inflate the
-## encounter budget, because it wakes what is already counted.
+## encounter budget, because it hurries what is already counted.
+##
+## It used to be the step at which everything on the floor WOKE UP. D197 took the sleeping
+## away: a floor's fights all hunt from the first turn now, so there is nothing left to wake
+## and the only pressure a turn count can still apply is speed. Same number, same job —
+## greed is timed — and the number is kept because `iso_optional_turn_budget` derives the
+## completionist ceiling from it (D179) and that derivation did not change.
 const ISO_LINGER := 22
-
-## Wanderers come OUT of the combat budget, they are not added to it: a dungeon
-## must cost what its difficulty says it costs (D14), so the choice here is how
-## much of the budget hunts you rather than how much there is. Half, floored at
-## one, so every floor has something on it and the elites stay put as landmarks.
-const ISO_WANDER_FRACTION := 0.5
-## Steps at which a wanderer notices you and starts pathing. Past it they drift.
-## This is the dial that decides how much of the combat budget a careful player
-## can actually evade, and therefore whether ISO still costs what GRAPH costs —
-## tuned against tools/sim_balance.gd, not chosen.
-const ISO_WANDER_SENSE := 5
 
 ## What being caught in the open costs, before the fight even starts.
 ##
@@ -1677,25 +1706,33 @@ const ISO_WANDER_SENSE := 5
 ## gently: the Foundry at d3 with an Early deck paid ~26 HP of a 80-point bar before any
 ## fight started and measured **0%**, while the Abyssal Stair fell to 4%.
 ##
+## **And 7.0 until D197.** Being caught used to be the exception a careful player could play
+## around: most of a floor's fights stood still, and the ones that walked were asleep four
+## turns in five. It is the RULE now — every fight in the dungeon is walking toward you from
+## the turn you arrive — so this stopped being the price of carelessness and became the price
+## of the model. That is a reason to charge more for it, not less: the whole difference
+## between a good and a bad player on this floor is how many of these they eat, and at 7% the
+## difference was not worth playing for.
+##
 ## A flat cost cannot be right at both 60 HP and 220 HP — it is a third of the opening bar
 ## and a rounding error by the endgame — and depth-scaling it only moves which end is
 ## wrong. A percentage is the same *decision* at every point on the curve, which is what
 ## this price is supposed to be: the cost of being careless, not a toll that grows.
 ## Floored so it never rounds to nothing.
-const ISO_AMBUSH_PCT := 7.0
+const ISO_AMBUSH_PCT := 10.0
 const ISO_AMBUSH_MIN_HP := 3
 
 static func iso_ambush_cost(max_hp: int) -> int:
 	return maxi(ISO_AMBUSH_MIN_HP, int(round(float(maxi(1, max_hp)) * ISO_AMBUSH_PCT / 100.0)))
 
 ## How much MORE of a floor's turns the optional route may spend than the required one
-## (D179), expressed in rouses rather than in turns — because turns are what the floor
+## (D179), expressed in lingerings rather than in turns — because turns are what the floor
 ## charges and `ISO_LINGER` is the price list.
 ##
 ## The plan asked for the completionist ceiling to be *derived, not picked*, and this is the
-## derivation: a floor wakes up every `ISO_LINGER` turns you spend on it, and an optional
-## route that costs more than one extra waking has stopped being a choice and become a
-## difficulty setting. It is RELATIVE to the required path deliberately. An absolute
+## derivation: a floor hurries its hunters every `ISO_LINGER` turns you spend on it, and an
+## optional route that costs more than one extra hurrying has stopped being a choice and
+## become a difficulty setting. It is RELATIVE to the required path deliberately. An absolute
 ## per-floor number would have been wrong on the day it was written — the greedy route
 ## already spends 22 to 45 turns on a floor depending on how many floors the dungeon has —
 ## and it would go stale the first time floor sizes moved.
@@ -1705,14 +1742,13 @@ const ISO_COMPLETIONIST_ROUSES := 1
 static func iso_optional_turn_budget() -> int:
 	return ISO_LINGER * ISO_COMPLETIONIST_ROUSES
 
-static func iso_wanderers_for(combats: int) -> int:
-	if combats <= 0:
-		return 0
-	# Rounds up at the half, not down. Flooring gave ONE wanderer for the three-combat
-	# mix that nine of the twelve dungeons use, and one thing moving on a 27-tile floor
-	# is a floor that is still basically empty — the whole point of the open ground is
-	# that something is using it too.
-	return maxi(1, int(round(float(combats) * ISO_WANDER_FRACTION)))
+## How many steps a floor's hunters take per turn of yours, given how long you have been
+## on that floor. One, until you have outstayed `linger`; two after (D197).
+##
+## A function rather than a branch at the call site because it is the whole of what
+## lingering now means, and the floor asks the question in four places.
+static func iso_hunter_steps(floor_steps: int, linger: int) -> int:
+	return 2 if floor_steps >= maxi(1, linger) else 1
 
 const NODE_LABEL := {0: "Combat", 1: "Elite", 2: "Rest", 3: "BOSS", 4: "Shop",
 	5: "Event", 6: "Treasure"}

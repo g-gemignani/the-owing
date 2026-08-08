@@ -29,8 +29,11 @@ The loop:
    before you commit.
 2. **Deck builder** — assemble a run deck from your owned cards and equip one Power.
 3. **Run** — crawl the dungeon: a painted isometric building of rooms and corridors over
-   several floors, explored a tile at a time, with things walking it that take a step
-   whenever you do. Fight, shop, rest, hit events and crack chests, down to a named boss.
+   several floors, explored a tile at a time. **Every fight in it walks, and all of them are
+   walking toward you from the turn you arrive** (D197) — nothing waits on a tile, nothing
+   sleeps, and the ones you outstay start taking two steps to your one. A hunter beside you
+   can be fought or shaken off for health, and shaking it off costs the turn everything else
+   spends getting closer. Shop, rest, hit events and crack chests, down to a named boss.
    A locked chest wants a key, and the keys are lying on the floors — off the route, in the
    far corner of some room you had no other reason to cross (D167). Which chest wants one is
    readable from the doorway: a chest stands in the light of its own tier (D172). The floor
@@ -322,6 +325,11 @@ effects are drawn at runtime by `scripts/fx.gd`.
   deriving a number from the same stale source agree with each other and with nothing
   else.** `avoid_cost` now takes the count from the traversal that generates it, and solves
   the base so the whole ladder lands on the target however many rungs there are (D99).
+  **And it happened again the moment N moved, exactly as designed to be survivable:** when
+  every fight started walking (D197) the rung count doubled, the solver did its job, the
+  first rung fell to 3 HP of a 60 HP bar and completion went *up* three points on a change
+  meant to make the floor meaner. Solving for the total is what keeps a ladder honest; it
+  does not tell you the total is still the right total.
 
 - **A harness that selects by name goes quiet when the name changes.** The avoid calibration
   filtered on `Kind.DECK` and matched nothing the moment every dungeon became isometric — so
@@ -418,7 +426,7 @@ effects are drawn at runtime by `scripts/fx.gd`.
   ranked option, and optional business is deliberately invisible to that ranking — keys are
   ranked, not required (D167). So there is a second walker for the player who strips a floor,
   with its own figure and a ceiling *derived* from `ISO_LINGER` (an optional route costing
-  more than one extra waking of the floor has become a difficulty setting, not a choice), plus
+  more than one extra hurrying of the floor has become a difficulty setting, not a choice), plus
   a `--explore` route policy in the simulator, because a walker counts moves and only the
   simulator can price them in HP. **It shipped alone, before any optional content existed**
   (D179): a baseline measured after the feature it exists to price has landed is not a

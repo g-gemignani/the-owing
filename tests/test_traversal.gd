@@ -1161,9 +1161,11 @@ func _init() -> void:
 	# --- aspects: a place you have cleared is not the same place (D187) ---------------
 	#
 	# The property that matters is that an aspect changes how a dungeon PLAYS without changing
-	# what it costs. Every one of the three is budget-neutral by construction rather than by
-	# hope, and this is where that is checked: the encounter budget of a dungeon wearing one
-	# must be identical to the same dungeon wearing none.
+	# what it costs — and TWO of the three still do exactly that. `Walked` stopped being
+	# budget-neutral in D197, when the last thing standing still got up and there was nothing
+	# left for its extra hunter to be taken from; it adds one fight per floor and is priced in
+	# gold instead. So the assertion is not "identical" but "identical, or exactly the fights
+	# the aspect says it adds" — which still catches a budget drifting on its own.
 	var aspect_budget := {}
 	for dida in Balance.DUNGEONS:
 		var dda := Balance.dungeon(dida)
@@ -1172,10 +1174,12 @@ func _init() -> void:
 			var at2 := TraversalIso.new()
 			at2.aspect = String(asp)
 			at2.generate(dda)
-			if at2.quota != want_q:
+			var added: int = at2.floors * Balance.ASPECT_EXTRA_WANDERERS \
+				if String(asp) == Balance.ASPECT_CROWDED else 0
+			if at2.quota != want_q + added:
 				fails += 1
 				print("FAIL %s wearing '%s': quota %d, the dungeon budgeted %d" % [
-					dida, asp, at2.quota, want_q])
+					dida, asp, at2.quota, want_q + added])
 			aspect_budget[String(asp)] = int(aspect_budget.get(String(asp), 0)) + at2.quota
 			# ...and `Walked` must actually put more of it on its feet, or the aspect is a
 			# name with nothing behind it.
@@ -1184,15 +1188,84 @@ func _init() -> void:
 				plain.generate(dda)
 				var walking := 0
 				for r in at2.roam:
-					walking += int(r)
-					pass
+					walking += (r as Array).size()
 				var still := 0
 				for r in plain.roam:
-					still += int(r)
+					still += (r as Array).size()
 				if walking <= still:
 					fails += 1
-					print("FAIL %s: 'Walked' fields %d wanderers against the plain %d" % [
+					print("FAIL %s: 'Walked' fields %d hunters against the plain %d" % [
 						dida, walking, still])
+	# ...and every fight the dungeon holds is one of the things walking it (D197). This is the
+	# assertion the model's whole promise rests on: nothing waits on a tile to be walked into.
+	for didw in Balance.DUNGEONS:
+		var wt := TraversalIso.new()
+		wt.generate(Balance.dungeon(didw))
+		for i in wt.enc.size():
+			var ew := int(wt.enc[i])
+			if ew == Traversal.Enc.COMBAT or ew == Traversal.Enc.ELITE:
+				fails += 1
+				print("FAIL %s stands a fight on a tile: nothing in this model waits" % didw)
+				break
+		if wt.mons.is_empty():
+			fails += 1
+			print("FAIL %s laid down a floor with nothing hunting on it" % didw)
+
+	# --- and every one of them is coming for you, every turn (D197) -------------------
+	#
+	# Two separate claims, and neither is visible in the generation assertions above. The
+	# floor is asked to take its turn with the player standing still, so anything that moves
+	# moved because it wanted to and not because the geometry shifted under it.
+	#
+	#   1. NOTHING HOLDS ITS GROUND. A hunter may stay put only if it has already reached the
+	#      player — that is what an engagement IS — or if every neighbour is rock or occupied.
+	#      This is the clause that would silently rot: a chase written off a distance field
+	#      keeps working when the sidestep breaks, because most turns have a closer tile in
+	#      them and the failure only shows in a corridor.
+	#   2. THEY CLOSE. Ten turns of a stationary player must bring the nearest one to touching
+	#      distance. A hunter that moves without converging is a drifter with extra steps, and
+	#      that is exactly what this decision deleted.
+	var stood_still := 0
+	for didh in Balance.DUNGEONS:
+		var ht := TraversalIso.new()
+		ht.generate(Balance.dungeon(didh))
+		var d0 := ht._dist_from(ht.pos)
+		var was_at: Array = []
+		for m in ht.mons:
+			was_at.append(int(m["cell"]))
+		ht._floor_turn(d0)
+		for k in ht.mons.size():
+			if int((ht.mons[k] as Dictionary)["cell"]) != int(was_at[k]):
+				continue
+			var here := int(was_at[k])
+			if int(d0[here]) <= 1:
+				continue                      # it is on you; holding ground is the engagement
+			var ways := 0
+			for n in ht._neighbours(here):
+				if int(ht.enc[n]) != TraversalIso.WALL and n != here:
+					ways += 1
+			if ways > 0:
+				stood_still += 1
+				fails += 1
+				print("FAIL %s: a hunter %d steps away held its ground with %d ways to go" % [
+					didh, int(d0[here]), ways])
+		# ...and it is a CHASE. The player never moves, so the only thing that can shorten
+		# this is the floor walking toward them.
+		var nearest := 9999
+		for m in ht.mons:
+			nearest = mini(nearest, int(d0[int(m["cell"])]))
+		for _t in 10:
+			ht._floor_turn(ht._dist_from(ht.pos))
+		var now_near := 9999
+		var field_h := ht._dist_from(ht.pos)
+		for m in ht.mons:
+			now_near = mini(now_near, int(field_h[int(m["cell"])]))
+		if now_near > 1 and now_near >= nearest:
+			fails += 1
+			print("FAIL %s: ten turns of standing still and the nearest hunter went %d -> %d" % [
+				didh, nearest, now_near])
+	print("  (info: every fight walks; %d hunters held ground with somewhere to go)" % stood_still)
+
 	# The rotation has to reach every aspect and start at none, or a player either never sees
 	# one or never sees the dungeon as written.
 	if Balance.aspect_for(0) != Balance.ASPECT_NONE:
@@ -1217,9 +1290,9 @@ func _init() -> void:
 	var waking := TraversalIso.new()
 	waking.aspect = Balance.ASPECT_WAKING
 	if waking._linger() >= Balance.ISO_LINGER:
-		fails += 1; print("FAIL 'Waking' does not bring the rousing in")
-	print("  (info: aspects %s, budget identical in all of them, +%d%% gold)" % [
-		str(Balance.ASPECTS), Balance.ASPECT_GOLD_PCT])
+		fails += 1; print("FAIL 'Waking' does not bring the hurrying in")
+	print("  (info: aspects %s, +%d%% gold; 'Walked' adds %d fight/floor and is priced)" % [
+		str(Balance.ASPECTS), Balance.ASPECT_GOLD_PCT, Balance.ASPECT_EXTRA_WANDERERS])
 
 	# --- the dressing has to survive being written down (R7) -------------------------
 	#

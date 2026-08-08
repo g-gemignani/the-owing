@@ -175,7 +175,7 @@ func _stage(tv: TraversalIso) -> void:
 		if c3 == tv.pos:
 			c3 += 1
 		var fam2: String = String(fams[k % fams.size()])
-		tv.mons.append({"cell": c3, "type": Traversal.Enc.COMBAT, "awake": true,
+		tv.mons.append({"cell": c3, "type": Traversal.Enc.COMBAT, "pen": -1,
 			"design": k, "south": k % 2 == 0,
 			"enemy": String(by_family.get(fam2, ""))})
 	# ...and the two stationary fights get cast too, so the tile art and the wanderer art

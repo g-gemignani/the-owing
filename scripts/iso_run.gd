@@ -176,8 +176,8 @@ var face_step := Vector2i(1, 0)
 ## already is.
 const PAD_KEY := Vector2(88.0, 66.0)
 const PAD_INSET := 18.0
-## A contextual button under the floor: the offers that are NOT movement (slipping past a
-## fight). Kept as buttons on every platform on purpose — a price you pay in HP is a
+## A contextual button under the floor: the offers that are NOT movement (breaking away from
+## a hunter). Kept as buttons on every platform on purpose — a price you pay in HP is a
 ## decision and belongs in words, where the pad only says which way.
 const ACT_BUTTON := Vector2(300.0, 46.0)
 
@@ -1774,7 +1774,7 @@ func _refresh() -> void:
 
 	var opts := tv.options()
 	# What each direction is: the first option that walks that way, which is the walk
-	# itself — a slip past is ranked below everything and is never the first (D88).
+	# itself — a break-away is ranked below everything and is never the first (D88).
 	var by_dir := {}
 	for i in opts.size():
 		var d: int = int(opts[i]["dir"])
@@ -1836,7 +1836,7 @@ func _refresh() -> void:
 		act.text = String(opts[i]["label"])
 		act.focus_mode = Control.FOCUS_NONE
 		act.pressed.connect(_on_pick.bind(i))
-		UI.hoverable(act, "Take the tile without the fight. The price rises with each one.")
+		UI.hoverable(act, "Shake it off instead of fighting it. It costs a turn, and the price rises with each one.")
 		acts_box.add_child(act)
 
 	# The legend teaches the keyboard, so it goes where the pad is not.
@@ -1918,7 +1918,7 @@ func _refresh() -> void:
 				hint = "%s is through there. %s  Anything you leave up here, you leave behind." % [
 					boss.name, Balance.boss_warning(GameState.dungeon_id)]
 	elif tv.mons.size() > 0:
-		hint = "Something else is walking this floor. You cannot hear it from here."
+		hint = "Something else is walking this floor, and it is walking toward you."
 	elif not last:
 		hint = "A room opens up as you enter it; a passage shows you nothing. The stairs down are somewhere on this floor."
 	hint_label.text = hint
@@ -2020,10 +2020,15 @@ func _on_pick(i: int) -> void:
 	if slip > 0:
 		GameState.hp = maxi(1, GameState.hp - slip)
 		Audio.play("hurt")
-		log_label.text = "You squeeze past it. -%d HP." % slip
+		log_label.text = "You tear yourself away from it. -%d HP." % slip
 		GameState.autosave()
-		_refresh()
-		return
+		# ...and it does NOT return when something came back, which it did not have to while a
+		# slip was a step past a fight standing on a tile. Breaking away is a turn spent where
+		# you stand (D197), so the rest of the floor closes on you while you do it and the very
+		# next thing that reaches you is an ambush this screen still has to charge for.
+		if chosen.is_empty():
+			_refresh()
+			return
 	if chosen.is_empty():
 		# Four different things a step that resolves nothing can be. Descending and
 		# picking up a key both come back as {} — they are handled inside the model so
