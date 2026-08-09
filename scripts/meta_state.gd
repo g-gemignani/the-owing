@@ -313,6 +313,8 @@ const FUSE_COST := Balance.FUSE_BASE_COPIES
 const MIN_KEEP := Balance.MIN_KEEP
 const MIN_DECK_SIZE := Balance.MIN_DECK_SIZE
 const MAX_DECK_SIZE := Balance.MAX_DECK_SIZE
+const MAX_DECKS := Balance.MAX_DECKS
+const MAX_DECK_NAME := Balance.MAX_DECK_NAME
 
 # collection[id] = {"count": int, "level": int}
 var collection: Dictionary = {}
@@ -977,7 +979,22 @@ func deck_valid(loadout: Dictionary) -> bool:
 	var n := loadout_size(loadout)
 	return n >= MIN_DECK_SIZE and n <= MAX_DECK_SIZE
 
-func save_deck(deck_name: String, loadout: Dictionary) -> void:
+## Whether a NEW name would be refused. `>=` rather than `==` because a save written
+## before the cap existed can hold more decks than the cap allows, and the answer
+## there is to stop accepting new ones — never to drop the extras on load, which
+## deletes a player's work to satisfy a number introduced after they saved it.
+func decks_full() -> bool:
+	return decks.size() >= MAX_DECKS
+
+## Store `loadout` under `deck_name`, overwriting any deck already using that name.
+##
+## False only when this would be a new deck past `MAX_DECKS`. Overwriting is always
+## allowed: the cap counts how many decks EXIST, not how often one is edited, and a
+## cap that blocked re-saving the deck you are looking at would make the last slot
+## unusable the moment you filled it.
+func save_deck(deck_name: String, loadout: Dictionary) -> bool:
+	if not decks.has(deck_name) and decks_full():
+		return false
 	# store only positive, owned selections
 	var clean := {}
 	for id in loadout:
@@ -986,6 +1003,29 @@ func save_deck(deck_name: String, loadout: Dictionary) -> void:
 			clean[id] = n
 	decks[deck_name] = clean
 	mark_meta_dirty()
+	return true
+
+## Rename in place, keeping the deck where it sits on the bar.
+##
+## Rebuilt rather than erase-and-reinsert. A Dictionary keeps insertion order, so the
+## short version would move the renamed deck to the END of the row — the player types
+## a new name and the chip they were pointing at jumps to the other side of the bar,
+## which reads as "it made a copy" rather than "it renamed".
+##
+## Refused for an empty name, a deck that is not there, and a name another deck
+## already holds. The last one matters most: allowing it would silently overwrite the
+## other deck, so one rename would destroy a loadout the player never named.
+func rename_deck(from: String, to: String) -> bool:
+	if from == to:
+		return decks.has(from)
+	if to == "" or not decks.has(from) or decks.has(to):
+		return false
+	var rebuilt := {}
+	for dn in decks:
+		rebuilt[to if dn == from else dn] = decks[dn]
+	decks = rebuilt
+	mark_meta_dirty()
+	return true
 
 func delete_deck(deck_name: String) -> void:
 	decks.erase(deck_name)

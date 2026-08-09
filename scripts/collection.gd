@@ -61,13 +61,30 @@ const W_COUNT := 36.0
 ## trailing "g" — the number was there and the unit was not, which is the one way a
 ## price can be wrong and still look right.
 const W_FUSE := 186.0
+## The saved-deck picker on the kit bar — one width whatever the cap is, which is the
+## whole reason it is a picker (see `_build_ui`). 260 fits a name at the length cap:
+## the row measures ~12.6px a character at scale 1.0, so 16 characters and the frame's
+## own 52px come to 254.
+const W_DECK_PICK := 260.0
 
 var mode: int = Mode.MANAGE
 var selection: Dictionary = {}   # id -> copies chosen for the deck
+## Which saved deck `selection` was last loaded from, "" if none. It is what rename
+## and delete ACT ON (D212): both need a target, and the alternative — a control on
+## every chip in the Load bar — puts a destructive button one misclick from the load
+## button beside it, on a bar already sharing its row with the power picker.
+var loaded_deck: String = ""
 
 var info_label: Label
 var note_label: Label
-var decks_box: HBoxContainer
+var decks_label: Label
+var deck_pick: OptionButton
+## Deck name per `deck_pick` item, index-aligned. Item 0 is the prompt and its entry
+## is "" — the picker's own indices cannot be trusted as names once a rename has
+## reordered nothing and a delete has shifted everything.
+var deck_names: Array[String] = []
+var rename_btn: Button
+var delete_btn: Button
 var list_bay: MarginContainer
 var list_box: VBoxContainer
 var filter_box: VBoxContainer
@@ -75,6 +92,10 @@ var power_box: HBoxContainer
 var name_edit: LineEdit
 var start_btn: Button
 var msg_label: Label
+## The deck, down the right of the card grid, and the thing a dragged card is dropped
+## onto (D213). Built in both views and hidden in the table one, where the stepper on
+## each row is already the way a copy goes in and out.
+var deck_bay: CardGrid.DropBay
 
 func _ready() -> void:
 	mode = _mode_now()
@@ -242,16 +263,38 @@ func _build_ui() -> void:
 		manage.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Powers.tscn"))
 		kit_row.add_child(manage)
 
-		var lbl := Label.new()
-		lbl.text = "    Load:"
-		kit_row.add_child(lbl)
-		decks_box = HBoxContainer.new()
-		decks_box.add_theme_constant_override("separation", UITheme.sep(6))
-		kit_row.add_child(decks_box)
+		decks_label = Label.new()
+		# The count is on the label because the cap is a rule the player only meets when
+		# they hit it, and "6 decks is the cap" arriving as a refusal after a whole
+		# arrangement is the wrong time to learn it. `_refresh_decks` writes the text.
+		kit_row.add_child(decks_label)
+		# ONE control of fixed width, not a button per saved deck (D212). The chips were
+		# measured on this row and they do not fit: an 18-character name makes a 279px
+		# chip at scale 1.0, so six of them ask for 1705px inside a frame that has 1248,
+		# and that is before the power picker beside them. A cap alone does not save it
+		# — four chips still overflow — so the list moved into a picker whose width is
+		# the same whether it holds one deck or the cap.
+		deck_pick = OptionButton.new()
+		UITheme.style_button(deck_pick)
+		deck_pick.fit_to_longest_item = false
+		deck_pick.clip_text = true
+		deck_pick.custom_minimum_size.x = UITheme.px(W_DECK_PICK)
+		deck_pick.item_selected.connect(_on_deck_picked)
+		kit_row.add_child(deck_pick)
 
 	# the bar lives in its own box so a filter change can rebuild just the controls
 	filter_box = VBoxContainer.new()
 	root.add_child(filter_box)
+
+	# The cards and, beside them, the deck they are going into (D213). One row, because
+	# the deck bay is a DROP TARGET and a target the player has to scroll to find is
+	# not one — it has to be on screen the whole time a card is being dragged. In the
+	# table view the bay is hidden and the list gets the whole width back, which is what
+	# keeps that view exactly the screen it always was.
+	var bay_row := HBoxContainer.new()
+	bay_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	bay_row.add_theme_constant_override("separation", UITheme.sep(10))
+	root.add_child(bay_row)
 
 	# The card list is clipped to WHOLE rows — see `_snap_list_to_rows`. The frame
 	# around it is what the slack is taken out of, so the scroll itself can be handed
@@ -259,10 +302,13 @@ func _build_ui() -> void:
 	# rather than this screen hand-rolling a second copy of the shared scaffold.
 	list_bay = MarginContainer.new()
 	list_bay.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	list_bay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	list_bay.resized.connect(_snap_list_to_rows)
-	root.add_child(list_bay)
+	bay_row.add_child(list_bay)
 	list_box = UI.scroll(list_bay)
 	list_box.sort_children.connect(func(): _snap_list_to_rows.call_deferred())
+
+	deck_bay = CardGrid.deck_bay(bay_row, _ctx())
 
 	# The bottom bar carries everything that COMMITS: leave, start, and name-and-save
 	# the loadout. They were two bars and are one for the height (see above), but
@@ -313,14 +359,40 @@ func _build_ui() -> void:
 		bottom.add_child(msg_label)
 		name_edit = LineEdit.new()
 		name_edit.placeholder_text = "deck name"
+		# The field is capped where the bar is (Balance.MAX_DECK_NAME): a saved name
+		# becomes a button up there, so an unbounded name is an unbounded chip that
+		# pushes the powers off the row.
+		name_edit.max_length = MetaState.MAX_DECK_NAME
 		name_edit.custom_minimum_size.x = UITheme.px(190)
+		name_edit.text = loaded_deck   # the deck `_ready` started from, if there was one
 		bottom.add_child(name_edit)
 		var save_btn := Button.new()
 		UITheme.style_button(save_btn)
 		save_btn.text = "Save deck"
 		save_btn.pressed.connect(_on_save)
-		UI.hoverable(save_btn, "Store the current selection under that name, to load again from the bar above.")
+		UI.hoverable(save_btn, ("Store the current selection under that name, to load again from the bar above.\n"
+			+ "The name already there overwrites that deck; a new one costs a slot, and there are %d."
+			) % MetaState.MAX_DECKS)
 		bottom.add_child(save_btn)
+		# Rename and delete both take the LOADED deck and nothing else, which is why
+		# loading one fills the name field above: the field is what the rename renames
+		# TO, and it starts holding what the deck is called now.
+		#
+		# Neither asks for a confirmation, and delete is the interesting half of that.
+		# It is not the destructive act it looks like: the deck it removes is the one
+		# whose cards are on screen at that moment, so pressing Save under the same name
+		# puts it straight back. Requiring the load is what buys that — a delete button
+		# on a chip could throw away an arrangement nobody had looked at in weeks.
+		rename_btn = Button.new()
+		UITheme.style_button(rename_btn)
+		rename_btn.text = "Rename"
+		rename_btn.pressed.connect(_on_rename)
+		bottom.add_child(rename_btn)
+		delete_btn = Button.new()
+		UITheme.style_button(delete_btn)
+		delete_btn.text = "Delete"
+		delete_btn.pressed.connect(_on_delete_deck)
+		bottom.add_child(delete_btn)
 
 ## Builds whose every card is in the collection. Counted here rather than asked of
 ## `builds_screen.gd`, which counts as it LAYS OUT — one pass that both sums and
@@ -386,6 +458,20 @@ func _snap_list_to_rows() -> void:
 	var scroll := list_box.get_parent() as ScrollContainer
 	if scroll == null:
 		return
+	# The grid does NOT snap, and the reason is arithmetic rather than laziness. The
+	# generalisation is easy — the flow container's wrapped lines are the rows, and
+	# every tile on a line shares its top edge — and it was built, photographed, and
+	# taken back out. A table row is 46px tall, so snapping one away costs at most 46px
+	# of frame; a card row is 176px, and the bay is 418px, which is 2.37 rows. Snapping
+	# there throws 74px away to hide a partial row and leaves a third of the bay empty.
+	#
+	# It also buys less than it does downstairs. D133's defect was a row of TEXT sliced
+	# through the middle, which reads as a rendering fault; a card cut off by the bottom
+	# edge reads as a card that continues below, because that is what a card looks like
+	# in every deck-builder anyone has used. The partial row is the scroll affordance
+	# here, not a blemish on one.
+	if _cards_view():
+		return
 	# The FRAME's height, never the scroll's. Measuring the scroll makes the margin a
 	# function of itself: trim 30px off, ask again, the last row now ends exactly at
 	# the bottom, so the answer is "trim 0" and the fix undoes itself on the next
@@ -410,11 +496,18 @@ func _snap_list_to_rows() -> void:
 		return
 	list_bay.add_theme_constant_override("margin_bottom", slack)
 
+## Take a saved loadout as the current selection, and become the deck the rename and
+## delete buttons point at. The name field follows the load, because after loading
+## "Aggro" the likeliest next saves are back onto Aggro and a rename of it — both of
+## which want that name in the field, and neither of which should need it retyped.
 func _load_deck(deck_name: String) -> void:
 	selection = {}
 	var lo: Dictionary = MetaState.decks.get(deck_name, {})
 	for id in lo:
 		selection[id] = min(int(lo[id]), MetaState.owned(id))
+	loaded_deck = deck_name
+	if name_edit != null:
+		name_edit.text = deck_name
 
 func _adjust(id: String, delta: int) -> void:
 	var cur: int = selection.get(id, 0)
@@ -451,24 +544,162 @@ func _in_run_deck(id: String) -> int:
 			n += 1
 	return n
 
+## The whole screen: the bars above the list, and then the list.
 func _refresh() -> void:
-	_clamp_selection()
-	var shown: Array = CardFilter.apply(MetaState.collection, MetaState.CATALOG)
-	_write_info(shown)
-
 	if power_box != null:
 		_refresh_powers()
-	if decks_box != null:
+	if deck_pick != null:
 		_refresh_decks()
 
 	for c in filter_box.get_children():
 		c.queue_free()
-	UI.card_filter_bar(filter_box, _refresh)
+	_view_toggle(UI.card_filter_bar(filter_box, _refresh, _refresh_list))
+	_refresh_list()
+
+## Everything BELOW the filter bar, leaving that bar standing.
+##
+## This is what a keystroke in the search box runs (D214). `_refresh` frees the bar in
+## order to redraw it, which is right for a button that changes its own label and fatal
+## for a `LineEdit` being typed into: the control holding the focus and the caret would
+## be freed on the first letter, and the second letter would go nowhere.
+func _refresh_list() -> void:
+	_clamp_selection()
+	var shown: Array = CardFilter.apply(MetaState.collection, MetaState.CATALOG)
+	_write_info(shown)
 
 	for c in list_box.get_children():
 		c.queue_free()
+	if shown.is_empty():
+		_empty_note()
+	if _cards_view():
+		var ctx := _ctx()
+		CardGrid.fill(list_box, shown, ctx)
+		deck_bay.visible = true
+		deck_bay.on_drop = Callable() if mode == Mode.LEDGER else ctx.add
+		CardGrid.fill_deck(deck_bay, ctx)
+		# The row snapper measures the CHILDREN of `list_box` and trims the frame so the
+		# last whole one ends at the bottom edge. In the grid there is one child — the
+		# flow container — and its height is the whole grid, so the measurement says
+		# "nothing fits" and the trim it computes is meaningless. Whatever a previous
+		# table view left on the frame is taken back off here; `_snap_list_to_rows`
+		# returns early in this view rather than fighting for it.
+		list_bay.add_theme_constant_override("margin_bottom", 0)
+		return
+	deck_bay.visible = false
 	for id in shown:
 		_build_row(id)
+
+## What an empty list says for itself. It goes IN the list rather than on the note line
+## above it, for one reason and it is not tidiness: the note line is written by the
+## handlers that run before a refresh — a fuse says what it cost, a save says what it
+## saved — so a message posted there by the list would have to blank itself when the
+## list refilled, and would take those with it. In the list, it is gone the next time
+## the list is built, which is exactly when it stops being true.
+##
+## It answers the search case and the filter case, because a player who has typed and
+## a player who has picked Legendary + Power are both looking at the same empty box and
+## the box has never said anything at all (D214).
+func _empty_note() -> void:
+	var q := String(CardFilter.state.get("query", "")).strip_edges()
+	var l := Label.new()
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.add_theme_color_override("font_color", Color(0.86, 0.72, 0.68))
+	if q != "":
+		l.text = ("Nothing here matches '%s' — not by name, and not by what a card does.\n"
+			+ "The Rarity and Type menus are still narrowing this list; Clear drops all three.") % q
+	else:
+		l.text = "No card you own passes that filter. Clear puts the whole collection back."
+	list_box.add_child(l)
+
+## Whether the collection is drawn as faces or as rows. LEDGER gets the same choice as
+## the other two: a run in progress is the moment a player most wants to look at what
+## they are actually holding, and the reading is the same reading either way.
+func _cards_view() -> bool:
+	return SettingsState.card_view
+
+## The view switch, appended to the filter bar rather than given a row of its own.
+##
+## On that bar because it belongs with the other controls that change WHAT YOU SEE and
+## nothing about what you own — sort, rarity, type, and now shape. And appended rather
+## than placed on a new line because this screen's height is the thing it has least of
+## (D133): a fourth control bar would cost a row of cards to say one word.
+func _view_toggle(bar: HBoxContainer) -> void:
+	if bar == null:
+		return
+	UI.hspacer(bar)
+	var b := Button.new()
+	UITheme.style_button(b)
+	b.text = "View: Cards" if _cards_view() else "View: Table"
+	UI.hoverable(b, ("The same collection, drawn two ways.\n"
+		+ "Cards: the faces, dragged into the deck beside them.\n"
+		+ "Table: one row a card, with every fuse price in a column."))
+	b.pressed.connect(func():
+		SettingsState.card_view = not SettingsState.card_view
+		SettingsState.save_settings()
+		Audio.play("ui_select")
+		# Rebuilt whole rather than refreshed. The two views disagree about what the
+		# frame around the list is for — one snaps it to rows, the other zeroes it —
+		# and about whether the deck bay is on screen at all, and both of those are
+		# properties of the tree rather than of the loop that fills it.
+		_rebuild())
+	bar.add_child(b)
+
+## Tear the screen down and put it back up, keeping the selection.
+##
+## `_build_ui` appends to whatever is already under this node, so switching a view
+## twice would draw the whole screen three times on top of itself. The selection is a
+## plain dictionary on this node and survives, which is what makes the switch free:
+## the same deck is redrawn in the other shape, and nothing about it is re-derived.
+func _rebuild() -> void:
+	for c in get_children():
+		remove_child(c)
+		c.queue_free()
+	info_label = null
+	note_label = null
+	decks_label = null
+	deck_pick = null
+	power_box = null
+	start_btn = null
+	msg_label = null
+	deck_bay = null
+	_build_ui()
+	_refresh()
+
+## Everything `CardGrid` is allowed to do to this screen, and nothing more.
+##
+## Built fresh on each refresh rather than kept, because `counts` is a SNAPSHOT: the
+## grid reads it while it lays out and must not be handed a dictionary that the next
+## click mutates underneath it. Every verb routes back through the methods the table
+## view already uses — `_adjust`, `_on_fuse`, `_bulk_steps`, `_price_of` — so the two
+## views cannot come to different conclusions about a price or a clamp.
+func _ctx() -> CardGrid.Ctx:
+	var c := CardGrid.Ctx.new()
+	c.ledger = mode == Mode.LEDGER
+	c.fusing = _fusing_allowed()
+	c.counts = _run_counts() if c.ledger else selection.duplicate()
+	c.add = func(id: String) -> void:
+		var before: int = int(selection.get(id, 0))
+		_adjust(id, 1)
+		Audio.play("ui_select" if int(selection.get(id, 0)) > before else "ui_back")
+	c.remove = func(id: String) -> void:
+		_adjust(id, -1)
+		Audio.play("ui_back")
+	c.fuse = _on_fuse
+	c.steps = func(id: String) -> Array[int]:
+		return _bulk_steps(MetaState.fusable_levels(id))
+	c.price = _price_of
+	c.note = _card_note
+	return c
+
+## The live run's deck, tallied by card id. The grid needs the whole tally at once —
+## it draws every card against it — where `_in_run_deck` answers for one card and would
+## walk the run deck once per card in the collection.
+func _run_counts() -> Dictionary:
+	var out := {}
+	for c in GameState.run_deck:
+		if c != null:
+			out[c.id] = int(out.get(c.id, 0)) + 1
+	return out
 
 ## Say something on the note line — and give it a line's worth of height only when
 ## there is something to say. An always-present label that is usually empty costs a
@@ -537,22 +768,51 @@ func _refresh_powers() -> void:
 			_refresh())
 		power_box.add_child(pb)
 
+## The Load bar: the saved decks, the loaded one showing on the picker's face, and
+## how many of the slots are spoken for.
+##
+## Item 0 is a prompt rather than a deck, so the picker has something to say when
+## nothing is loaded — a delete leaves exactly that state, and an OptionButton with
+## no selection draws an empty frame that reads as a control that failed to build.
 func _refresh_decks() -> void:
-	for c in decks_box.get_children():
-		c.queue_free()
-	if MetaState.decks.is_empty():
-		var none := Label.new()
-		none.text = "no saved decks yet"
-		decks_box.add_child(none)
+	if decks_label != null:
+		decks_label.text = "    Load (%d/%d):" % [MetaState.decks.size(), MetaState.MAX_DECKS]
+	deck_pick.clear()
+	deck_names.clear()
+	deck_pick.add_item("no saved decks yet" if MetaState.decks.is_empty() else "load a deck...")
+	deck_names.append("")
 	for dn in MetaState.decks:
-		var lb := Button.new()
-		UITheme.style_button(lb)
-		lb.text = dn
-		UI.hoverable(lb, "Load the '%s' loadout, clamped to what you still own." % dn)
-		lb.pressed.connect(func():
-			_load_deck(dn)
-			_refresh())
-		decks_box.add_child(lb)
+		deck_pick.add_item(dn)
+		deck_names.append(dn)
+	deck_pick.disabled = MetaState.decks.is_empty()
+	# `select` does not emit `item_selected`, so this cannot re-enter `_on_deck_picked`.
+	var at: int = deck_names.find(loaded_deck)
+	deck_pick.select(at if at > 0 else 0)
+	UI.hoverable(deck_pick, ("Loaded '%s'. Picking another replaces the selection below with it, clamped to what you still own."
+		% loaded_deck) if at > 0 else "Your saved loadouts. Picking one fills the selection below with it.")
+
+	# Both act on the loaded deck, so both are dead until there is one. Disabled rather
+	# than hidden: they sit in the middle of the bottom bar, and a control that appears
+	# and vanishes shifts the buttons either side of it under the cursor.
+	var have: bool = loaded_deck != "" and MetaState.decks.has(loaded_deck)
+	if rename_btn != null:
+		rename_btn.disabled = not have
+		UI.hoverable(rename_btn, ("Rename '%s' to whatever is in the field, keeping its place on the bar."
+			% loaded_deck) if have else "Load a deck first — this renames the one you have loaded.")
+	if delete_btn != null:
+		delete_btn.disabled = not have
+		UI.hoverable(delete_btn, ("Forget '%s'. Its cards are on screen and stay yours, so Save under that name puts it back."
+			% loaded_deck) if have else "Load a deck first — this deletes the one you have loaded.")
+
+## The picker changed. Item 0 is the prompt, not a deck: choosing it is not a request
+## to unload anything, so the picker is simply put back where it was.
+func _on_deck_picked(idx: int) -> void:
+	var dn: String = deck_names[idx] if idx >= 0 and idx < deck_names.size() else ""
+	if dn == "":
+		_refresh_decks()
+		return
+	_load_deck(dn)
+	_refresh()
 
 ## One card, one row: identify it, then the two things you can do to it.
 ##
@@ -595,13 +855,10 @@ func _build_row(id: String) -> void:
 	row.add_theme_constant_override("separation", UITheme.sep(5))
 	list_box.add_child(row)
 
-	# The illustration is the way into the full card — see UI.inspect_thumb. Its note
-	# is where the two old screens' notes merge: how many copies this deck is asking
-	# for, and what one more level would buy. Neither screen could say both.
-	var note := "%s: %d copies." % [
-		"In the run deck" if mode == Mode.LEDGER else "In this deck", _shown_count(id)]
-	if can_level:
-		note += "\nLevel %d of %d.\nOne more level: %s" % [level, cap, gain]
+	# The illustration is the way into the full card — see UI.inspect_thumb. Its note is
+	# `_card_note`, which both views share so that a card held up at full size says the
+	# same thing whichever shape the screen was in when it was opened.
+	var note := _card_note(id)
 	UI.inspect_thumb(row, card, UITheme.px(W_THUMB), note)
 
 	var pic := TextureRect.new()
@@ -669,6 +926,28 @@ func _build_row(id: String) -> void:
 ## edited, or — in a run, where there is no loadout to edit — the deck in play.
 func _shown_count(id: String) -> int:
 	return _in_run_deck(id) if mode == Mode.LEDGER else int(selection.get(id, 0))
+
+## The one line of context that rides with a card wherever it is held up at full size
+## — off a table row, off a face in the grid, off a row in the deck bay.
+##
+## Shared rather than built at each of those three places, because it is the sentence
+## that makes an opened card answer the question the SCREEN was being asked: how many
+## copies is this deck taking, and what would one more level buy. Three copies of it
+## is three chances for one of them to go stale after a fuse (D50's shape).
+func _card_note(id: String) -> String:
+	if not MetaState.collection.has(id):
+		return ""
+	var entry: Dictionary = MetaState.collection[id]
+	var card := (load(MetaState.CATALOG[id]) as CardData).duplicate()
+	card.level = entry["level"]
+	var level := int(entry["level"])
+	var cap: int = MetaState.max_level(id)
+	var gain: String = card.level_up_text(level + 1)
+	var note := "%s: %d copies." % [
+		"In the run deck" if mode == Mode.LEDGER else "In this deck", _shown_count(id)]
+	if gain != "" and level < cap and _fusing_allowed():
+		note += "\nLevel %d of %d.\nOne more level: %s" % [level, cap, gain]
+	return note
 
 func _build_deck_cell(row: HBoxContainer, id: String) -> void:
 	if mode == Mode.LEDGER:
@@ -782,8 +1061,61 @@ func _on_save() -> void:
 	if nm == "":
 		msg_label.text = "name required"
 		return
-	MetaState.save_deck(nm, selection)
+	if not MetaState.save_deck(nm, selection):
+		# The only way to fail: a new name with every slot taken. Say the way out, not
+		# just the rule — the two buttons that clear a slot are the next two along.
+		msg_label.text = "%d decks is the cap" % MetaState.MAX_DECKS
+		_say("All %d deck slots are saved. Rename one to reuse it, or delete one to free a slot." % MetaState.MAX_DECKS)
+		return
+	# Saving under a name makes THAT deck the one on screen, so rename and delete follow
+	# the save. Otherwise "Save deck" as a new name would leave the buttons still aimed
+	# at the deck you loaded ten minutes ago and have since edited away from.
+	loaded_deck = nm
 	msg_label.text = "saved '%s'" % nm
+	_refresh()
+
+## Rename the loaded deck to whatever the name field holds.
+##
+## The refusals are `MetaState.rename_deck`'s, reported apart, because they are three
+## different mistakes: an empty field, and a name another deck already holds — which
+## is the one worth naming, since the player's next thought is "then overwrite it",
+## and Save does exactly that and is the button beside this one.
+func _on_rename() -> void:
+	var nm := name_edit.text.strip_edges()
+	if loaded_deck == "" or not MetaState.decks.has(loaded_deck):
+		msg_label.text = "load a deck first"
+		return
+	if nm == "":
+		msg_label.text = "name required"
+		return
+	if nm == loaded_deck:
+		msg_label.text = "already called that"
+		return
+	if MetaState.decks.has(nm):
+		msg_label.text = "'%s' is taken" % nm
+		_say("Another deck is already called '%s'. Pick a different name, or Save over it if that is what you meant." % nm)
+		return
+	var was := loaded_deck
+	if not MetaState.rename_deck(was, nm):
+		msg_label.text = "could not rename"
+		return
+	loaded_deck = nm
+	msg_label.text = "'%s' is now '%s'" % [was, nm]
+	_refresh()
+
+## Forget the loaded deck. No confirmation, because this is the one delete in the game
+## that undoes itself: the selection stays exactly as it is, so the deck is still on
+## screen and Save under the same name restores it. The message says so rather than
+## leaving the player to work it out — see the note on the buttons in `_build_ui`.
+func _on_delete_deck() -> void:
+	if loaded_deck == "" or not MetaState.decks.has(loaded_deck):
+		msg_label.text = "load a deck first"
+		return
+	var gone := loaded_deck
+	MetaState.delete_deck(gone)
+	loaded_deck = ""
+	msg_label.text = "deleted '%s'" % gone
+	_say("'%s' is gone from the bar; its cards are still yours and still selected, so Save under that name brings it back." % gone)
 	_refresh()
 
 func _on_start() -> void:

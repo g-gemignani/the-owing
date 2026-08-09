@@ -66,8 +66,43 @@ func _init() -> void:
 	m2.delete_deck("Aggro")
 	if m2.decks.has("Aggro"): fails += 1; print("FAIL delete_deck")
 
+	# --- rename, delete and the slot cap (D212) ---------------------------------------
+	# A rename keeps the deck where it sits on the Load bar. Erase-and-reinsert would
+	# pass a "the name changed" check and still move the chip to the far end of the row.
+	m2.save_deck("A", {"hack": 2})
+	m2.save_deck("B", {"cover": 2})
+	if not m2.rename_deck("A", "Anvil"): fails += 1; print("FAIL rename rejected")
+	if m2.decks.has("A") or not m2.decks.has("Anvil"):
+		fails += 1; print("FAIL rename left the old name ", m2.decks.keys())
+	if int(m2.decks["Anvil"]["hack"]) != 2: fails += 1; print("FAIL rename lost the loadout")
+	var order: Array = m2.decks.keys()
+	if order.find("Anvil") > order.find("B"):
+		fails += 1; print("FAIL rename reordered the bar ", order)
+
+	# Renaming onto a name another deck holds would silently eat that deck.
+	if m2.rename_deck("Anvil", "B"): fails += 1; print("FAIL rename over an existing deck")
+	if int(m2.decks["B"]["cover"]) != 2: fails += 1; print("FAIL collided rename overwrote B")
+	if m2.rename_deck("nosuch", "C"): fails += 1; print("FAIL renamed a deck that is not there")
+	if m2.rename_deck("Anvil", ""): fails += 1; print("FAIL renamed to nothing")
+
+	# The cap counts decks that EXIST. Overwriting one must stay possible at the cap,
+	# or the last slot becomes unusable the moment it is filled.
+	while m2.decks.size() < m2.MAX_DECKS:
+		m2.save_deck("filler%d" % m2.decks.size(), {"hack": 1})
+	if m2.decks.size() != m2.MAX_DECKS: fails += 1; print("FAIL filled to ", m2.decks.size())
+	if m2.save_deck("one too many", {"hack": 1}):
+		fails += 1; print("FAIL saved past the cap of %d" % m2.MAX_DECKS)
+	if m2.decks.has("one too many"): fails += 1; print("FAIL over-cap deck stored anyway")
+	if not m2.save_deck("Anvil", {"hack": 3}):
+		fails += 1; print("FAIL cannot overwrite an existing deck at the cap")
+	if int(m2.decks["Anvil"]["hack"]) != 3: fails += 1; print("FAIL overwrite at cap did nothing")
+	# ...and a free slot takes a new one again.
+	m2.delete_deck("B")
+	if not m2.save_deck("B2", {"cover": 2}):
+		fails += 1; print("FAIL deleting a deck did not free a slot")
+
 	if fails == 0:
-		print("DECK TEST: PASS (validation, clamp, build, level, persistence)")
+		print("DECK TEST: PASS (validation, clamp, build, level, persistence, rename/delete/cap)")
 	else:
 		print("DECK TEST: FAIL (%d)" % fails)
 	_cleanup_sandbox()

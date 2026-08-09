@@ -275,6 +275,19 @@ static func gold_to_reach(rarity: int, level: int) -> int:
 # --- deck bounds ---
 const MIN_DECK_SIZE := 8
 const MAX_DECK_SIZE := 20
+## How many loadouts may be saved at once (D212). Not a storage bound — the save file
+## would not notice a hundred of them, and the picker they live in is one fixed-width
+## control however many there are. It is a bound on the LIST you read: a saved deck
+## you have to hunt for is one you rebuild by hand instead, and the pile only ever
+## grows, because saving is one press and there was no way at all to unsave. Six is
+## more than the five dungeons ask for, and small enough that rename and delete are
+## the way you keep it rather than controls nobody ever needs.
+const MAX_DECKS := 6
+## Longest deck name, in characters. This one IS a width: the name is what the picker
+## shows, and the picker sits on a row that already overflows a 1280 frame when the
+## powers are all owned. 16 characters measure ~254px at scale 1.0, which is the
+## width `collection.gd` reserves (W_DECK_PICK).
+const MAX_DECK_NAME := 16
 
 # --- player power baseline ---
 ## Enemies scale against the deck's power PER ENERGY, because that is what the

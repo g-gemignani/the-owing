@@ -200,6 +200,8 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D209** | [Half the game was a walkover and the knob for it had been clamped away](#d209--half-the-game-was-a-walkover-and-the-knob-for-it-had-been-clamped-away) |
 | **D210** | [Two sessions reached for D205 on the same afternoon, and nothing noticed](#d210--two-sessions-reached-for-d205-on-the-same-afternoon-and-nothing-noticed) |
 | **D211** | [The debt was a purchase on the wrong screen, so it became a door](#d211--the-debt-was-a-purchase-on-the-wrong-screen-so-it-became-a-door) |
+| **D212** | [Saving a deck was one press and unsaving one was impossible, so the bar grew until it left the screen](#d212--saving-a-deck-was-one-press-and-unsaving-one-was-impossible-so-the-bar-grew-until-it-left-the-screen) |
+| **D213** | [A hundred cards were a hundred rows of text, and a card game's cards are pictures](#d213--a-hundred-cards-were-a-hundred-rows-of-text-and-a-card-games-cards-are-pictures) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -13595,3 +13597,307 @@ belongs at the run's start, not on the screen that only OFFERS it"*. What is **n
 the end-to-end flow, and that gap is worth writing down rather than leaving for someone to
 discover: no test presses the button, so a `pending_debt` that stopped being read would pass
 all 42 suites.
+
+### D212 — Saving a deck was one press and unsaving one was impossible, so the bar grew until it left the screen
+
+Loadouts (D4) could be saved and loaded. That was all. There was no rename, no delete, and no
+limit — `save_deck` wrote a key into a dictionary and `delete_deck` existed in `MetaState` with
+nothing in the game calling it. So the only editing operation was "save it again under a new
+name", which does not remove the old one, and a saved deck was permanent in the strict sense:
+nothing in the game could take it away.
+
+**What that costs is a row.** Every saved deck was a button on the collection screen's kit bar,
+which shares one row with the power picker. Measured in a 1280x720 frame at scale 1.0, where
+`UI.screen`'s margins leave 1248px of usable width:
+
+| on the kit bar | asks for |
+|---|---|
+| a chip for a deck named with 18 characters | 279px |
+| six such chips, with separations | 1705px |
+| the power picker at 10 powers owned | 1426px |
+| the row's fixed parts (`Power:`, `Powers...`, `Load:`) | ~300px |
+
+Two decks and a couple of powers fit. Four decks do not, and the overflow is silent — an
+`HBoxContainer` draws its children past the frame edge rather than complaining — so the newest
+saved deck is the one that walks off the right-hand side, and the player's response to a deck
+they cannot reach is to build it again by hand.
+
+**So the cap the request asked for is not, by itself, the fix.** A cap of six still asks for
+1705px of a 1248px frame. The list had to stop being a row of buttons: it is now one
+`OptionButton` of fixed width (`W_DECK_PICK`, 260px, sized to hold a name at the 16-character
+name cap), which measures the same whether it holds one deck or the cap. Re-measured after: the
+deck side of the bar asks 1113px against 1248 with six maximum-length names saved, and
+`deck_pick` is the same width at one deck as at six.
+
+That leaves the cap doing the job a cap is actually good for — bounding the LIST you read
+rather than the row you overflow. Six is more than the five dungeons ask for, and small enough
+that the two new controls are how you keep the set rather than buttons nobody needs.
+
+**Rename and delete take the loaded deck, and nothing else.** The alternative is a control per
+chip, which puts a destructive button one misclick from the load button beside it — and there
+are no chips any more. Loading a deck therefore fills the name field with its name, because the
+two likeliest next acts both want it there: saving back onto that deck, and renaming it.
+
+Three things worth stating about the edges, because each one is a way to destroy a loadout
+silently:
+
+* **A rename keeps the deck's place in the list.** `erase()` + reinsert is the short version and
+  it moves the deck to the END of an ordered Dictionary, so the entry the player was pointing at
+  jumps to the other end of the picker — which reads as "it made a copy", not "it renamed". The
+  dictionary is rebuilt in order instead.
+* **A rename onto a name another deck holds is refused**, not merged. Merging is a one-press way
+  to lose a loadout that was never named in the transaction. The refusal says which name is
+  taken, because the player's next thought is "then overwrite it" and Save — the button beside
+  it — does exactly that.
+* **The cap counts decks that EXIST, not saves.** Overwriting at the cap has to keep working, or
+  the last slot becomes unusable the moment it is filled. And `decks_full()` is `>=`, so a save
+  written before the cap loads intact and merely stops accepting new decks; dropping the extras
+  on load would delete a player's work to satisfy a number introduced after they saved it.
+
+**Delete does not confirm, and that is a claim rather than an oversight.** It only ever removes
+the deck whose cards are on screen at that moment, so pressing Save under the same name puts it
+back — the one delete in the game that undoes itself. Requiring the deck to be loaded first is
+what buys that; a delete button on a chip could throw away an arrangement nobody had looked at
+in weeks. The message says so instead of leaving it to be discovered.
+
+**The guard.** `tests/test_deck.gd` covers the rules — rename, order, collision, the cap, and
+overwrite-at-cap. The wiring is a property of a built tree, so `tests/DeckFlowTest.tscn` is a
+scene test: it loads the screen, picks a deck off the bar, renames it, deletes it, saves it
+back, and hits the cap, checking each time which deck the buttons are aimed at. It also re-takes
+the measurement above — the deck side of the kit bar and the whole save bar must fit 1248px at
+the cap with maximum-length names, and the picker must be the same width at one deck as at six.
+A measurement that lives only in a design note is one nothing re-takes.
+
+**What is not fixed, stated rather than left to be found.** The power picker overflows this same
+row on its own: ten owned powers ask for 1426px of a 1248px frame. It is a real defect, it
+predates this change, and no deck cap can fix it — the layout check here measures the deck side
+apart from the power box precisely so it cannot be blamed for it, or hide it.
+
+### D213 — A hundred cards were a hundred rows of text, and a card game's cards are pictures
+
+`collection.gd` is the one screen for everything you do to a card you own (D133), and until now
+it had exactly one shape: a table. One row a card, fixed-width columns, a stepper for the deck
+and up to three priced fuse buttons out to the right. Every column on it was measured against
+the 1280 frame and the whole header stack was cut to the bone to buy the list six rows instead
+of three.
+
+It is a good table. It is the right surface for the question it was built around — *what do I
+own, and what does the next level cost* — because it puts a hundred prices in one column the eye
+can run down, and nothing else on this screen can do that.
+
+It is the wrong surface for the other question the same screen is asked: **what am I building.**
+
+**What was wrong.** A card in this game is a painted illustration, a name, a cost, a headline
+number and a line of rules text, and `UI.card_button` draws all of that on one face. The
+collection showed a 28px thumbnail of it. So a player who had learned a card by its picture —
+which is how anyone learns a card game — could not find that card in their own collection
+without reading a hundred names, and the deck they were assembling existed only as a column of
+`x2`s scattered down a list they were scrolling. A player asked for the cards.
+
+**What was NOT wrong, and is why this is a second view rather than a replacement.** Everything
+above about the table is still true, and the request was explicitly for an alternative. The two
+shapes answer two questions, they share one `_refresh()`, one filter, one `selection`
+dictionary and one fuse curve, and the switch between them is a button on the filter bar with
+the choice kept in `SettingsState.card_view`. Neither is a mode in the sense D133 spent a whole
+entry killing: nothing about what a control *means* changes between them, only how a card is
+drawn and which gesture puts a copy in the deck.
+
+|   | table | cards |
+|---|---|---|
+| a card is | a row, 46px tall | a face, 104x148 with a count under it |
+| add a copy | `+` on the row | drag it to the bay, or double-click it |
+| remove a copy | `-` on the row | click it in the bay |
+| the deck is | a column of `x2`s down the list | a panel on the right, always on screen |
+| a fuse price is | three buttons on the row | a badge that quotes `+1` and opens all three |
+| rows visible at 1280x720 | 6 | 16 faces, and part of a 17th |
+
+**The deck had to become a place.** A drop target that is only as big as its contents has no
+target at all when it is empty, which is exactly the state a player is in the first time they
+build a deck. So the bay is a `PanelContainer` with a frame that lights green while a card is
+over it, it is `SIZE_EXPAND_FILL` down the whole height of the grid, and it says
+*Drag a card here, or double-click it* when there is nothing in it.
+
+Lighting it turned out to need a subclass rather than the three lambdas `set_drag_forwarding`
+takes. `can_drop_data` is the only hook Godot calls while a card hovers a target, so it is the
+natural place to switch the frame on — and **nothing** calls it when the cursor leaves or when
+the card is dropped somewhere else entirely, so a bay lit that way stays lit for the rest of the
+session. `NOTIFICATION_DRAG_END` is broadcast to every Control when a drag finishes wherever it
+finished, and it is reachable only from `_notification`. Hence `CardGrid.DropBay`.
+
+**A single click cannot open a card and also be half of a double click.** `UI.inspect_card`
+raises a full-screen veil that swallows the next click, so opening the card on the first press
+eats the second half of every double click and the add gesture can never fire. The first press
+therefore starts a 220ms timer that opens the card unless a double click arrives first. The
+delay costs nothing that matters: hovering a card already enlarges it 1.45x instantly, so the
+click is the *hold it up and read it* gesture rather than the first look. One timer per card,
+not one per screen — a shared one would have to be told which card it belongs to on every click,
+and the first thing that breaks is clicking one card while another's grace period is running.
+
+**The fuse prices moved, and D133 said not to move them.** That entry refused to put the fuse
+buttons behind a click, and it was right: the prices are what you shop on, and a shop that hides
+them has stopped being a shop. This does not undo it. A 104px card face cannot hold three price
+buttons — that is the honest reason, and it is why the table still exists one toggle away — so
+what moved is *where* the prices are stated, not *whether*:
+
+* the badge itself quotes the `+1` price on hover, before it is pressed;
+* the panel it opens carries the same three purchases the table row carries, built from the
+  same `_bulk_steps` and `_price_of`, so there is one fuse curve in the game and not a second
+  one that drifts;
+* the badge only appears where `MetaState.can_fuse` says a purchase is actually available. A
+  badge on a card whose every purchase is refused is a door onto a wall.
+
+`tests/CardGridTest.tscn` checks the second bullet by comparing the panel against `_price_of`
+rather than against a hard-coded number, because the claim being made is *the same prices*, not
+*some prices*.
+
+**Where the badge sits, and why it is the only place it could.** `UI.card_button` puts the cost
+badge in the top-left corner, the effect symbol in the top-right, the damage and Block numerals
+in the picture's bottom corners, the name in its own strip and the rules text in a band of its
+own. The middle 48% of the top strip is the one region of a card in this game that is
+guaranteed empty on all hundred of them. Anywhere else covers either the illustration, the name,
+or the authored rules text — and covering the rules text is the one thing this whole view exists
+to stop doing.
+
+The copy count is NOT on the face for the same reason. It is a 20px strip underneath, which also
+gives the grid the text half of D205b's pair: every card in every list is openable from its
+picture and from its words, and `tooltip_test.gd` counts those two and fails if they disagree.
+
+**The grid does not snap to whole rows, and that was built before it was rejected.** D133 trims
+the frame around the table so its bottom edge falls between two rows rather than through one.
+Generalising it to the grid is easy — the flow container's wrapped lines are the rows, every
+tile on a line shares its top edge — and it was written, photographed, and taken back out. The
+arithmetic is why: a table row is 46px, so snapping one away costs at most 46px of frame; a card
+row is 176px and the bay is 418px, which is 2.37 rows, so snapping throws 74px away to hide a
+partial row and leaves a third of the bay looking broken. It also buys less than it does
+downstairs — a line of TEXT sliced through the middle reads as a rendering fault, which is the
+defect D133 was fixing, while a card cut off by the bottom edge reads as a card that continues
+below, because that is what a card looks like in every deck-builder anyone has used.
+
+**Measured, not chosen.** `UI.screen`'s margins leave 1248 of the 1280, the bay takes 250 and
+two scrollbars take about 28, so the grid gets ~950; eight columns of `104 + 8` is 896 and nine
+is 1008. The height is what made the size: `UITheme.BASE_CARD` is 150x214 and one row of those
+fills the whole bay, so the screen reads as though the collection were eight cards long. At
+104x148 two rows are always whole and a third is 44% visible.
+
+**The guard.** `tests/CardGridTest.tscn`, a scene test for the reason `tooltip_test.gd` gives —
+a drop target's `_can_drop_data` is a virtual on a node, a double click is an event delivered to
+a control that exists, and a view toggle is a screen torn down and put back up. Four gestures
+arrived at once and each is the *only* way to do something, which is what makes them worth a
+suite: drag and double-click are the two ways a copy goes in, a click on the bay is the only way
+one comes out, and the badge is the only route to a price in this view. It also checks that
+switching views leaves exactly one screen behind — `_build_ui` appends, so a toggle that forgot
+to tear down would draw a second whole screen over the first — and that a live run is read-only
+on both halves of the gesture, the card that will not lift and the bay that will not accept.
+
+**What is not covered, stated rather than left to be found.** `set_drag_forwarding` stores its
+callables where nothing in GDScript can read them back, so the suite can drive the *drop* side
+of the drag and not the *pick-up* side. The one rule that lives on the pick-up side — a card
+with no spare copies does not move — is split out into `CardGrid.drag_payload` so it can be
+tested directly; that the lambda actually calls it is the gap, and it is a two-line gap by
+construction. Touch is the other one: `card_button`'s own tap-to-preview handler is still
+connected on a touchscreen, so a first tap there both previews the card and starts this view's
+grace timer. Nothing breaks, both paths open the same card, and it is one handler too many.
+
+#### The deck bay's rows wear the card's own painting
+
+Added straight after the above, on the same complaint read one step further. The grid had just
+taught the player to find a card by its picture, and then the bay beside it made them read the
+names of the very cards they had been recognising by sight a moment earlier. So each row now
+carries a horizontal band of its own illustration behind the name, `KEEP_ASPECT_COVERED` inside
+a clipping window, dimmed until the name is safe.
+
+**Two knobs, not one.** `ART_ALPHA` fades the picture toward the bay's dark panel and keeps its
+colours; `SCRIM_ALPHA` lays flat black over the result and kills the contrast a bright patch
+would otherwise put behind a letter. The first pair — 0.55 and 0.42 — left an effective 32% of
+the painting and was photographed as a *tint*, not a picture: the thing being asked for was the
+art, and at that strength there was no art. 0.90 and 0.38 leave 56% and every name still reads.
+The rows that decide it are the pale tans (Bandage, Bulwark, Give Ground), which are where a
+white name goes grey first.
+
+**Only where there is a painting.** `PixelArt.card_art` falls back to a 16x16 CC0 sheet slice,
+and 16 pixels stretched across a 234px strip is the sixteen-fold mush `UI.card_button` documents
+in its own picture band. `painted_card_art` returns null instead of the fallback, so a card
+without art keeps exactly the flat plate it had — the same "use it if it exists" contract every
+backdrop in the game follows.
+
+**And a layout bug it uncovered, which was already there.** The row is now a stack — picture,
+scrim, button — so the button had to be anchored inside a holder of known height, and that is
+what made the real defect visible: `Icons.style_card_button` puts the effect glyph *above* the
+label (`VERTICAL_ALIGNMENT_TOP`), which is right for the wide buttons it was written for and
+gives this row a minimum height of **52px** against a stated `ROW_H` of 26. Anchoring a Control
+to a rect does not shrink it below its own minimum, so every row had been overflowing its slot
+by 18px onto the row beneath since the bay was built — invisible while the rows were flat plates
+of the same colour, and instantly obvious once each row had a different picture painted behind
+it. The glyph moved beside the text, and the holder now takes `max(ROW_H, the button's own
+minimum)` so the next theme change that grows a button grows the row instead of silently
+stacking it on its neighbour.
+
+That is the third time in this file a *cosmetic* change has been the thing that exposed a
+geometry fault nothing was testing (D95, D169). A layout that only looks correct because
+everything in it is the same colour is not known to be correct.
+
+### D214 — A hundred cards and no way to ask for one by name
+
+D213 gave the collection a hundred painted faces. It did not give the player a way to find one.
+The filter bar could narrow by rarity and by type and order the result six ways, and every one
+of those controls answers "show me a KIND of card". None of them answers the question somebody
+actually opens that screen with, which is "where is Blight Bloom" — and at a hundred cards the
+answer was to read the grid.
+
+**Fuzzy on the name, literal on the rules text.** Two fields, two rules, and the split is the
+only interesting decision here:
+
+* The **name** is matched as a subsequence, so `blbl` finds Blight Bloom and `seit` finds See
+  It Coming. A half-remembered name is the normal case; the exact spelling of "Anvil Stance" is
+  not something the player owes the game.
+* The **rules text** is matched as a plain substring, and only once the name has failed. A
+  fuzzy pass over a sentence matches everything — four letters are a subsequence of almost any
+  rules text — so fuzzy there would quietly switch the search off. `dmge` is a subsequence of
+  "Deal 6 damage" and is not a search anybody typed. Literal, the text pass answers the
+  deckbuilding question the screen exists for: *what do I own that poisons*.
+
+It searches `effect_text()`, the sentence printed on the card's face, and not `description`,
+which is an authored field on `CardData` that no screen in the game displays. A search that
+hits on words the player cannot see reads as broken.
+
+**Scores are tiers, not a tuned number.** 1000 exact, 800 prefix, 600 substring, 400
+subsequence, 100 rules text. The gaps are what make the ranking legible — a card whose name
+*starts* with what you typed can never lose to one that merely contains it — and the bonuses
+inside a subsequence match (12 for landing on a word start, 8 for landing straight after the
+last hit) are capped at 150 so a long query cannot push a scattered match past a clean
+substring. The subsequence walk is greedy rather than optimal: finding the best alignment needs
+a matrix per card per keystroke and changes the order of two hits at most, never whether a card
+is listed.
+
+**The search takes the sort control's job, and says so.** With a query, the list is ordered by
+match and the chosen sort drops to breaking ties. That overrides something the player set,
+which is normally exactly what this project refuses to do — so the readout line names both:
+*"3 of 100 cards, best match for 'blig', then by name"*. The alternative is the card you are
+typing toward sitting fourteenth because its name begins with a W.
+
+**What actually broke: the box could not be typed into.** Every other control on that bar
+rebuilds the bar to redraw itself — that is how the direction button changes its own label from
+`asc` to `desc` — and `collection.gd` refreshed the whole screen on any change. Rebuilding the
+bar frees the `LineEdit` being typed into, so the first letter dropped the focus and the caret
+and the second letter went nowhere. The fix is a second entry point: `card_filter_bar` takes an
+`on_search` callable, the screen passes `_refresh_list`, and a keystroke rebuilds everything
+BELOW the bar and leaves the bar standing.
+
+That is invisible to any headless assertion about list contents — the filtering is correct
+either way — so it is guarded by a scene test. `tests/CardSearchTest.tscn` types into the real
+control and checks the box afterwards is the SAME instance, still focused, still holding what
+was typed. Verified by reinstating the bug: pass `_refresh` as `on_search` and the suite prints
+*"the search box was rebuilt under the player mid-word"*.
+
+**An empty list now explains itself**, which it never did — not for a search that matched
+nothing, and not for the Legendary + Power filter pair that has always been able to empty it.
+The note goes IN the list rather than on the note line above it: that line is written by the
+handlers that run before a refresh (a fuse says what it cost, a save says what it saved), so a
+message posted there by the list would have to blank itself and would take those with it. In
+the list, it disappears the next time the list is built, which is exactly when it stops being
+true.
+
+**The width, because this is the bar D133 cut to the bone.** The search box is 190px unscaled —
+enough for the longest card name in the game, See It Coming at 14 characters — on a bar that
+was asking 654px of a 1248px frame. `CardSearchTest` re-measures it rather than trusting the
+arithmetic here.

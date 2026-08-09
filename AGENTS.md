@@ -32,7 +32,15 @@ The loop:
    usually three doors rather than one, and a gate takes depth in places that beat you as
    well as clears (D178). Difficulty is a *choice*, shown up front, with the boss named
    before you commit.
-2. **Deck builder** — assemble a run deck from your owned cards and equip one Power. Cards
+2. **Deck builder** — assemble a run deck from your owned cards and equip one Power. Up to
+   six loadouts can be saved, and they are *kept* rather than piled up: a saved deck can be
+   renamed and deleted from the same bar it loads from (D212). The collection is readable
+   two ways off one toggle (D213): a **table** of rows, which is the surface that can put a
+   hundred fuse prices in one column, and **cards**, a grid of the real painted faces you
+   drag into a deck bay beside them. Both are the same screen, the same filter and the same
+   selection — only the drawing and the gesture differ. A hundred cards need finding as well
+   as reading, so the filter bar carries a **fuzzy search** (D214): near enough on the name
+   is enough, and a word no name holds is looked for in what the cards *do*. Cards
    interact on purpose: a card can make the NEXT one better, or be worth more for what you
    already spent this turn — the earlier cards played, the debuff stacks on the target, the
    cards burned out of your hand, the Energy left over, whether it is the last card you hold
@@ -82,7 +90,7 @@ dungeon) · 30 relics ·
 10 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 46 errands and 16 debts over 44 counters · 3 aspects ·
-24 sound effects · 5 score tracks · 42 test suites. All content is `.tres` data
+24 sound effects · 5 score tracks · 45 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
 **Art: 310 files wanted, 310 present, 0 to provide — the list is closed.** It was
@@ -1080,6 +1088,31 @@ These are failure modes that have actually bitten this project. Treat each as a 
   goes:** a rule goes on the rules screen, a fact about this save goes on the screen that
   owns the thing it is a fact about.
 
+- **A gesture that opens a modal cannot also be half of a compound gesture.** Clicking a
+  card face opens `UI.inspect_card`, which raises a full-screen veil that swallows the next
+  click — so opening it on the first press eats the second half of every double click and
+  double-click-to-add can never fire (D213). The first press starts a 220ms timer instead.
+  **Before adding a second meaning to a click, check what the first meaning puts on top of
+  the thing being clicked.**
+
+- **A layout that only looks correct because everything in it is one colour is not known
+  to be correct.** The deck bay's rows overflowed their slots by 18px from the day they were
+  built — `Icons.style_card_button` stacks its glyph above the label, giving a 52px minimum
+  against a stated 26px row, and anchoring a Control to a rect never shrinks it below its
+  own minimum. Invisible while the rows were identical flat plates; instantly obvious the
+  moment each row had a different picture behind it (D213). Third time in this log a
+  cosmetic change was what exposed a geometry fault nothing was testing (D95, D169). **Size
+  a holder from `get_combined_minimum_size()` of what goes in it, not from the number you
+  wish the row were.**
+
+- **A drop target has to be a place, and it has to be able to turn its highlight OFF.**
+  A target sized to its contents does not exist when it is empty, which is the state a
+  player is in the first time they use it. And `can_drop_data` is the only hook called while
+  a drag is over a target, so it is the natural place to light the frame — and nothing calls
+  it when the cursor leaves or the card is dropped elsewhere, so a bay lit there stays lit
+  for the session. `NOTIFICATION_DRAG_END` is the off switch and it is reachable only from
+  `_notification`, which is why `CardGrid.DropBay` is a subclass and not three lambdas.
+
 - **Measure the data before designing the panel that shows it.** "A card panel for every
   dungeon" would have printed the same nineteen cards three times on one screen, because a
   dungeon's pool is its ZONE's pool plus one to three exclusives (D166). What is
@@ -1166,7 +1199,7 @@ resources/   all content as .tres: cards, enemies, relics, powers, events, dunge
 scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      pixel/ (CC0 Kenney), art/ (painted + generated, incl. the computed app icon),
              audio/ (all ours: 5 loops, 24 effects, one instrument in tools/audio_voices.py)
-tests/       42 suites + run.sh; export.sh and export_ready.sh need templates
+tests/       44 suites + run.sh; export.sh and export_ready.sh need templates
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
              screenshots.gd (renders every screen to PNG — drive it under
              `Xvfb -screen 0 1280x720x24`, NOT on the desktop, or a 16:10 monitor

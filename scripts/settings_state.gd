@@ -74,6 +74,23 @@ enum Pad {AUTO, ALWAYS, NEVER}
 var pad_mode: int = Pad.AUTO
 const PAD_NAMES := ["Automatic", "Always", "Never"]
 
+# --- how the Cards screen draws a card (D213) ----------------------------------
+
+## True: the collection is a grid of card faces you drag into the deck. False: the
+## table of rows and priced fuse buttons that screen has always been.
+##
+## It lives HERE rather than in `MetaState` because it is a preference about drawing,
+## not a fact about a save — the same player wants the same view in every slot, and a
+## per-save copy would mean choosing it again after every new game. It is deliberately
+## NOT in the settings menu: the toggle is on the screen it changes, where the player
+## can see what it did, and a second copy of the control two menus away would be a
+## place to change something you cannot see.
+##
+## Cards is the shipped default. The table is the older, denser view and is the better
+## one for pricing a hundred levels, but it is the view a player has to be taught to
+## read; a grid of pictures is the one they arrive already knowing.
+var card_view: bool = true
+
 func _ready() -> void:
 	load_settings()
 	apply()
@@ -100,7 +117,7 @@ func save_settings() -> void:
 			"sfx_volume": sfx_volume,
 			"fullscreen": fullscreen, "show_numbers": show_numbers,
 			"effects_enabled": effects_enabled, "effect_speed": effect_speed,
-			"pad_mode": pad_mode,
+			"pad_mode": pad_mode, "card_view": card_view,
 		}))
 		f.close()
 
@@ -128,3 +145,6 @@ func load_settings() -> void:
 	effect_speed = clampi(int(d.get("effect_speed", effect_speed)),
 		EFFECT_SPEED_MIN, EFFECT_SPEED_MAX)
 	pad_mode = clampi(int(d.get("pad_mode", pad_mode)), 0, PAD_NAMES.size() - 1)
+	# absent in every settings file written before D213, and `get`'s default is again
+	# what makes that a non-event — an older file simply arrives on the new default.
+	card_view = bool(d.get("card_view", card_view))

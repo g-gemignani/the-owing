@@ -645,17 +645,52 @@ static func hoverable(control: Control, text: String) -> void:
 	if control.mouse_filter == Control.MOUSE_FILTER_IGNORE:
 		control.mouse_filter = Control.MOUSE_FILTER_STOP
 
+## The search box on the filter bar below, unscaled. Wide enough for the longest card
+## name in the game (See It Coming, 14 characters) so a player who types the whole
+## thing can still read it back, and no wider: that bar shares a 1248px frame with
+## five other controls and a view toggle, and had 594px of slack to spend.
+const SEARCH_W := 190.0
+
 ## Filter and sort controls for a list of owned cards.
 ##
 ## One builder used by both the collection and the deck builder, so the two cannot
 ## end up offering different orderings of the same cards. Calls `on_change` after
 ## mutating CardFilter.state; the screen just re-runs its own refresh.
-static func card_filter_bar(parent: Node, on_change: Callable) -> void:
+## Returns the bar it built, so a screen with one more control that belongs on this
+## row can append to it instead of spending a second 50px row on it. The Cards screen
+## is the only caller that does — its view toggle (D213) — and it matters there
+## because that screen's height budget is the reason its header stack was cut to the
+## bone in the first place (D133).
+##
+## `on_search` is called instead of `on_change` while the search box is being typed
+## into, and a screen that has one MUST pass a refresh that leaves this bar standing
+## (D214). Every other control here rebuilds the bar to redraw itself — that is how
+## the direction button changes its own label — and rebuilding it under a `LineEdit`
+## frees the control the player is typing into, which drops focus and the caret with
+## it. One keystroke per search, and no second one.
+static func card_filter_bar(parent: Node, on_change: Callable,
+		on_search: Callable = Callable()) -> HBoxContainer:
 	var st: Dictionary = CardFilter.state
 
 	var bar := HBoxContainer.new()
 	bar.add_theme_constant_override("separation", UITheme.sep(6))
 	parent.add_child(bar)
+
+	# First on the bar, because it is the control that answers the question the player
+	# actually arrived with — "where is that card" — and the only one they reach for
+	# with a specific card already in mind.
+	var find := LineEdit.new()
+	find.placeholder_text = "search"
+	find.custom_minimum_size.x = UITheme.px(SEARCH_W)
+	find.clear_button_enabled = true
+	find.text = String(st.get("query", ""))
+	find.text_changed.connect(func(t: String):
+		CardFilter.state["query"] = t
+		(on_search if on_search.is_valid() else on_change).call())
+	hoverable(find, ("Find a card by name — near enough will do: 'blbl' finds Blight Bloom.\n"
+		+ "A word that is not in any name is looked for in what the cards DO, so 'poison' "
+		+ "lists everything that poisons."))
+	bar.add_child(find)
 
 	var lbl := Label.new()
 	lbl.text = "Sort"
@@ -720,6 +755,7 @@ static func card_filter_bar(parent: Node, on_change: Callable) -> void:
 		Audio.play("ui_back")
 		on_change.call())
 	bar.add_child(clear)
+	return bar
 
 ## A modal list of the run deck, for anything that acts on one card.
 ##
