@@ -847,6 +847,13 @@ These are failure modes that have actually bitten this project. Treat each as a 
   because **a cutout can only be judged against something brighter than it** — over a dark
   corridor a hole reads as shadow.
 
+  **And a correct instrument read at the wrong SIZE is still a miss (D219).** That sheet was
+  judged at 380px a cell and a hole clean through a hound's chest was called clean twice; it
+  is unmistakable at 700px. Use the contact sheet to pick suspects and then render the
+  suspects large, one at a time. The same rule as the 48px relic strip, in the other
+  direction: **judge at the size the defect is visible, which is not always the size the
+  thing is drawn.**
+
   **And a list of STATES rots the same way a list of screens does (D217).** Every iso
   capture photographs a floor being *walked*, and a walk never stops at an offer — so the
   row of buttons that carries push, answer, break-away and the stone had never been in a

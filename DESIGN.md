@@ -207,6 +207,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D216** | [A card that cost nothing could not be played, and the game gave the wrong reason twice](#d216--a-card-that-cost-nothing-could-not-be-played-and-the-game-gave-the-wrong-reason-twice) |
 | **D217** | [Three of the four things the floor can offer you had no button](#d217--three-of-the-four-things-the-floor-can-offer-you-had-no-button) |
 | **D218** | [The half of the damage that was joined to the field, so nothing had ever looked for it](#d218--the-half-of-the-damage-that-was-joined-to-the-field-so-nothing-had-ever-looked-for-it) |
+| **D219** | [Six plates the restore could not save, and the generator that had been leaving scars](#d219--six-plates-the-restore-could-not-save-and-the-generator-that-had-been-leaving-scars) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14295,3 +14296,51 @@ off backdrops and never took off these. At the size a plate is drawn they are su
 invisible; chasing them is how D199's re-cut ended up making all thirty-five files 5-25
 points more opaque to fix six. The diamonds also cannot be restored, only inpainted: the
 paint under them is genuinely gone, because it was the stamp.
+
+### D219 — Six plates the restore could not save, and the generator that had been leaving scars
+
+D218 restored the alpha on `grave_moth`, `forge_hound` and `ossuary_wretch` and shipped. The
+player came back with **both hounds, the mother, the skeleton and the zombie** — so the
+restore was necessary and not sufficient, and the reason is worth writing down.
+
+**The magenta sheet was read at the wrong size.** D218 judged 35 plates in a 5x7 grid at
+380px a cell. `ember_hound` has a hole through its chest that is unmistakable at 700px and
+reads as shading at 380; it was called clean twice. The instrument was right and the way it
+was used was not: **render the suspects large and one at a time, and only use the contact
+sheet to decide which are suspects.**
+
+**And a restore cannot invent paint that was never there.** Where D218's finding holds — the
+pipeline writes only alpha — the repair is exact and it fixed the moth's wings outright.
+Where the source painting is itself ragged it cannot: `forge_hound`'s hindquarters restored
+to a reattached leg with a torn outline and a floating wedge, better than a severed leg and
+still wrong. That is the boundary between the two repairs, and it is visible before you
+start: force the alpha opaque and look at what is underneath.
+
+**So these six were repainted**, on a flat magenta key per D200, through the browser
+(`gemini-browser`) because every image model on this key reports a free-tier quota of zero.
+`ember_hound`, `forge_hound`, `crypt_hound`, `brood_mother`, `ossuary_wretch`, `bog_lurker`.
+
+**Three things that batch taught, all now in the skill.**
+
+*Ask for a GRID.* Six creatures in one 1264x844 image agree on line weight and palette by
+construction rather than by prompting, and cost one of the day's ~20 generations instead of
+six. Split by connected component afterwards, never by grid arithmetic — the model does not
+honour a tidy 3x2 — and require "spaced well apart, none touching", because subjects that
+touch merge into one blob that cannot be separated.
+
+*The generator stamps a four-point sparkle and FORBIDDEN does not stop it.* Every image in
+this batch carried one. For a cutout it costs nothing — the despeckle drops it as a stray
+island, and `install_cutouts` duly reported 1 to 31 of them per file. **But when the stamp
+lands ON the subject the matte cuts it out and leaves a diamond-shaped hole with no paint
+under it**, which is exactly the scar `ossuary_wretch` and `marrow_priest` carry and the one
+defect in this whole family that D218 correctly said could not be restored. The cause was
+never a mystery in the pipeline; it was upstream, in the tool.
+
+*Judge the ASPECT, not the picture.* `combat.gd` stretches a plate's whole canvas into a
+square slot, so what the player sees is scaled by how much of the canvas the subject fills.
+The first brood-mother came back sprawling at 1.78:1 and filled **53% of its canvas height
+against the 86% of the art it replaced** — a boss that would have been drawn at 60% of its
+size, with nothing wrong in the picture and nothing to notice by eye. Re-asked as "TALLER
+THAN IT IS WIDE, filling the frame top to bottom, limbs folded in close rather than
+sprawling sideways", it came back at 98%. **Measure the bounding box against the canvas
+after installing**; it is a one-line check and it is the only thing that catches this.
