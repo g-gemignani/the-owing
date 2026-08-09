@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**384 files wanted · 384 already present · 0 to provide.**
+**386 files wanted · 386 already present · 0 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -411,7 +411,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 8a — isometric figures
 
-*20 files, 0 still to provide.* Every one of these exists and is a flat near-black silhouette; the floor is the screen a run is mostly spent on.
+*22 files, 0 still to provide.* Every one of these exists and is a flat near-black silhouette; the floor is the screen a run is mostly spent on.
 
 | ? | file | size | what it is |
 |---|---|---|---|
@@ -419,8 +419,10 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `iso/hero_n.png` | 128x192 | The player, walking away. Standing still. |
 | x | `iso/hero_s_a.png` | 128x192 | The player facing the camera, mid-stride with her LEFT leg leading. Same character, same cloak, same colours and the same height as `hero_s.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
 | x | `iso/hero_s_b.png` | 128x192 | The player facing the camera, mid-stride with her RIGHT leg leading. Same character, same cloak, same colours and the same height as `hero_s.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
+| x | `iso/hero_s_p.png` | 128x192 | The player facing the camera, at the PASSING moment of the walk: the two legs are together and level, one foot flat on the ground and the other swinging past it with the knee lifted and the toe just clear of the floor. This is the frame between the two strides above, so the cloak hangs nearer to straight than it does in either of them rather than swept out behind. Same character, same cloak, same colours, same height. Her supporting foot must still be the lowest painted pixel. |
 | x | `iso/hero_n_a.png` | 128x192 | The player walking away, mid-stride with her LEFT leg leading. Same character, same cloak, same colours and the same height as `hero_n.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
 | x | `iso/hero_n_b.png` | 128x192 | The player walking away, mid-stride with her RIGHT leg leading. Same character, same cloak, same colours and the same height as `hero_n.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into. |
+| x | `iso/hero_n_p.png` | 128x192 | The player walking away, at the PASSING moment of the walk: the two legs are together and level, one foot flat on the ground and the other swinging past it with the knee lifted and the toe just clear of the floor. This is the frame between the two strides above, so the cloak hangs nearer to straight than it does in either of them rather than swept out behind. Same character, same cloak, same colours, same height. Her supporting foot must still be the lowest painted pixel. |
 | x | `iso/mon_swarm_s.png` | 128x192 | A swarm, facing the camera. It IS the fight this tile becomes, so it must match the arena's swarm (D85). |
 | x | `iso/mon_swarm_n.png` | 128x192 | The same swarm, from behind. |
 | x | `iso/mon_brute_s.png` | 128x192 | A brute, facing the camera. It IS the fight this tile becomes, so it must match the arena's brute (D85). |

@@ -341,10 +341,11 @@ func _ready() -> void:
 func _load_art() -> void:
 	var roles: Array = ["floor", "rock", "combat", "elite", "boss", "shop", "rest",
 		"event", "treasure", "hero_s", "hero_n",
-		# The two stride poses of each hero painting. Absent from a checkout that has not
-		# installed them, and `_draw_you` then falls back to the standing painting — so the
-		# gait below is what walks and these only ever make it better, never load-bearing.
-		"hero_s_a", "hero_s_b", "hero_n_a", "hero_n_b"]
+		# The stride poses of each hero painting: two CONTACTS and one PASSING (D222).
+		# Absent from a checkout that has not installed them, and `_draw_you` then falls back
+		# to the standing painting — so the gait below is what walks and these only ever make
+		# it better, never load-bearing.
+		"hero_s_a", "hero_s_b", "hero_s_p", "hero_n_a", "hero_n_b", "hero_n_p"]
 	for i in WANDER_DESIGNS:
 		roles.append("wander_%d_s" % i)
 		roles.append("wander_%d_n" % i)
@@ -1670,9 +1671,13 @@ func _draw_you(centre: Vector2, t: Vector2) -> void:
 	# what is LOADED rather than assumed installed: the standing painting is the fallback, so a
 	# checkout without the stride frames still walks — it just walks without moving its feet.
 	if walk_t < 1.0:
-		var posed: String = "%s_%s" % [role, "a" if stride == 0 else "b"]
+		var posed: String = "%s_%s" % [role, IsoFooting.gait_frame(stride, walk_t)]
 		if art.has(posed):
 			role = posed
+		elif art.has("%s_%s" % [role, "a" if stride == 0 else "b"]):
+			# A checkout with the two contacts and no passing frame: hold the contact for the
+			# whole step, which is exactly what this did before D222.
+			role = "%s_%s" % [role, "a" if stride == 0 else "b"]
 	if IsoFooting.hero_mirrored(face_step) and art.has(role + FLIP):
 		role += FLIP
 	var tex: Texture2D = art.get(role)

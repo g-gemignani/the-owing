@@ -854,6 +854,16 @@ These are failure modes that have actually bitten this project. Treat each as a 
   direction: **judge at the size the defect is visible, which is not always the size the
   thing is drawn.**
 
+- **An animation is judged by its SEQUENCE, and a frame count is not one.** The hero walked
+  on two poses alternated once per STEP, so a step showed one frozen pose for its whole
+  0.13s while the position lerped underneath — a sprite being dragged, not a figure walking
+  (D222). Both poses were also *contacts*, the two extremes of the stride, with no passing
+  frame between them; playing two extremes faster only flickers faster. The fix was one more
+  drawing per facing and a phase keyed to the PAIR of steps, so the cycle reads
+  `a, p, b, p` and does not repeat a pose where two steps join. **Ask what the thing looks
+  like between the keyframes, not how many keyframes there are** — and assert the sequence,
+  since a check on any single frame passes on a slide.
+
   **The one picture that decides it is the PAIR (D221).** On magenta a missing trident head
   looks like a trident drawn short and a severed arm looks like a sleeve ending in rags — the
   sprite is *plausible* without the part, which is the case a single picture cannot settle. So

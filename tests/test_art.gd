@@ -1008,6 +1008,35 @@ func _init() -> void:
 	print("  (info: worst iso stand point is %s, %.1f%% of its own width off centre)" % [
 		worst_role, worst * 100.0])
 
+	# --- the walk cycle is contact, passing, contact, passing --------------------------
+	#
+	# Walked over two whole steps rather than spot-checked, because the property that makes it
+	# read as a walk is a property of the SEQUENCE: every pose must be followed by a different
+	# one, and the join between two steps is where that is easy to get wrong. The version this
+	# replaces changed pose once per step and held it for the whole 0.13s, which is a sprite
+	# being dragged rather than a figure walking (D222).
+	var seq: Array[String] = []
+	for st in 2:
+		for k in 12:
+			var fr: String = IsoFooting.gait_frame(st, float(k) / 12.0)
+			if seq.is_empty() or String(seq[seq.size() - 1]) != fr:
+				seq.append(fr)
+	if ", ".join(seq) != "a, p, b, p":
+		fails += 1
+		print("FAIL the walk cycle is %s, not contact/passing/contact/passing" % [seq])
+	# ...and it has to CLOSE: the frame at the end of the second step and the frame at the
+	# start of the first are consecutive when a third step follows, so if they match the
+	# figure freezes for two frames every time the cycle comes round.
+	if IsoFooting.gait_frame(1, 0.99) == IsoFooting.gait_frame(0, 0.0):
+		fails += 1
+		print("FAIL the walk cycle repeats a pose where it wraps — it will hitch every 2 steps")
+	# Standing still is not part of the cycle: the idle painting is what a stopped figure
+	# shows, and `_draw_you` only asks for a frame while `walk_t < 1`.
+	for st in 2:
+		if IsoFooting.gait_frame(st, 1.0) != "b" and IsoFooting.gait_frame(st, 1.0) != "p":
+			fails += 1
+			print("FAIL gait_frame is undefined at rest")
+
 	# --- the hero's mirror rule and the monsters' are ONE rule -------------------------
 	#
 	# The hero picks her mirror by comparing a step against the diagonal her file was painted

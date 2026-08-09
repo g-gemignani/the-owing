@@ -994,15 +994,21 @@ func _iso() -> void:
 		"Two columns and one row per figure. LEFT column: the figure walking TOWARD the camera and to the viewer's LEFT (down-left, 45 degrees). RIGHT column: the SAME figure walking AWAY and to the viewer's RIGHT (up-right, 45 degrees) — seen from behind and above, one character turned around, not a second character, same size and colours and silhouette width. THOSE TWO ANGLES ARE NOT NEGOTIABLE: the game mirrors each file to get the other two of the four walking directions (`IsoFooting.facing_mirrored`), so a figure drawn facing straight out of the frame mirrors to itself and the mirror does nothing, and a figure drawn on the WRONG diagonal walks sideways on half the compass. Flat even background of a single colour that appears nowhere in the subject, nothing touching a cell edge. Install: `godot --headless --script tools/install_sheet.gd -- iso_figures <sheet.png> --key`")
 	_add("iso/hero_s.png", "128x192", "The player, facing the camera. Standing still: this is the pose the floor draws whenever she is not mid-step.")
 	_add("iso/hero_n.png", "128x192", "The player, walking away. Standing still.")
-	# Her walk. Two poses per facing, alternated once per step by `iso_run.stride`, and the
-	# reason there are two rather than four is that the model moves one tile per turn — a
-	# step IS the unit of the cycle, so a third pose would never be on screen at a decision
-	# point. The standing paintings above stay the idle frame, so this is a set of four, not
-	# a replacement for the two.
+	# Her walk: three poses per facing, a full contact-passing-contact-passing cycle.
+	#
+	# It was TWO, on the argument that "a step IS the unit of the cycle, so a third pose would
+	# never be on screen at a decision point". That is true and it is about the wrong moment
+	# (D222). Nothing is on screen at a decision point except the IDLE pose; the frames that
+	# matter are the ones during the 0.13s step nobody has a decision to make in, and with two
+	# contacts and no passing frame the pose was held for that whole step. One pose held while
+	# the position lerps is a sprite being dragged across the floor, which is what it looked
+	# like. The standing paintings above stay the idle frame.
 	for e in [["s", "facing the camera"], ["n", "walking away"]]:
 		for foot in [["a", "LEFT"], ["b", "RIGHT"]]:
 			_add("iso/hero_%s_%s.png" % [e[0], foot[0]], "128x192",
 				("The player %s, mid-stride with her %s leg leading. Same character, same cloak, same colours and the same height as `hero_%s.png` — only the legs and the swing of the cloak move. Her feet must still be the lowest painted pixel: this pose is anchored exactly as the standing one is, and a stride drawn with a raised foot at the bottom of the canvas walks along a floor it is sunk into." % [e[1], foot[1], e[0]]))
+		_add("iso/hero_%s_p.png" % e[0], "128x192",
+			("The player %s, at the PASSING moment of the walk: the two legs are together and level, one foot flat on the ground and the other swinging past it with the knee lifted and the toe just clear of the floor. This is the frame between the two strides above, so the cloak hangs nearer to straight than it does in either of them rather than swept out behind. Same character, same cloak, same colours, same height. Her supporting foot must still be the lowest painted pixel." % e[1]))
 	for fam in Balance.ISO_FAMILIES:
 		_add("iso/mon_%s_s.png" % fam, "128x192",
 			"A %s, facing the camera. It IS the fight this tile becomes, so it must match the arena's %s (D85)." % [fam, fam])

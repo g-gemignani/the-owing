@@ -211,6 +211,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D220** | [The mark on the Marrow-Priest was never a hole, and the tool that says so](#d220--the-mark-on-the-marrow-priest-was-never-a-hole-and-the-tool-that-says-so) |
 | **D220b** | [Every way into a card was a gesture a finger cannot make](#d220b--every-way-into-a-card-was-a-gesture-a-finger-cannot-make) |
 | **D221** | [Twice I called a severed limb a painted drip, and the test that settles it existed](#d221--twice-i-called-a-severed-limb-a-painted-drip-and-the-test-that-settles-it-existed) |
+| **D222** | [Two contacts and nothing between them, which is a slide rather than a walk](#d222--two-contacts-and-nothing-between-them-which-is-a-slide-rather-than-a-walk) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14533,3 +14534,49 @@ code — a coordinate compiled into a tool is a number nobody can check later.
 When an instrument disagrees with your eye, the instrument has seen something your eye has
 not, and the cheap move is not to argue with it — it is to take the ONE picture that can
 tell the two readings apart.
+
+### D222 — Two contacts and nothing between them, which is a slide rather than a walk
+
+*"I am still not convinced by how the hero walks. Can we add more frames?"* Yes, and the
+count was not the only thing wrong with it.
+
+**What was there.** Two paintings per facing, `_a` and `_b`, alternated by `iso_run.stride`
+— which flips **once per step**. So a step showed ONE pose for its whole 0.13s while the
+position lerped underneath it, and the next step showed the other. Two frames at 7.7 fps,
+and inside any single step nothing about the figure moved at all. A pose held while the
+position interpolates is the definition of a sprite being dragged across a floor.
+
+**And both poses are CONTACTS.** `_a` and `_b` are the two extremes of the stride, legs
+apart, cloak swept. A walk cycle is **contact, passing, contact, passing** — the passing
+frame, legs together and the body at the top of its rise, is the one that makes the other two
+read as a stride rather than as two stills. There was no passing frame, so playing the
+existing two faster would only have made the flicker faster.
+
+**`art_manifest.gd` had an argument for two and it is about the wrong moment.** *"A step IS
+the unit of the cycle, so a third pose would never be on screen at a decision point."* True.
+Nothing is on screen at a decision point except the IDLE painting — the frames that matter
+are the ones during the step nobody has a decision to make in, which is precisely where the
+old version had one frozen pose.
+
+**What shipped.** `hero_s_p` and `hero_n_p`, the passing frame for each facing, generated on
+the magenta key and installed through `install_sheet --only=... --cols=2 --key`. The cycle is
+now `a, p, b, p` — two pose changes per step instead of one, and a real cycle instead of two
+extremes.
+
+**The phase is keyed to the pair of steps, not to one.** A full cycle is TWO steps, so
+`stride` is the high bit and `walk_t` is the rest: `c = (stride + walk_t) / 2`. That is what
+keeps the sequence continuous across the step boundary. The obvious per-step version —
+contact, passing, other contact — repeats a contact where two steps meet, and a repeated
+frame at the join is a hitch you can see at this speed.
+
+**Where it lives, and why that is not `iso_run.gd`.** `IsoFooting.gait_frame()`, beside the
+lift and stretch it works with, for the reason that file opens with: `iso_run.gd` reaches
+autoloads and cannot be loaded in a headless run, and this is the part that has to be
+*asserted*. `tests/test_art.gd` walks two whole steps and checks the sequence is
+`a, p, b, p` and that it does not repeat a pose where it wraps — a property of the SEQUENCE,
+which is what a spot check on one frame would miss. Verified by reinstating the old
+one-pose-per-step rule: it prints `the walk cycle is ["a", "b"]`.
+
+**It degrades rather than breaks.** A checkout without the passing frames falls back to
+holding the contact for the step, which is exactly what this did before — so the frames make
+it better and are never load-bearing, the same contract the stride poses already had.

@@ -240,6 +240,38 @@ static func gait_lift(t: Vector2, walk_t: float) -> Vector2:
 	return Vector2(0.0, -t.y * GAIT_LIFT * sin(PI * walk_t))
 
 
+## Which frame of the walk a step in progress is showing: "a", "p" or "b" (D222).
+##
+## The cycle is the classic four — **contact, passing, contact, passing** — and the reason
+## the two-pose version read as a slide is that it had no passing frame and changed pose once
+## per STEP. One pose held for the whole 0.13s means the only thing moving inside a step is
+## the position lerp, which is the definition of a sprite being dragged across the floor.
+##
+## `art_manifest.gd` argued for two poses because "a step IS the unit of the cycle, so a third
+## pose would never be on screen at a decision point". True, and about the wrong moment:
+## nothing is on screen at a decision point except the idle pose, and the frames that matter
+## are the ones during the step nobody has a decision to make in.
+##
+## A full cycle is TWO steps, so `stride` — which already flips once per step — is the high
+## bit of the phase and `walk_t` is the rest. That is what makes the sequence continuous
+## across the step boundary: a, p, b, p, a, ... A naive per-step "contact, passing, other
+## contact" repeats a contact where two steps meet, and a repeated frame at the join is a
+## hitch you can see at this speed.
+##
+## Lives here rather than in `iso_run.gd` for the reason at the top of this file: that script
+## reaches autoloads and cannot be loaded headless, and this is the part that has to be
+## ASSERTED. `tests/test_art.gd` walks the whole cycle against this.
+static func gait_frame(stride: int, walk_t: float) -> String:
+	var c := (float(stride & 1) + clampf(walk_t, 0.0, 1.0)) * 0.5
+	if c < 0.25:
+		return "a"
+	if c < 0.5:
+		return "p"
+	if c < 0.75:
+		return "b"
+	return "p"
+
+
 ## The height multiplier that goes with it. Applied to a rect that is anchored by its FEET
 ## (`rect` above), so the extension happens upward from the ground rather than outward around
 ## the middle — the feet stay where they are and the figure reaches.

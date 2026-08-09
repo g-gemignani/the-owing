@@ -315,12 +315,17 @@ func _ids(set_name: String) -> Array:
 			# one figure toward the camera beside the same figure walking away. Ordered
 			# s,n the other way round and row two would be her two front strides side by
 			# side, which is not what the column rule says the sheet means.
-			for foot in ["a", "b"]:
+			# Three rows, not two: the two CONTACTS and the PASSING frame between them
+			# (D222). A walk cycle is contact, passing, contact, passing, and the two
+			# contacts on their own are the two extremes with nothing in between — which
+			# is what made her slide.
+			for foot in ["a", "b", "p"]:
 				for e in ["s", "n"]:
 					out.append(["iso/hero_%s_%s.png" % [e, foot],
-						"hero %s, %s leg leading" % [
+						"hero %s, %s" % [
 							"toward you (down-left)" if e == "s" else "away (up-right)",
-							"left" if foot == "a" else "right"]])
+							"passing: legs together, mid-stride" if foot == "p"
+								else ("%s leg leading" % ("left" if foot == "a" else "right"))]])
 			for fam in Balance.ISO_FAMILIES:
 				out.append(["iso/mon_%s_s.png" % fam, "%s, facing you" % fam])
 				out.append(["iso/mon_%s_n.png" % fam, "%s, from behind" % fam])
