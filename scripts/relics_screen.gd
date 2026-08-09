@@ -121,6 +121,20 @@ func _ready() -> void:
 	# twenty-four rows. Dropped when there is nothing left to withhold.
 	if found < slots:
 		UI.label(col, "An unfound relic shows its name and its rarity. What it does is learned by holding it.")
+	# ...and the OTHER reason a slot is empty, which is new and is not "you have been
+	# unlucky" (D223). The rarer half of the set is sealed until you have cleared
+	# enough, so a player grinding the Crypt for a Legendary is grinding for something
+	# that cannot drop — and before this there was nothing anywhere that said so.
+	var reach: int = MetaState.total_clears()
+	var sealed := 0
+	for id in MetaState.RELIC_CATALOG:
+		if MetaState.relic_locked(id, reach):
+			sealed += 1
+	if sealed > 0:
+		var seal := UI.label(col, ("%d of them are sealed until you have cleared more: %s so far. "
+			+ "Depth is what opens them, and a clear of a place you have already beaten counts.")
+			% [sealed, Wording.count(reach, "clear")])
+		seal.add_theme_color_override("font_color", Color(0.95, 0.78, 0.45))
 
 	# Empty, all thirty slots and their five headers fit 720px with no scrollbar at
 	# all — measured, and what HEAD_LEADING is tuned against. Every slot that fills in
@@ -136,9 +150,17 @@ func _ready() -> void:
 		for e in entries:
 			if bool(e["owned"]):
 				held += 1
-		var head := UI.label(list, "%s  %d of %d" % [
-			CardData.rarity_badge(rarity), held, entries.size()])
-		head.add_theme_color_override("font_color", Icons.rarity_colour(rarity))
+		# The gate is per RARITY, so it goes on the group header and nowhere else —
+		# the same rule that keeps the rarity badge off all thirty rows. A sealed
+		# group says what would open it and how far off that is, because "sealed" on
+		# its own is the "???" row this screen was built to stop printing (D223).
+		var to_go: int = Balance.relic_clears_to_go(rarity, reach)
+		var head := UI.label(list, "%s  %d of %d%s" % [
+			CardData.rarity_badge(rarity), held, entries.size(),
+			"" if to_go == 0 else "   sealed — %s to go (%d clears in all)" % [
+				Wording.count(to_go, "clear"), int(Balance.RELIC_UNLOCK[rarity])]])
+		head.add_theme_color_override("font_color", Icons.rarity_colour(rarity)
+			if to_go == 0 else Icons.rarity_colour(rarity).darkened(UNFOUND_DIM))
 		# The air a group needs goes ABOVE its header, and the scroll's own uniform
 		# separation cannot put it on one side only — so the header carries a floor
 		# under its height and sits at the bottom of it. Without this, the first

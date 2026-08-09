@@ -77,7 +77,10 @@ The loop:
    D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
 4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
    of it. Between runs you fuse duplicates into levels, buy and level Powers and
-   Relics, and unlock deeper zones.
+   Relics, and unlock deeper zones. The thirty relics are the long tail: each rarity is
+   sealed until you have cleared enough, and the last of them do not open until four
+   clears past the twelfth dungeon (D223), so finishing the set is something you do
+   after the game rather than halfway through it.
 
 Two-tier state makes this work:
 
@@ -1155,6 +1158,19 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `glossary.gd` reads `MetaState` again. **The same split decides where new information
   goes:** a rule goes on the rules screen, a fact about this save goes on the screen that
   owns the thing it is a fact about.
+
+- **A reward pool with no duplicates is a countdown, and it needs a gate or it just
+  empties.** Every relic grant handed out a relic you did not own, so thirty relics was
+  thirty grants however shallow the play — and the twelve dungeons pay 26 of them in one
+  pass (D223). A collection meant to last needs the pool itself gated by depth, not just a
+  rarity weighting on the roll: weights change *which* one you get, never *how many are
+  left*. **Price the gate in a currency that can exceed the game** — `clear_count()` caps at
+  twelve distinct dungeons, so any threshold past the end measured against it never opens.
+
+- **A withheld reward and an unlucky one look identical, so say which.** An elite that
+  drops no relic means "you own them all" or "the rest are sealed", and only one of those
+  means keep going (D223). Any gate added to a random reward owes the player a sentence
+  somewhere, or it reads as the reward being broken.
 
 - **Count the ways into a feature, and check how many of them a finger can make.** D213's
   grid offered three — drag to the bay, double-click, and a 40x14 badge — and on Android all

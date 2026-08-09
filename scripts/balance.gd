@@ -625,6 +625,48 @@ static func power_ratio_bonus(p, deck_per_energy: float = BASELINE_CARD_POWER) -
 
 # --- relics ---
 const RELIC_DIR := "res://resources/relics/"
+
+## Total dungeon clears before a relic of each RARITY can be rolled at all (D223).
+##
+## Relics had no depth gate. `unowned_relics()` was the whole pool, so a Legendary
+## could drop off the first elite in the Crypt, and — because a grant is always a relic
+## you do not own — the collection was a countdown from thirty that emptied at a fixed
+## rate whatever the depth. Reported as "I finished the Ashen Foundry and I already
+## have them all", and the arithmetic agrees with the report: the twelve dungeons carry
+## 14 elites between them and each pays a relic, plus one per boss, so **one clean pass
+## of the whole game is 26 of the 30** — and every repeat clear after that finishes the
+## set. There was no version of playing this game in which the last relic was a late
+## thing.
+##
+## The counts per rarity are 7 / 8 / 7 / 5 / 3, so the thresholds open the pool to
+## 7, 15, 22, 27 and finally 30. Set against the earn rate rather than picked: a clear
+## pays a bit over two relics, so those ceilings sit just above what a player will have
+## banked when they reach each one, and the pool does not run dry between tiers. The
+## last of them is 16, which is four clears past the twelve the game has — the shape the
+## report asked for, where finishing the set is something you do after the last dungeon
+## rather than halfway to it.
+##
+## Measured against TOTAL clears (`MetaState.total_clears`), not `clear_count()`, and
+## that is the load-bearing half. `clear_count()` is how many DISTINCT dungeons you have
+## beaten and cannot exceed twelve — a threshold of 16 measured against it would never
+## be reachable by anyone, which is a softlock disguised as a difficulty knob.
+const RELIC_UNLOCK := [0, 3, 7, 11, 16]
+
+## Whether a relic of this rarity is in the pool yet.
+##
+## Out of range is UNLOCKED, deliberately. A rarity this table has no row for is a
+## content change that outran its tuning, and the failure that should follow is a relic
+## dropping early — not one that can never drop at all and is invisible in every save.
+static func relic_unlocked(rarity: int, clears: int) -> bool:
+	if rarity < 0 or rarity >= RELIC_UNLOCK.size():
+		return true
+	return clears >= int(RELIC_UNLOCK[rarity])
+
+## Clears still to go before this rarity opens, or 0 if it is already open.
+static func relic_clears_to_go(rarity: int, clears: int) -> int:
+	if rarity < 0 or rarity >= RELIC_UNLOCK.size():
+		return 0
+	return maxi(0, int(RELIC_UNLOCK[rarity]) - clears)
 ## Relic power is divided by this to convert it into ratio points. Relics are
 ## permanent and sit outside the deck, so without folding them into the ratio a
 ## relic collection would outscale enemies exactly the way fusion once did.

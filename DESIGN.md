@@ -212,6 +212,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D220b** | [Every way into a card was a gesture a finger cannot make](#d220b--every-way-into-a-card-was-a-gesture-a-finger-cannot-make) |
 | **D221** | [Twice I called a severed limb a painted drip, and the test that settles it existed](#d221--twice-i-called-a-severed-limb-a-painted-drip-and-the-test-that-settles-it-existed) |
 | **D222** | [Two contacts and nothing between them, which is a slide rather than a walk](#d222--two-contacts-and-nothing-between-them-which-is-a-slide-rather-than-a-walk) |
+| **D223** | [Thirty relics with no gate on them, so the collection emptied halfway to the end](#d223--thirty-relics-with-no-gate-on-them-so-the-collection-emptied-halfway-to-the-end) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14580,3 +14581,101 @@ one-pose-per-step rule: it prints `the walk cycle is ["a", "b"]`.
 **It degrades rather than breaks.** A checkout without the passing frames falls back to
 holding the contact for the step, which is exactly what this did before — so the frames make
 it better and are never load-bearing, the same contract the stride poses already had.
+
+### D223 — Thirty relics with no gate on them, so the collection emptied halfway to the end
+
+Reported: *"Relics are too easy to get. I finished the ashen foundry and I already have them
+all. I would expect to be able to get them all only way past the last dungeon."*
+
+**The arithmetic agrees with the report, and it is worse than "too fast" — it was never slow.**
+Relics had no depth gate of any kind. `MetaState.unowned_relics()` returned every relic the
+player did not hold, and that array is the pool for all three sources — the elite drop, the boss
+drop and the six events that hand one over. So a Legendary could roll off the first elite in the
+Crypt, and because a grant is *always* a relic you do not own, the collection was a countdown
+from thirty that emptied at a fixed rate whatever the depth.
+
+The rate, read straight off the dungeon data rather than simulated:
+
+| | elites | relics per clear |
+|---|---|---|
+| crypt · ossuary | 1 | 2 |
+| warrens | 0 | 1 |
+| foundry | 2 | 3 |
+| ember_road … abyssal_stair | 1 | 2 |
+| the_maw | 2 | 3 |
+
+Fourteen elites across the twelve dungeons, one relic each, plus one per boss: **one clean pass
+of the entire game is 25 of the 30**, and the thirteenth clear finishes the set. Zone gates
+(D178) are priced in clears, so a player who has opened the second zone has already made several
+of those. There was no version of playing this game in which the last relic was a late thing.
+
+#### The gate is on the ROLL, and it is priced in a currency that can exceed the game
+
+`Balance.RELIC_UNLOCK = [0, 3, 7, 11, 16]` — clears before a relic of each rarity enters the
+pool. The set is 7 / 8 / 7 / 5 / 3, so the pool opens to 7, 15, 22, 27 and finally 30.
+
+**Measured against `MetaState.total_clears()`, which is new, and that is the load-bearing
+half.** `clear_count()` is `cleared_dungeons.size()` — how many DISTINCT dungeons you have
+beaten — and it cannot exceed twelve. A threshold of 16 measured against it would never open for
+anybody: a softlock wearing a difficulty knob. `total_clears()` sums `clear_counts`, counts
+repeats, and is the only one of the two that can express "past the end of the game". They are
+kept separate rather than merged behind a flag, because every existing dungeon and zone gate
+wants the first and quietly changing what those measure would move every unlock in the game.
+
+The thresholds are set against the earn rate, not picked. Modelled over one pass then repeats:
+
+```
+clears  earned  unlocked  held
+     1       2         7     2
+     3       5        15     5
+     7      14        22    14
+    11      22        27    22
+    12      25        27    25     <- a full sweep of all twelve
+    13      27        27    27
+    14      29        27    27     STARVED by 2
+    16      33        30    30     <- complete
+```
+
+Complete at **16 clears — four past the twelve dungeons the game has**, which is the shape the
+report asked for. The ceilings sit just above what a player has banked when they reach each one,
+so the pool does not run dry between tiers; the single exception is a two-clear window at 14-15
+where the last three Legendaries are still sealed, and that window is *deliberate* — it is the
+"go deeper" state the whole change exists to create.
+
+#### Two things the gate had to not break
+
+**A relic already held is never taken away.** The gate is on the roll, not on the holding:
+`add_relic` is ungated, so a save made before this keeps everything it earned and a directly
+awarded relic still lands. Asserted, because the opposite is a save-eating bug.
+
+**Every relic stays reachable.** A gate that permanently withholds one is a broken collection,
+not a slower one. `test_relic.gd` takes a save deep and grants until the catalogue is empty.
+
+#### The player has to be able to tell "sealed" from "unlucky"
+
+They look identical from the seat: an elite that drops nothing. Only one of them means keep
+going, and before this there was nothing anywhere that said which.
+
+The relics screen already lists all thirty slots grouped by rarity (D116), so the gate goes on
+the **group header** and nowhere else — the same rule that keeps the rarity badge off all thirty
+rows: `[Rare] 0 of 7   sealed — 3 clears to go (7 clears in all)`, with the header dimmed to
+`UNFOUND_DIM`. A summary line above says how many are sealed and how many clears the save has.
+And an elite that cannot pay a relic now says so rather than silently skipping the line — that
+silence was survivable while the pool was ungated, because emptying it meant "finished"; with a
+gate it is the ordinary state of a shallow save, and an unexplained missing reward reads as a
+bug.
+
+#### What was deliberately not changed
+
+**The earn rate.** The obvious second lever is that a boss pays a relic on *every* clear,
+including a fifth run through the Crypt — which is the treadmill D69 already docked gold for.
+Making the boss relic a first-clear-only reward would cut the supply from 26 a pass to 12 and
+push the tail further still. It is not done here because it is a second, separable balance
+decision the report did not ask for, and stacking it would make the effect of the gate
+impossible to attribute. It is the knob to reach for if 16 clears still lands too early.
+
+**Grinding the shallow end.** `total_clears()` does not care *which* dungeon was cleared, so
+sixteen runs through the Crypt opens everything. That is sixteen real runs and the player's
+choice to spend them that way, but if it turns out to be the fast path, the fix is to weight the
+currency by difficulty rather than to raise the thresholds — raising them punishes the player
+who went deep along with the one who did not.

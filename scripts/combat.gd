@@ -2126,6 +2126,14 @@ func _win() -> void:
 			var rd := load(MetaState.RELIC_CATALOG[won_relic]) as RelicData
 			relic_line = "  Took %s (at risk)." % (rd.name if rd != null else won_relic)
 			Audio.play("treasure")
+		elif MetaState.sealed_relics() > 0:
+			# An elite that pays no relic looks the same whether you own all thirty or
+			# the rest are still sealed by depth (D223), and only one of those means
+			# keep going. The silence was survivable while the pool was ungated and
+			# emptying meant "finished"; with a gate it is the ordinary state of a
+			# shallow save, and an unexplained missing reward reads as a bug.
+			relic_line = "  No relic here — %d are still sealed until you have cleared more." % \
+				MetaState.sealed_relics()
 		# ...and a pack, so the elite is the middle rung of the three pack sources
 		# (D81): a chest is usually worn, an elite is usually sealed, a boss is
 		# never worn. Choosing to take the hard fight is what buys the better tier.

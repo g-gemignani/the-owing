@@ -778,13 +778,57 @@ func relic_data() -> Array:
 			out.append(r)
 	return out
 
-## Relic ids the player does not own yet (the grant pool).
+## Relic ids that could still be rolled: not owned, and deep enough to have unlocked
+## (D223). This is the grant pool, and both `pick_relic` and `grant_relic` read it, so
+## the gate applies to the elite drop, the boss drop and the events alike.
 func unowned_relics() -> Array:
+	var reach := total_clears()
 	var out: Array = []
 	for id in RELIC_CATALOG:
-		if not has_relic(id):
-			out.append(id)
+		if has_relic(id):
+			continue
+		if relic_locked(id, reach):
+			continue
+		out.append(id)
 	return out
+
+## Whether this relic is still behind the depth gate. `clears` is passed in so a caller
+## walking all thirty slots — the relics screen does — asks `total_clears()` once
+## instead of thirty times.
+func relic_locked(id: String, clears: int = -1) -> bool:
+	if not RELIC_CATALOG.has(id):
+		return false
+	var r := load(RELIC_CATALOG[id]) as RelicData
+	if r == null:
+		return false
+	return not Balance.relic_unlocked(r.rarity, clears if clears >= 0 else total_clears())
+
+## How many relics exist that this save is not deep enough to be offered yet.
+##
+## Exists so a reward that CANNOT pay a relic can say which of the two reasons it is:
+## "you own them all" and "the rest are sealed" look identical from the player's seat —
+## an elite that drops nothing — and only one of them means keep going.
+func sealed_relics() -> int:
+	var reach := total_clears()
+	var n := 0
+	for id in RELIC_CATALOG:
+		if not has_relic(id) and relic_locked(id, reach):
+			n += 1
+	return n
+
+## Dungeon clears including repeats — the currency the relic gate is priced in.
+##
+## `clear_count()` is the size of `cleared_dungeons` and answers "how much of the game
+## have you beaten", which tops out at twelve. This answers "how much have you played",
+## which does not, and it is the only one of the two that can express a threshold past
+## the end of the game. They are deliberately separate rather than one function with a
+## flag: every existing gate wants the first, and quietly changing what those measure
+## would move every dungeon and zone unlock in the game.
+func total_clears() -> int:
+	var n := 0
+	for id in clear_counts:
+		n += maxi(0, int(clear_counts[id]))
+	return n
 
 ## Grant a random unowned relic, rarity-weighted by encounter tier. "" if none left.
 ## Roll a relic WITHOUT taking it. Split out so an elite's drop can go into escrow

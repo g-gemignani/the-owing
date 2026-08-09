@@ -67,6 +67,84 @@ func _init() -> void:
 	if "iron_heart" in m.unowned_relics():
 		fails += 1; print("FAIL owned relic still in unowned pool")
 
+	# --- the depth gate (D223) -------------------------------------------------------
+	#
+	# Relics had no gate at all: every unowned relic was in the pool from the first
+	# elite in the first dungeon, so the collection was a countdown from thirty that
+	# emptied at a fixed rate however shallow the play. Reported as "I finished the
+	# Ashen Foundry and I already have them all".
+	var g = Meta.new()
+	g.path_prefix = SANDBOX
+	g.slot = 3
+	g.new_save()
+	# A fresh save can roll commons and nothing else.
+	for id in g.RELIC_CATALOG:
+		var r := load(g.RELIC_CATALOG[id]) as RelicData
+		if r == null:
+			continue
+		var open: bool = not g.relic_locked(id)
+		if open != (r.rarity == CardData.Rarity.COMMON):
+			fails += 1
+			print("FAIL at zero clears %s (rarity %d) is %s" % [
+				id, r.rarity, "open" if open else "sealed"])
+	for id in g.unowned_relics():
+		var r2 := load(g.RELIC_CATALOG[id]) as RelicData
+		if r2 != null and r2.rarity != CardData.Rarity.COMMON:
+			fails += 1
+			print("FAIL a fresh save can roll %s, which is rarity %d" % [id, r2.rarity])
+			break
+
+	# The gate has to be priced in a currency that can EXCEED the game. `clear_count()`
+	# is distinct dungeons and stops at twelve, so a threshold past that measured
+	# against it would never open for anybody — a softlock wearing a difficulty knob.
+	if Balance.RELIC_UNLOCK[CardData.Rarity.LEGENDARY] <= Balance.DUNGEONS.size():
+		fails += 1
+		print("FAIL the last relics unlock at %d clears, which one pass of the %d dungeons reaches — they are meant to be past the end" % [
+			int(Balance.RELIC_UNLOCK[CardData.Rarity.LEGENDARY]), Balance.DUNGEONS.size()])
+	g.clear_counts = {}
+	for did in Balance.DUNGEONS:
+		g.clear_counts[did] = 1
+	if g.total_clears() != Balance.DUNGEONS.size():
+		fails += 1; print("FAIL total_clears counts %d for one clear of each" % g.total_clears())
+	if g.clear_count() > Balance.DUNGEONS.size():
+		fails += 1; print("FAIL clear_count exceeded the dungeon list")
+	# ...and repeats push it past the end, which `clear_count()` cannot do.
+	g.clear_counts[Balance.DUNGEONS[0]] = 9
+	if g.total_clears() <= Balance.DUNGEONS.size():
+		fails += 1; print("FAIL repeat clears do not raise total_clears")
+
+	# Deep enough and every slot is open — the set must be COMPLETABLE, or the gate is
+	# a wall rather than a pace.
+	g.clear_counts = {}
+	for did in Balance.DUNGEONS:
+		g.clear_counts[did] = Balance.RELIC_UNLOCK[CardData.Rarity.LEGENDARY]
+	for id in g.RELIC_CATALOG:
+		if g.relic_locked(id):
+			fails += 1
+			print("FAIL %s is still sealed at %d clears" % [id, g.total_clears()])
+			break
+	if g.unowned_relics().size() != g.RELIC_CATALOG.size():
+		fails += 1
+		print("FAIL a deep save can roll %d of %d relics" % [
+			g.unowned_relics().size(), g.RELIC_CATALOG.size()])
+
+	# Thresholds must be non-decreasing, or a rarer relic opens before a commoner one
+	# and the pyramid the screen draws stops meaning anything.
+	for i in range(1, Balance.RELIC_UNLOCK.size()):
+		if int(Balance.RELIC_UNLOCK[i]) < int(Balance.RELIC_UNLOCK[i - 1]):
+			fails += 1
+			print("FAIL rarity %d unlocks before rarity %d" % [i, i - 1])
+
+	# A relic already OWNED is never taken away by the gate: the gate is on the roll,
+	# not on the holding, so a save made before D223 keeps everything it earned.
+	g.relics = []
+	g.clear_counts = {}
+	if not g.add_relic("keen_lens"):     # rarity 4, sealed at zero clears
+		fails += 1; print("FAIL the gate blocked a relic being granted directly")
+	if not g.has_relic("keen_lens"):
+		fails += 1; print("FAIL a sealed relic could not be held even when awarded")
+	g.writes_disabled = true
+
 	# --- relic_bonus sums the right field ---
 	var ih := load(m.RELIC_CATALOG["iron_heart"]) as RelicData
 	if m.relic_bonus("bonus_max_hp") != ih.bonus_max_hp:
@@ -89,17 +167,49 @@ func _init() -> void:
 	if m2.relics.size() != before:
 		fails += 1; print("FAIL death removed relics (%d -> %d)" % [before, m2.relics.size()])
 
-	# --- grant_relic hands out unowned relics, then runs dry ---
+	# --- grant_relic hands out unowned UNLOCKED relics, then runs dry (D223) ---
+	#
+	# Two ceilings now, and the test asserts both because they fail differently: a
+	# shallow save runs dry at the end of what its depth has opened, and only a deep
+	# one can be granted the whole catalogue. This block asserted the second against a
+	# FRESH save before the gate existed, which is the pacing the report was about.
 	var m3 = Meta.new()
+	m3.path_prefix = SANDBOX
+	m3.slot = 4
 	m3.new_save()
+	var open_now: int = m3.unowned_relics().size()
+	if open_now >= m3.RELIC_CATALOG.size():
+		fails += 1
+		print("FAIL a fresh save can already roll every relic (%d of %d)" % [
+			open_now, m3.RELIC_CATALOG.size()])
 	var granted := {}
-	for i in m3.RELIC_CATALOG.size():
+	for i in open_now:
 		var got: String = m3.grant_relic(Balance.Tier.BOSS)
 		if got == "":
-			fails += 1; print("FAIL grant returned empty while relics remained"); break
+			fails += 1; print("FAIL grant returned empty while unlocked relics remained"); break
 		if granted.has(got):
 			fails += 1; print("FAIL granted duplicate relic: %s" % got); break
 		granted[got] = true
+	if m3.grant_relic(Balance.Tier.BOSS) != "":
+		fails += 1; print("FAIL granted a relic past what this save's depth has opened")
+
+	# ...and the same save, taken deep, can be granted the rest. Every relic must
+	# still be REACHABLE — a gate that permanently withholds one is a broken
+	# collection, not a slower one.
+	for did in Balance.DUNGEONS:
+		m3.clear_counts[did] = Balance.RELIC_UNLOCK[CardData.Rarity.LEGENDARY]
+	var rest: int = m3.unowned_relics().size()
+	if rest + granted.size() != m3.RELIC_CATALOG.size():
+		fails += 1
+		print("FAIL %d granted + %d still open != %d in the catalogue" % [
+			granted.size(), rest, m3.RELIC_CATALOG.size()])
+	for i in rest:
+		if m3.grant_relic(Balance.Tier.BOSS) == "":
+			fails += 1; print("FAIL a deep save could not be granted every remaining relic"); break
+	if m3.relics.size() != m3.RELIC_CATALOG.size():
+		fails += 1
+		print("FAIL the set is not completable: %d of %d held at %d clears" % [
+			m3.relics.size(), m3.RELIC_CATALOG.size(), m3.total_clears()])
 	if m3.grant_relic(Balance.Tier.BOSS) != "":
 		fails += 1; print("FAIL granted a relic when all are owned")
 
