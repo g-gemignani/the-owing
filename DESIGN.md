@@ -208,6 +208,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D217** | [Three of the four things the floor can offer you had no button](#d217--three-of-the-four-things-the-floor-can-offer-you-had-no-button) |
 | **D218** | [The half of the damage that was joined to the field, so nothing had ever looked for it](#d218--the-half-of-the-damage-that-was-joined-to-the-field-so-nothing-had-ever-looked-for-it) |
 | **D219** | [Six plates the restore could not save, and the generator that had been leaving scars](#d219--six-plates-the-restore-could-not-save-and-the-generator-that-had-been-leaving-scars) |
+| **D220** | [The mark on the Marrow-Priest was never a hole, and the tool that says so](#d220--the-mark-on-the-marrow-priest-was-never-a-hole-and-the-tool-that-says-so) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14344,3 +14345,44 @@ size, with nothing wrong in the picture and nothing to notice by eye. Re-asked a
 THAN IT IS WIDE, filling the frame top to bottom, limbs folded in close rather than
 sprawling sideways", it came back at 98%. **Measure the bounding box against the canvas
 after installing**; it is a one-line check and it is the only thing that catches this.
+
+### D220 — The mark on the Marrow-Priest was never a hole, and the tool that says so
+
+Reported as the last of the sprite defects and repainted on request. What it turned out to
+be is worth more than the repaint.
+
+**It was the watermark, left behind opaque.** Zoomed to 10x against magenta, the grey
+diamond on the priest's hip sits *entirely outside his robe* — it is the generator's
+four-point sparkle (D219) sitting in the FIELD, kept rather than cut. Every instrument this
+project has was blind to it and correctly so: it is not a hole, so `find_gouges` and
+`find_bites` have nothing to say, and on the dark corridor `combat.gd` draws it reads as a
+smudge on the robe. `tools/plate_check.gd` shows it plainly, and it still needed reading at
+10x to see that it was beside the arm rather than on it.
+
+**`install_cutouts` has dropped this for free since `despeckle` existed** — a run over the
+enemy set reports 1 to 31 "stray island(s)" a file and the stamp is among them. Anything
+installed BEFORE that pass kept its stamp, and nothing has ever gone back over the installed
+set to look. So `tools/drop_strays.gd` does: opaque components under 8% of the largest,
+reported per file, cleared by `--fix <family>/<id>`. Clearing is exact — the island is
+background that was never cut, so the subject is untouched.
+
+**A shortlist, not a verdict, and the survey is why.** Three islands across the four
+installed sets, and looking at them, **none was the watermark**: a drip off the Deep
+Warden's spear, a hanging drop of water under the Drowned Thrall's arm, a mote on Bulwark.
+All three are painted on purpose. The rule that would have caught the priest would have
+deleted a designed detail from three other files, which is the same trade `refill_pockets`
+records for the enclosed pockets — so this reports and does not decide, and there is no
+`--all`.
+
+**And it would not have caught the priest either.** His diamond is bridged to the sleeve by
+a two-pixel wisp of pale paint, so it is one component with the figure and no connectivity
+rule can separate them. That is the honest limit of the tool, written down rather than
+tuned around: it finds the stamps that float, and a stamp that touches the subject is a
+repaint. The priest was repainted.
+
+**On repainting rather than erasing.** The replacement fills 98% of its canvas height
+against the old plate's 98%, so it draws at the same size (D219's aspect check), and it sits
+correctly beside Marrow-Abbot, Pale Acolyte and Rot-Priest — flatter in the shading than the
+plate it replaces, which is the cost of a fresh chat with no reference attached. Worth it
+here because the alternative was a hand-placed eraser box, and a coordinate in a tool is a
+number nobody can check later.

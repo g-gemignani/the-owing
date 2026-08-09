@@ -854,6 +854,13 @@ These are failure modes that have actually bitten this project. Treat each as a 
   direction: **judge at the size the defect is visible, which is not always the size the
   thing is drawn.**
 
+  **And not every mark on a sprite is a hole (D220).** The one on the Marrow-Priest was the
+  generator's watermark left OPAQUE in the field beside his arm — no detector that looks for
+  missing alpha can see it, and at 1:1 over a dark corridor it reads as a smudge on the
+  robe. It took 10x on magenta to tell "beside the arm" from "on the arm", and those are
+  different defects with different fixes. Ask what a mark IS before reaching for the repair
+  that matches what it looks like.
+
   **And a list of STATES rots the same way a list of screens does (D217).** Every iso
   capture photographs a floor being *walked*, and a walk never stops at an offer — so the
   row of buttons that carries push, answer, break-away and the stone had never been in a
@@ -1280,6 +1287,10 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              since combat draws them over a dark corridor where one reads as
              shadow; pair with refill_pockets.gd, which restores the ones that
              still carry paint — D218),
+             drop_strays.gd (the other half: opaque islands the matte KEPT,
+             which are the generator's watermark on anything installed before
+             despeckle existed. Reports, never decides — the three it finds
+             across the installed sets are all painted drips — D220),
              art_manifest.gd (driven by art_docs.sh — see the doc list below),
              art_docs.sh, design_index.sh and readme_downloads.sh (the three
              documentation generators; all take `--check`, which is how you find
