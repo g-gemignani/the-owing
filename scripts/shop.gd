@@ -149,7 +149,7 @@ func _refresh() -> void:
 
 		# The illustration is the way into the full card, exactly as it is in the
 		# collection and the deck builder — `UI.inspect_thumb` rather than the plain
-		# TextureRect that used to sit here (D205). This was the one screen that listed
+		# TextureRect that used to sit here (D205b). This was the one screen that listed
 		# cards and could not show you one, which is the worst place for that to be true:
 		# it is the only list where the decision costs gold and is not reversible, and the
 		# row's 600px of clipped text is all the player had to spend it on.
@@ -168,7 +168,7 @@ func _refresh() -> void:
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		row.add_child(pic)
-		# ...and so is the text (D205). This cell is `clip_text` at 600px, so on the
+		# ...and so is the text (D205b). This cell is `clip_text` at 600px, so on the
 		# wordiest cards it is the row that says least and the one most worth clicking.
 		UI.inspect_text(_line(row, "%s  %s  %s" % [
 			card.name, CardData.rarity_badge(card.rarity), card.effect_text()],

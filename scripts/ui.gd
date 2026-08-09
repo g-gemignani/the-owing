@@ -1472,7 +1472,7 @@ static func inspect_thumb(parent: Node, card: CardData, side: float,
 ## the rules text are what the eye is on when the question "what does this actually do"
 ## arrives, and clicking them did nothing — so the affordance existed at the one place
 ## the player was not looking. Both now open the same card, in all three screens that
-## list cards (D205).
+## list cards (D205b).
 ##
 ## Takes a Label the caller has already built and sized rather than building one, because
 ## every one of these lists is a fixed-width column grid: `W_NAME` in the collection,

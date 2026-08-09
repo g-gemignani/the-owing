@@ -60,7 +60,7 @@ func _check(path: String) -> void:
 	inst.queue_free()
 	await get_tree().process_frame
 
-## Every card in every list must be openable from its PICTURE and from its TEXT (D205).
+## Every card in every list must be openable from its PICTURE and from its TEXT (D205b).
 ##
 ## Same failure shape as the one this suite was written for, one step along. There the
 ## tooltips existed and could not be hovered; here the preview existed and could only be
