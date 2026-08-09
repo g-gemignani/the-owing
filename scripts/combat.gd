@@ -2026,8 +2026,40 @@ func _chip_fallback(spec: Array, n: int, compact: bool) -> String:
 ## the fallback the words name the status.
 func _refresh_buffs(p: Combatant) -> void:
 	var said := _fill_chips(buff_row, p, false)
+	said.append_array(_carriers())
 	buffs_label.visible = not said.is_empty()
 	buffs_label.text = "   ·   ".join(said)
+
+## The two per-turn carriers, as words, because they had none (D216).
+##
+## `next_card_discount` and `next_attack_bonus` are state the player is holding, exactly
+## like Block, and until now the only trace either left on the screen was a number
+## quietly changing on some card faces. That is what made the discount unreadable: a
+## discount of 1 subtracts itself from EVERY card in hand, so a hand of five 1-cost
+## cards all read 0 — five free cards, when only one of them can have it. The player
+## plays one, the rest jump back to 1, and with an empty pool they are refused. Nothing
+## on the screen had ever said there was one discount rather than five.
+##
+## The per-card number is not the thing to change: it is individually true, and "what
+## would I pay for THIS card" is the question a price on a card exists to answer. What
+## was missing is the SCOPE, and scope is a fact about the turn, so it belongs on the
+## line that lists what the turn is carrying.
+##
+## Worded exactly as the card that grants it words itself (`CardData.effect_text`:
+## `Next card -1E`, `Next Attack +N`) so the promise and the state are the same
+## sentence — a player who read the card is not made to learn a second phrasing for
+## the thing it did.
+##
+## Not chips: `_fill_chips` draws painted symbols out of `STATUS_CHIPS`, and neither
+## carrier has one on disk. Inventing a row that resolves to nothing is D115's trap —
+## the text fallback beside the chips is what that row is already for.
+func _carriers() -> Array[String]:
+	var out: Array[String] = []
+	if eng.next_card_discount > 0:
+		out.append("Next card -%dE" % eng.next_card_discount)
+	if eng.next_attack_bonus > 0:
+		out.append("Next Attack +%d" % eng.next_attack_bonus)
+	return out
 
 ## Keep the last few lines. A turn where three enemies act used to report only the
 ## third, because this overwrote a single Label.

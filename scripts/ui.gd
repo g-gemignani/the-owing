@@ -1106,17 +1106,32 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	var live_dmg: int = live.card_damage(card) if live != null else -1
 	var live_blk: int = live.card_block(card) if live != null else -1
 	var tail := "\n\n%s" % note if note != "" else ""
-	# Why this card cannot be played, on the card, in a fight (D216). The hand already
-	# dims what it cannot afford, which says THAT and never WHY — and the one refusal a
-	# player cannot work out for themselves is the lethal HP cost, where a card reading
-	# "costs 0" sits greyed out beside a full energy pool. Live only: out of a fight
-	# there is no pool and no health to measure a refusal against.
-	var refusal := func(l: CombatEngine) -> String:
+	# What the FIGHT says about this card, which its own data cannot (D216). Two things,
+	# and both of them are states the hand shows without explaining:
+	#
+	# * why it cannot be played. The hand dims what it cannot afford, which says THAT and
+	#   never WHY — and the refusal a player cannot work out for themselves is the lethal
+	#   HP cost, where a card reading "costs 0" sits greyed out beside a full pool.
+	# * that its price is borrowing a discount only ONE card can have. The number is
+	#   individually true for every card in hand and collectively a lie: a discount of 1
+	#   makes five 1-cost cards all read 0, and four of them go back to 1 the moment the
+	#   fifth is played. The status line names the carrier (`Combat._carriers`); this
+	#   says it again on the card whose price is currently quoting it, because that is
+	#   where the player is looking when they decide what a 0 means.
+	#
+	# Live only: out of a fight there is no pool, no health and no carrier to report.
+	var live_note := func(l: CombatEngine) -> String:
 		if l == null:
 			return ""
+		var lines: Array[String] = []
+		if l.next_card_discount > 0 and l.play_cost(card) < card.eff_cost():
+			lines.append(("This price includes the standing -%dE, and only the FIRST card "
+				+ "you play gets it — the rest of your hand goes back up.") % l.next_card_discount)
 		var r: String = l.why_not(card)
-		return "\n\n%s" % r if r != "" else ""
-	b.tooltip_text = Icons.card_tooltip(card, live_dmg, live_blk) + tail + refusal.call(live)
+		if r != "":
+			lines.append(r)
+		return "\n\n" + "\n\n".join(lines) if not lines.is_empty() else ""
+	b.tooltip_text = Icons.card_tooltip(card, live_dmg, live_blk) + tail + live_note.call(live)
 	holder.add_child(b)
 
 	# NO containers inside the card. A VBox/HBox honours its children's *minimum*
@@ -1335,7 +1350,7 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		# ...and the refusal is re-read with them. Energy is spent and health is lost
 		# between refreshes, so a reason baked in when the card was dealt is a reason
 		# that goes stale on the turn it matters.
-		b.tooltip_text = Icons.card_tooltip(card, d2, b2) + tail + refusal.call(live2)
+		b.tooltip_text = Icons.card_tooltip(card, d2, b2) + tail + live_note.call(live2)
 		# THE COST TOO, and it is the one this list was missing (D216). A discount is
 		# per-turn state exactly like Strength, and the combat screen diffs its hand
 		# rather than rebuilding it — so a card already in hand when a discount landed

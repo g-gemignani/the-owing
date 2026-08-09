@@ -203,8 +203,9 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D212** | [Saving a deck was one press and unsaving one was impossible, so the bar grew until it left the screen](#d212--saving-a-deck-was-one-press-and-unsaving-one-was-impossible-so-the-bar-grew-until-it-left-the-screen) |
 | **D213** | [A hundred cards were a hundred rows of text, and a card game's cards are pictures](#d213--a-hundred-cards-were-a-hundred-rows-of-text-and-a-card-games-cards-are-pictures) |
 | **D214** | [A hundred cards and no way to ask for one by name](#d214--a-hundred-cards-and-no-way-to-ask-for-one-by-name) |
-| **D215** | [Three things a player found on the new Cards screen, and none of them were the grid](#d215--three-things-a-player-found-on-the-new-cards-screen-and-none-of-them-were-the-grid) |
+| **D215** | [Five things a player found on the new Cards screen, and none of them were the grid](#d215--five-things-a-player-found-on-the-new-cards-screen-and-none-of-them-were-the-grid) |
 | **D216** | [A card that cost nothing could not be played, and the game gave the wrong reason twice](#d216--a-card-that-cost-nothing-could-not-be-played-and-the-game-gave-the-wrong-reason-twice) |
+| **D217** | [Three of the four things the floor can offer you had no button](#d217--three-of-the-four-things-the-floor-can-offer-you-had-no-button) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14168,3 +14169,58 @@ model marks with an `action` has an enabled button with that label — asserted 
 model's own list, so a hand-kept list here cannot go stale the way the row it guards did.
 Putting `action != "avoid"` back prints three failures, one per unreachable answer. And
 `IsoRunOffer` joins the screenshot harness so this state is photographed from now on.
+
+#### The third report was the real one: a discount of 1 makes five cards look free
+
+The two fixes above went in and the reporter came back a third time, naming the card:
+*"It happened with read ahead. It discounts cards but if they reach 0 and you do not have
+energy you cannot play them."*
+
+Driven end to end through the real combat screen rather than through the engine — because the
+engine had already been cleared twice — the sequence is this, and every line of it is correct
+code doing what it was written to do:
+
+| | pool | discount | what the hand showed |
+|---|---|---|---|
+| 1. opening | 1 | 0 | Read Ahead `0`, Anvil Stance `1`, Anvil Stance `1` |
+| 2. Read Ahead played (it also draws) | 1 | 1 | Anvil Stance `0`, Anvil Stance `0`, Anvil Stance `0` |
+| 3. one of them played, pool spent | 0 | 0 | Anvil Stance `1`, Anvil Stance `1` — refused |
+
+**`play_cost` subtracts the standing discount from every card in the hand.** Each of those
+zeroes is individually true — that IS what you would pay for that card if you played it next —
+and collectively they are a lie, because only one card can have it. The player reads three free
+cards, plays one, and the other two go back up. Nothing anywhere on the screen had ever said
+there was *one* discount rather than a hand of free cards.
+
+**The per-card number is not the thing to change.** "What would I pay for THIS card" is the
+question a price on a card exists to answer, and there is no honest way to pick which card in
+hand to show the discount on — the game does not know which one you will play. What was missing
+is not the number, it is the **scope**, and scope is a fact about the turn.
+
+So the turn now says it. `next_card_discount` and `next_attack_bonus` are per-turn carriers
+exactly like Block — `end_turn` clears all three in the same place — and Block has been on the
+status line since the screen was built while these two had never left a mark on it at all. They
+join it, worded exactly as the card that grants them words itself (`CardData.effect_text` prints
+`Next card -1E` and `Next Attack +N`), so the promise and the state are the same sentence and
+nobody has to learn a second phrasing for the thing the card did. The hovered card says it again
+at the point of decision, because the status line is where the player looks for the *turn* and
+the card is where they look when deciding what a `0` means.
+
+Text and not a chip: `_fill_chips` draws painted symbols out of `STATUS_CHIPS` and neither
+carrier has one on disk. Adding a row that resolves to nothing is D115's trap, and the text
+fallback beside the chips is what that line is already for.
+
+**Empower was fixed by the same line, and had never been reported.** `next_attack_bonus` is the
+identical defect — invisible state that silently changes a number on a card face — and it was
+only ever going to be noticed by a player who could already have worked it out. Leaving it out
+because nobody had complained yet would have been arbitrary.
+
+**The guard**, in `CardTextTest.tscn` beside the badge check, asserts the line names the carrier
+while it stands **and drops it when spent** — a line that never goes away is the stale badge
+again in a new place. Verified by breaking it: without `_carriers()` it reports
+*"FAIL with a discount standing the status line reads ''"*.
+
+**All three reports were one screen failing to say what the engine was doing**, and none of them
+were the discount arithmetic, which was never touched. Worth stating plainly because two rounds
+of investigation went looking in `play_cost` first: **when a player reports a rule is broken,
+check what the screen told them about the rule before checking the rule.**

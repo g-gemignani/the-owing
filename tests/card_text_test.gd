@@ -722,6 +722,18 @@ func _check_cost_tracks_discount() -> void:
 		if checked == 0:
 			_fails += 1
 			print("FAIL no card in hand exposed a cost badge to check under %s" % phase[0])
+		# ...and the SCOPE of the discount is on screen while it stands. The per-card
+		# number is individually true and collectively misleading — a discount of 1 makes
+		# every 1-cost card in hand read 0, and all but the first go back up the moment
+		# one is played. Without a line naming the carrier, nothing on the screen ever
+		# said there was one discount rather than a hand of free cards, which is exactly
+		# how it was reported. Asserted in BOTH directions: a line that never goes away
+		# is the stale badge again in a new place.
+		var hud: String = inst.buffs_label.text
+		var lit: bool = hud.find("Next card") != -1
+		if lit != (int(phase[1]) > 0):
+			_fails += 1
+			print("FAIL with %s the status line reads '%s'" % [phase[0], hud])
 	# ...and a card the discount takes to nothing has to be PLAYABLE at an empty pool,
 	# which is the other half of the same report. The rule already allowed it; nothing
 	# asserted that it did, and the stale badge made it look as though it did not.

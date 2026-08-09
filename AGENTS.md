@@ -1123,6 +1123,18 @@ These are failure modes that have actually bitten this project. Treat each as a 
   reason where the rule lives, and `can_play` is *defined as* `why_not() == ""` rather than
   written beside it, so the two cannot drift.
 
+- **A number that is true per-item can be a lie across the set.** A standing "next card
+  costs 1 less" is subtracted from *every* card in hand, so five 1-cost cards all read 0 —
+  five free cards, when only one can have it (D216). The per-card figure is right and must
+  stay; what was missing is the **scope**, and scope is a fact about the turn, so it goes on
+  the status line beside Block. Per-turn carriers are state the player is holding: if
+  `end_turn` clears it, the screen should have named it.
+
+- **When a player reports a rule is broken, check what the screen told them about the rule
+  before checking the rule.** Three reports about discounts, two rounds of investigation
+  starting in `play_cost`, and the arithmetic was correct every time — all three were the
+  screen failing to say what the engine was doing (D216).
+
 - **A diffed widget is a cache, and every number on it needs an entry in the invalidator.**
   The combat hand is diffed rather than rebuilt so cards can animate; `relabel` re-read the
   damage, the Block and the hover text, and not the cost. A discount landing left the price
