@@ -30,6 +30,19 @@ const FAMILIES := ["enemies", "relics", "powers", "cards"]
 const CELL := 380
 const COLS := 5
 
+## `--paired` draws each plate TWICE: as shipped over magenta, and again with its alpha
+## ignored. That second panel is the whole painting the generator delivered, because the
+## pipeline only ever wrote the alpha channel (D218) — so the pair answers, in one look, the
+## only question that matters about a suspect plate: **is this shape missing, or was it never
+## drawn?**
+##
+## It exists because that question was answered wrong twice from the magenta panel alone. The
+## Deep Warden holds two tridents and the shipped plate has both heads cut off; the Drowned
+## Thrall's left arm is severed. Both were called "painted drips" on the strength of the
+## magenta render, and both are complete in the paint underneath — a restore away, and
+## instead they shipped twice more (D221).
+var paired := false
+
 func _init() -> void:
 	var cell := CELL
 	var families: Array[String] = []
@@ -37,6 +50,8 @@ func _init() -> void:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--cell="):
 			cell = maxi(64, int(a.substr(7)))
+		elif a == "--paired":
+			paired = true
 		elif a in FAMILIES:
 			families.append(a)
 		elif not a.begins_with("--"):
@@ -65,9 +80,11 @@ func _sheet(family: String, cell: int, only: Array[String]) -> void:
 	names.sort()
 	if names.is_empty():
 		return
-	var cols: int = mini(COLS, names.size())
+	# In paired mode each plate takes two cells side by side, so half as many fit per row.
+	var per: int = 2 if paired else 1
+	var cols: int = maxi(1, mini(COLS, names.size() * per) / per)
 	var rows := int(ceil(float(names.size()) / float(cols)))
-	var sheet := Image.create(cols * cell, rows * cell, false, Image.FORMAT_RGBA8)
+	var sheet := Image.create(cols * cell * per, rows * cell, false, Image.FORMAT_RGBA8)
 	# Pure magenta, and pure on purpose: it is the one hue none of this art uses, which is
 	# the same reasoning D200 keyed the source sheets on.
 	sheet.fill(Color(1, 0, 1, 1))
@@ -83,9 +100,20 @@ func _sheet(family: String, cell: int, only: Array[String]) -> void:
 			float(cell) / float(img.get_height()))
 		img.resize(maxi(1, int(img.get_width() * s)), maxi(1, int(img.get_height() * s)),
 			Image.INTERPOLATE_LANCZOS)
-		sheet.blend_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i(
-			(i % cols) * cell + int((cell - img.get_width()) / 2.0),
-			int(i / cols) * cell + int((cell - img.get_height()) / 2.0)))
+		var ox := (i % cols) * cell * per + int((cell - img.get_width()) / 2.0)
+		var oy := int(i / cols) * cell + int((cell - img.get_height()) / 2.0)
+		sheet.blend_rect(img, Rect2i(Vector2i.ZERO, img.get_size()), Vector2i(ox, oy))
+		if not paired:
+			continue
+		# ...and the same pixels with the alpha thrown away. `blit_rect` rather than
+		# `blend_rect`, or the panel would composite over magenta again and show nothing.
+		var bare := Image.create(img.get_width(), img.get_height(), false, Image.FORMAT_RGBA8)
+		for y in img.get_height():
+			for x in img.get_width():
+				var c := img.get_pixel(x, y)
+				bare.set_pixel(x, y, Color(c.r, c.g, c.b, 1.0))
+		sheet.blit_rect(bare, Rect2i(Vector2i.ZERO, bare.get_size()),
+			Vector2i(ox + cell, oy))
 	var path := OUT + family + ".png"
 	if sheet.save_png(ProjectSettings.globalize_path(path)) != OK:
 		print("FAILED writing %s" % path)

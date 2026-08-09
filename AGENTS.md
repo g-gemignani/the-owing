@@ -854,6 +854,19 @@ These are failure modes that have actually bitten this project. Treat each as a 
   direction: **judge at the size the defect is visible, which is not always the size the
   thing is drawn.**
 
+  **The one picture that decides it is the PAIR (D221).** On magenta a missing trident head
+  looks like a trident drawn short and a severed arm looks like a sleeve ending in rags — the
+  sprite is *plausible* without the part, which is the case a single picture cannot settle. So
+  `tools/plate_check.gd --paired` draws each plate twice, shipped and with its alpha ignored;
+  since the pipeline only ever wrote alpha, the second panel is the painting that was
+  delivered, and "missing" versus "never drawn" stops being a judgement call. Two plates were
+  cleared by eye TWICE from the magenta panel alone and were wrong both times.
+
+  **A shortlist you have already decided against reads as noise.** Both of those plates were
+  on `drop_strays`' list and `refill_pockets`' list while being called fine. When an
+  instrument disagrees with your eye, it has seen something your eye has not; the cheap move
+  is not to argue with it but to take the one picture that separates the readings.
+
   **And not every mark on a sprite is a hole (D220b).** The one on the Marrow-Priest was the
   generator's watermark left OPAQUE in the field beside his arm — no detector that looks for
   missing alpha can see it, and at 1:1 over a dark corridor it reads as a smudge on the

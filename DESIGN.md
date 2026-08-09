@@ -210,6 +210,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D219** | [Six plates the restore could not save, and the generator that had been leaving scars](#d219--six-plates-the-restore-could-not-save-and-the-generator-that-had-been-leaving-scars) |
 | **D220** | [The mark on the Marrow-Priest was never a hole, and the tool that says so](#d220--the-mark-on-the-marrow-priest-was-never-a-hole-and-the-tool-that-says-so) |
 | **D220b** | [Every way into a card was a gesture a finger cannot make](#d220b--every-way-into-a-card-was-a-gesture-a-finger-cannot-make) |
+| **D221** | [Twice I called a severed limb a painted drip, and the test that settles it existed](#d221--twice-i-called-a-severed-limb-a-painted-drip-and-the-test-that-settles-it-existed) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14487,3 +14488,48 @@ itself — and the argument that this fixes Android is that the row needs no ges
 on a button. The `card_button` touch guard is reasoned, not measured; its desktop half is
 unchanged and asserted by everything that already presses a card. The README already warns that
 Android has never been tested on real hardware, and this does not change that.
+
+### D221 — Twice I called a severed limb a painted drip, and the test that settles it existed
+
+The player, on the plates fixed in D219 and D220: *the zombie and the dead knight still have
+issues, third row from the top, two left ones.* `deep_warden` and `drowned_thrall` — the two
+I had looked at TWICE and cleared, in writing, as "painted drips" and "the shortlist doing
+its job".
+
+**What was actually wrong.** The Deep Warden holds two tridents; the shipped plate had both
+heads cut off and the shafts broken. The Drowned Thrall's left arm was severed at the
+shoulder, hand floating. Both are **complete in the paint underneath** — a `refill_pockets`
+restore away, which is what they got: six bites on the warden, one on the thrall.
+
+**Why I got it wrong twice, which is the part worth keeping.** Both times I judged from the
+magenta panel alone. On magenta a missing trident head looks like a trident that was drawn
+short, and a severed arm looks like the sleeve ending in rags — the sprite is *plausible*
+without the missing part, which is exactly the case a single picture cannot decide. Worse,
+both plates were on `drop_strays`' shortlist and on `refill_pockets`', and I read the
+shortlists as noise because I had already decided from the picture.
+
+**The test that settles it is the one D218 already used and I did not repeat.** Force the
+alpha opaque and look: the pipeline only ever wrote the alpha channel, so that panel is the
+painting the generator delivered. Side by side, "missing" and "never drawn" are not a
+judgement call, they are two different pictures.
+
+So it is now one flag: `tools/plate_check.gd --paired` draws every plate twice, shipped over
+magenta and again with its alpha ignored. Run over all 35 it takes one look to confirm the
+rest of the set is whole — and it immediately turned up two more, `brute` and `warden`,
+carrying a stamp I had also already dismissed.
+
+**And the erase, for the stamp that touches the subject.** D220 recorded that a stamp bridged
+to the art cannot be reached by connectivity and called that the limit. Two more plates have
+it: the four-point sparkle straddling the gap between a thigh and a hand, cut down the middle
+by the matte so half is welded to each side. `drop_strays --erase <id> x,y,w,h` clears, inside
+one box, only pixels carrying the stamp's own signature. The thresholds are measured, not
+picked: the stamps run **0.30-0.55 luminance at 0.01-0.16 saturation** while the brown thigh
+and orange pauldron they sit against are 0.4+ saturated, so the SATURATION gate is what
+protects the art and luminance only has to clear the rim. At 0.38 the bright core went and the
+rim stayed as a visible ghost; 0.30 takes both. The box lives in the command and never in the
+code — a coordinate compiled into a tool is a number nobody can check later.
+
+**The rule this leaves.** A shortlist you have already decided against reads as noise.
+When an instrument disagrees with your eye, the instrument has seen something your eye has
+not, and the cheap move is not to argue with it — it is to take the ONE picture that can
+tell the two readings apart.
