@@ -78,7 +78,10 @@ func triggered_power() -> float:
 			Effect.DAMAGE_ALL:
 				unit = float(effect_value[i]) * 1.35   # AoE premium, as CardData prices it
 			Effect.DRAW:
-				unit = float(effect_value[i]) * 1.5
+				# The card rate (D224), not the old 1.5. `_expected_fires` already says
+				# how OFTEN this happens, so the unit here has to be what one drawn card
+				# is worth and nothing else — the same number `CardData` pays for it.
+				unit = float(effect_value[i]) * 5.0
 			Effect.GAIN_BLOCK:
 				unit = float(effect_value[i]) * CardData.BLOCK_VALUE
 			Effect.GAIN_STRENGTH:
@@ -124,6 +127,12 @@ func flat_power() -> float:
 	v += triggered_power()
 	return v
 
-## Total worth of the relic, for display and future relic pricing.
+## Total worth of the relic, for display and for relic pricing.
+##
+## `extra_draw` is a card EVERY TURN for the whole run, where `CardData`'s `draw` is a
+## card once. At the card's new rate of 5 a card (D224) and a fight of about five
+## turns, that is 25 — it was 14, set against a per-card rate of 1.5 that made a
+## drawn card a tenth of an energy. The two have to move together or a relic and a
+## card that do the same thing are priced from different books.
 func power_value() -> float:
-	return flat_power() + bonus_energy * 45.0 + extra_draw * 14.0
+	return flat_power() + bonus_energy * 45.0 + extra_draw * 25.0

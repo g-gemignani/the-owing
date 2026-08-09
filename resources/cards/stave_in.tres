@@ -11,6 +11,6 @@ spend_all_energy = true
 damage_per_energy = 6
 cost = 1
 type = 0
-rarity = 1
+rarity = 2
 level = 1
 damage = 3

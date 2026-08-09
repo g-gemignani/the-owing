@@ -3176,6 +3176,19 @@ const SHOP_HEAL_FRAC := 0.35
 ## cost the same amount of *play* at every depth, and cannot drift from the income
 ## curve because it is computed from it.
 const SHOP_COMMON_IN_FIGHTS := 2.0
+## What a relic costs when something offers to sell you one (D224).
+##
+## In fights, like everything above it, and deliberately above the dearest thing a shop
+## stocks: a legendary card is `SHOP_COMMON_IN_FIGHTS` times its rarity multiple, which
+## works out at 20 fights. A relic is worth more than that on every axis the game has —
+## no merchant stocks one at any price, death never takes them (the card collection it
+## can shrink), and their power sits outside the deck entirely, which is why
+## `RELIC_POWER_PER_RATIO` exists to fold it back into enemy scaling.
+##
+## 30 fights: 210 gold in the Crypt, 540 in the Slag Pits, 1440 in the Maw. A player
+## reported paying 70 for one and said it should be nearer a thousand; that is what
+## this is, at the depths where a thousand is a number the purse ever sees.
+const RELIC_IN_FIGHTS := 30.0
 const SHOP_HEAL_IN_FIGHTS := 2.5
 const SHOP_REMOVAL_IN_FIGHTS := 3.0
 const SHOP_REMOVAL_STEP_IN_FIGHTS := 2.0
@@ -3223,6 +3236,11 @@ static func card_price(rarity: int, difficulty: int = 0) -> int:
 	var d: int = difficulty if difficulty > 0 else mid_difficulty()
 	return int(round(rarity_price_mult(rarity) * SHOP_COMMON_IN_FIGHTS
 		* float(fight_income(d))))
+
+## What one relic costs, at this depth. See `RELIC_IN_FIGHTS`.
+static func relic_price(difficulty: int = 0) -> int:
+	var d: int = difficulty if difficulty > 0 else mid_difficulty()
+	return int(round(RELIC_IN_FIGHTS * float(fight_income(d))))
 
 static func heal_price(max_hp: int, difficulty: int = 0) -> int:
 	var d: int = difficulty if difficulty > 0 else mid_difficulty()

@@ -38,6 +38,45 @@ func _init() -> void:
 			if e.hp_percent(i) <= -50:
 				fails += 1; print("FAIL %s choice %d can cost >=50%% max HP" % [id, i])
 
+	# --- a relic is never sold cheap, and the button says what it takes (D224) --------
+	#
+	# One of these was going for 60 gold flat. A relic is the only power in the game no
+	# merchant stocks and death never takes, and 60 was most of a whole Crypt run's
+	# income and a fifth of one fight's at the bottom — the same number meaning two
+	# completely different things, which is what pricing in gold instead of in fights
+	# always does.
+	var sold := 0
+	for id in Balance.EVENTS:
+		var e := load(Balance.EVENT_DIR + id + ".tres") as EventData
+		if e == null:
+			continue
+		for i in e.choice_count():
+			if e.relic_grant(i) <= 0 or e.gold_delta(i) >= 0:
+				continue
+			sold += 1
+			var last := 0
+			for d in [1, 4, 8]:
+				var price: int = -e.gold_cost(i, d)
+				# above the dearest thing a shop will sell at the same depth
+				var legendary: int = Balance.card_price(CardData.Rarity.LEGENDARY, d)
+				if price <= legendary:
+					fails += 1
+					print("FAIL %s sells a relic for %d at depth %d, under a legendary card (%d)" % [
+						id, price, d, legendary])
+				if price <= last:
+					fails += 1
+					print("FAIL %s prices a relic at %d at depth %d — no deeper than the depth before" % [
+						id, price, d])
+				last = price
+				# and the words on the button have to be the number it charges
+				var text: String = e.label(i, d)
+				if text.find(str(price)) == -1:
+					fails += 1
+					print("FAIL %s choice %d reads '%s' and charges %d" % [id, i, text, price])
+	if sold == 0:
+		fails += 1
+		print("FAIL nothing in the event tables sells a relic — this check is measuring nothing")
+
 	# --- treasure numbers are sane ---
 	if Balance.TREASURE_GOLD_MIN <= 0 or Balance.TREASURE_GOLD_MAX < Balance.TREASURE_GOLD_MIN:
 		fails += 1; print("FAIL treasure gold range invalid")

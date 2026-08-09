@@ -138,7 +138,7 @@ Known rough edges, so you don't waste time reporting them:
 This part is for developers; if you only want to play, everything you need is above.
 
 The game is built in **Godot 4.7** in GDScript, and all of its content is data files rather than
-code, so adding a card or an enemy is a data task. There are 45 test suites, including one that
+code, so adding a card or an enemy is a data task. There are 46 test suites, including one that
 walks every screen and every dungeon checking the player always has something to press.
 
 ```bash

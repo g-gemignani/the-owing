@@ -10,6 +10,6 @@ description = "Deal 4 damage. Resolve the card you played before it again."
 repeat_previous = true
 cost = 2
 type = 0
-rarity = 0
+rarity = 3
 level = 1
 damage = 4

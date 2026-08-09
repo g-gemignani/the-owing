@@ -14679,3 +14679,209 @@ sixteen runs through the Crypt opens everything. That is sixteen real runs and t
 choice to spend them that way, but if it turns out to be the fast path, the fix is to weight the
 currency by difficulty rather than to raise the thresholds — raising them punishes the player
 who went deep along with the one who did not.
+
+### D224 — Rarity was a colour, not a claim, and the score that could have settled it was wrong about half the game
+
+*"Do we have a score of how strong a card is? In that case I would make sure the strongest are
+legendary and the weakest common. Same for the relics."*
+
+There is a score. `CardData.power_value()` is the number `Balance.power_ratio` prices a deck
+with, the number enemy scaling is computed against, and the number the collection screen's own
+**Power** sort already shows the player. Asked what rarity was worth, it said this:
+
+| band | cards | power |
+|---|---|---|
+| COMMON | 32 | 2.0 – 18.0 |
+| UNCOMMON | 28 | 2.9 – 16.8 |
+| RARE | 22 | 5.4 – 23.0 |
+| EPIC | 12 | 11.0 – 30.1 |
+| LEGENDARY | 6 | 12.0 – 25.7 |
+
+Twenty-nine of thirty-two commons beat the weakest uncommon. Fifteen of twenty-two rares beat the
+weakest epic. The single strongest card in the game was an epic, and the strongest relic in the
+game was a rare — relic rarity did not ascend at all, its EPIC band averaging 10.5 against RARE's
+13.4. `tests/test_rarity.gd` was green throughout, because it asserted that band AVERAGES ascend,
+and an average can climb beautifully while every card in it is misfiled.
+
+**The score was not fit to rank on yet, and that had to be fixed first.** It is an enemy-scaling
+price, and its own comments say so: `retain_block` was 12.0 flat under the note *"keep the
+premium modest: this value feeds enemy scaling, and over-valuing an effect makes enemies hit
+harder than the deck can actually answer"*. A drawn card was 1.5 against 15 for a point of
+energy — a tenth. Ranked on that, **Set Stone** ("Block no longer expires at end of turn", the
+one card in the game that rewrites a rule rather than a number) files as a RARE, and **See It
+Coming** ("Draw 3") files below **Stumble**, a card whose entire text is that it is bad.
+
+So two weights moved before anything was re-filed:
+
+* **a drawn card, 1.5 → 5.0.** A third of the Energy that would let you play it, not a tenth.
+  The discount off Energy is the honest part of the old number — a drawn card still has to be
+  paid for — but the size of it was a hole.
+* **`retain_block`, 12.0 → 30.0.** The old comment's reasoning was sound and applied to the
+  wrong side: under-valuing it meant a Barricade deck fought enemies scaled for a deck it was
+  not.
+* and `RelicData` followed, because a relic that draws a card every turn (`extra_draw`, 14.0)
+  and a card that draws one once were being priced from different books. 25.0, and the DRAW
+  entry in `triggered_power` moved to the card's own 5.0.
+
+**Measured on the simulator before re-filing anything**, 120 trials, the builds whose priced
+ratio moved at all:
+
+| build | ratio | completion before → after |
+|---|---|---|
+| Draw (Lv15 + 2 lenses) | 4.90 → 5.33 | Foundry 67→60, Vault 98→94, Market 67→58 |
+| Barricade (Lv15) | 5.18 → 5.41 | Foundry 28→25, Vault 87→83 |
+| Mid (fused Lv15) | 4.57 → 4.77 | Foundry 68→57, Road 99→97 |
+| Combo / Exhaust / AoE / Late | +1–2% | inside trial noise |
+
+That is the reprice working as intended: the decks that were getting their utility for free now
+pay for it in enemy scaling, and none of them collapsed.
+
+**Then rarity was rewritten from the score, by `tools/rerarify.gd`.** Band sizes are the ones
+the catalogue already had, so the pyramid stands; a boundary never splits two cards of equal
+power; and the tool is idempotent — running it twice moves nothing. 56 of 100 cards and 21 of 30
+relics changed band. Molten Core is a legendary. Set Stone stayed one, which is the whole
+argument for fixing the score first: on the old numbers it would have been demoted.
+
+**Per energy was tried for the ranking and is wrong for this job.** It is the measure the balance
+model uses everywhere else — enemies scale against power per energy because energy is the binding
+constraint — and dividing impact by cost files big expensive cards at the bottom: Massacre (12.3
+power, 3 energy) and Stave In (15.0, 3) came out COMMON, while Second Heart (25.4, 2) and Plague
+Bearer (22.1, 2) were pushed out of the top band by 1-energy cards worth half as much. A common
+is what a pack is full of, and a big expensive card is not that. **Rarity is impact; scaling is
+efficiency; they are two questions.** `--rate` keeps the experiment runnable rather than only
+described.
+
+**One assertion had to be demoted to an info line, and the demotion is the finding.** The rarity
+suite required average power-per-energy to rise with rarity. Rarity is now written from total
+power, and the two cannot both hold: ranking by impact concentrates expensive cards in the upper
+bands, and an expensive card is by definition worse per energy. It failed by 1% — uncommon 10.2,
+rare 10.1 — with every band otherwise in perfect order, which is the shape of a test measuring
+the wrong thing. What it protected is not lost: the maxed-multiplier ladder still ascends, and
+per-energy is still exactly what `Balance.power_ratio` reads, where it is measured against real
+decks rather than against rarity bands.
+
+**In its place, the property the request actually asked for**: the bands may not OVERLAP. Every
+common is weaker than every uncommon, and so on up, for cards and for relics, checked against
+`power_value()`. One exception, and it is the other rule on that page rather than a fudge: a
+legendary must change a rule, so a card that is only numbers is passed over for the top band
+however strong it is, and may out-score what is in there. Exactly one card does — Drilled, at
+23.0, above Plague Bearer's 22.1.
+
+**What re-filing rarity actually moves, which is more than a colour.** Rarity drives four things,
+and this is the honest accounting:
+
+* **the level cap and the growth rate** (`Balance.max_level`, `LEVEL_RATE_BY_RARITY`, which runs
+  0.17 → 6.30 across the bands). A promoted card gets a shorter track and a far steeper one.
+* **the drop weight**, so a promoted card is rarer.
+* **the shop price**, through `rarity_price_mult`.
+* **and, since D223, when a relic becomes available at all** — the relic gate is priced in
+  clears by rarity, so a relic promoted to legendary now waits for sixteen.
+
+The growth ladder is the one with teeth. Re-measured on the simulator after re-filing, against
+the same 120-trial baseline: the Draw build's ratio went 4.90 → 10.76 and its Foundry completion
+67% → 97%; Deep (fused Lv40) 8.77 → 11.92 and its Vault 67% → 95%; while the Vampire build's Maw
+fell 71% → 18% and Late's Maw 24% → 2%. Those are level-cap effects, not combat changes: a fixed
+"Lv15" deck is a different deck when its cards' rates move by a factor of nine. Every balance
+suite still passes, and the sim's own 40–60% target band is guidance rather than an assertion —
+but re-centring it is a tuning pass this entry does not claim to have done, and the numbers above
+are where it would start.
+
+**And the relic that cost seventy gold.** Relics are the one power in the game no merchant
+stocks at any price, that death never takes, and that sits outside the deck entirely. An event
+was selling one for a flat 60. Flat is the fault: one fight pays 7 gold in the Crypt and 69 in
+the Maw, so 60 was most of a whole shallow run's income and a fifth of one fight's at the bottom.
+Every other price in the game is quoted in fights for exactly this reason (D57's lesson), and
+these were not.
+
+`Balance.relic_price` is 30 fights — 210 in the Crypt, 540 in the Slag Pits, 1440 in the Maw —
+which is half again the 20 a legendary card costs. `EventData.gold_cost` substitutes it for any
+choice that grants a relic and charges gold for it; choices that charge HP, a card or an elite
+fight are untouched, because those currencies already scale with the player. The labels carry a
+`%d` and are formatted by whatever computes the price, because the first version of this printed
+"(-60 gold)" on a button that took 1440. `tests/test_event.gd` asserts all three: above a
+legendary at every depth, rising with depth, and the number on the button is the number charged.
+
+Not changed, and worth naming: the three events that hand a relic over for HP, for a card, or for
+an elite fight, and the one that gives one away for burying a corpse. Those are prices in other
+currencies and the report was about gold; re-pricing a story beat is a different decision.
+
+### D225 — The powers were never re-filed either, and on a phone no list could be moved at all
+
+Two reports in one line: *"What about powers? No legendary? On android i cannot scroll on that
+screen."*
+
+**The powers wear a rarity, and it is not decoration.** `PowerData extends CardData`, so a power
+has a rarity band like everything else, and `Balance.power_price` is `card_price(rarity) * 2`
+while `power_upgrade_cost` is the fusion gold curve at that rarity. The band a power wears is
+what it costs to buy and what every level of it costs afterwards. D224 re-filed the hundred cards
+and the thirty relics from `power_value()` and did not look at the ten powers. They were:
+
+| power | worth | was |
+|---|---|---|
+| Push On (+1 Energy, costs 5 HP) | 9.0 | EPIC |
+| Overwhelm (deal 7) | 7.0 | RARE |
+| Bramble (+3 Thorns) | 6.6 | UNCOMMON |
+| Blight (Poison 3) | 6.0 | UNCOMMON |
+| Scythe (deal 4 to all) | 5.4 | UNCOMMON |
+| Foresight (Draw 1) | 5.0 | COMMON |
+| Kindle (+1 Strength) | 4.5 | RARE |
+| Siphon (deal 3, lifesteal) | 4.5 | RARE |
+| Expose (Vulnerable 2) | 4.0 | UNCOMMON |
+| Bulwark (gain 6 Block) | 3.9 | COMMON |
+
+Two rares priced above a common that beat both of them, three uncommons spanning 4.0 to 6.6, and
+no legendary at all — the answer to *"no legendary?"* is that nobody re-filed the set after it
+grew. `tools/rerarify.gd` now walks powers too, on the same yardstick and with the same rule that
+a top-band entry must change something rather than be a big number. Push On is the legendary, and
+it is the one power in the set that hands back a whole energy. Nine of the ten moved band.
+
+Note what that costs: Push On's price doubles the multiple it had, and every level of it after
+that. That is the intended reading of D224 — rarity is a claim about strength, and a claim about
+strength is a claim about price.
+
+**And then the phone.** There is no wheel on a phone. A drag is the only gesture there is, and
+in this build nothing moved:
+
+* The Powers list was not the bug it looked like. Measured at 1280x720, its content is 554px in
+  a frame of 554 — it fits, **exactly**, with no slack whatever. So the screen the report names
+  has nothing to scroll on a desktop, and one pixel of difference in font metrics or a system
+  inset is the whole margin.
+* The bug underneath it is every list in the game. `project.godot` sets
+  `emulate_mouse_from_touch=true` deliberately — *"Touch must generate the button presses the
+  whole UI is built on"* — and the engine's own touch-drag path on `ScrollContainer` reads
+  `InputEventScreenTouch` / `ScreenDrag`. A list of buttons consumes the press first, and this
+  game's lists are made of buttons.
+
+**The instrument had to be checked before any of that could be claimed.** A synthetic
+`InputEventScreenTouch` + `ScreenDrag` pushed into a `SubViewport` moved nothing — and then moved
+nothing on a BARE `ScrollContainer` containing forty plain `Label`s, with a touchscreen declared
+via `Input.set_emulate_touch_from_mouse(true)`. That is the harness failing, not the game, and
+had it not been checked this entry would have confidently blamed the engine's touch path on
+evidence that could not tell one from the other (D124's lesson, in a new place). Nothing here
+claims to know what Godot's own handler does on a real Android device.
+
+So the fix is built on the events this game is CERTAIN to receive — the mouse events the
+emulation turns every tap and swipe into, the same ones every button on every screen already
+runs on. `UI.DragScroll` is attached by `UI.scroll()` to every list in the game, so no screen has
+to remember it, and three things about it are load-bearing:
+
+* **`_input`, not `_gui_input`.** A press that lands on a Button is consumed by it and every
+  motion after that goes to the pressed control, so anything hung off the ScrollContainer's own
+  input never hears the drag it is meant to follow. `_input` runs first, for the whole viewport.
+* **The scroll is set ABSOLUTELY**, from where the finger went down, never nudged by each
+  motion's delta. That is what makes it safe beside the engine's own handling on a platform where
+  that does fire: two handlers computing "the list has moved as far as the finger" agree, where
+  two handlers each adding a delta scroll at double speed. It also self-corrects a missed frame.
+* **A 12px slop** before it takes over, and it stands down entirely while `gui_is_dragging()` —
+  a card on its way to the deck bay (D213) is not a scroll gesture.
+
+`tests/TouchScrollTest.tscn` drives it with mouse events: a 160px drag over a list of BUTTONS
+moves the list 160px, a 3px wobble moves it nothing, a drag that begins outside the list does not
+touch it, and no screen builds a raw `ScrollContainer` that would miss the handler. The platform
+gate — off on anything that is not a touchscreen — is one line and the suite turns it back on,
+because the gesture is the part that can break.
+
+What is NOT fixed: the Powers screen still fits its frame to the pixel, and a screen with no
+slack is one system inset away from hiding its own last row. That is a layout budget question of
+the kind D133 spent an entry on, and it wants a capture from the device rather than another
+arithmetic argument here.

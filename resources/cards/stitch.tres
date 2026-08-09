@@ -9,6 +9,6 @@ name = "Stitch"
 description = "Heal 12."
 cost = 1
 type = 1
-rarity = 0
+rarity = 1
 level = 1
 heal = 12

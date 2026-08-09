@@ -578,7 +578,73 @@ static func scroll(parent: Node) -> VBoxContainer:
 	col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	col.add_theme_constant_override("separation", UITheme.sep(6))
 	s.add_child(col)
+	s.add_child(DragScroll.new())
 	return col
+
+## Drag-to-scroll for every list in the game, because on a phone there is no wheel and
+## a finger is the only thing there is (D225).
+##
+## Reported as "on Android I cannot scroll on that screen". The engine has its own
+## touch-drag path on `ScrollContainer`, and this game cannot rely on it: the whole UI
+## is built on `emulate_mouse_from_touch`, which is what turns a tap into the button
+## press every screen here is made of, and a list of buttons consumes the press before
+## the container ever sees a drag begin.
+##
+## `_input`, not `_gui_input`, and that is the load-bearing choice. A press that lands
+## on a Button is consumed by it, and every motion after that goes to the pressed
+## control — so nothing hung off the ScrollContainer's own input ever hears the drag it
+## is supposed to be following. `_input` runs before any of that, for the whole
+## viewport, so this sees the gesture wherever it started.
+##
+## The scroll is set ABSOLUTELY, from where the finger went down, rather than nudged by
+## each motion's delta. That is what makes it safe to run beside the engine's own touch
+## handling on a platform where that DOES fire: two handlers both computing "the list
+## has moved by how far the finger has moved" agree, where two handlers each adding a
+## delta would scroll at double speed. It also self-corrects a frame the drag missed.
+##
+## It does not fight a real drag-and-drop: while `gui_is_dragging()` — a card on its
+## way to the deck bay (D213) — the gesture belongs to that and this stands down.
+class DragScroll extends Node:
+	## How far the finger must travel before this takes over, unscaled. Below it a drag
+	## is a press with a shaky hand, and stealing that would make every button on a
+	## phone feel like it was refusing taps.
+	const SLOP := 12.0
+
+	var _from := Vector2.ZERO      ## where the finger went down
+	var _at_start := 0.0           ## what the scroll was showing then
+	var _down := false
+	var _panning := false
+
+	func _ready() -> void:
+		# Only where a finger is the input. On a desktop a click-drag over a list is not
+		# a scroll gesture, and the wheel already works.
+		if not UI.touch_ui():
+			set_process_input(false)
+
+	func _input(event: InputEvent) -> void:
+		var sc := get_parent() as ScrollContainer
+		if sc == null or not sc.is_visible_in_tree():
+			return
+		var mb := event as InputEventMouseButton
+		if mb != null and mb.button_index == MOUSE_BUTTON_LEFT:
+			if mb.pressed:
+				# Only a gesture that STARTS on this list is this list's to follow.
+				_down = sc.get_global_rect().has_point(mb.position)
+				_from = mb.position
+				_at_start = float(sc.scroll_vertical)
+				_panning = false
+			else:
+				_down = false
+				_panning = false
+			return
+		var mm := event as InputEventMouseMotion
+		if mm == null or not _down or get_viewport().gui_is_dragging():
+			return
+		var moved: float = _from.y - mm.position.y
+		if not _panning and absf(moved) < UITheme.px(SLOP):
+			return
+		_panning = true
+		sc.scroll_vertical = int(round(_at_start + moved))
 
 ## A labelled 0-100 slider row (placeholder-friendly).
 static func slider(parent: Node, text: String, value: float, lo: float, hi: float,

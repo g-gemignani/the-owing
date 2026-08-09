@@ -722,7 +722,14 @@ func _power_value_uncached() -> float:
 	## enemy scaling ran past them (thorns builds fell 69% -> 46%).
 	v += eff_strength() * 4.5
 	v += eff_dexterity() * 4.0
-	v += eff_draw() * 1.5
+	# A card in hand, priced as a third of the Energy that would let you play it
+	# (`energy_gain`, 15 below). It was 1.5 — a TENTH of an energy — and that was not a
+	# conservative estimate, it was a hole: the only card in the catalogue that does
+	# nothing but draw scored 2.9, below Stumble, which is a card whose whole text is
+	# that it is bad (D224). Draw is not free power, and the discount off Energy is the
+	# honest part of the old number: a drawn card still has to be paid for, and a hand
+	# you cannot afford to empty is a hand that drew nothing. A third, not a tenth.
+	v += eff_draw() * 5.0
 	# Poison ignores Block, but it is back-loaded and wasted when a fight ends
 	# early, so it prices below the same number of immediate damage.
 	debuff += eff_poison() * 2.0
@@ -747,9 +754,17 @@ func _power_value_uncached() -> float:
 		v += 3.0
 	if exhaust:
 		v *= 0.65                  # one use per combat is a real cost
-	# Persistent block compounds, but keep the premium modest: this value feeds
-	# enemy scaling, and over-valuing an effect makes enemies hit harder than the
-	# deck can actually answer.
+	# Persistent Block compounds, and this is the one card in the game that rewrites a
+	# RULE rather than a number: every point of Block you fail to spend stops being
+	# waste and starts being a wall. Priced at 30 rather than 12 (D224).
+	#
+	# The old comment argued the premium down because this value feeds enemy scaling
+	# and over-valuing an effect makes enemies hit harder than the deck can answer.
+	# That reasoning is sound and it was applied to the wrong side: under-valuing it
+	# meant a Barricade deck fought enemies scaled for a deck it was not, and the
+	# rarity ladder — which reads this number — called the game's biggest rule change
+	# a rare. Measured on the simulator rather than argued: see D224 for the before and
+	# after, and re-measure here rather than re-deriving if it moves again.
 	if retain_block:
-		v += 12.0
+		v += 30.0
 	return v

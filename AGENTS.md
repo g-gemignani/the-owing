@@ -80,7 +80,13 @@ The loop:
    Relics, and unlock deeper zones. The thirty relics are the long tail: each rarity is
    sealed until you have cleared enough, and the last of them do not open until four
    clears past the twelfth dungeon (D223), so finishing the set is something you do
-   after the game rather than halfway through it.
+   after the game rather than halfway through it. **Rarity is a claim about strength,
+   and it is derived rather than authored** (D224): every card's and every relic's band
+   is written from `power_value()` by `tools/rerarify.gd` — cards, relics and the ten
+   Powers alike (D225) — the bands may not overlap, and the rarity suite fails a
+   catalogue where a common outranks an uncommon. It is not a colour: it sets the level
+   cap, the growth rate, the drop weight, the shop price, how many clears a relic waits
+   for, and what a Power costs to buy and to level.
 
 Two-tier state makes this work:
 
@@ -95,7 +101,7 @@ dungeon) · 30 relics ·
 10 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 46 errands and 16 debts over 44 counters · 3 aspects ·
-24 sound effects · 5 score tracks · 45 test suites. All content is `.tres` data
+24 sound effects · 5 score tracks · 46 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
 **Art: 310 files wanted, 310 present, 0 to provide — the list is closed.** It was
@@ -633,10 +639,11 @@ effects are drawn at runtime by `scripts/fx.gd`.
 
 - **Cross-platform.** Desktop (Linux/Windows/macOS) builds here; Android and iOS stay
   *exportable* even though their toolchains cannot run here (D44). Touch is a first
-  class input — a finger has no hover, so cards read on tap (D43). The APK reaches as
-  wide as the engine allows: Android 7.0 is Godot's own floor, and both ARM ABIs ship in
-  one package because 64-bit-only is refused by a 32-bit phone as *"app not compatible"*
-  — a message that names neither (D170).
+  class input — a finger has no hover, so cards read on tap (D43), and a finger has no
+  wheel, so every list carries its own drag-to-scroll rather than trusting the engine's
+  (D225). The APK reaches as wide as the engine allows: Android 7.0 is Godot's own
+  floor, and both ARM ABIs ship in one package because 64-bit-only is refused by a
+  32-bit phone as *"app not compatible"* — a message that names neither (D170).
 
 - **A set can be uniform and uniformly the wrong game.** D150 made the sound coherent —
   one instrument, one rate, one key, one measured loudness ladder — and it was still a

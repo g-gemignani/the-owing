@@ -91,9 +91,11 @@ func _show_event() -> void:
 		# uniform for free. If a future event writes a longer one it will grow past
 		# 480 on its own, because the helper's width is a minimum (D116); it is the
 		# 1244 that was never derivable from anything.
-		var text: String = ev.choice_labels[i]
+		# `ev.label`, not the raw string: a price that scales with depth has to be
+		# printed by whatever computes it, or the button says 60 and takes 1440 (D224).
+		var text: String = ev.label(i, GameState.dungeon)
 		# do not offer a choice the player cannot pay for
-		var affordable: bool = GameState.available_gold() + ev.gold_delta(i) >= 0
+		var affordable: bool = GameState.available_gold() + ev.gold_cost(i, GameState.dungeon) >= 0
 		if not affordable:
 			text += "  (not enough gold)"
 		UI.button(options_box, text,
@@ -124,7 +126,7 @@ func _on_choice(i: int) -> void:
 		GameState.hp = clampi(GameState.hp + hp, 1, GameState.max_hp)
 		lines.append("%s %d HP." % ["Gained" if hp > 0 else "Lost", abs(hp)])
 
-	var gold := ev.gold_delta(i)
+	var gold := ev.gold_cost(i, GameState.dungeon)
 	if gold > 0:
 		GameState.earn_gold(gold)
 		lines.append("Gained %d gold." % gold)

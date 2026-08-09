@@ -10,6 +10,6 @@ description = "Gain 6 Block, +11 if it empties your hand."
 bonus_if_hand_empty = 11
 cost = 1
 type = 1
-rarity = 1
+rarity = 0
 level = 1
 block = 6

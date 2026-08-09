@@ -9,6 +9,6 @@ name = "Double Down"
 description = "Double your Block."
 cost = 2
 type = 1
-rarity = 2
+rarity = 1
 level = 1
 double_block = true

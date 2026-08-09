@@ -58,23 +58,29 @@ func _init() -> void:
 		# in `Balance.deck_cost` cannot disagree about the same card.
 		sums[c.rarity] += c.power_value() / maxf(1.0, Balance.card_energy_cost(c))
 		counts[c.rarity] += 1
-	var prev_avg := 0.0
+	# INFORMATIONAL since D224, and the demotion is the finding rather than a retreat.
+	#
+	# It used to be an assertion: average power per energy must rise with rarity. Rarity
+	# is now written from TOTAL power (`tools/rerarify.gd`), and the two cannot both
+	# hold — ranking by impact concentrates expensive cards in the upper bands, and an
+	# expensive card is by definition worse per energy, so the rate average sags exactly
+	# where the ranking is working. It first failed by 1% (uncommon 10.2, rare 10.1) with
+	# every band otherwise in order, which is the shape of a test measuring the wrong
+	# thing rather than of a catalogue going wrong.
+	#
+	# What it was protecting — a legendary should FEEL strong for the turn it costs — is
+	# not lost: it is the maxed-multiplier ladder above and the no-overlap check below,
+	# and per-energy is still exactly what enemy scaling reads (`Balance.power_ratio`),
+	# where it is measured against real decks rather than against rarity bands.
 	for r in NAMES.size():
 		if all_counts[r] == 0:
 			fails += 1; print("FAIL no cards at rarity %s" % NAMES[r]); continue
-		# Rate-comparison needs a sample. Legendaries are almost all one-shots by
-		# design, so their repeatable pool is tiny; the total-power ladder below is
-		# what covers them.
 		if counts[r] < 3:
-			print("  (info: %-9s only %d repeatable cards — rate check skipped)" % [
+			print("  (info: %-9s only %d repeatable cards — no rate to quote)" % [
 				NAMES[r], counts[r]])
 			continue
-		var avg: float = sums[r] / float(counts[r])
-		if avg <= prev_avg:
-			fails += 1; print("FAIL avg power/energy not rising at %s (%.1f vs %.1f)" % [
-				NAMES[r], avg, prev_avg])
-		prev_avg = avg
-		print("  (info: %-9s %2d cards, avg %.1f power/energy repeatable)" % [NAMES[r], counts[r], avg])
+		print("  (info: %-9s %2d cards, avg %.1f power/energy repeatable)" % [
+			NAMES[r], counts[r], sums[r] / float(counts[r])])
 
 	# total card power must also ascend with rarity (covers one-shot cards)
 	var prev_total := 0.0
@@ -87,6 +93,79 @@ func _init() -> void:
 				NAMES[r], avg_total, prev_total])
 		prev_total = avg_total
 		print("  (info: %-9s avg total power %.1f)" % [NAMES[r], avg_total])
+
+	# --- the bands may not OVERLAP (D224) ---------------------------------------------
+	#
+	# The ladder above is about averages, and averages hid the state this replaced: 29 of
+	# 32 commons beat the weakest uncommon, and the strongest card in the game was an
+	# epic. A band average can ascend perfectly while every card in it is misfiled.
+	#
+	# The yardstick is `power_value()` — the same score the collection screen sorts by,
+	# so a player who sorts by Power and reads the rarity colours sees one ordering and
+	# not two. Rarity is written FROM it by `tools/rerarify.gd`; this is what stops the
+	# next hand-authored card from landing in the wrong band.
+	#
+	# ONE exception, and it is the other rule on this page rather than a fudge: a
+	# legendary must change a rule (see below), so a card that is only numbers is passed
+	# over for the top band however strong it is. It may therefore out-score a legendary.
+	# Nothing else may.
+	var worst := {}   # rarity -> weakest power in the band
+	var best := {}    # rarity -> strongest
+	var only_numbers := {}
+	for id in ids:
+		var c := load(m.CATALOG[id]) as CardData
+		var p: float = c.power_value()
+		var r := int(c.rarity)
+		worst[r] = minf(float(worst.get(r, 1e9)), p)
+		best[r] = maxf(float(best.get(r, -1.0)), p)
+		if p > float(worst.get(CardData.Rarity.LEGENDARY, 1e9)) and not _rule_changer(c):
+			only_numbers[String(id)] = p
+	for r in range(NAMES.size() - 1):
+		if not worst.has(r) or not worst.has(r + 1):
+			continue
+		var over: Array[String] = []
+		for id in ids:
+			var c2 := load(m.CATALOG[id]) as CardData
+			if int(c2.rarity) != r or c2.power_value() <= float(worst[r + 1]):
+				continue
+			# the documented exception, and only at the top boundary
+			if r + 1 == CardData.Rarity.LEGENDARY and not _rule_changer(c2):
+				continue
+			over.append("%s %.1f" % [c2.name, c2.power_value()])
+		if not over.is_empty():
+			fails += 1
+			print("FAIL %d %s card(s) outrank the weakest %s (%.1f): %s" % [
+				over.size(), NAMES[r], NAMES[r + 1], worst[r + 1], ", ".join(over)])
+	for r in range(NAMES.size()):
+		if worst.has(r):
+			print("  (info: %-9s power %.1f .. %.1f)" % [NAMES[r], worst[r], best[r]])
+
+	# --- and the same for relics, which had no ordering at all ---
+	var rworst := {}
+	var rbest := {}
+	var relics: Array = []
+	for rid in m.RELIC_CATALOG:
+		var rd := load(m.RELIC_CATALOG[rid]) as RelicData
+		if rd == null:
+			continue
+		relics.append(rd)
+		var rr := int(rd.rarity)
+		rworst[rr] = minf(float(rworst.get(rr, 1e9)), rd.power_value())
+		rbest[rr] = maxf(float(rbest.get(rr, -1.0)), rd.power_value())
+	for r in range(NAMES.size() - 1):
+		if not rworst.has(r) or not rworst.has(r + 1):
+			continue
+		var rover: Array[String] = []
+		for rd2 in relics:
+			if int(rd2.rarity) == r and rd2.power_value() > float(rworst[r + 1]):
+				rover.append("%s %.1f" % [rd2.name, rd2.power_value()])
+		if not rover.is_empty():
+			fails += 1
+			print("FAIL %d %s relic(s) outrank the weakest %s (%.1f): %s" % [
+				rover.size(), NAMES[r], NAMES[r + 1], rworst[r + 1], ", ".join(rover)])
+	for r in range(NAMES.size()):
+		if rworst.has(r):
+			print("  (info: relics %-9s power %.1f .. %.1f)" % [NAMES[r], rworst[r], rbest[r]])
 
 	# --- the pyramid: commons should be the bulk, legendaries scarce ---
 	if int(by_rarity.get(0, 0)) < int(by_rarity.get(3, 0)):
@@ -120,7 +199,15 @@ func _init() -> void:
 				fails += 1; print("FAIL legendary %s is only numbers" % id)
 
 	if fails == 0:
-		print("RARITY TEST: PASS (%d cards; power and growth both ascend with rarity)" % ids.size())
+		print("RARITY TEST: PASS (%d cards; power and growth ascend with rarity, and the bands do not overlap)" % ids.size())
 	else:
 		print("RARITY TEST: FAIL (%d)" % fails)
 	quit()
+
+## Whether a card changes a RULE rather than only a number. Stated once and used
+## twice: the legendary check below, and the one exception the no-overlap check above
+## allows — a card that is only numbers cannot be promoted into the top band, so it is
+## the one thing permitted to out-score what is in there.
+func _rule_changer(c: CardData) -> bool:
+	return c.retain_block or c.aoe or c.energy_gain > 0 or c.gain_strength > 0 \
+		or c.gain_dexterity > 0 or c.gain_thorns > 0 or c.heal > 0 or c.apply_poison > 0

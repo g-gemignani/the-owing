@@ -14,6 +14,14 @@ Illustration is assigned automatically. `CardData.power_value()` must price any
 new mechanic you invent, or enemy scaling will not see it and the card becomes
 free power — see `DESIGN.md` on the difficulty ratchet.
 
+**Do not hand-author the rarity.** It is derived from `power_value()` and the bands may
+not overlap (D224). Write the card, then run `godot --headless --script
+tools/rerarify.gd` for the plan and `-- --write` to apply it; `tests/test_rarity.gd`
+fails a catalogue where a common outranks an uncommon. Rarity is not decoration — it
+sets the level cap, the growth rate, the drop weight and the shop price, so a card
+filed by taste is a card whose whole progression is wrong. The same is true of a relic,
+where it also decides how many clears you wait for it.
+
 ## An enemy
 
 1. `resources/enemies/<id>.tres`.

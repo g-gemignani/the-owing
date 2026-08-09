@@ -9,6 +9,6 @@ name = "Ram"
 description = "Deal damage equal to your Block."
 cost = 1
 type = 0
-rarity = 1
+rarity = 0
 level = 1
 damage_from_block = true
