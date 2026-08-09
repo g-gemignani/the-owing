@@ -193,7 +193,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/counterblow.png` | 320x240 | **Counterblow.** A blade caught on a bracer and a second blade already coming back the other way. An attack card: Deal 8 damage. Gain 4 Block. |
 | x | `cards/cover.png` | 320x240 | **Cover.** A figure ducked behind a broken slab of masonry, only the helm showing. A block card: Gain 5 block. |
 | x | `cards/creeping_death.png` | 320x240 | **Creeping Death.** A grey rot spreading along a limb, further at the wrist than at the elbow. A poison card: Deal 5 damage. Apply 4 Poison. Permanently +2 this combat. |
-| x | `cards/cull.png` | 320x240 | **Cull.** Three quick cuts laid across a line of shapes, one shape dropping out of the line. A block card: Exhaust your hand. Gain 3 Block, +3 for each card exhausted this combat. |
+| x | `cards/cull.png` | 320x240 | **Cull.** Three quick cuts laid across a line of shapes, one shape dropping out of the line. A block card: Exhaust your hand. Gain 2 Block, +1 for each card exhausted this combat. |
 | x | `cards/dead_weight.png` | 320x240 | **Dead Weight.** A blunt iron weight at the end of a slack chain, swung on its own momentum. An attack card: Deal 4 damage. Resolve the card you played before it again. |
 | x | `cards/decapitate.png` | 320x240 | **Decapitate.** An axe at the top of its arc above a bowed neck, the stroke not yet begun. An attack card: Deal 26 damage. Exhaust. |
 | x | `cards/deep_breath.png` | 320x240 | **Deep Breath.** A helm lifted off and a long breath taken in cold air. A heal card: Heal 8. Draw 1. |
@@ -221,7 +221,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/last_stand.png` | 320x240 | **Last Stand.** One shield-bearer alone with the shield still up, everything else in the frame broken. A block card: Double your Block. Gain 2 Dexterity. |
 | x | `cards/last_word.png` | 320x240 | **Last Word.** A duelling blade thrust clean through, hilt-deep, the arm behind it locked straight. An attack card: Deal 11 damage, +16 if it empties your hand. |
 | x | `cards/leech.png` | 320x240 | **Leech.** A dark blade drinking, one thin line of red climbing the steel against gravity. An attack card: Deal 6 damage. Heal for the damage dealt. |
-| x | `cards/lifedrain.png` | 320x240 | **Lifedrain.** A gauntleted hand closed on a ribcage with light draining out between the fingers. An attack card: Deal 4 damage, +3 for each card exhausted this combat. Heal for the damage dealt. |
+| x | `cards/lifedrain.png` | 320x240 | **Lifedrain.** A gauntleted hand closed on a ribcage with light draining out between the fingers. An attack card: Deal 6 damage, +2 for each card exhausted this combat. Heal for the damage dealt. |
 | x | `cards/light_on_it.png` | 320x240 | **Light on It.** A boot resting on a stretched rope, the rope barely dipping. A dexterity card: Gain 3 Dexterity (permanent). |
 | x | `cards/massacre.png` | 320x240 | **Massacre.** A wide killing arc that has already finished, the shapes on both sides falling away. An attack aoe card: Deal 14 damage to ALL enemies. Exhaust. |
 | x | `cards/molten_core.png` | 320x240 | **Molten Core.** A hollow chest cavity glowing furnace-orange behind a cage of iron ribs. A thorns card: Deal 2 damage per Thorns you have. Gain 3 Thorns. |
@@ -237,7 +237,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `cards/ram.png` | 320x240 | **Ram.** A shield turned edge-on and driven forward as the weapon itself. An attack card: Deal damage equal to your Block. |
 | x | `cards/read_ahead.png` | 320x240 | **Read Ahead.** A finger held on a line partway down a page already turning. A draw card: Draw 1. The next card you play this turn costs 1 less. Exhaust. |
 | x | `cards/reap.png` | 320x240 | **Reap.** A long scythe drawn level through a standing crop of dark shapes. An attack aoe card: Deal 7 damage to ALL enemies. |
-| x | `cards/red_mind.png` | 320x240 | **Red Mind.** A helm with red light behind both eye slits and nothing human in it. An attack card: Deal 8 damage, +5 for each card exhausted this combat. |
+| x | `cards/red_mind.png` | 320x240 | **Red Mind.** A helm with red light behind both eye slits and nothing human in it. An attack card: Deal 8 damage, +3 for each card exhausted this combat. |
 | x | `cards/riposte.png` | 320x240 | **Riposte.** A blade turned aside onto a spiked bracer, the attacker's hand torn on it. A thorns card: Deal 4 damage, +1 per Thorns. Gain 3 Thorns. |
 | x | `cards/riptide.png` | 320x240 | **Riptide.** A backwash of dark water dragging several figures off their feet at once. An attack aoe card: Deal 4 damage twice to ALL enemies. If it kills, gain 1 Energy. |
 | x | `cards/rot_touch.png` | 320x240 | **Rot Touch.** A bare fingertip pressed to skin, the grey spreading out from the contact. A poison card: Deal 5 damage. Apply 2 Poison. |
@@ -443,75 +443,75 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | ? | file | size | what it is |
 |---|---|---|---|
 | x | `iso/foe/abyss_horror_s.png` | 128x192 | **The Maw Itself**, walking down-left toward the camera. The same creature as `enemies/abyss_horror.png`, turned onto the diagonal. |
-| x | `iso/foe/abyss_horror_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/abyss_horror_n.png` | 128x192 | **The Maw Itself**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/bellows_brute_s.png` | 128x192 | **Bellows Brute**, walking down-left toward the camera. The same creature as `enemies/bellows_brute.png`, turned onto the diagonal. |
-| x | `iso/foe/bellows_brute_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/bellows_brute_n.png` | 128x192 | **Bellows Brute**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/bellows_master_s.png` | 128x192 | **The Bellows-Master**, walking down-left toward the camera. The same creature as `enemies/bellows_master.png`, turned onto the diagonal. |
-| x | `iso/foe/bellows_master_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/bellows_master_n.png` | 128x192 | **The Bellows-Master**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/bog_lurker_s.png` | 128x192 | **Bog Lurker**, walking down-left toward the camera. The same creature as `enemies/bog_lurker.png`, turned onto the diagonal. |
-| x | `iso/foe/bog_lurker_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/bog_lurker_n.png` | 128x192 | **Bog Lurker**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/bone_picker_s.png` | 128x192 | **Bone Picker**, walking down-left toward the camera. The same creature as `enemies/bone_picker.png`, turned onto the diagonal. |
-| x | `iso/foe/bone_picker_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/bone_picker_n.png` | 128x192 | **Bone Picker**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/brood_mother_s.png` | 128x192 | **The Brood-Mother**, walking down-left toward the camera. The same creature as `enemies/brood_mother.png`, turned onto the diagonal. |
-| x | `iso/foe/brood_mother_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/brood_mother_n.png` | 128x192 | **The Brood-Mother**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/brute_s.png` | 128x192 | **Brute**, walking down-left toward the camera. The same creature as `enemies/brute.png`, turned onto the diagonal. |
-| x | `iso/foe/brute_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/brute_n.png` | 128x192 | **Brute**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/cinder_knight_s.png` | 128x192 | **The Cinder Knight**, walking down-left toward the camera. The same creature as `enemies/cinder_knight.png`, turned onto the diagonal. |
-| x | `iso/foe/cinder_knight_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/cinder_knight_n.png` | 128x192 | **The Cinder Knight**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/crypt_hound_s.png` | 128x192 | **Crypt Hound**, walking down-left toward the camera. The same creature as `enemies/crypt_hound.png`, turned onto the diagonal. |
-| x | `iso/foe/crypt_hound_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/crypt_hound_n.png` | 128x192 | **Crypt Hound**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/cultist_s.png` | 128x192 | **Cultist**, walking down-left toward the camera. The same creature as `enemies/cultist.png`, turned onto the diagonal. |
-| x | `iso/foe/cultist_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/cultist_n.png` | 128x192 | **Cultist**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/deep_warden_s.png` | 128x192 | **The Deep Warden**, walking down-left toward the camera. The same creature as `enemies/deep_warden.png`, turned onto the diagonal. |
-| x | `iso/foe/deep_warden_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/deep_warden_n.png` | 128x192 | **The Deep Warden**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/drowned_thrall_s.png` | 128x192 | **Drowned Thrall**, walking down-left toward the camera. The same creature as `enemies/drowned_thrall.png`, turned onto the diagonal. |
-| x | `iso/foe/drowned_thrall_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/drowned_thrall_n.png` | 128x192 | **Drowned Thrall**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/ember_hound_s.png` | 128x192 | **Ember Hound**, walking down-left toward the camera. The same creature as `enemies/ember_hound.png`, turned onto the diagonal. |
-| x | `iso/foe/ember_hound_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/ember_hound_n.png` | 128x192 | **Ember Hound**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/false_step_s.png` | 128x192 | **The False Step**, walking down-left toward the camera. The same creature as `enemies/false_step.png`, turned onto the diagonal. |
-| x | `iso/foe/false_step_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/false_step_n.png` | 128x192 | **The False Step**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/forge_hound_s.png` | 128x192 | **Forge Hound**, walking down-left toward the camera. The same creature as `enemies/forge_hound.png`, turned onto the diagonal. |
-| x | `iso/foe/forge_hound_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/forge_hound_n.png` | 128x192 | **Forge Hound**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/fungal_host_s.png` | 128x192 | **Fungal Host**, walking down-left toward the camera. The same creature as `enemies/fungal_host.png`, turned onto the diagonal. |
-| x | `iso/foe/fungal_host_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/fungal_host_n.png` | 128x192 | **Fungal Host**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/grave_moth_s.png` | 128x192 | **Grave Moth**, walking down-left toward the camera. The same creature as `enemies/grave_moth.png`, turned onto the diagonal. |
-| x | `iso/foe/grave_moth_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/grave_moth_n.png` | 128x192 | **Grave Moth**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/grave_sexton_s.png` | 128x192 | **The Grave-Sexton**, walking down-left toward the camera. The same creature as `enemies/grave_sexton.png`, turned onto the diagonal. |
-| x | `iso/foe/grave_sexton_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/grave_sexton_n.png` | 128x192 | **The Grave-Sexton**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/hexer_s.png` | 128x192 | **Hexer**, walking down-left toward the camera. The same creature as `enemies/hexer.png`, turned onto the diagonal. |
-| x | `iso/foe/hexer_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/hexer_n.png` | 128x192 | **Hexer**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/last_vendor_s.png` | 128x192 | **The Last Vendor**, walking down-left toward the camera. The same creature as `enemies/last_vendor.png`, turned onto the diagonal. |
-| x | `iso/foe/last_vendor_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/last_vendor_n.png` | 128x192 | **The Last Vendor**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/market_ghoul_s.png` | 128x192 | **Market Ghoul**, walking down-left toward the camera. The same creature as `enemies/market_ghoul.png`, turned onto the diagonal. |
-| x | `iso/foe/market_ghoul_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/market_ghoul_n.png` | 128x192 | **Market Ghoul**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/marrow_abbot_s.png` | 128x192 | **The Marrow-Abbot**, walking down-left toward the camera. The same creature as `enemies/marrow_abbot.png`, turned onto the diagonal. |
-| x | `iso/foe/marrow_abbot_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/marrow_abbot_n.png` | 128x192 | **The Marrow-Abbot**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/marrow_priest_s.png` | 128x192 | **Marrow Priest**, walking down-left toward the camera. The same creature as `enemies/marrow_priest.png`, turned onto the diagonal. |
-| x | `iso/foe/marrow_priest_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/marrow_priest_n.png` | 128x192 | **Marrow Priest**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/maw_tender_s.png` | 128x192 | **Maw Tender**, walking down-left toward the camera. The same creature as `enemies/maw_tender.png`, turned onto the diagonal. |
-| x | `iso/foe/maw_tender_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/maw_tender_n.png` | 128x192 | **Maw Tender**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/mycelial_lord_s.png` | 128x192 | **The Mycelial Lord**, walking down-left toward the camera. The same creature as `enemies/mycelial_lord.png`, turned onto the diagonal. |
-| x | `iso/foe/mycelial_lord_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/mycelial_lord_n.png` | 128x192 | **The Mycelial Lord**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/ossuary_wretch_s.png` | 128x192 | **Ossuary Wretch**, walking down-left toward the camera. The same creature as `enemies/ossuary_wretch.png`, turned onto the diagonal. |
-| x | `iso/foe/ossuary_wretch_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/ossuary_wretch_n.png` | 128x192 | **Ossuary Wretch**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/pale_acolyte_s.png` | 128x192 | **Pale Acolyte**, walking down-left toward the camera. The same creature as `enemies/pale_acolyte.png`, turned onto the diagonal. |
-| x | `iso/foe/pale_acolyte_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/pale_acolyte_n.png` | 128x192 | **Pale Acolyte**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/plague_rat_s.png` | 128x192 | **Plague Rat**, walking down-left toward the camera. The same creature as `enemies/plague_rat.png`, turned onto the diagonal. |
-| x | `iso/foe/plague_rat_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/plague_rat_n.png` | 128x192 | **Plague Rat**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/rat_swarm_s.png` | 128x192 | **Rat**, walking down-left toward the camera. The same creature as `enemies/rat_swarm.png`, turned onto the diagonal. |
-| x | `iso/foe/rat_swarm_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/rat_swarm_n.png` | 128x192 | **Rat**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/rot_priest_s.png` | 128x192 | **Rot Priest**, walking down-left toward the camera. The same creature as `enemies/rot_priest.png`, turned onto the diagonal. |
-| x | `iso/foe/rot_priest_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/rot_priest_n.png` | 128x192 | **Rot Priest**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/slag_wretch_s.png` | 128x192 | **Slag Wretch**, walking down-left toward the camera. The same creature as `enemies/slag_wretch.png`, turned onto the diagonal. |
-| x | `iso/foe/slag_wretch_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/slag_wretch_n.png` | 128x192 | **Slag Wretch**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/spore_thing_s.png` | 128x192 | **Spore Thing**, walking down-left toward the camera. The same creature as `enemies/spore_thing.png`, turned onto the diagonal. |
-| x | `iso/foe/spore_thing_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/spore_thing_n.png` | 128x192 | **Spore Thing**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/the_gardener_s.png` | 128x192 | **The Gardener**, walking down-left toward the camera. The same creature as `enemies/the_gardener.png`, turned onto the diagonal. |
-| x | `iso/foe/the_gardener_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/the_gardener_n.png` | 128x192 | **The Gardener**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/tomb_guard_s.png` | 128x192 | **Tomb Guard**, walking down-left toward the camera. The same creature as `enemies/tomb_guard.png`, turned onto the diagonal. |
-| x | `iso/foe/tomb_guard_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/tomb_guard_n.png` | 128x192 | **Tomb Guard**, walking up-right away from the camera, seen from behind and above. |
 | x | `iso/foe/warden_s.png` | 128x192 | **The Forge-Warden**, walking down-left toward the camera. The same creature as `enemies/warden.png`, turned onto the diagonal. |
-| x | `iso/foe/warden_n.png` | 128x192 | **%s**, walking up-right away from the camera, seen from behind and above. |
+| x | `iso/foe/warden_n.png` | 128x192 | **The Forge-Warden**, walking up-right away from the camera, seen from behind and above. |
 
 ## Tier 8b — isometric furniture
 

@@ -356,7 +356,7 @@ effects are drawn at runtime by `scripts/fx.gd`.
   the smallest target in the row and not the part anyone is reading. The name and the rules
   text are where the eye is when that question arrives, and clicking them did nothing; the
   shop had no way in at all, on the one card list whose decisions cost gold and cannot be
-  undone (D205). Existing is not the same as being found. Ask of any gesture: is it on the
+  undone (D205b). Existing is not the same as being found. Ask of any gesture: is it on the
   element the player is already reading, and does something *say* it is there? And when the
   answer is a tooltip promising what a click will do, **test the click, not the promise** —
   a count of affordances passed a handler wired to the wrong mouse button.
@@ -1245,6 +1245,14 @@ REVIEW.md    a review of the game AS A GAME (2026-08-01) — playability, graphi
   `godot --headless --script tools/sim_balance.gd` (paste the numbers).
 - **Before committing content or code:** `tests/run.sh` must be green, including
   `test_compile`, `PlayableTest` and `test_content`.
+- **Before committing anything that touches content or decisions:** run the three
+  generators — `tools/art_docs.sh`, `tools/design_index.sh`, `tools/readme_downloads.sh`
+  (or all three with `--check` first). Nothing runs them automatically, and a commit
+  that changed twenty cards and added two decisions shipped all three stale (D210).
+- **A new decision takes the next FREE number.** Check `grep -oE '^### D[0-9]+[a-z]?'`
+  before writing one: two sessions picked D205 on the same afternoon and neither could
+  see the other. `test_content.gd` now fails on a repeat, but the number is still yours
+  to choose (D210).
 - **A hook re-asserts this every turn.** `.claude/hooks/docs-current.sh` (a
   `UserPromptSubmit` hook in `.claude/settings.json`) injects a reminder to keep
   these two files current on every prompt, and escalates to a STALE warning when the

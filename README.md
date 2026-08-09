@@ -28,7 +28,7 @@ Pick your machine, download, open. There is no installer and no account.
 | **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-windows-x86_64.zip) (77 MB) | Unzip and run **TheOwing.exe**. Windows shows a blue "unrecognised app" box the first time — click **More info**, then **Run anyway** |
 | **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (98 MB) | Unzip, then **right-click the app and choose Open** (not double-click) so macOS offers you the Open button |
 | **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-linux-x86_64.zip) (68 MB) | Unzip, then run `TheOwing.x86_64`. If it will not start, mark it executable first: `chmod +x TheOwing.x86_64` |
-| **Android phone or tablet** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) (91 MB) | Copy it to your phone and tap it. Android 7 or newer. If it says *App not installed*, delete the older copy first |
+| **Android phone or tablet** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) (92 MB) | Copy it to your phone and tap it. Android 7 or newer. If it says *App not installed*, delete the older copy first |
 
 <sub>Sizes read from the current build by `tools/readme_downloads.sh` — not typed here,
 because typed ones were three megabytes stale and nobody could tell (D207).</sub>

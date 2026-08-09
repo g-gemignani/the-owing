@@ -276,6 +276,38 @@ func _init() -> void:
 		fails += 1
 		print("FAIL no touch path in card_button — cards would be unreadable until played")
 
+	# --- one decision number, one decision (D112, D196, D210) -------------------------
+	#
+	# Two concurrent sessions writing up their work on the same afternoon both reached for
+	# D205, and neither could see the other doing it. Nothing failed: DESIGN.md is appended
+	# to, both entries were well-formed, and the collision was invisible until the generated
+	# index was rebuilt and printed the number twice.
+	#
+	# That has now happened five times — D103, D109, D125, D138 and D205 — which is the point
+	# at which "be careful" stops being a strategy. D196 settled the convention (the second of
+	# a pair takes a letter, following D83b) and this is the check that makes the convention
+	# enforceable: append a duplicate and the suite goes red before it is pushed.
+	#
+	# Letter-aware on purpose. The first version of this check matched `^### D[0-9]*` and so
+	# read D83 and D83b as the same number, reporting four historical duplicates that had
+	# already been resolved — an assertion whose false positives have to be explained away with
+	# a hand-kept exception list is one nobody will keep.
+	var seen_dnum := {}
+	var dre := RegEx.new()
+	dre.compile("(?m)^### (D\\d+[a-z]?) ")
+	var design := FileAccess.open("res://DESIGN.md", FileAccess.READ)
+	if design == null:
+		fails += 1; print("FAIL DESIGN.md is missing")
+	else:
+		var dtext := design.get_as_text()
+		design.close()
+		for dm in dre.search_all(dtext):
+			var dnum := dm.get_string(1)
+			if seen_dnum.has(dnum):
+				fails += 1
+				print("FAIL DESIGN.md has two %s sections — the second should take a letter, as D83b does" % dnum)
+			seen_dnum[dnum] = true
+
 	# --- the README's numbers are claims, and a claim nobody re-checks goes stale ---
 	#
 	# Any suite count the front page states is a hand-written number — there is no service

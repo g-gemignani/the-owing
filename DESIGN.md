@@ -191,12 +191,14 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D201** | [She was sliding, and the second effect had to be a stretch](#d201--she-was-sliding-and-the-second-effect-had-to-be-a-stretch) |
 | **D202** | [The figures were drawn head-on and the floor is not](#d202--the-figures-were-drawn-head-on-and-the-floor-is-not) |
 | **D203** | [The floor was asking without ever being asked, so the errand got a ledger and forty-six things to ask for](#d203--the-floor-was-asking-without-ever-being-asked-so-the-errand-got-a-ledger-and-forty-six-things-to-ask-for) |
-| **D203** | [The report grew the HP bar with the clears and took the relics back off](#d203--the-report-grew-the-hp-bar-with-the-clears-and-took-the-relics-back-off) |
 | **D204** | [Twenty cards were the same card at a different number, so they became the cards that read the other cards](#d204--twenty-cards-were-the-same-card-at-a-different-number-so-they-became-the-cards-that-read-the-other-cards) |
 | **D205** | [A debt was offered on a screen that could not show the place it named](#d205--a-debt-was-offered-on-a-screen-that-could-not-show-the-place-it-named) |
-| **D205** | [The way to see a card was a 28px picture nobody was looking at, and in the shop there was no way at all](#d205--the-way-to-see-a-card-was-a-28px-picture-nobody-was-looking-at-and-in-the-shop-there-was-no-way-at-all) |
+| **D205b** | [The way to see a card was a 28px picture nobody was looking at, and in the shop there was no way at all](#d205b--the-way-to-see-a-card-was-a-28px-picture-nobody-was-looking-at-and-in-the-shop-there-was-no-way-at-all) |
 | **D206** | [The back door was unreadable, and on five dungeons it was not a door](#d206--the-back-door-was-unreadable-and-on-five-dungeons-it-was-not-a-door) |
 | **D207** | [The front page was written for the person who wrote it](#d207--the-front-page-was-written-for-the-person-who-wrote-it) |
+| **D208** | [The report grew the HP bar with the clears and took the relics back off](#d208--the-report-grew-the-hp-bar-with-the-clears-and-took-the-relics-back-off) |
+| **D209** | [Half the game was a walkover and the knob for it had been clamped away](#d209--half-the-game-was-a-walkover-and-the-knob-for-it-had-been-clamped-away) |
+| **D210** | [Two sessions reached for D205 on the same afternoon, and nothing noticed](#d210--two-sessions-reached-for-d205-on-the-same-afternoon-and-nothing-noticed) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -13234,7 +13236,7 @@ its subjects instead of naming the ones somebody remembered.
 
     back doors walk 5.9 moves per encounter, ceiling 7.5, same quota; 6 of 12 dungeons have a real one
 
-### D205 — The way to see a card was a 28px picture nobody was looking at, and in the shop there was no way at all
+### D205b — The way to see a card was a 28px picture nobody was looking at, and in the shop there was no way at all
 
 *"I would like to always have a preview of the card in the shop, in the build deck and in
 the collection. The preview should not only appear if someone clicks the left icon, but also
@@ -13476,3 +13478,49 @@ walkover. Re-run at two other seeds the table mean is 75.0 / 64.5 / 74.7 and the
 74.1 / 67.4 / 79.2: **the direction never changes and the magnitude moves by up to ten
 points.** Every number above is one draw. Averaging the report over seeds would make the
 instrument honest about that.
+
+### D210 — Two sessions reached for D205 on the same afternoon, and nothing noticed
+
+A concurrent session and this one both finished a piece of work, both appended a write-up, and
+both numbered it **D205**. Nothing failed. DESIGN.md is append-only, both entries were
+well-formed, and the collision was invisible until `tools/design_index.sh` was re-run and
+printed the number twice in the generated table.
+
+It was found by accident: the working tree was clean and every suite was green, and the only
+reason anybody looked was that `--check` on the three generators reported them stale after
+somebody else's commit.
+
+#### This is the fifth time
+
+D103, D109, D125 and D138 each named two decisions. D112 records two of those being left alone
+on purpose — a concurrent session held the entries, and renumbering another session's in-flight
+work is how you get *three* of them — which was right at the time, and then nobody came back.
+D196 cleaned them up and settled the convention: **the second of a pair takes a letter**,
+following the `D83b` precedent.
+
+A convention that has been restated twice and violated five times is not a convention, it is a
+hope. So it is a test now: `tests/test_content.gd` walks DESIGN.md's own headings and fails on
+a repeated number. Append a duplicate and the suite goes red before it can be pushed.
+
+**Letter-aware, and that mattered on the first run.** The obvious pattern `^### D[0-9]*` reads
+`D83` and `D83b` as the same number, so the first version reported four historical duplicates
+that had already been resolved exactly as the convention says. An assertion whose false
+positives have to be explained away with a hand-kept exception list is one nobody keeps — the
+regex matches the optional letter, and then the only collision in the file is the real one.
+
+#### Which of the two took the letter, and why
+
+The second in file order, per D196. It also happens to be the cheap one: the debt entry is cited
+from fifteen places across `meta_state.gd`, `zone_view.gd`, `traversal_iso.gd`, `game_state.gd`
+and `overworld.gd`, and the card-affordance entry from exactly one line of AGENTS.md. Renaming
+by file order and renaming by blast radius agreed here; if they ever disagree, blast radius
+should win, because a stale citation in code is a reader sent to the wrong decision.
+
+#### The generated files were stale in the same commit
+
+Worth recording beside it, because it is the same failure mode. That commit changed twenty card
+`.tres` files and their rules text, which is input to `ART_ASSETS.md`, and added two decisions,
+which is input to the design index — and shipped neither regenerated. Both were caught by
+`--check` rather than by anything failing, which is precisely what `--check` is for and also a
+reminder that nothing runs it automatically. Running the three generators before a commit that
+touches content or decisions is now the cheapest thing on the working-rules list.
