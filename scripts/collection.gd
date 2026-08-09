@@ -191,6 +191,29 @@ func _build_ui() -> void:
 				boss.name, dd.name if dd != null else "this dungeon",
 				Balance.boss_warning(GameState.dungeon_id)])
 
+		# Going in owing has to be said HERE, because this is now where it is paid (D211).
+		# The region screen named the fee, then the player spent a whole deck-building
+		# session on this screen — and moving the payment to `_on_start` without saying so
+		# would take gold on a button press whose label is "Start", with the only mention
+		# of it a screen behind them. A price must be visible before it is paid (D172), and
+		# it is the moment of payment that decides where "before" is.
+		#
+		# Also the only thing on this screen that tells them WHICH door they came through:
+		# the debt row and the plain row lead to an identical deck builder.
+		if GameState.pending_debt:
+			var kind_d := MetaState.debt_on(GameState.dungeon_id)
+			if kind_d != "":
+				var owe := Label.new()
+				owe.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				owe.add_theme_color_override("font_color", Color(0.95, 0.78, 0.45))
+				var stake_d: int = Balance.debt_stake(kind_d, GameState.dungeon_id)
+				owe.text = "GOING IN OWING: %s — %d gold is taken when you start, and you have %d." % [
+					Balance.debt_text(kind_d, GameState.dungeon_id), stake_d, MetaState.gold]
+				root.add_child(owe)
+				UI.hoverable(owe, ("The stake leaves your purse the moment this run begins, "
+					+ "not before — back out now and it costs you nothing.\nSettle the debt and "
+					+ "you get the %d back with more on top; fail and it is gone.") % stake_d)
+
 	# Power picker and saved loadouts, on ONE bar. Both belong to the deck rather
 	# than to the collection, so both are hidden in LEDGER, where the deck is already
 	# dealt and the power already equipped — a picker that cannot change this run is
@@ -767,6 +790,21 @@ func _on_start() -> void:
 	if not MetaState.deck_valid(selection):
 		msg_label.text = "deck too small"
 		return
+	# The debt's stake is paid HERE, at the one moment a run begins (D211), and before
+	# anything else commits. It used to be spent on the region screen the instant the offer
+	# was pressed — a screen away from the run it is a wager on, and unrecoverable if the
+	# player then thought better of the deck and walked out.
+	#
+	# It is also the one thing in this function that can fail after the deck has passed, so
+	# it goes FIRST: `enter_dungeon` generates the floor and `autosave` writes the run, and
+	# a stake that failed to leave the purse behind either of those is a debt the player is
+	# carrying for free. Reported rather than swallowed, because "you are not actually
+	# owing" is not something to discover at the boss.
+	if GameState.pending_debt:
+		if not MetaState.take_debt(GameState.dungeon_id):
+			GameState.pending_debt = false
+			msg_label.text = "cannot take that debt now — go back and check the terms"
+			return
 	Audio.play("enter")
 	GameState.enter_dungeon(MetaState.build_deck(selection))
 	GameState.autosave()   # the run exists from here on and can be resumed

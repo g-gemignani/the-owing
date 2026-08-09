@@ -199,6 +199,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D208** | [The report grew the HP bar with the clears and took the relics back off](#d208--the-report-grew-the-hp-bar-with-the-clears-and-took-the-relics-back-off) |
 | **D209** | [Half the game was a walkover and the knob for it had been clamped away](#d209--half-the-game-was-a-walkover-and-the-knob-for-it-had-been-clamped-away) |
 | **D210** | [Two sessions reached for D205 on the same afternoon, and nothing noticed](#d210--two-sessions-reached-for-d205-on-the-same-afternoon-and-nothing-noticed) |
+| **D211** | [The debt was a purchase on the wrong screen, so it became a door](#d211--the-debt-was-a-purchase-on-the-wrong-screen-so-it-became-a-door) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -13524,3 +13525,73 @@ which is input to the design index — and shipped neither regenerated. Both wer
 `--check` rather than by anything failing, which is precisely what `--check` is for and also a
 reminder that nothing runs it automatically. Running the three generators before a commit that
 touches content or decisions is now the cheapest thing on the working-rules list.
+
+### D211 — The debt was a purchase on the wrong screen, so it became a door
+
+*"Now fix the debts buttons. They should take the player directly to the deck screen to start
+the dungeon. The money should be taken at the dungeon start."*
+
+**What was wrong.** D205 did the hard half of this correctly — it moved the debt offer off the
+hub and onto the dungeon's own row, so a contract naming a place is pressed beside the place it
+names. What it left was a button that behaved like nothing else on that screen. Every other
+control on a dungeon row is a **door**: the front door, and the back door D190 added. The debt
+button was a **purchase** — `MetaState.take_debt(d.id); _refresh()` — so pressing the thing
+that names a dungeon did not go to that dungeon. It spent your gold where you stood and
+redrew the row you were already looking at, now reading "Owed here."
+
+Two consequences, and the second is the one that costs a player real money:
+
+* The row you had just committed to still needed its *other* button pressed to enter, and the
+  screen gave no sign of that. The state after the press looks like the state before a
+  different press.
+* **The irreversible part happened first.** Take the debt, walk into the deck builder, decide
+  the deck cannot do it, back out — the stake is gone and you are carrying a contract on a
+  dungeon you are not in. Nothing in the game refunds it, and `settle_debt` deliberately will
+  not discharge a debt by going somewhere else, which is right and which makes the trap worse.
+
+**The change.** The offer is a door. It calls the same `_enter` the other two rows call, with a
+third flag, and lands in the deck builder like every other way into a dungeon. The stake is
+paid in `collection._on_start()` — the single place a run begins — and it goes *first* in that
+function, ahead of `enter_dungeon` and `autosave`, because it is the one step that can still
+fail after the deck has validated and a stake that failed to leave the purse behind a generated
+floor is a debt held for free.
+
+`GameState.pending_debt` carries the choice between the two screens, deliberately shaped like
+`deep_entry` directly above it: same lifetime, same reason for existing — a fact about a run
+that does not exist yet, known only to the screen that offered it. It is a **bool**, not the
+debt: which debt is a pure function of the place and how many times you have beaten it
+(`MetaState.debt_on`), so storing the kind would be the second copy of a derivable thing that
+D205 deleted `debt_offers` to be rid of.
+
+`_enter` now sets **both** flags on every call rather than letting either default. A player who
+opens one row, backs out of the deck builder and enters a different dungeon must not carry the
+first row's choice into the second, and stating both every time makes that impossible instead
+of merely unlikely.
+
+**What the move exposed, which the request did not ask for and needed doing anyway.** Payment
+moved to a screen that said nothing about it. The region screen names the fee; the player then
+spends a whole deck-building session elsewhere; and "Start" would have quietly taken gold with
+the only mention of it a screen behind them. **A price must be visible before it is paid
+(D172), and it is the moment of payment that decides where "before" is** — so the deck builder
+now carries a GOING IN OWING line with the fee, the terms and the purse, and it is also the
+only thing on that screen that says which of the two identical-looking doors you came through.
+
+`can_take_debt` is now checked at both ends — on the region screen so the fee can be *named*
+before it is owed, and at the start so it is still *true* when it is taken. That is not
+redundancy; it is the same rule needing both halves.
+
+**The guard, and an honest note on its limits.** `tests/test_layout.gd` asserts that
+`zone_view.gd` does **not** call `take_debt(`, that `collection.gd` does, and that
+`game_state.gd` clears `pending_debt`. That is a source check, which this file's header already
+explains and licenses: these are UI scripts and a `--script` run has no autoloads to
+instantiate them with. It is also the only kind available here — the honest test presses the
+offer and watches the purse, and pressing it *navigates*, which in a harness replaces the
+harness (`playable_test.gd`'s note on screens that bail out by changing scene).
+
+So what is guarded is **which screen spends the stake**, which is precisely what regressed:
+putting `take_debt` next to the button that names the debt reads perfectly sensible, and is
+wrong. Verified by reinstating it — the check prints *"zone_view.gd spends the debt stake — it
+belongs at the run's start, not on the screen that only OFFERS it"*. What is **not** guarded is
+the end-to-end flow, and that gap is worth writing down rather than leaving for someone to
+discover: no test presses the button, so a `pending_debt` that stopped being read would pass
+all 42 suites.

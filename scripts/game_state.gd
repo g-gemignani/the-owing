@@ -35,6 +35,17 @@ var traversal: Traversal = null
 ## Did this run go in by the back door (D190)? Set by the region screen before the deck
 ## builder, consumed by `build_traversal`, and cleared with the run.
 var deep_entry: bool = false
+## Is this run being started ON a debt (D211)? Same shape and same lifetime as
+## `deep_entry` above, and for the same reason: it is a choice the region screen makes
+## about a run that does not exist yet, and only that screen knows it was made.
+##
+## A BOOL, not the debt itself. Which debt is a pure function of the place and how many
+## times you have beaten it (`MetaState.debt_on`), so storing the kind here would be a
+## second copy of something already derivable — the thing D205 deleted `debt_offers` to
+## avoid. All this has to carry is "they pressed the other button".
+##
+## Consumed by the deck builder's start, which is where the stake is actually paid.
+var pending_debt: bool = false
 ## What the crawl's model number was in saves written before D94 deleted the other
 ## three models. Read once, on resume, to tell a restorable run from a stale one.
 const LEGACY_ISO_KIND := 3
@@ -426,6 +437,7 @@ func clear_run() -> void:
 	traversal = null
 	dungeon_id = ""
 	deep_entry = false
+	pending_debt = false
 	combat_state = {}
 	shop_stock = []
 

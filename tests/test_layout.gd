@@ -274,8 +274,35 @@ func _init() -> void:
 				fails += 1
 				print("FAIL %s can contain encounter %d with no label" % [did, ty])
 
+	# --- the debt is paid at the door, and the door is the deck builder (D211) ---------
+	#
+	# A SOURCE check, for the reason this file's own header gives: these are UI scripts and a
+	# `--script` run has no autoloads to instantiate them with. It is also the only kind of
+	# check available here — the honest version presses the offer on the region screen and
+	# watches the purse, and pressing it NAVIGATES, which in a harness replaces the harness
+	# (see `playable_test.gd`'s note on screens that bail out by changing scene).
+	#
+	# So it asserts WHICH SCREEN spends the stake, which is exactly the thing that regressed:
+	# D205 spent it on the region screen the instant the offer was pressed, a screen and a
+	# whole deck-building session away from the run it is a wager on, and unrecoverable if the
+	# player walked back out. Moving it is easy to undo by accident, because putting
+	# `take_debt` next to the button that names the debt reads perfectly sensible.
+	if _defines("res://scripts/zone_view.gd", "take_debt("):
+		fails += 1
+		print("FAIL zone_view.gd spends the debt stake — it belongs at the run's start, not")
+		print("     on the screen that only OFFERS it (D211). The offer is a door now.")
+	if not _defines("res://scripts/collection.gd", "take_debt("):
+		fails += 1
+		print("FAIL nothing in the deck builder takes the debt, so a run started on the")
+		print("     'go in owing' door would owe nothing and pay nothing (D211).")
+	# ...and the flag that carries the choice between the two screens has to be cleared with
+	# the run, or the NEXT dungeon entered after a debt run silently starts owing.
+	if not _defines("res://scripts/game_state.gd", "pending_debt = false"):
+		fails += 1
+		print("FAIL game_state.gd never clears pending_debt, so the choice outlives its run")
+
 	if fails == 0:
-		print("LAYOUT TEST: PASS (actionable content is reachable, no dead ends, no debug text)")
+		print("LAYOUT TEST: PASS (actionable content is reachable, no dead ends, no debug text, the debt is paid at the door)")
 	else:
 		print("LAYOUT TEST: FAIL (%d)" % fails)
 	quit()

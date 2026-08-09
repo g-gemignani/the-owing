@@ -368,6 +368,17 @@ effects are drawn at runtime by `scripts/fx.gd`.
   cannot. Ask of any generated control: does the thing in this position mean the same thing
   it meant a moment ago?
 
+- **The moment of payment decides where "before" is, and a control that names a place should
+  go there.** The debt offer sat on the dungeon's own row (D205) and then behaved like nothing
+  else on that row: every other control there is a door, and this one was a purchase — it spent
+  the stake where the player stood, redrew the row, and still needed a different button pressed
+  to actually enter. Take it, walk into the deck builder, think better of the deck, walk out:
+  the gold is gone and the contract is on a dungeon you are not in. It is a door now, and the
+  stake is taken at the one moment a run begins (D211). Moving the payment moved the disclosure
+  with it — the fee is named again on the screen that now charges it, because a screen behind
+  you is not "before". Ask of any irreversible step: does it happen at the moment the player
+  believes they are committing, and does the screen where it happens say so?
+
 - **A price must be visible before it is paid, which means it must exist before then.** A
   chest's tier is its lock, and the tier was rolled on the chest SCREEN — so the lock came
   into being one step after the only step that could have answered it, and the floor drew

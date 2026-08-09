@@ -220,12 +220,19 @@ func _debt_offer(box: VBoxContainer, d: DungeonData) -> void:
 		poor.add_theme_color_override("font_color", Color(0.70, 0.70, 0.78))
 		return
 	# The fee is named on the button and the payout underneath, because they are different
-	# kinds of fact: one is spent the instant you press, and the other is a thing you might
-	# not come back with. Putting them on one line read as a price tag.
-	UI.button(box, "    ...or take on a debt for %d gold: %s" % [
+	# kinds of fact: one is a price, and the other is a thing you might not come back with.
+	# Putting them on one line read as a price tag.
+	#
+	# **The button GOES IN (D211).** It used to take the debt and call `_refresh()`, which
+	# spent the gold where the player was standing and left them on this screen next to a
+	# row that now said "Owed here" — so pressing the thing that names a dungeon did not go
+	# to that dungeon, and the one irreversible part of it had already happened. It is a
+	# door now, the same door the two buttons above it are, and it goes through the deck
+	# builder like every other way into a dungeon. Nothing is spent until the run starts.
+	UI.button(box, "    ...or go in owing, for %d gold at the door: %s" % [
 		fee, Balance.debt_text(kind, d.id)],
-		func(): MetaState.take_debt(d.id); _refresh(), 34.0)
-	var terms := UI.label(box, "        Settle it and you get your %d back, %d gold on top, and a %s pack. Fail and the %d is gone." % [
+		func(): _enter(d.id, false, true), 34.0)
+	var terms := UI.label(box, "        The %d is taken as the dungeon opens, not now. Settle it and you get it back, %d gold on top, and a %s pack. Fail and the %d is gone." % [
 		fee, pays, Balance.PACK_TIER_NAME.get(tier, "Worn"), fee])
 	terms.add_theme_color_override("font_color", Color(0.70, 0.82, 1.0))
 
@@ -309,9 +316,17 @@ func _indent(c: Control) -> MarginContainer:
 	pad.add_child(c)
 	return pad
 
-func _enter(id: String, deep: bool = false) -> void:
+## Every way into a dungeon from this screen: the front door, the back door (D190) and
+## owing (D211). All three land in the deck builder, because that is where a run starts.
+##
+## Both flags are set on EVERY call, never left to a default. They are the two facts about
+## a run that only this screen knows, and a player who opens one row, backs out of the deck
+## builder and enters a different dungeon must not carry the first row's choice into the
+## second. Stating them both every time makes that impossible rather than merely unlikely.
+func _enter(id: String, deep: bool = false, owing: bool = false) -> void:
 	GameState.select_dungeon(id)
 	GameState.deep_entry = deep
+	GameState.pending_debt = owing
 	UI.goto(self, "res://scenes/DeckBuilder.tscn")
 
 func _back() -> void:

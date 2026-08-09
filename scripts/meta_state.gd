@@ -675,12 +675,23 @@ func can_take_debt(dungeon_id: String) -> bool:
 		return false
 	return gold >= Balance.debt_stake(kind, dungeon_id)
 
-## Take on what this place is offering, and pay at the door (D205).
+## Take on what this place is offering, and pay for it (D205, and D211 moved WHEN).
 ##
 ## The stake is spent HERE rather than reported for a caller to pay, which is the opposite of
-## how the run's own prices work (D13) — and correctly so: this is meta gold changing hands at
-## the hub, with no run in existence yet to owe it to. The run-owns-nothing rule is about a
-## traversal reaching into `GameState`, and there is no traversal here.
+## how the run's own prices work (D13) — and correctly so: this is meta gold, and the
+## run-owns-nothing rule is about a traversal reaching into `GameState`. There is no traversal
+## in this function either way.
+##
+## **The door moved, and this is now called from behind it.** D205 called this from the region
+## screen the instant the offer was pressed, one screen and one whole deck-building session
+## before the run it is a wager on — so the gold was gone if the player then thought better of
+## the deck and walked out. The caller is the deck builder's start (D211), the one moment a run
+## actually begins. Nothing about the transaction changed; what changed is that the player is
+## now committed to the dungeon when it happens.
+##
+## `can_take_debt` is therefore checked twice against different moments — once on the region
+## screen so the fee can be NAMED before it is owed, and once here so it is true when it is
+## taken. That is not redundant, it is the price-before-payment rule (D172) needing both ends.
 func take_debt(dungeon_id: String) -> bool:
 	if not can_take_debt(dungeon_id):
 		return false
