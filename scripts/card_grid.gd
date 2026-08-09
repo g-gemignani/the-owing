@@ -47,6 +47,24 @@ const GAP := 8.0
 ## card name in the catalogue behind a two-digit count — at the row font, and no
 ## wider, because every pixel here comes out of the grid beside it.
 const PANEL_W := 250.0
+## The same panel beside the TABLE view, where it is a readout rather than a drop
+## target and the row beside it is the tightest in the game (D215).
+##
+## Measured, not picked, and the margin that decides it is one this file's own header
+## already names: the widest table row asks 1038px, and the frame's 1248 is 1234 once
+## the list's scrollbar is out. 1234 - 180 - 10 of separation leaves 1044, which the row
+## fits with six to spare. At 200 it does not — the arithmetic says 1024 and the row
+## overflows its own scroll by fourteen pixels, silently, which is how the table row got
+## measured to the pixel in the first place.
+##
+## Names clip harder in it than at `PANEL_W`. That is the trade the width forces, and it
+## is the right way round: the panel answers "what is in the deck", the count and the
+## first word of a name answer it, and the whole card is one right-click away.
+const PANEL_W_TABLE := 180.0
+## The deck scroll's bar, widened from the theme's own. It is the only way to move a
+## twenty-row deck other than the wheel, and at the kit's natural width it is a hard
+## thing to put a cursor on beside a panel this narrow.
+const BAR_W := 14.0
 ## Tall enough that the strip of illustration behind a row is a picture rather than a
 ## smear. `KEEP_ASPECT_COVERED` fills the 234px of row inside the bay's margins from a
 ## 320x240 painting, so the painting renders 175px tall and the row is a horizontal
@@ -111,6 +129,10 @@ class Ctx extends RefCounted:
 	var ledger := false
 	## Nothing is at risk, so levelling is on offer (`collection.gd::_fusing_allowed`).
 	var fusing := false
+	## The card grid is what is beside the deck panel, rather than the table. The panel
+	## is in both views now (D215) and it has to say how a copy gets IN, which is the one
+	## thing that differs: a drag or a double-click there, the row's `+` here.
+	var grid := true
 	var add := Callable()      ## (id: String) -> void
 	var remove := Callable()   ## (id: String) -> void
 	var fuse := Callable()     ## (id: String, steps: int) -> void
@@ -172,8 +194,12 @@ static func tile(flow: Node, id: String, ctx: Ctx) -> Control:
 	var holder := b.get_parent() as Control
 	# The promise, in the words `tests/tooltip_test.gd` looks for and the player reads:
 	# a gesture nobody is told about is not a feature (`UI.inspect_thumb`'s rule).
-	b.tooltip_text += "\n\n%s — click to see the whole card%s" % [
-		card.name, "" if ctx.ledger else ", double-click or drag it to the deck"]
+	# ...and the LV+ corner is named here as well, because a badge is only discoverable
+	# to somebody who already looked at it. This is the tooltip a player reads while
+	# working out what the grid does with a card (D215).
+	var lv: String = "\nLV+ in the corner levels it." if (ctx.fusing and _levelable(id, card)) else ""
+	b.tooltip_text += "\n\n%s — click to see the whole card%s%s" % [
+		card.name, "" if ctx.ledger else ", double-click or drag it to the deck", lv]
 
 	# A card whose every copy is already committed is still SHOWN — you may want to
 	# read it, or level it — but it is dimmed, because the one thing you cannot do with
@@ -271,10 +297,18 @@ static func _drag_ghost(card: CardData) -> Control:
 ## Whether this card has a level left to buy. `can_fuse` is asked as well as the cap
 ## because the badge is a PRICE TAG: it opens a panel of purchases, and a badge on a
 ## card whose every purchase is refused is a door onto a wall.
+## Whether this card has a level left to buy AT ALL — not whether it can be paid for
+## today (D215).
+##
+## Those were the same test, and that is the bug a player reported as "it is not clear
+## how to evolve a card": the badge is the only levelling control in this view, and it
+## appeared only on cards whose price was already met. A player with no spare copies of
+## anything — which is everyone early on, and everyone again after a fuse — saw a grid
+## with no levelling on it anywhere and no reason to think the game had any. The table
+## view never had this problem: it draws the price button blocked, with the reason on
+## it, so the mechanism is visible before it is affordable.
 static func _levelable(id: String, card: CardData) -> bool:
-	if card.level >= MetaState.max_level(id):
-		return false
-	return MetaState.can_fuse(id)
+	return card.level < MetaState.max_level(id)
 
 ## The one mark this view adds to a card face: it can be levelled, and here is where
 ## you press.
@@ -298,16 +332,26 @@ static func _badge(holder: Control, size: Vector2, id: String, card: CardData,
 	if w <= 0.0:
 		return
 
+	# Blocked is DRAWN, not withheld: a control that only exists once you can afford it
+	# cannot teach anyone that the purchase exists (D215). Greyed and unpressable, with
+	# the reason on the hover — the same treatment, and the same sentence, the table
+	# view's price button has always given it.
+	var blocked: String = MetaState.fuse_blocked_reason(id)
 	var up := Button.new()
 	up.text = "LV+"
 	up.focus_mode = Control.FOCUS_NONE
+	up.disabled = blocked != ""
 	up.add_theme_font_size_override("font_size", maxi(9, int(h * 0.72)))
 	up.add_theme_color_override("font_color", Color(0.72, 0.94, 0.66))
 	up.add_theme_color_override("font_hover_color", Color(0.88, 1.0, 0.82))
-	for state in [["normal", 0.72], ["hover", 0.92], ["pressed", 1.0]]:
+	up.add_theme_color_override("font_disabled_color", Color(0.60, 0.64, 0.58, 0.72))
+	for state in [["normal", 0.72], ["hover", 0.92], ["pressed", 1.0], ["disabled", 0.34]]:
 		var sb := StyleBoxFlat.new()
-		sb.bg_color = Color(0.05, 0.10, 0.05, float(state[1]))
-		sb.border_color = Color(0.50, 0.80, 0.46, float(state[1]))
+		var off: bool = String(state[0]) == "disabled"
+		sb.bg_color = (Color(0.07, 0.07, 0.08, float(state[1])) if off
+			else Color(0.05, 0.10, 0.05, float(state[1])))
+		sb.border_color = (Color(0.42, 0.44, 0.40, float(state[1])) if off
+			else Color(0.50, 0.80, 0.46, float(state[1])))
 		sb.set_border_width_all(1)
 		sb.set_corner_radius_all(int(h * 0.4))
 		sb.set_content_margin_all(0)
@@ -323,9 +367,16 @@ static func _badge(holder: Control, size: Vector2, id: String, card: CardData,
 	# opened, so nobody clicks it to find out what it costs.
 	var one: Dictionary = ctx.price.call(id, 1) if ctx.price.is_valid() else {}
 	var gain: String = card.level_up_text(card.level + 1)
-	up.tooltip_text = "Level %s: %s\nCosts %d copies and %d gold.\nClick for the bulk prices." % [
+	# A blocked badge still quotes the level it is refusing to sell. "Need 4 copies" on
+	# its own is a wall; "need 4 copies, and it would take this to 16 damage" is a goal,
+	# and it is the sentence that makes somebody go and earn the copies.
+	up.tooltip_text = "Level %s: %s\n%s" % [
 		card.name, gain if gain != "" else "no change to its numbers",
-		int(one.get("copies", 0)), int(one.get("gold", 0))]
+		("Costs %d copies and %d gold.\nClick for the bulk prices." % [
+			int(one.get("copies", 0)), int(one.get("gold", 0))]) if blocked == ""
+		else "Not yet: %s." % blocked]
+	if blocked != "":
+		return
 	up.pressed.connect(func(): _fuse_panel(up, id, ctx))
 
 ## How many copies of this card the deck is asking for, out of how many exist.
@@ -558,10 +609,25 @@ static func fill_deck(bay: PanelContainer, ctx: Ctx) -> void:
 			head.text += "   need %d more" % (MetaState.MIN_DECK_SIZE - size)
 		elif size > MetaState.MAX_DECK_SIZE:
 			head.text += "   over by %d" % (size - MetaState.MAX_DECK_SIZE)
+	# How a copy comes back out, on the header rather than on a line of its own under the
+	# list (D215). That line was 46px of a panel whose scroll had 312px to spend on a
+	# deck 737px long — an eighth of the deck, permanently, to repeat something every row
+	# in the list already says in its own tooltip. A player reported the deck as hard to
+	# scroll, and this is a seventh of the reason.
+	UI.hoverable(head, "%s\n%s" % [
+		"What the run will be dealt from." if ctx.ledger else "What the run will be dealt from, once you start it.",
+		"Right-click a card here to read it." if ctx.ledger
+			else "Click a card here to take one copy back out; right-click to read it."])
 	col.add_child(head)
 
 	var rows := UI.scroll(col)
 	rows.add_theme_constant_override("separation", UITheme.sep(3))
+	# A bar you can actually put a cursor on. The wheel works over the panel and always
+	# did, but the wheel is not the gesture somebody reaches for when the list they can
+	# see is a third of the list they have.
+	var sc := rows.get_parent() as ScrollContainer
+	if sc != null:
+		sc.get_v_scroll_bar().custom_minimum_size.x = UITheme.px(BAR_W)
 
 	var ids: Array = ctx.counts.keys()
 	ids.sort_custom(func(a, b) -> bool:
@@ -577,21 +643,19 @@ static func fill_deck(bay: PanelContainer, ctx: Ctx) -> void:
 		var empty := Label.new()
 		empty.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		empty.add_theme_color_override("font_color", Color(0.62, 0.60, 0.66))
-		empty.text = ("Nothing in the deck yet.\n\nDrag a card here, or double-click it."
-			if not ctx.ledger else "Nothing in the deck.")
+		# The empty panel is the one place the way IN has to be spelled out, and it is not
+		# the same way in both views (D215).
+		if ctx.ledger:
+			empty.text = "Nothing in the deck."
+		elif ctx.grid:
+			empty.text = "Nothing in the deck yet.\n\nDrag a card here, or double-click it."
+		else:
+			empty.text = "Nothing in the deck yet.\n\nUse the + on a card's row."
 		rows.add_child(empty)
 		return
 
 	for id in ids:
 		_deck_row(rows, String(id), ctx)
-
-	if not ctx.ledger:
-		var hint := Label.new()
-		hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		hint.add_theme_font_size_override("font_size", maxi(11, UITheme.font() - 3))
-		hint.add_theme_color_override("font_color", Color(0.58, 0.56, 0.62))
-		hint.text = "Click a card here to take one copy back out."
-		col.add_child(hint)
 
 ## One kind of card in the deck. Clicking it takes a copy back out.
 ##

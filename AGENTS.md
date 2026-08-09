@@ -37,9 +37,11 @@ The loop:
    renamed and deleted from the same bar it loads from (D212). The collection is readable
    two ways off one toggle (D213): a **table** of rows, which is the surface that can put a
    hundred fuse prices in one column, and **cards**, a grid of the real painted faces you
-   drag into a deck bay beside them. Both are the same screen, the same filter and the same
-   selection — only the drawing and the gesture differ. A hundred cards need finding as well
-   as reading, so the filter bar carries a **fuzzy search** (D214): near enough on the name
+   drag into a deck bay beside them. The deck panel sits beside **both** views (D215), because a
+   stepper says how many of one card and only the panel says what the whole deck is. Both are
+   the same screen, the same filter and the same selection — only the drawing and the gesture
+   differ. A hundred cards need finding as well as reading, so the filter bar carries a
+   **fuzzy search** (D214): near enough on the name
    is enough, and a word no name holds is looked for in what the cards *do*. Cards
    interact on purpose: a card can make the NEXT one better, or be worth more for what you
    already spent this turn — the earlier cards played, the debuff stacks on the target, the
@@ -833,6 +835,24 @@ These are failure modes that have actually bitten this project. Treat each as a 
   of the four isometric terrains had never been photographed at all, and Settings had no
   row until somebody went looking for it (D122, D123). Before trusting "the captures look
   fine", check what the capture list does not contain.
+
+  **And a list of STATES rots the same way a list of screens does (D217).** Every iso
+  capture photographs a floor being *walked*, and a walk never stops at an offer — so the
+  row of buttons that carries push, answer, break-away and the stone had never been in a
+  frame. Behind that gap: a toll offers three answers on one tile, both of the screen's
+  no-button selectors take the first match, and the game **could only ever say the lowest
+  of the three numbers.** Nearly half the riddles in the game were unanswerable, through
+  three shipped features and a green suite. When a feature adds an interaction, ask which
+  capture will contain it — and if the honest answer is *none*, that is the row to add
+  before the feature is called done.
+- **A UI that filters on a NAME goes quiet when a fifth thing arrives; one that filters on a
+  PROPERTY follows it.** The act row read `action == "avoid"` from the day the slip was the
+  only non-movement offer, and three kinds added later were simply never drawn (D217). The
+  same shape as the avoid calibration that silently matched nothing when every dungeon
+  became iso (D88) and the hand-kept art list of D89. The rule is now "anything the model
+  calls an action", so the next kind is offered on the day it is added — and the test
+  asserts against the model's own option list rather than against a list of names, because a
+  guard kept by hand goes stale exactly like the code it guards.
 - **Two decisions can each be right and still collide, and the seam is where nobody
   looks.** The backdrop brief asks for framing elements at the left and right thirds;
   combat spread enemies across the full width, which puts two of them at exactly the
@@ -1094,6 +1114,22 @@ These are failure modes that have actually bitten this project. Treat each as a 
   double-click-to-add can never fire (D213). The first press starts a 220ms timer instead.
   **Before adding a second meaning to a click, check what the first meaning puts on top of
   the thing being clicked.**
+
+- **A refusal is part of the rule that refuses; a screen must not guess why.** Every
+  denied card printed "Not enough energy" because `play_card` returned a bare `""` and the
+  screen filled in the reason. Right most of the time, and absurd in the one case a player
+  cannot reason about — a card showing cost 0 refused beside a full energy pool, because
+  paying its HP cost would have been lethal (D216). `CombatEngine.why_not()` generates the
+  reason where the rule lives, and `can_play` is *defined as* `why_not() == ""` rather than
+  written beside it, so the two cannot drift.
+
+- **A diffed widget is a cache, and every number on it needs an entry in the invalidator.**
+  The combat hand is diffed rather than rebuilt so cards can animate; `relabel` re-read the
+  damage, the Block and the hover text, and not the cost. A discount landing left the price
+  stale in both directions, and the player got a card advertising 0 that the engine charged
+  full (D216). **When a face quotes live state, list every figure on it in the function that
+  re-reads them** — and verify the guard by breaking the fix, or a regression test nobody
+  has seen fail is a test whose subject nobody has confirmed it can see.
 
 - **A layout that only looks correct because everything in it is one colour is not known
   to be correct.** The deck bay's rows overflowed their slots by 18px from the day they were

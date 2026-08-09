@@ -811,10 +811,16 @@ func _on_power_pressed() -> void:
 func _on_card_pressed(card: CardData) -> void:
 	var before := _snapshot_vitals()
 	var blow := _blow_of(card)
+	# The reason is ASKED FOR, not assumed. This line used to read "Not enough energy for
+	# %s" on every refusal, which is a guess that happens to be right most of the time —
+	# and is spectacularly wrong on a card with an HP cost, where it denies a card
+	# showing a cost of 0 while the energy pool is full (D216). `why_not` is the rule
+	# itself talking.
+	var why := eng.why_not(card)
 	var msg := eng.play_card(card)
 	if msg == "":
 		Audio.play("ui_denied")
-		_log("Not enough energy for %s." % card.name)
+		_log(why if why != "" else "%s cannot be played right now." % card.name)
 		return
 	# pick the sound from what the card actually did, so it matches the effect
 	if card.eff_poison() > 0:

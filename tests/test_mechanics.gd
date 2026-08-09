@@ -332,6 +332,40 @@ func _init() -> void:
 	if eD.next_card_discount != 0:
 		fails += 1; print("FAIL the discount survived the card that spent it")
 
+	# ...and a refusal has to say which resource it is short of (D216).
+	#
+	# The reported bug in one setup: a card discounted to cost 0, a full energy pool,
+	# and a refusal — because the card also charges HP and paying it would be lethal.
+	# The rule is right; the screen said "not enough energy" for every denial, so the
+	# one refusal a player cannot reason about was also the one described wrongly.
+	var e_bleed := _fight(cond)
+	var bleed := _card("old_debt")          # cost 1, hp_cost 5
+	e_bleed.energy = 3
+	e_bleed.next_card_discount = 2               # ...so it shows, and charges, 0 energy
+	e_bleed.player.hp = bleed.eff_hp_cost()      # exactly lethal: the rule refuses at <=
+	e_bleed.hand = [bleed]
+	if e_bleed.play_cost(bleed) != 0:
+		fails += 1; print("FAIL the discount did not take %s to 0 energy" % bleed.name)
+	if e_bleed.can_play(bleed):
+		fails += 1; print("FAIL a card whose HP cost would kill the player was playable")
+	var why := e_bleed.why_not(bleed)
+	# The assertion is about WHICH resource is named, not about the phrasing: with a
+	# free card and three energy in the pool, an energy complaint is the wrong answer.
+	if why.find("health") == -1 or why.find("energy") != -1:
+		fails += 1; print("FAIL a lethal HP cost was refused as an energy problem: '%s'" % why)
+	if why.find(str(e_bleed.player.hp)) == -1:
+		fails += 1; print("FAIL the refusal does not quote the health the player has: '%s'" % why)
+	# and the ordinary refusal still names energy
+	var e_energy := _fight(cond)
+	var pricey := _card("brace")
+	e_energy.energy = 0
+	e_energy.hand = [pricey]
+	if e_energy.why_not(pricey).find("energy") == -1:
+		fails += 1; print("FAIL an unaffordable card was not refused for energy: '%s'" % e_energy.why_not(pricey))
+	# `can_play` must stay a reading of `why_not` and not a second copy of the rules
+	if e_energy.can_play(pricey) != (e_energy.why_not(pricey) == ""):
+		fails += 1; print("FAIL can_play and why_not disagree about the same card")
+
 	# payoff: the fourth card of a turn is worth more than the first, and the FACE says so
 	var eP := _fight(cond)
 	var grind := _card("grinding_down")

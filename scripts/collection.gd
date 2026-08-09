@@ -186,17 +186,37 @@ func _build_ui() -> void:
 	note_label.add_theme_color_override("font_color", Color(0.72, 0.86, 0.68))
 	root.add_child(note_label)
 
-	var relic_label := Label.new()
-	relic_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	var names: Array[String] = []
-	for r in MetaState.relic_data():
-		names.append("%s (%s)" % [r.name, r.description])
-	var prefix := ""
-	if GameState.last_relic != "":
-		prefix = "NEW RELIC: %s!    " % GameState.last_relic
-		GameState.last_relic = ""
-	relic_label.text = "%sRelics: %s" % [prefix, ", ".join(names) if not names.is_empty() else "none"]
-	root.add_child(relic_label)
+	# Relics: ONE clipped line of names, with what they do on the hover (D215).
+	#
+	# It used to print every relic's full description inline and wrap. That reads fine
+	# with two relics and is four rows of text with a dozen — on the screen that has
+	# less height to spend than any other in the game, whose whole header stack was cut
+	# to the bone to buy the card list three more rows (D133). A player reported it as
+	# the relics taking too much space, which is exactly what it was.
+	#
+	# What a relic DOES is a paragraph and belongs where paragraphs go: the tooltip, and
+	# the Relics screen that exists for it. What this screen needs is which ones you are
+	# carrying, because that is the part that changes what you build. Nothing at all
+	# when you carry none — an empty line still costs a row of cards.
+	var relics: Array = MetaState.relic_data()
+	var new_relic := GameState.last_relic
+	GameState.last_relic = ""
+	if not relics.is_empty() or new_relic != "":
+		var names: Array[String] = []
+		var told: Array[String] = []
+		for r in relics:
+			names.append(r.name)
+			told.append("%s — %s" % [r.name, r.description])
+		var relic_label := Label.new()
+		relic_label.clip_text = true
+		var prefix := ""
+		if new_relic != "":
+			prefix = "NEW RELIC: %s!    " % new_relic
+		relic_label.text = "%sRelics (%d): %s" % [
+			prefix, names.size(), ", ".join(names) if not names.is_empty() else "none"]
+		UI.hoverable(relic_label, "\n".join(told) if not told.is_empty()
+			else "You are carrying no relics yet.")
+		root.add_child(relic_label)
 
 	# Who you are building against. A boss you cannot know is a boss you cannot
 	# prepare for, and the preparation is the decision this screen exists to ask.
@@ -288,9 +308,18 @@ func _build_ui() -> void:
 
 	# The cards and, beside them, the deck they are going into (D213). One row, because
 	# the deck bay is a DROP TARGET and a target the player has to scroll to find is
-	# not one — it has to be on screen the whole time a card is being dragged. In the
-	# table view the bay is hidden and the list gets the whole width back, which is what
-	# keeps that view exactly the screen it always was.
+	# not one — it has to be on screen the whole time a card is being dragged.
+	#
+	# It is beside BOTH views now (D215). It was hidden in the table one on the argument
+	# that the stepper on each row already says what the deck holds, and that is false in
+	# the way that matters: the stepper says how many of THIS card, one row at a time,
+	# and the question the panel answers is what the whole deck is. A player asked for it,
+	# and the table view is where a twenty-card deck is hardest to hold in your head,
+	# because its rows are the collection's order and not the deck's.
+	#
+	# It is narrower there, and that is measured rather than chosen: the widest table row
+	# asks 1038px of the 1248px frame, so 210px is exactly what is left to give a
+	# companion panel — see `CardGrid.PANEL_W_TABLE`.
 	var bay_row := HBoxContainer.new()
 	bay_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	bay_row.add_theme_constant_override("separation", UITheme.sep(10))
@@ -509,6 +538,13 @@ func _load_deck(deck_name: String) -> void:
 	if name_edit != null:
 		name_edit.text = deck_name
 
+## One copy in or out of the deck — the most-pressed control on the screen.
+##
+## `_refresh_list`, not `_refresh`: a copy changes the deck and the readout above it and
+## nothing else. Rebuilding the whole screen for it threw away and rebuilt the power
+## picker, the deck picker and the filter bar — including the search box, so a player
+## who searched for a card and then added it lost the text field they had been typing
+## in (D215). It also doubled the work under the cursor that D215's other half is about.
 func _adjust(id: String, delta: int) -> void:
 	var cur: int = selection.get(id, 0)
 	var next: int = clampi(cur + delta, 0, MetaState.owned(id))
@@ -516,7 +552,7 @@ func _adjust(id: String, delta: int) -> void:
 		selection.erase(id)
 	else:
 		selection[id] = next
-	_refresh()
+	_refresh_list()
 
 ## Fusing eats copies, so a deck chosen before the fuse can be asking for more of a
 ## card than the collection still holds. `loadout_size` and `build_deck` both clamp,
@@ -571,12 +607,21 @@ func _refresh_list() -> void:
 		c.queue_free()
 	if shown.is_empty():
 		_empty_note()
+	var ctx := _ctx()
+	# The deck panel is in both views, sized for the one it is in (D215).
+	deck_bay.visible = true
+	deck_bay.custom_minimum_size.x = UITheme.px(
+		CardGrid.PANEL_W if _cards_view() else CardGrid.PANEL_W_TABLE)
+	deck_bay.on_drop = Callable() if mode == Mode.LEDGER else ctx.add
+	CardGrid.fill_deck(deck_bay, ctx)
 	if _cards_view():
-		var ctx := _ctx()
 		CardGrid.fill(list_box, shown, ctx)
-		deck_bay.visible = true
-		deck_bay.on_drop = Callable() if mode == Mode.LEDGER else ctx.add
-		CardGrid.fill_deck(deck_bay, ctx)
+		# Levelling is a whole mechanic reachable only from a badge in a card's corner,
+		# so it is said once in words the first time the player is somewhere they could
+		# use it. Same flag as the table view's hint (`_build_fuse_cell`), so nobody is
+		# told twice — only the gesture differs between the two views.
+		if _fusing_allowed() and MetaState.hint_once("first_fuse"):
+			_say("Levelling spends copies AND gold: press LV+ in a card's corner. Deck width and purse, traded for power.")
 		# The row snapper measures the CHILDREN of `list_box` and trims the frame so the
 		# last whole one ends at the bottom edge. In the grid there is one child — the
 		# flow container — and its height is the whole grid, so the measurement says
@@ -584,10 +629,13 @@ func _refresh_list() -> void:
 		# table view left on the frame is taken back off here; `_snap_list_to_rows`
 		# returns early in this view rather than fighting for it.
 		list_bay.add_theme_constant_override("margin_bottom", 0)
-		return
-	deck_bay.visible = false
-	for id in shown:
-		_build_row(id)
+	else:
+		for id in shown:
+			_build_row(id)
+	# The list was just replaced under a cursor that has not moved, and the card the
+	# player is pointing at came back at rest (D215). Waits a frame of its own, so it
+	# measures the layout this build produces rather than the one it replaced.
+	UI.resync_hover(self)
 
 ## What an empty list says for itself. It goes IN the list rather than on the note line
 ## above it, for one reason and it is not tidiness: the note line is written by the
@@ -676,6 +724,7 @@ func _ctx() -> CardGrid.Ctx:
 	var c := CardGrid.Ctx.new()
 	c.ledger = mode == Mode.LEDGER
 	c.fusing = _fusing_allowed()
+	c.grid = _cards_view()
 	c.counts = _run_counts() if c.ledger else selection.duplicate()
 	c.add = func(id: String) -> void:
 		var before: int = int(selection.get(id, 0))

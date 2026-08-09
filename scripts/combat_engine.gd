@@ -497,17 +497,41 @@ func x_energy_for(card: CardData) -> int:
 		return x_energy
 	return maxi(0, energy - play_cost(card))
 
-func can_play(card: CardData) -> bool:
+## Why this card cannot be played right now, in the words the player gets, or "" if
+## it can be.
+##
+## The refusals used to be a bare `false` and the screen guessed the reason: every
+## denial in the game printed "Not enough energy for X". That was right most of the
+## time and wrong in the one case a player is most likely to hit and least able to
+## work out — a card with an HP cost, refused because paying it would kill them, while
+## the card in front of them said it cost 0 and the pool was full. Reported as a card
+## that could not be played for no reason, which is exactly what it looked like.
+##
+## So the reason is generated where the rule lives, and `can_play` is defined in terms
+## of it rather than beside it. Two functions that each decide affordability is the
+## D50 disagreement in a new place: one of them gets a rule added and the other goes on
+## refusing, or explaining, something that is no longer true.
+##
+## Both lines quote the numbers rather than naming the resource, because "not enough
+## health" is a statement a player at 4 HP holding a card that costs 5 cannot argue
+## with, and "you cannot play that" is one they can only test by clicking.
+func why_not(card: CardData) -> String:
 	# play_cost / eff_hp_cost, not the authored fields: levels buy both of these
 	# DOWN and a discount buys the first one down again, and a card the player has
 	# been promised is cheaper has to actually be cheaper at the one place the game
 	# checks whether it can be afforded.
-	if play_cost(card) > energy:
-		return false
+	var cost := play_cost(card)
+	if cost > energy:
+		return "%s needs %d energy and you have %d." % [card.name, cost, energy]
 	# an HP cost must never be lethal: paying it has to leave you alive
-	if card.eff_hp_cost() > 0 and player.hp <= card.eff_hp_cost():
-		return false
-	return true
+	var hp_cost := card.eff_hp_cost()
+	if hp_cost > 0 and player.hp <= hp_cost:
+		return "%s costs %d health and you have %d — paying it would kill you." % [
+			card.name, hp_cost, player.hp]
+	return ""
+
+func can_play(card: CardData) -> bool:
+	return why_not(card) == ""
 
 ## Fire every relic effect matching `when`. Returns a log line, or "".
 ##

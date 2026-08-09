@@ -37,13 +37,16 @@ func _ready() -> void:
 	await _check_deck_row_removes()
 	await _check_drag_refused_when_spent()
 	await _check_badge_opens_prices()
+	await _check_badge_shows_when_it_cannot_be_paid()
+	await _check_hover_survives_an_add()
+	await _check_relics_stay_one_line()
 	await _check_toggle_rebuilds()
 	await _check_ledger_is_read_only()
 
 	MetaState.writes_disabled = true
 	_purge()
 	if _fails == 0:
-		print("CARD GRID TEST: PASS (grid builds, both add gestures work, the bay removes, the badge prices, the toggle rebuilds, a run is read-only)")
+		print("CARD GRID TEST: PASS (grid builds, both add gestures work, the bay removes, the badge prices and is always visible, the hover survives an add, the relics stay one line, the toggle rebuilds, a run is read-only)")
 	else:
 		print("CARD GRID TEST: FAIL (%d)" % _fails)
 	get_tree().quit()
@@ -252,6 +255,172 @@ func _check_badge_opens_prices() -> void:
 		_fail("pressing the level badge on %s opened no priced buttons" % id)
 	await _drop(inst)
 
+## A card that CANNOT be levelled today still shows the badge, greyed, with the reason
+## on it (D215).
+##
+## The badge is the only levelling control in this view, and it used to appear only on
+## cards whose price was already met — so a player holding one copy of everything saw a
+## grid with no levelling anywhere and no reason to believe the game had any. Reported
+## as "it is not clear how to evolve a card". The card is starved here rather than found
+## in that state, because a stocked collection is exactly the one where every card can
+## be levelled and the bug is invisible.
+func _check_badge_shows_when_it_cannot_be_paid() -> void:
+	var id := _some_id()
+	var gold := MetaState.gold
+	var had: int = MetaState.collection[id]["count"]
+	MetaState.gold = 0
+	var inst := await _screen(true)
+	var badge := _badge_for(inst, id)
+	if badge == null:
+		_fail("no level badge on %s once it cannot be afforded — the mechanic is invisible" % id)
+	else:
+		if not badge.disabled:
+			_fail("the level badge on %s is pressable with no gold to pay for it" % id)
+		var why: String = MetaState.fuse_blocked_reason(id)
+		if why != "" and badge.tooltip_text.find(why) == -1:
+			_fail("the blocked badge on %s does not say why: '%s'" % [id, badge.tooltip_text])
+		if badge.tooltip_text.find("Level ") == -1:
+			_fail("the blocked badge on %s does not say what the level would buy" % id)
+	await _drop(inst)
+	MetaState.gold = gold
+	MetaState.collection[id]["count"] = had
+
+## The card under the cursor is still enlarged after a copy goes into the deck (D215).
+##
+## Adding rebuilds the grid, and Godot only works out what the mouse is over when the
+## mouse MOVES — so the card just double-clicked came back at rest with the cursor still
+## on it, and stayed flat until the player moved or clicked again. They reported it as
+## the enlarge getting stuck.
+##
+## Driven through real motion events rather than by calling the hover handler, because
+## the fix is precisely that the ENGINE's idea of what is hovered is put right: setting
+## the scale by hand passes a test like this and leaves a card that never shrinks.
+func _check_hover_survives_an_add() -> void:
+	# Its own SubViewport, with input handled locally: the pointer has to be somewhere
+	# definite for any of this to mean anything, and pushing motion at the headless
+	# window's viewport does not reach the screen's controls.
+	var vp := SubViewport.new()
+	vp.size = Vector2i(1280, 720)
+	vp.handle_input_locally = true
+	get_tree().root.add_child(vp)
+	SettingsState.card_view = true
+	var inst := (load("res://scenes/Collection.tscn") as PackedScene).instantiate() as Control
+	vp.add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	# A face the pointer can actually reach: the grid is a hundred cards inside a scroll,
+	# and one that is off the bottom of the frame is clipped — the hit test still says
+	# the cursor is inside its rect, and the engine quite rightly disagrees.
+	var face := _visible_face(inst, Rect2(Vector2.ZERO, Vector2(vp.size)))
+	if face == null:
+		_fail("no card face inside the frame to hover")
+		vp.queue_free()
+		await get_tree().process_frame
+		return
+	var id := String(face.get_parent().get_meta("card_id"))
+	var at: Vector2 = face.get_global_rect().get_center()
+	_motion(vp, at)
+	await get_tree().process_frame
+	var grown: float = (face.get_parent() as Control).scale.x
+	if grown <= 1.0:
+		_fail("hovering a card face does not enlarge it — this suite cannot see the bug it is for")
+		vp.queue_free()
+		await get_tree().process_frame
+		return
+
+	_click(face, true)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var back := _face_for(inst, id)
+	if back == null:
+		_fail("the card left the grid when a copy went into the deck")
+		vp.queue_free()
+		await get_tree().process_frame
+		return
+	if back == face:
+		_fail("the grid was not rebuilt, so this check is no longer testing anything")
+	if not is_equal_approx((back.get_parent() as Control).scale.x, grown):
+		_fail("the card under the cursor came back flat after an add (scale %.2f, want %.2f)" % [
+			(back.get_parent() as Control).scale.x, grown])
+
+	# ...and it must still let go. A card enlarged without the engine agreeing it is
+	# hovered never gets its `mouse_exited`, and stays big for the rest of the session.
+	var other: Button = null
+	for f in _faces(inst):
+		if f != back:
+			other = f
+			break
+	if other != null:
+		_motion(vp, other.get_global_rect().get_center())
+		await get_tree().process_frame
+		if (back.get_parent() as Control).scale.x > 1.0:
+			_fail("the card stayed enlarged after the cursor jumped to another one")
+	vp.queue_free()
+	await get_tree().process_frame
+
+## The relics line is one clipped line with the detail on its hover (D215).
+##
+## It used to print every relic's full description inline and wrap, which is four rows
+## of text on the screen with the least height in the game and was reported as the
+## relics taking too much space. Checked with a large handful owned, because two relics
+## wrap to one line and the bug does not exist yet.
+func _check_relics_stay_one_line() -> void:
+	var had: Array = MetaState.relics.duplicate()
+	for rid in MetaState.RELIC_CATALOG:
+		if MetaState.relics.size() >= 10:
+			break
+		if not MetaState.relics.has(rid):
+			MetaState.relics.append(rid)
+	var inst := await _screen(true)
+	var line: Label = null
+	for c in _controls(inst):
+		var l := c as Label
+		if l != null and l.text.find("Relics (") != -1:
+			line = l
+			break
+	if line == null:
+		_fail("the Cards screen no longer says which relics are carried")
+	else:
+		if not line.clip_text or line.autowrap_mode != TextServer.AUTOWRAP_OFF:
+			_fail("the relics line wraps again — it is a header, not a paragraph")
+		if line.get_line_count() > 1:
+			_fail("the relics line is %d lines tall" % line.get_line_count())
+		var first := load(MetaState.RELIC_CATALOG[MetaState.relics[0]]) as RelicData
+		if first != null:
+			if line.text.find(first.description) != -1:
+				_fail("a relic's description is inline on the header again")
+			if line.tooltip_text.find(first.description) == -1:
+				_fail("the relics line does not explain itself on hover: '%s'" % line.tooltip_text)
+	await _drop(inst)
+	MetaState.relics = had
+
+## The first card face wholly inside `frame`, so a gesture aimed at it lands.
+func _visible_face(inst: Control, frame: Rect2) -> Button:
+	for b in _faces(inst):
+		if frame.encloses(b.get_global_rect()):
+			return b
+	return null
+
+## The LV+ badge on a given card, or null.
+func _badge_for(inst: Control, id: String) -> Button:
+	var face := _face_for(inst, id)
+	if face == null:
+		return null
+	for c in face.get_parent().get_children():
+		var b := c as Button
+		if b != null and b.text == "LV+":
+			return b
+	return null
+
+## Move the real pointer, so the engine updates what it thinks is hovered.
+func _motion(vp: Viewport, to: Vector2) -> void:
+	var m := InputEventMouseMotion.new()
+	m.position = to
+	m.global_position = to
+	vp.push_input(m)
+
 ## Switching the view redraws the screen once, keeps the deck, and puts the other view
 ## up. Rebuilt-not-refreshed is what this is really guarding: `_build_ui` appends, so a
 ## toggle that forgot to tear down would draw a second whole screen over the first.
@@ -276,8 +445,26 @@ func _check_toggle_rebuilds() -> void:
 		_fail("the view toggle did not change the view")
 	if int(inst.selection.get(id, 0)) != 2:
 		_fail("switching views lost the deck being built")
-	if inst.deck_bay != null and inst.deck_bay.visible:
-		_fail("the deck bay is still on screen in the table view, where the stepper is the way in")
+	# The deck panel is beside BOTH views now (D215), narrower in the table one — where
+	# the row is measured to the pixel and 180 is what there is room for.
+	if inst.deck_bay == null or not inst.deck_bay.visible:
+		_fail("the deck panel is missing from the table view")
+	elif inst.deck_bay.size.x > UITheme.px(CardGrid.PANEL_W_TABLE) + 1.0:
+		_fail("the deck panel is %.0fpx in the table view, where the row leaves room for %.0f" % [
+			inst.deck_bay.size.x, UITheme.px(CardGrid.PANEL_W_TABLE)])
+	else:
+		# ...and the row beside it still fits. This is the assertion that catches a panel
+		# widened later: the overflow is silent, and the price is a clipped fuse price.
+		var widest := 0.0
+		for c in _controls(inst):
+			var h := c as HBoxContainer
+			if h == null or h.get_child_count() < 4:
+				continue
+			if h.get_combined_minimum_size().x > h.size.x + 1.0 and h.size.x > widest:
+				widest = h.size.x
+				_fail("a table row wants %.0fpx and has %.0f beside the deck panel" % [
+					h.get_combined_minimum_size().x, h.size.x])
+				break
 	var titles := 0
 	for c in _controls(inst):
 		if c is Label and (c as Label).text.begins_with("Cards — "):

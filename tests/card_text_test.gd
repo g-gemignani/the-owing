@@ -73,6 +73,7 @@ func _ready() -> void:
 	# what breaks, and a starter deck contains none of them.
 	await _check_every_card()
 	await _check_live_hand()
+	await _check_cost_tracks_discount()
 	# ...and again at the size real play reaches, which is not the size combat deals.
 	# LAST, deliberately: it grants relics and puts a fused card in the collection, so
 	# anything that wants the plain starter state has to run before it.
@@ -671,6 +672,76 @@ func _check_large_hand() -> void:
 
 ## The run deck the collection makes, at the levels the collection holds — the same
 ## thing the deck builder hands to a run.
+## The cost badge on a card already in hand tracks a discount arriving and leaving —
+## D216, and the reported bug in one sentence.
+##
+## The combat screen DIFFS its hand rather than rebuilding it, which is what lets a
+## card animate; the price of that is a face whose numbers have to be re-read by hand,
+## and `relabel` re-read the damage, the Block and the hover and not the cost. So a
+## card sitting in hand when a discount landed went on advertising its full price, and
+## worse, a card DEALT while the discount stood went on advertising the reduced one
+## after the next card spent it. That second state is what gets reported: a card
+## reading 0 that the engine refuses, with a full-looking pool, because the discount
+## it is still showing was consumed two clicks ago.
+##
+## Asserted against `eng.play_cost` rather than against a number, because the claim is
+## that the face and the rule agree — which is D50 on the one figure the player reads
+## before spending anything. A hard-coded expectation would pass a face that agreed
+## with the test and not with the game.
+func _check_cost_tracks_discount() -> void:
+	GameState.select_dungeon(Balance.DUNGEONS[0])
+	GameState.enter_dungeon(_collection_deck())
+	GameState.pending = {"type": GameState.NodeType.COMBAT}
+	GameState.combat_state = {}
+	var inst := (load("res://scenes/Combat.tscn") as PackedScene).instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	# Three passes over the SAME widgets, which is the whole point: none of them may be
+	# rebuilt between the states, or the diffing this is about is not being exercised.
+	for phase in [["no discount", 0], ["a discount standing", 1], ["the discount spent", 0]]:
+		inst.eng.next_card_discount = int(phase[1])
+		inst._refresh()
+		await get_tree().process_frame
+		var checked := 0
+		for card in inst.eng.hand:
+			var holder: Control = inst.card_widgets.get(card)
+			if holder == null or not is_instance_valid(holder):
+				continue
+			var badge: Label = holder.get_meta("cost_label", null)
+			if badge == null:
+				continue
+			checked += 1
+			var want: int = inst.eng.play_cost(card)
+			if int(badge.text) != want:
+				_fails += 1
+				print("FAIL with %s, %s shows cost %s and would be charged %d" % [
+					phase[0], card.name, badge.text, want])
+				break
+		if checked == 0:
+			_fails += 1
+			print("FAIL no card in hand exposed a cost badge to check under %s" % phase[0])
+	# ...and a card the discount takes to nothing has to be PLAYABLE at an empty pool,
+	# which is the other half of the same report. The rule already allowed it; nothing
+	# asserted that it did, and the stale badge made it look as though it did not.
+	inst.eng.energy = 0
+	inst.eng.next_card_discount = 9
+	var freebie: CardData = null
+	for card in inst.eng.hand:
+		if card.eff_hp_cost() == 0:
+			freebie = card
+			break
+	if freebie == null:
+		_fails += 1
+		print("FAIL the dealt hand holds no card without an HP cost to test a free play with")
+	elif not inst.eng.can_play(freebie):
+		_fails += 1
+		print("FAIL %s discounted to %d energy was refused on an empty pool: '%s'" % [
+			freebie.name, inst.eng.play_cost(freebie), inst.eng.why_not(freebie)])
+	inst.queue_free()
+	await get_tree().process_frame
+
 func _collection_deck() -> Array[CardData]:
 	var deck: Array[CardData] = []
 	for id in MetaState.collection:

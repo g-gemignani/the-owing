@@ -130,14 +130,25 @@ const FLIP := "_flip"
 ## On-screen height of each sprite, as a multiple of the tile's height. A sprite is
 ## anchored by its FEET — horizontally by its own stand point, measured from the art
 ## (`IsoFooting.offset`), which is why only a height is needed here.
+## Every entry rose in D217, and the RELATIONSHIPS between them did not: the whole table is
+## the old one x1.13, with treasure and wander taking a further nudge on top because they
+## were the two that actually read as miniatures — a chest at 1.7 stood barely knee-high on
+## its own tile, and a wanderer at 1.6 was smaller than the thing it is meant to make you
+## walk around. The rankings below are load-bearing (see the hero note) and scaling them
+## uniformly is what keeps a retune from quietly becoming a redesign.
+##
+## Sized against the TILE and not against each other, which is why they could all drift
+## small together without any one of them looking wrong beside its neighbour. The floor is
+## 116x58 unscaled, so a 1.7 chest occupied ~99px of a 720px window: correct by the table
+## and too small to read as a thing you walk up to.
 const SPRITE_H := {
-	"combat": 1.95, "elite": 2.15, "boss": 2.15,
-	"shop": 1.9, "rest": 1.9, "event": 1.9, "treasure": 1.7,
-	"wander": 1.6,
+	"combat": 2.20, "elite": 2.45, "boss": 2.45,
+	"shop": 2.15, "rest": 2.15, "event": 2.15, "treasure": 2.05,
+	"wander": 1.95,
 	# The hero is a person, and the armoured brutes she meets are not: shorter than a
 	# combat and taller than a spider is the whole reading, and it has to survive the
 	# fact that she is drawn last and so never occluded.
-	"hero": 1.95,
+	"hero": 2.20,
 }
 ## Wanderer design count lives in `Balance.ISO_WANDERERS` — the manifest lists one
 ## painted file per design and cannot preload this script to read it (D122).
@@ -201,6 +212,11 @@ const PAD_INSET := 18.0
 ## a hunter). Kept as buttons on every platform on purpose — a price you pay in HP is a
 ## decision and belongs in words, where the pad only says which way.
 const ACT_BUTTON := Vector2(300.0, 46.0)
+## ...and the width the other three use. A toll puts THREE buttons in this row at once, and
+## three of the above overflow a 1280px window; these labels are short ("↘  Answer: 7") and
+## a Button grows past its minimum to fit its own text anyway, so this is a floor and not a
+## size. Same height, because a row of buttons at two heights reads as two rows.
+const ACT_COMPACT_W := 150.0
 
 ## Movement keys, bound SCREEN-relative (D87).
 ##
@@ -1977,22 +1993,46 @@ func _refresh() -> void:
 				in [TraversalIso.STAIR, TraversalIso.KEY]
 		b.add_theme_color_override("font_color", COL_REACH if notable else STAT_INK)
 
-	# Everything on offer that is NOT a direction. One kind so far: paying HP to squeeze
-	# past a fight instead of having it. These keep their words because the price is the
-	# whole decision, and they sit UNDER the floor where a decision is read, not on the pad
-	# where the thumb is.
+	# Everything on offer that is NOT a step. FOUR kinds, not one — and the missing three
+	# are D217 (see DESIGN.md), because this row read `!= "avoid"` from the day the slip was
+	# the only non-movement offer in the game and never learned about the three added after
+	# it. What that cost, counted over 400 generated Maw floors:
+	#
+	#     answer   223 reachable, 446 NOT — and of 223 riddles the right number could
+	#              be picked in 100. A toll offers three answers on ONE tile in ONE
+	#              direction, and both selectors take the FIRST match, so the game
+	#              would only ever say the lowest of the three.
+	#     shrine   280 reachable, 830 NOT — the reachable ones are the tile you are
+	#              STANDING on, so the stone worked only if you guessed that clicking
+	#              your own feet was a thing you could do.
+	#     push     reachable, but through a wordless arrow key: the pad cannot say
+	#              "push at the mark" and the hint line is the only thing that does.
+	#
+	# So the rule is now the honest one — **anything the model calls an action gets a
+	# button** — rather than a list of the actions that existed when this was written. A
+	# fifth kind added later is offered by this row on the day it is added.
 	for c in acts_box.get_children():
 		c.queue_free()
 	for i in opts.size():
-		if String(opts[i].get("action", "")) != "avoid":
+		var kind := String(opts[i].get("action", ""))
+		if kind == "":
 			continue
 		var act := Button.new()
 		UITheme.style_button(act)
-		act.custom_minimum_size = Vector2(UITheme.px(ACT_BUTTON.x), UITheme.px(ACT_BUTTON.y))
+		# The slip keeps its full width because its label carries a price and a name; the
+		# others size to their own words, because a toll puts THREE of them in this row and
+		# three 300px buttons do not fit in a 1280px window.
+		act.custom_minimum_size = Vector2(
+			UITheme.px(ACT_BUTTON.x if kind == "avoid" else ACT_COMPACT_W),
+			UITheme.px(ACT_BUTTON.y))
 		act.text = String(opts[i]["label"])
 		act.focus_mode = Control.FOCUS_NONE
 		act.pressed.connect(_on_pick.bind(i))
-		UI.hoverable(act, "Shake it off instead of fighting it. It costs a turn, and the price rises with each one.")
+		# A fifth action kind reaches this row the day it is added and has no sentence here
+		# yet; it gets a working button with no tooltip rather than an empty hover box.
+		var tip := _act_tip(kind, opts[i])
+		if tip != "":
+			UI.hoverable(act, tip)
 		acts_box.add_child(act)
 
 	# The legend teaches the keyboard, so it goes where the pad is not.
@@ -2032,6 +2072,15 @@ func _refresh() -> void:
 	if near > 0:
 		hint = "Something is moving nearby. It takes a step whenever you do." if near == 1 \
 			else "%d things are moving nearby. They take a step whenever you do." % near
+		# ...and the question is APPENDED rather than dropped (D217). A thing walking toward
+		# you is the more urgent fact and keeps the front of the line, but a toll is a one-shot
+		# wager — answer wrong and it costs HP and never asks again — and the row underneath
+		# is at that moment showing three numbered buttons. Ranked below a threat, the question
+		# they answer simply vanished, so the screen asked the player to pick a number without
+		# telling them what for. A tooltip is not the answer either: the pad exists because
+		# some of these players have no pointer to hover with.
+		if asked_here != "":
+			hint += "  %s" % asked_here
 	elif asked_here != "":
 		hint = asked_here
 	elif door_here:
@@ -2078,6 +2127,46 @@ func _refresh() -> void:
 	elif not last:
 		hint = "A room opens up as you enter it; a passage shows you nothing. The stairs down are somewhere on this floor."
 	hint_label.text = hint
+
+## What pressing this button will actually do, in the sentence the player needs BEFORE they
+## press it (D217).
+##
+## The complaint that produced this was two things at once — the offers had no buttons, and
+## the words they did have said what the gesture IS ("Push at the mark") rather than what it
+## COSTS or gives. Every line here names the price, because the price is the decision; the
+## label names the gesture and this names the consequence.
+##
+## Read out of `Balance` rather than written as numbers, so a tooltip cannot go stale the
+## way a restated constant does — the shrine's HP bite and the toll's forfeit are the same
+## figures `_on_pick` will charge a moment later.
+func _act_tip(kind: String, o: Dictionary) -> String:
+	match kind:
+		"avoid":
+			return "Shake it off instead of fighting it. It costs a turn, and the price rises with each one."
+		"shrine":
+			# The stone's own offer, plus what it takes. `shrine_line` is what the hint
+			# line already says; the second sentence is what the hint line cannot fit.
+			return "%s It asks %d HP, and pays %d gold when you reach the stairs." % [
+				Balance.shrine_line(String(o.get("state", ""))),
+				Balance.shrine_hp_cost(GameState.max_hp),
+				Balance.shrine_gold(GameState.dungeon)]
+		"answer":
+			# The question comes FIRST, because a button reading "Answer: 2" is meaningless
+			# without it. Said plainly after, because D186 made this a WAGER and a wager the
+			# player cannot price is a coin flip: one guess, and the wall stays shut for the
+			# rest of the floor if it is wrong.
+			var tv := GameState.traversal as TraversalIso
+			var asked := ""
+			if tv != null:
+				asked = Balance.toll_text(
+					String(tv.pockets[int(o["pocket"])].get("toll", "")), tv.terrain)
+			return "%s\nSay this number. Right, and the wall opens. Wrong, and it costs %d HP and it does not ask again." % [
+				asked, Balance.toll_wrong_cost(GameState.max_hp)]
+		"push":
+			if bool(o.get("needs_key", false)):
+				return "A door, not a wall. Opening it spends one of your keys — you have %d." % GameState.keys
+			return "There is a mark on this stone. Push it open and take what the floor was keeping behind it."
+	return ""
 
 func _on_pick(i: int) -> void:
 	var tv := GameState.traversal as TraversalIso

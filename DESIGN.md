@@ -202,6 +202,9 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D211** | [The debt was a purchase on the wrong screen, so it became a door](#d211--the-debt-was-a-purchase-on-the-wrong-screen-so-it-became-a-door) |
 | **D212** | [Saving a deck was one press and unsaving one was impossible, so the bar grew until it left the screen](#d212--saving-a-deck-was-one-press-and-unsaving-one-was-impossible-so-the-bar-grew-until-it-left-the-screen) |
 | **D213** | [A hundred cards were a hundred rows of text, and a card game's cards are pictures](#d213--a-hundred-cards-were-a-hundred-rows-of-text-and-a-card-games-cards-are-pictures) |
+| **D214** | [A hundred cards and no way to ask for one by name](#d214--a-hundred-cards-and-no-way-to-ask-for-one-by-name) |
+| **D215** | [Three things a player found on the new Cards screen, and none of them were the grid](#d215--three-things-a-player-found-on-the-new-cards-screen-and-none-of-them-were-the-grid) |
+| **D216** | [A card that cost nothing could not be played, and the game gave the wrong reason twice](#d216--a-card-that-cost-nothing-could-not-be-played-and-the-game-gave-the-wrong-reason-twice) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -13901,3 +13904,267 @@ true.
 enough for the longest card name in the game, See It Coming at 14 characters — on a bar that
 was asking 654px of a 1248px frame. `CardSearchTest` re-measures it rather than trusting the
 arithmetic here.
+
+### D215 — Five things a player found on the new Cards screen, and none of them were the grid
+
+D213 put a hundred painted faces on the collection screen. The report back was not about the
+faces: the relics took too much space, it was not clear how to level a card, the card being added
+to the deck "got stuck until I pressed it again", the deck itself was hard to scroll, and it
+should be beside the table view too. Five faults, one screen, and every one of them was true
+before the grid and only became visible with it.
+
+**The relics were a paragraph pretending to be a header.** The line printed every relic's name
+AND its full description, wrapped. Measured at the width the screen has (1248px, scale 1.0):
+
+| relics carried | old line | new line |
+|---|---|---|
+| 3 | 1 line, 23px | 1 line, 23px |
+| 5 | 2 lines, 49px | 1 line, 23px |
+| 10 | 4 lines, 101px | 1 line, 23px |
+| 30 (all of them) | 9 lines, 231px | 1 line, 23px |
+
+A grid row is 148px of card plus its footer and gap, about 176px. So a full relic collection was
+eating more than a whole row of cards, and ten relics — an ordinary mid-game state — cost over
+half of one, on the screen whose header stack D133 cut to the bone to buy the list three more
+rows. It is now the names, clipped to one line, with a count in front and every description on
+the hover. What a relic DOES is a paragraph and there is a whole screen for paragraphs; what
+this screen needs is which ones you are carrying, because that is the part that changes what you
+build. At thirty relics the names themselves overrun the line and clip — the count still leads
+and the tooltip still has all of it, which is the right failure.
+
+**Levelling was invisible to exactly the players who needed it.** The LV+ badge is the only
+levelling control in the grid view, and it was drawn only when `MetaState.can_fuse(id)` — that
+is, only on cards whose price in copies AND gold was already met. So a player early on, or any
+player just after a fuse, saw a grid with no levelling on it anywhere and nothing to suggest the
+game had any. The table view never had this problem: it draws the price button blocked, with
+the reason written on it, so the mechanism is visible long before it is affordable.
+
+Same treatment now. The badge appears whenever the card has a level left to buy, greyed and
+unpressable when it cannot be paid for, with the reason on the hover — and it still quotes what
+the level would give, because "need 4 copies" alone is a wall and "need 4 copies, and it takes
+this to 16 damage" is a goal. The face's own tooltip names the badge as well, since a mark in a
+card's corner is only discoverable to somebody already looking at it, and the first-fuse hint
+now fires in this view too, sharing its flag with the table's so nobody is told twice.
+
+**The "stuck" card was the hover, and the cause is an engine rule.** Godot works out what the
+mouse is over only when the mouse MOVES. Adding a copy rebuilds the grid, so the card that was
+just double-clicked is freed and a new one is built in its place under a cursor that has not
+moved — and the new one is at rest. Reproduced exactly: hover a face, scale 1.45; double-click
+it; the card comes back at scale 1.00 with the pointer still inside its rect; nudge the mouse
+one pixel and it is 1.45 again. From the player's chair that is a card that stopped responding
+until they pressed it again.
+
+The first fix was to set the hover state directly on the new face, and it is worth writing down
+because it looks right and is worse than the bug. The engine's own bookkeeping would still say
+nothing is hovered, so moving from that card straight onto another in one motion event would
+enlarge the new one and never shrink the old — a card that fails to grow becomes a card that
+never stops. `UI.resync_hover` pushes a zero-distance mouse motion instead, one frame after the
+rebuild (the new controls have no rect until their containers sort). Everything then happens
+through the path a real twitch takes, so entering and leaving both work: verified by jumping the
+cursor straight from the rebuilt card to another one and watching the first let go.
+
+While in there, `_adjust` — the most-pressed control on the screen — was calling the full
+`_refresh`, which threw away and rebuilt the power picker, the deck picker and the filter bar
+for a change that only affects the deck and the readout above it. That is also how adding a card
+destroyed the search box you had just typed into (D214). It calls `_refresh_list` now.
+
+**The guards.** All three are runtime claims about a built tree, so they are in `CardGridTest`:
+a starved card still shows a disabled badge that says why and what the level would buy; the
+relics line is one clipped line with the descriptions on its hover and not in its text; and the
+hover check drives real `InputEventMouseMotion` through a `SubViewport` rather than calling the
+handler, because the whole point of the fix is that the ENGINE's idea of what is hovered is put
+right — setting the scale by hand passes a naive test and ships the never-shrinks bug. Verified
+by reinstating: without `resync_hover` the suite prints *"the card under the cursor came back
+flat after an add (scale 1.00, want 1.45)"*.
+
+One thing the hover check had to learn: the face it hovers must be wholly inside the frame. The
+grid is a hundred cards in a scroll, and a card off the bottom of the viewport still passes a
+`Rect2.has_point` test against the cursor while the engine — quite correctly — refuses to
+consider it hovered.
+
+**The deck panel is beside both views now, and it is 180px wide in the table one.** It was
+hidden in the table view on the argument that the stepper on each row already says what the deck
+holds. That is false in the way that matters: a stepper says how many of THIS card, one row at a
+time, and the question the panel answers is what the whole deck IS. The table view is also where
+a twenty-card deck is hardest to hold in your head, because its rows are in the collection's
+order and never the deck's. A player asked for it.
+
+The width is measured and the margin is thin. The widest table row asks 1038px; the 1248px frame
+is 1234 once the list's own scrollbar is out; 1234 - 180 - 10 of separation leaves 1044, which
+the row fits with six to spare. At 200px it does not — 1024, and the row overflows its own scroll
+by fourteen pixels, silently. `CardGridTest` asserts both halves now: the panel is on screen in
+the table view, it is no wider than `PANEL_W_TABLE`, and no row beside it wants more width than
+it has. Names clip harder in the narrow panel, which is the trade the arithmetic forces and the
+right way round — the count and the first words answer "what is in the deck", and the whole card
+is one right-click away.
+
+**"Hard to scroll the cards in the deck", measured.** The panel could always be scrolled — the
+wheel works over it, and the bar was there — so the complaint was really about how little of the
+deck it showed. With twenty kinds in the deck, 737px of rows:
+
+| | scroll height | rows visible | panel furniture |
+|---|---|---|---|
+| before | 312px | 8.5 of 20 | 89px |
+| after, grid view | 355px | 9.6 of 20 | 46px |
+| after, table view | 388px | 10.5 of 20 | 46px |
+
+The 43px came from one line: *"Click a card here to take one copy back out."*, sitting under the
+list, repeating what every row in it already says in its own tooltip and costing an eighth of the
+visible deck to do it. It is on the header's hover now. The scrollbar also got a 14px minimum
+width — the wheel was never the problem, but the wheel is not what somebody reaches for when the
+list they can see is half the list they have.
+
+Both are half-measures against the real constraint, which is that this screen's header stack
+leaves the list 401px of a 720px frame, and that is D133's fight rather than this one's. The
+relics line above gives between 26px and 208px of it back depending on how many relics are
+carried, which is the largest single thing any of this changed.
+
+### D216 — A card that cost nothing could not be played, and the game gave the wrong reason twice
+
+Two reports, one afternoon, both about a discount: *"I got a card discounted costing 0 and I
+cannot play it"*, and then *"if a card costs 1 and it's discounted and you do not have energy,
+you cannot play it"*. They read like one bug in the discount arithmetic. They were two bugs,
+neither of them in the arithmetic — `play_cost`, `can_play` and the charge in `play_card` were
+all correct and are unchanged.
+
+#### The engine was right; the screen guessed and the face went stale
+
+**One: every refusal was reported as an energy problem.** `play_card` returns `""` when a card
+cannot be played, and `Combat._on_card_pressed` turned that into `"Not enough energy for %s."` —
+a guess, right most of the time, and *spectacularly* wrong in the one case a player cannot
+reason their way out of. Three cards in the catalogue charge health as well as energy
+(`abyssal_gift` 0/8, `old_debt` 1/5, `exsanguinate` 1/10), and `can_play` refuses them when
+paying would be lethal, which is correct — a cost must not kill you. So a player at 4 HP holding
+Old Debt, discounted to **0 energy**, with **3 energy in the pool**, clicked it and was told they
+did not have enough energy. Reproduced exactly before anything was changed:
+
+    R: old_debt shows cost 0, energy 3, hp 4/60, hp_cost 5 -> can_play=false, play returns ''
+
+The fix is `CombatEngine.why_not(card)`, which returns the reason in the words the player gets,
+and `can_play` is now **defined as** `why_not(card) == ""` rather than sitting beside it. Two
+functions that each decide affordability is D50 in a new place: one gets a rule added and the
+other goes on refusing, or explaining, something that is no longer true. Both messages quote the
+numbers — *"Old Debt costs 5 health and you have 4 — paying it would kill you"* — because that is
+a sentence a player cannot argue with, where *"you cannot play that"* is one they can only test
+by clicking.
+
+**Two: the cost badge on a card already in hand never changed.** This is the one the second
+report is about, and it is the more interesting failure. The combat screen **diffs** its hand
+rather than rebuilding it — that is what lets a card animate at all — and the price of that is a
+face whose numbers must be re-read by hand. `relabel` re-read the damage, the Block and the
+hover text. It did not re-read the cost. So:
+
+| what happened | what the face said | what the engine would do |
+|---|---|---|
+| a discount lands on a card already in hand | its full price | charge the discounted one |
+| that card is dealt *during* the discount, then another card spends it | the discounted price | charge the full one |
+
+The second row is the report. A card showing **0**, an energy pool the player has not touched
+since, and a refusal — because the discount it was still advertising had been consumed two
+clicks earlier. It also explains the first report's framing: the player was not wrong that the
+card said 0, and was not wrong that they had energy.
+
+`relabel` now re-reads `play_cost` and the green "this is cheaper than the card says" tint,
+which has to come **off** as well as go on — a spent discount leaving the price lit as a bargain
+is the same lie in the other direction. And `why_not` rides the card's own hover, live only, so
+the reason is readable before the click rather than after it: the hand already dims what it
+cannot afford, which says *that* and never *why*.
+
+#### What was checked before it was believed
+
+The discount maths was suspected first and cleared by measurement, not by reading: a scratch
+harness played Iron Lung and then a 2-cost card, then forced `energy = 0` with a discount
+standing, and every case was already correct. That is what pointed at the two places above,
+both of which are *reporting* rather than *deciding*.
+
+**The guards.** `tests/test_mechanics.gd` covers the engine half beside the discount checks that
+were already there: the exact reported setup — discounted to 0, pool full, HP exactly lethal —
+must be refused, and the refusal must name health and **not** name energy. It asserts which
+resource is named rather than the phrasing, because with a free card and three energy the energy
+complaint is simply the wrong answer whatever words it uses. It also asserts `can_play` and
+`why_not` still agree, which is what stops them drifting back apart.
+
+`tests/CardTextTest.tscn` covers the face, and it is a scene test because the claim is about a
+widget that survived a refresh. It walks the same hand through three states — no discount, a
+discount standing, the discount spent — without rebuilding it, and asserts each cost badge
+against `eng.play_cost` at every step. Against `play_cost`, never against a number: the claim is
+that the face and the rule agree, and a hard-coded expectation would pass a face that agreed
+with the test and not with the game. It then checks the other half of the report directly, that a
+card discounted to nothing is playable on an empty pool.
+
+The face check was **verified by breaking the fix**: with the cost re-read removed it reports
+
+    FAIL with a discount standing, Two Quick shows cost 1 and would be charged 0
+
+and with it restored, green. A regression test that has never been seen to fail is a test whose
+subject nobody has confirmed it can see.
+
+**The shape to take away.** Both defects are in code that *reports* a decision rather than code
+that *makes* one, and neither could have been found by testing the decision. The engine was
+right in every case and the player was told two different untrue things about it. **Anywhere a
+rule refuses, the refusal is part of the rule; anywhere a face quotes state, the quote has a
+lifetime.** A diffed widget is a cache, and every number on it needs an entry in the function
+that invalidates it.
+
+### D217 — Three of the four things the floor can offer you had no button
+
+Reported as two things: *some sprites in the dungeon are too small*, and *when walking onto
+the missions you have to press them and it's not clear what they do.* The second turned out
+to be the report of a much larger fault than it sounds like.
+
+**The row under the floor was written for a game with one non-movement offer in it.** When
+the slip was the only thing you could do that was not a step, `_refresh` built a button for
+`action == "avoid"` and stopped. Three more kinds arrived afterwards — push at a mark
+(D182), answer a toll (D186), put a hand on the stone (D188) — and none of them ever taught
+this row about themselves. Its own comment still said *one kind so far*.
+
+That left two selectors to carry them: `_step_dir` takes the first option facing a
+direction, `_on_floor_input` the first option on a clicked cell. **Both collapse a set of
+offers sharing a tile down to one.** Walked over 400 generated Maw floors:
+
+```
+action    reachable   UNREACHABLE
+push            604            0
+shrine          280          830
+answer          223          446
+
+toll prompts seen: 223   of those, the RIGHT number could be picked in 100
+```
+
+So: **a toll offers three answers on one tile in one direction, and the game could only ever
+say the lowest of them.** Nearly half of the riddles in the game were unanswerable — not
+hard, not obscure: the correct number was not selectable. The stone was reachable only on
+the tile you were standing on, so it worked if you guessed that clicking your own feet was a
+thing you could do. And push, which the pad does reach, is reached through a wordless arrow.
+
+**Why nothing caught it.** Every iso row in `tools/screenshots.gd` photographs a floor being
+*walked*, and a walk never stops at an offer — the walk that reaches a pocket opens it. The
+one control carrying these decisions had never been in a capture at all. That is D122 in a
+fourth costume: **a state nobody photographs is a state nobody checks.**
+
+**The fix is the rule, not the list.** The row now builds a button for *anything the model
+calls an action*, so a fifth kind is offered on the day it is added. Labels already existed
+in the model; what was missing was the consequence, so `_act_tip` gives each one the price
+before it is paid — the shrine's HP bite and gold, the toll's forfeit, whether a door will
+spend a key you have. All read out of `Balance`, never restated.
+
+The toll's QUESTION is now appended to the hint line rather than dropped when something is
+prowling. It was ranked below the threat warning, so the common case was three buttons
+reading `Answer: 1 / 2 / 3` above a line about a wandering monster and no question anywhere
+on screen. A tooltip does not fix that: the pad exists because some of these players have no
+pointer to hover with.
+
+**Sprites.** `SPRITE_H` is the old table x1.13 with treasure and wander nudged further —
+1.7 to 2.05 and 1.6 to 1.95 — because those two were the ones that read as miniatures: a
+chest stood knee-high on its own tile and a wanderer was smaller than the thing it exists to
+make you walk around. The relationships between entries are unchanged, which is what keeps a
+resize from becoming a redesign; the hero note about reading shorter than a brute still
+holds. They are sized against the TILE and not against each other, which is exactly how they
+could all drift small together without any one of them looking wrong beside its neighbour.
+
+**Guards, both verified by reinstating the defect.** `tests/playable_test.gd` stands the
+player at a sealed pocket, preferring one that asks a question, and asserts every option the
+model marks with an `action` has an enabled button with that label — asserted against the
+model's own list, so a hand-kept list here cannot go stale the way the row it guards did.
+Putting `action != "avoid"` back prints three failures, one per unreachable answer. And
+`IsoRunOffer` joins the screenshot harness so this state is photographed from now on.

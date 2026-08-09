@@ -64,6 +64,18 @@ const SHOTS := [
 	# plants one, because a walk of fourteen steps has no reason to pass a tile that was
 	# placed as far from everything as the floor allows.
 	["IsoRunKey", "res://scenes/IsoRun.tscn", "iso_key"],
+	# Standing at a mark, where the floor is OFFERING something (D217). The row below the
+	# floor holds every non-movement choice the model makes — push at a mark, answer a toll,
+	# put a hand on the stone, break away — and this is the state that shows it.
+	#
+	# It exists because the row was broken for three of those four kinds for as long as they
+	# have existed, and nothing noticed: a toll could only ever be answered with the lowest
+	# of its three numbers, and the stone could only be used by clicking the tile you were
+	# standing on. Every other iso row here photographs a floor being WALKED, and the walk
+	# never stops at an offer — so the one control that carries these decisions had never
+	# been in a capture at all. That is D122's lesson in a fourth costume: **a state nobody
+	# photographs is a state nobody checks.**
+	["IsoRunOffer", "res://scenes/IsoRun.tscn", "iso_offer"],
 	["IsoEarth", "res://scenes/IsoRun.tscn", "iso_walked", "", "warrens"],
 	["IsoMoss", "res://scenes/IsoRun.tscn", "iso_walked", "", "fungal_deep"],
 	["IsoSand", "res://scenes/IsoRun.tscn", "iso_walked", "", "drowned_market"],
@@ -383,6 +395,46 @@ func _setup(need: String, dungeon: String = "") -> void:
 			GameState.pending = {"type": GameState.NodeType.TREASURE, "row": 1, "col": 0,
 				"cleared": false, "chest": Balance.PACK_SEALED}
 			GameState.keys = 2
+		"iso_offer":
+			# Put her AT a mark rather than walking her to one. A fourteen-step walk has no
+			# reason to end beside a sealed pocket, and the walk that does reach one OPENS
+			# it — so waiting for the route to make this state is waiting for the state
+			# being photographed to be destroyed.
+			#
+			# Re-rolled until the floor offers a TOLL, because a toll is the kind that puts
+			# three buttons in the row at once and is therefore the one that says whether
+			# the row fits its own window. Bounded, and it takes any pocket for the last
+			# eight tries: a capture that hangs is worse than a capture of the plain mark.
+			var tvo := GameState.traversal
+			var placed := false
+			for attempt in 40:
+				if tvo == null:
+					break
+				for k in tvo.pockets.size():
+					var p: Dictionary = tvo.pockets[k]
+					if bool(p["open"]):
+						continue
+					if attempt < 32 and String(p.get("toll", "")) == "":
+						continue
+					for raw in tvo._neighbours(int(p["mouth"])):
+						if int(tvo.enc[int(raw)]) == TraversalIso.WALL:
+							continue
+						tvo.pos = int(raw)
+						tvo._reveal_around(int(raw))
+						placed = true
+						break
+					if placed:
+						break
+				if placed:
+					break
+				# A fresh floor, not a nudged one: pockets are laid out at generation.
+				GameState.enter_dungeon(_run_state())
+				tvo = GameState.traversal
+			GameState.pending = {}
+			# The option list is memoised and was built before `pos` moved (D172's lesson on
+			# the key row): without this the act row would offer the floor as it was.
+			if tvo != null:
+				tvo._invalidate()
 		"iso_pad", "iso_key", "iso_walked", "iso_resumed":
 			# Forced ON for this row only, and reset at the top of every `_setup`, so the
 			# rows after it photograph the desktop screen again. Not saved: `pad_mode` is

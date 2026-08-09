@@ -51,6 +51,7 @@ func _ready() -> void:
 	await _dying_is_reported()
 	await _the_fight_reacts()
 	await _a_key_is_taken_off_the_floor()
+	await _every_offer_is_pressable()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -765,6 +766,74 @@ func _scene_names() -> Array:
 	d.list_dir_end()
 	out.sort()
 	return out
+
+## Every non-movement offer the model makes must be pressable on the screen (D217).
+##
+## The screen has exactly two ways to pick something without a button — `_step_dir` takes
+## the first option facing a direction, `_on_floor_input` the first option on a clicked
+## cell — and BOTH collapse a set of offers that share a tile down to one. A toll puts three
+## answers on one tile in one direction, so for as long as the act row was hard-coded to
+## `action == "avoid"` the game could only ever say the lowest of the three numbers.
+## Measured over 400 generated floors before the fix: 446 of 669 offers unreachable, and the
+## right answer to a riddle was pickable 100 times out of 223.
+##
+## Asserted against the MODEL's own option list rather than a list of action names, so a
+## fifth kind added later is covered by this test on the day it is added — a hand-kept list
+## here would go stale in exactly the way the row it guards did.
+func _every_offer_is_pressable() -> void:
+	_start_a_run("the_maw")
+	var tv := GameState.traversal as TraversalIso
+	if tv == null:
+		_fails += 1; print("FAIL no traversal to stand a player on")
+		return
+	# Stand her at a sealed pocket, preferring one that asks a question: the toll is the
+	# case with several offers on ONE tile, which is the case that was broken.
+	var placed := false
+	for attempt in 40:
+		for k in tv.pockets.size():
+			var p: Dictionary = tv.pockets[k]
+			if bool(p["open"]) or (attempt < 32 and String(p.get("toll", "")) == ""):
+				continue
+			for raw in tv._neighbours(int(p["mouth"])):
+				if int(tv.enc[int(raw)]) == TraversalIso.WALL:
+					continue
+				tv.pos = int(raw)
+				tv._reveal_around(int(raw))
+				placed = true
+				break
+			if placed:
+				break
+		if placed:
+			break
+		_start_a_run("the_maw")
+		tv = GameState.traversal as TraversalIso
+	if not placed:
+		_fails += 1; print("FAIL could not find a sealed pocket to stand beside in 40 floors")
+		return
+	tv._invalidate()
+
+	var want: Array = []
+	for o in tv.options():
+		if String(o.get("action", "")) != "":
+			want.append(String(o["label"]))
+	if want.is_empty():
+		_fails += 1; print("FAIL standing at a mark and the model offers no action at all")
+		return
+
+	var inst = (load("res://scenes/IsoRun.tscn") as PackedScene).instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var shown := {}
+	for b in _buttons(inst):
+		if not b.disabled:
+			shown[b.text] = true
+	for label in want:
+		if not shown.has(label):
+			_fails += 1
+			print("FAIL the floor offers \"%s\" and the screen has no button for it" % label)
+	inst.queue_free()
+	await get_tree().process_frame
 
 func _buttons(n: Node) -> Array[Button]:
 	var out: Array[Button] = []

@@ -640,6 +640,42 @@ static func _slider_value(value: float, step: float) -> String:
 ## Pass the *row*, not the label: hovering anywhere over an entry should explain it.
 ## Children left on IGNORE fall through to this control, and a child Button with no
 ## tooltip of its own inherits this one by walking up the tree.
+## Re-test what the pointer is sitting on, after a rebuild that replaced the controls
+## under it (D215).
+##
+## Godot only works out what the mouse is over when the mouse MOVES. A list rebuilt
+## under a stationary cursor therefore leaves the thing the player is pointing at in
+## its resting state: on the card grid, adding a copy rebuilds the grid, so the card
+## just double-clicked came back flat with the cursor still on it and stayed flat until
+## the player moved or clicked again. Reported as the enlarge getting stuck.
+##
+## A zero-distance motion event rather than setting the hover state directly, which was
+## the first fix and is worse: the engine's own bookkeeping would still say nothing is
+## hovered, so moving from that card straight onto another in one jump would enlarge
+## the new one and never shrink the old — turning a card that fails to grow into a card
+## that never stops. Pushed through the same path a real twitch takes, entered and
+## exited both work.
+##
+## One frame first: the rebuilt controls have no rect until their containers sort, and
+## a hit test against a zero-size rect is a hit test against nothing.
+static func resync_hover(node: Node) -> void:
+	if touch_ui():
+		return   # a finger has no hover to resync, and a phantom motion invents one
+	var tree := node.get_tree()
+	if tree == null:
+		return
+	await tree.process_frame
+	if not is_instance_valid(node):
+		return
+	var vp := node.get_viewport()
+	if vp == null:
+		return
+	var m := InputEventMouseMotion.new()
+	m.position = vp.get_mouse_position()
+	m.global_position = m.position
+	m.relative = Vector2.ZERO
+	vp.push_input(m)
+
 static func hoverable(control: Control, text: String) -> void:
 	control.tooltip_text = text
 	if control.mouse_filter == Control.MOUSE_FILTER_IGNORE:
@@ -1070,7 +1106,17 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	var live_dmg: int = live.card_damage(card) if live != null else -1
 	var live_blk: int = live.card_block(card) if live != null else -1
 	var tail := "\n\n%s" % note if note != "" else ""
-	b.tooltip_text = Icons.card_tooltip(card, live_dmg, live_blk) + tail
+	# Why this card cannot be played, on the card, in a fight (D216). The hand already
+	# dims what it cannot afford, which says THAT and never WHY — and the one refusal a
+	# player cannot work out for themselves is the lethal HP cost, where a card reading
+	# "costs 0" sits greyed out beside a full energy pool. Live only: out of a fight
+	# there is no pool and no health to measure a refusal against.
+	var refusal := func(l: CombatEngine) -> String:
+		if l == null:
+			return ""
+		var r: String = l.why_not(card)
+		return "\n\n%s" % r if r != "" else ""
+	b.tooltip_text = Icons.card_tooltip(card, live_dmg, live_blk) + tail + refusal.call(live)
 	holder.add_child(b)
 
 	# NO containers inside the card. A VBox/HBox honours its children's *minimum*
@@ -1286,7 +1332,24 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		var d2: int = live2.card_damage(card) if live2 != null else -1
 		var b2: int = live2.card_block(card) if live2 != null else -1
 		desc.text = card.effect_text(d2, b2)
-		b.tooltip_text = Icons.card_tooltip(card, d2, b2) + tail
+		# ...and the refusal is re-read with them. Energy is spent and health is lost
+		# between refreshes, so a reason baked in when the card was dealt is a reason
+		# that goes stale on the turn it matters.
+		b.tooltip_text = Icons.card_tooltip(card, d2, b2) + tail + refusal.call(live2)
+		# THE COST TOO, and it is the one this list was missing (D216). A discount is
+		# per-turn state exactly like Strength, and the combat screen diffs its hand
+		# rather than rebuilding it — so a card already in hand when a discount landed
+		# went on showing its full price, and a card DEALT during the discount went on
+		# showing the reduced one after the next card spent it. The second half is the
+		# one that gets reported: a card reading 0 that the engine refuses, because the
+		# discount it is still advertising was consumed two clicks ago.
+		var c2: int = live2.play_cost(card) if live2 != null else card.eff_cost()
+		cost.text = str(c2)
+		# The green is the whole signal — "this is cheaper than it says on the card" —
+		# so it has to come off as well as go on, or a spent discount leaves the price
+		# lit as a bargain it no longer is.
+		cost.add_theme_color_override("font_color",
+			Color(0.60, 1.0, 0.62) if c2 < card.eff_cost() else Color(1.0, 0.86, 0.45))
 		if value_labels.size() > 0 and d2 >= 0 and headline != "":
 			var head := str(d2)
 			if card.hits > 1:
