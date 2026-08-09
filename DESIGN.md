@@ -206,6 +206,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D215** | [Five things a player found on the new Cards screen, and none of them were the grid](#d215--five-things-a-player-found-on-the-new-cards-screen-and-none-of-them-were-the-grid) |
 | **D216** | [A card that cost nothing could not be played, and the game gave the wrong reason twice](#d216--a-card-that-cost-nothing-could-not-be-played-and-the-game-gave-the-wrong-reason-twice) |
 | **D217** | [Three of the four things the floor can offer you had no button](#d217--three-of-the-four-things-the-floor-can-offer-you-had-no-button) |
+| **D218** | [The half of the damage that was joined to the field, so nothing had ever looked for it](#d218--the-half-of-the-damage-that-was-joined-to-the-field-so-nothing-had-ever-looked-for-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14224,3 +14225,73 @@ again in a new place. Verified by breaking it: without `_carriers()` it reports
 were the discount arithmetic, which was never touched. Worth stating plainly because two rounds
 of investigation went looking in `play_cost` first: **when a player reports a rule is broken,
 check what the screen told them about the rule before checking the rule.**
+
+### D218 — The half of the damage that was joined to the field, so nothing had ever looked for it
+
+Reported by a player: *several sprites during battle have holes in them (moth, fire dogs,
+brood mother), I thought they were regenerated and fixed in a previous session.* They were
+not, and the reason is structural rather than an oversight.
+
+**Two passes had already been made over this, and both were blind in the same direction.**
+D195 built `find_gouges`, which lists enclosed transparent pockets carrying paint, and
+repaired the Brood-Mother's abdomen with it. D199 found six eaten plates by eye and repainted
+them. `find_gouges` skips any region that touches the frame — correctly, because the surround
+IS background — and **a bite taken out of an outer edge is continuous with the surround.** So
+the moth's wings and the forge-hound's hind leg were never candidates for either pass. Run
+today, the shortlist returns six pockets and not one of the three the player named.
+
+**The fact that makes the repair possible is the same one D195 turned on: the pipeline only
+ever writes alpha.** `matte`, `fill_trapped` and `clear_bloom` zero `a[]` and leave the
+colour; `place` resizes RGBA without premultiplying. Rendering `grave_moth` with its alpha
+ignored shows **the wing complete** — membrane, veins, dark markings, all of it, sitting
+under a hole. The damage was never lost paint. It was visible data with its alpha set to
+zero, which is why this is a restore and not a request for another painting.
+
+That also corrects D199's conclusion in one direction. *The paint under the real damage is
+gone, not masked* was true of the six plates it examined and is **not** a property of this
+class of fault; it has to be asked per file, and the way to ask is to force the alpha opaque
+and look.
+
+**Finding it: colour OR texture, and neither alone.** `cutout_lib.find_bites` splits the
+surround by whether a cleared pixel still carries paint. Three things had to be right and the
+first two versions each got one wrong:
+
+* *The field colour is the MODE, not the mean and not the frame ring.* Reading the ring
+  returned every plate as one 30-50k-pixel bite, because `place` centres a trimmed painting
+  on a larger canvas and that padding is transparent BLACK, not field. A cutout's surround
+  holds two or three populations at once — 45-86% padding, the generator's slate
+  `(64,80,96)`, and on anything repainted since D200 a band of key magenta.
+* *Colour distance alone finds almost none of it.* It caught 260px of a moth bite that runs
+  to thousands and missed the forge-hound entirely, because a pale grey wing and a grey metal
+  leg are barely a colour apart from a blue-grey field. **That is not bad luck, it is the same
+  fact that caused the damage:** the matte could not tell them apart either. What separates
+  them is that paint has detail in it and a field does not, so `_local_std` against
+  `POCKET_STD` is the half that does the work.
+* *And the padding seam must be excluded.* The join between padding and field is a colour
+  cliff with detail in it, so the first working version flagged it and the repair **drew a
+  visible dark box around four plates** — a worse defect than the holes. `BITE_PAD_R` keeps
+  the finder 3px clear of it.
+
+**It is a shortlist, not a verdict**, and `refill_pockets.gd` prints it beside the enclosed
+one under the same rule: the operator names the file, the tool measures and restores, there
+is no `--all`. A painted ground shadow and an anti-aliased rim both carry detail, so both get
+listed. What changed is that the damage is now ON the list.
+
+**Repaired**, verified against magenta before and after: `grave_moth` (four bites, both wings
+whole again), `forge_hound` (two, hind leg reattached), `ossuary_wretch` (one). Nothing else
+in the enemy, relic, power or card sets needed writing.
+
+**The instrument, which is the part that stops this recurring.** `tools/plate_check.gd`
+composites every cutout over flat magenta, one sheet per family. D199 already knew the rule —
+*a cutout can only be judged against something brighter than it*, because `combat.gd` draws
+enemies over a dark corridor where a hole reads as shadow — but it left that as a thing
+somebody had done once, not a thing the project produces. Both previous passes found their
+damage by happening to look at the right picture. This makes the picture, and the three
+plates a player reported are obvious in it at a glance.
+
+**Left alone, deliberately.** `brood_mother` carries a few single-pixel specks and two plates
+carry a small opaque diamond — the generator's sparkle stamp, which `strip_sparkle.gd` takes
+off backdrops and never took off these. At the size a plate is drawn they are sub-pixel and
+invisible; chasing them is how D199's re-cut ended up making all thirty-five files 5-25
+points more opaque to fix six. The diamonds also cannot be restored, only inpainted: the
+paint under them is genuinely gone, because it was the stamp.

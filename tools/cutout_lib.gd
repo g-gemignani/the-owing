@@ -1034,6 +1034,208 @@ static func luma_spread(img: Image, members: Array[int], w: int) -> float:
 ##
 ## The pipeline-side question is different and answerable, because `fill_trapped` still has
 ## the source and the sampled field colour to compare against — see `POCKET_SPREAD`.
+## How far a clear pixel's colour must sit from the field before it counts as PAINT, in
+## 0-255 per-channel distance. Measured across the installed enemy set: the field's own
+## pixels scatter 6-14 from their mean, and the paint inside a bitten wing sits 40-90 off
+## it, so 28 is a gap and not a fitted number.
+const BITE_COLOUR := 28.0
+## And how much of a bite has to survive the 2px erosion. `place`'s LANCZOS downscale drags
+## subject colour one or two pixels out into the field, so EVERY cutout carries a thin ring
+## of "painted" clear pixels around its whole silhouette; eroding kills the ring and leaves
+## anything with a body. 60 rather than `GOUGE_CORE_MIN`'s 50 because an open bite has no
+## far side holding it together.
+const BITE_CORE_MIN := 60
+## How far a bite must stay clear of the transparent-black padding `place` leaves around a
+## trimmed painting. The seam between padding and field is a colour cliff with detail in it,
+## so without this the finder returns the canvas edge and the repair draws a box.
+const BITE_PAD_R := 3
+
+## Clear pixels that are joined to the SURROUND and still carry paint — the damage
+## `find_gouges` cannot see, by construction (D218).
+##
+## `find_gouges` skips any region touching the frame, because the surround is background by
+## definition. That is right for a pocket and it is exactly why the moth's wings and the
+## forge-hound's hind leg went unreported for as long as they existed: a bite taken out of
+## an OUTER edge is continuous with the field, so it is part of the surround and was never a
+## candidate. Every enclosed pocket in the installed set had been looked at (D195); nothing
+## had ever looked at the open ones.
+##
+## The discriminator is the same one, and it is the same fact underneath: **the pipeline
+## only ever writes alpha.** `matte`, `fill_trapped` and `clear_bloom` zero `a[]` and leave
+## the colour, so a wrongly-cleared pixel still holds the paint it was cleared from. Field
+## that was always field holds the field's own colour. So the surround splits by colour, and
+## the split is measurable rather than a judgement.
+##
+## Unlike `find_gouges` this one is safe enough to assert on — over the installed enemy,
+## relic, power and card sets it returns SIX regions and all six are real damage, against
+## seven false positives in eight for the enclosed test. The reason is the asymmetry above:
+## a pocket's field is genuinely lit or shadowed and so genuinely varies, while the open
+## surround is one flat field the generator painted behind everything.
+static func find_bites(img: Image, w: int, h: int) -> Array[Dictionary]:
+	var clear := PackedByteArray()
+	clear.resize(w * h)
+	for y in h:
+		for x in w:
+			clear[y * w + x] = 1 if img.get_pixel(x, y).a * 255.0 <= float(ALPHA_CUT) else 0
+	# The surround: clear pixels the frame can reach. Anything else is a pocket and belongs
+	# to `find_gouges`.
+	var sur := PackedByteArray()
+	sur.resize(w * h)
+	var q: Array[int] = []
+	for x in w:
+		for yy in [0, h - 1]:
+			var i := int(yy) * w + x
+			if clear[i] == 1 and sur[i] == 0:
+				sur[i] = 1
+				q.append(i)
+	for y in h:
+		for xx in [0, w - 1]:
+			var i := y * w + int(xx)
+			if clear[i] == 1 and sur[i] == 0:
+				sur[i] = 1
+				q.append(i)
+	var head := 0
+	while head < q.size():
+		var i: int = q[head]
+		head += 1
+		var x: int = i % w
+		var y: int = i / w
+		for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+			var nx: int = x + d[0]
+			var ny: int = y + d[1]
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var j: int = ny * w + nx
+			if clear[j] == 1 and sur[j] == 0:
+				sur[j] = 1
+				q.append(j)
+	# The field's own colour: the MODE of the surround, not its mean and not the frame ring.
+	#
+	# The first version read the frame ring and every plate came back as one 30-50k-pixel
+	# bite — the whole surround — because `place` centres a TRIMMED subject on a larger
+	# canvas and that padding is transparent BLACK, not field. So a cutout's surround holds
+	# two or three populations at once: 45-86% black padding, the generator's field
+	# (64,80,96 on the older enemy sheets), and on anything repainted since D200 a band of
+	# key magenta (240,0,240). A mean across those is a colour that appears nowhere in the
+	# file, and everything is then far from it.
+	#
+	# Binned at 16 so a graded field lands in one bucket, and near-black is skipped outright
+	# rather than competing for the mode: padding is not field, it is the absence of one, and
+	# paint that is genuinely black on black is invisible either way.
+	var bins := {}
+	for i in w * h:
+		if sur[i] == 0:
+			continue
+		var c := img.get_pixel(i % w, i / w)
+		if maxf(c.r, maxf(c.g, c.b)) * 255.0 < 24.0:
+			continue
+		var k := Vector3i(int(c.r * 255.0 / 16.0), int(c.g * 255.0 / 16.0),
+			int(c.b * 255.0 / 16.0))
+		bins[k] = int(bins.get(k, 0)) + 1
+	var best := 0
+	var bg := Vector3.ZERO
+	for k in bins:
+		if int(bins[k]) > best:
+			best = int(bins[k])
+			bg = Vector3(float(k.x), float(k.y), float(k.z)) * 16.0 + Vector3(8, 8, 8)
+	if best < 256:
+		return []
+	# Painted surround, then eroded so the LANCZOS spill ring cannot survive as a finding.
+	# The padding is excluded here too, for the same reason it was excluded from the mode.
+	#
+	# **Colour OR texture, and texture is the half that finds the reported damage.** A
+	# distance-from-field test alone found the moth's wings at 260px of a bite that is
+	# thousands, and missed the forge-hound's hind leg completely — because a pale grey wing
+	# on a blue-grey field and a grey metal leg on the same field are barely a colour apart.
+	# That is not a coincidence, it is the SAME fact that caused the damage: the matte could
+	# not tell them apart either. What separates them is that paint has detail in it and a
+	# field does not — the wing has veins, the leg has plating and rivets, and the generator's
+	# backdrop is smooth even where it is graded. `POCKET_STD` is the deviation the pipeline
+	# already calls flat, so this asks the question the cutter should have asked.
+	# The padding, and a margin around it, is off limits.
+	#
+	# `place` centres the trimmed painting on a larger canvas, so every plate carries a hard
+	# seam where transparent-black padding meets the generator's field. That seam is a colour
+	# cliff with detail in it, so the test above flags it — and restoring it drew a visible
+	# dark BOX around four repaired plates, which is a worse defect than the holes. Measured
+	# at 2px of seam; 3 clears it on every file in the set.
+	var pad := PackedByteArray()
+	pad.resize(w * h)
+	for i in w * h:
+		var c := img.get_pixel(i % w, i / w)
+		if c.a * 255.0 <= float(ALPHA_CUT) \
+				and maxf(c.r, maxf(c.g, c.b)) * 255.0 < 24.0:
+			pad[i] = 1
+	for _p in BITE_PAD_R:
+		var grown := pad.duplicate()
+		for y in h:
+			for x in w:
+				if pad[y * w + x] == 0:
+					continue
+				for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+					var nx: int = x + d[0]
+					var ny: int = y + d[1]
+					if nx >= 0 and ny >= 0 and nx < w and ny < h:
+						grown[ny * w + nx] = 1
+		pad = grown
+	var detail := _local_std(img, w, h)
+	var painted := PackedByteArray()
+	painted.resize(w * h)
+	for i in w * h:
+		if sur[i] == 0 or pad[i] == 1:
+			continue
+		var c := img.get_pixel(i % w, i / w)
+		var v := Vector3(c.r, c.g, c.b) * 255.0
+		painted[i] = 1 if ((v - bg).length() >= BITE_COLOUR
+			or detail[i] >= POCKET_STD) else 0
+	var core := _erode(painted, w, h, GOUGE_CORE_R)
+	var seen := PackedByteArray()
+	seen.resize(w * h)
+	var out: Array[Dictionary] = []
+	for start in w * h:
+		if seen[start] == 1 or painted[start] == 0:
+			continue
+		var members: Array[int] = []
+		var stack: Array[int] = [start]
+		seen[start] = 1
+		while not stack.is_empty():
+			var i: int = stack.pop_back()
+			members.append(i)
+			var x: int = i % w
+			var y: int = i / w
+			for d in [[-1, 0], [1, 0], [0, -1], [0, 1]]:
+				var nx: int = x + d[0]
+				var ny: int = y + d[1]
+				if nx < 0 or ny < 0 or nx >= w or ny >= h:
+					continue
+				var j: int = ny * w + nx
+				if seen[j] == 0 and painted[j] == 1:
+					seen[j] = 1
+					stack.append(j)
+		if members.size() < GOUGE_MIN:
+			continue
+		var inner: Array[int] = []
+		for i in members:
+			if core[i] == 1:
+				inner.append(i)
+		if inner.size() < BITE_CORE_MIN:
+			continue
+		# ...and it has to VARY, which is the half the first version left out and the half
+		# that does the work. Colour-distance alone returned 189 regions across the four
+		# sets, because a field is only flat *locally*: the power and card icons sit on a
+		# vignette, so the frame ring is not the colour of the field two hundred pixels in,
+		# and every one of those 189 scored a luma spread of 0.5-1.1 — one colour, smoothly
+		# lit, exactly what background looks like. Paint does not do that. With the same
+		# `POCKET_SPREAD` the enclosed test uses, the four sets return six regions and all
+		# six are damage.
+		var spread := luma_spread(img, inner, w)
+		if spread < POCKET_SPREAD:
+			continue
+		out.append({"pixels": members, "core": inner.size(), "spread": spread})
+	out.sort_custom(func(p, r): return int(p["pixels"].size()) > int(r["pixels"].size()))
+	return out
+
+
 static func find_gouges(img: Image, w: int, h: int) -> Array[Dictionary]:
 	var clear := PackedByteArray()
 	clear.resize(w * h)

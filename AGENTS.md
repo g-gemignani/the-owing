@@ -836,6 +836,17 @@ These are failure modes that have actually bitten this project. Treat each as a 
   row until somebody went looking for it (D122, D123). Before trusting "the captures look
   fine", check what the capture list does not contain.
 
+  **And the check itself has a blind spot with a shape (D218).** `find_gouges` lists
+  transparent pockets *enclosed by the subject*, which is right and is why it can never see
+  a bite taken out of an outer EDGE — that is joined to the surround, and the surround is
+  background by definition. Two passes over the art (D195, D199) used it or the eye, and the
+  moth's wings, the forge-hound's leg and the brood-mother both shipped through them and
+  were reported by a player. When a detector excludes a case *by construction*, write down
+  which case, because that sentence is the list of what it will never find.
+  `tools/plate_check.gd` is the answer here: it composites every cutout over flat magenta,
+  because **a cutout can only be judged against something brighter than it** — over a dark
+  corridor a hole reads as shadow.
+
   **And a list of STATES rots the same way a list of screens does (D217).** Every iso
   capture photographs a floor being *walked*, and a walk never stops at an offer — so the
   row of buttons that carries push, answer, break-away and the stone had never been in a
@@ -1257,6 +1268,11 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              captures the README shows, LANCZOS-downsamples them and writes
              docs/screenshots/ as WebP — the front page's pictures are generated
              so they cannot go stale, D141),
+             plate_check.gd (composites every painted cutout over flat magenta,
+             one sheet per family — the only way a hole in a sprite is visible,
+             since combat draws them over a dark corridor where one reads as
+             shadow; pair with refill_pockets.gd, which restores the ones that
+             still carry paint — D218),
              art_manifest.gd (driven by art_docs.sh — see the doc list below),
              art_docs.sh, design_index.sh and readme_downloads.sh (the three
              documentation generators; all take `--check`, which is how you find

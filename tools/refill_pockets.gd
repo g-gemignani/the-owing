@@ -106,22 +106,35 @@ func _handle(path: String, label: String, fix: bool) -> Array:
 		return [0, 0]
 	var w := im.get_width()
 	var h := im.get_height()
+	# Both kinds, and NEITHER is a verdict (D218). An enclosed pocket is a candidate a
+	# person has to look at — seven of eight are correct background. An open BITE is the
+	# damage `find_gouges` cannot see at all, and it is a shortlist for the same reason: a
+	# painted ground shadow and an anti-aliased rim both carry detail, so this lists them
+	# too. What it buys is that the damage is now ON the list; deciding is still the
+	# operator's, which is why there is no --all.
 	var gouges := Cut.find_gouges(im, w, h)
-	if gouges.is_empty():
+	var bites := Cut.find_bites(im, w, h)
+	if gouges.is_empty() and bites.is_empty():
 		return [0, 0]
 	for g in gouges:
-		print("%-26s %7d %7d %8.2f  %s" % [
+		print("%-26s %7d %7d %8.2f  pocket   %s" % [
 			label, int(g["pixels"].size()), int(g["core"]), float(g["spread"]),
 			"restored" if fix else "candidate — LOOK at it before restoring it"])
+	for b in bites:
+		print("%-26s %7d %7d %8.2f  BITE     %s" % [
+			label, int(b["pixels"].size()), int(b["core"]), float(b["spread"]),
+			"restored" if fix else "candidate — LOOK at it before restoring it"])
 	if not fix:
-		return [gouges.size(), 0]
+		return [gouges.size() + bites.size(), 0]
 
 	for g in gouges:
 		_restore(im, g["pixels"], w, h)
+	for b in bites:
+		_restore(im, b["pixels"], w, h)
 	if im.save_png(Cut.abs_path(path)) != OK:
 		print("  FAILED writing %s" % path)
-		return [gouges.size(), 0]
-	return [gouges.size(), 1]
+		return [gouges.size() + bites.size(), 0]
+	return [gouges.size() + bites.size(), 1]
 
 
 ## Alpha back to opaque over the pocket, then out through the feathered rim it left.
