@@ -1394,7 +1394,15 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 				holder.rotation = float(fan.get("rot", 0.0))
 				holder.position = home
 
-	if touch_ui():
+	# `on_press.is_valid()` gates BOTH branches, and on the touch side that is a fix
+	# rather than tidiness (D220b). The two-tap dance below only makes sense when there is
+	# something for the second tap to commit; with no press action it installed a handler
+	# whose first tap scaled the card to 1.45 and whose second tap did nothing at all —
+	# on the collection grid, where the taps belong to `CardGrid`, that left every tapped
+	# card enlarged under an overlay and stuck that way, because nothing on a touchscreen
+	# ever sends the mouse-exit that would put it back. The desktop branch has always had
+	# this test; the touch branch never did.
+	if touch_ui() and on_press.is_valid():
 		# TOUCH: a finger has no hover, so reading a card and committing to it must
 		# be two separate taps. Otherwise the only way to find out what a card does
 		# is to play it, which is exactly backwards — and the hover-to-enlarge that
@@ -1416,7 +1424,7 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 			if on_press.is_valid():
 				Audio.play("card_play")
 				on_press.call())
-	else:
+	elif not touch_ui():
 		if on_press.is_valid():
 			b.pressed.connect(func(): Audio.play("card_play"))
 			b.pressed.connect(on_press)
@@ -1452,10 +1460,22 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 ## Right-click opens it on any card face; the collection and deck builder put it on
 ## a left click too, because a list row has no card to right-click and an invisible
 ## gesture is not a feature.
+##
+## `actions` turns the overlay from a reading into a place you can ACT (D220b), and it
+## is a supplier rather than a list on purpose: pressing "add a copy" changes what the
+## row should say next, so a list captured when the overlay opened would be stale on
+## its own first button. It is called to draw the row and again after every press.
+## Each entry is `{text, hint, disabled, press}`.
+##
+## `note` may be a String or a Callable returning one, for the same reason: the line
+## beside the card says how many copies this deck is asking for, and the buttons above
+## can now change that number while the player is looking at it.
 static func inspect_card(anchor: Node, card: CardData, live: CombatEngine = null,
-		note: String = "") -> Control:
+		note: Variant = "", actions: Callable = Callable()) -> Control:
 	if card == null:
 		return null
+	var note_text := func() -> String:
+		return String((note as Callable).call()) if note is Callable else String(note)
 	# The OUTERMOST Control above this card, not `current_scene`. They are the same
 	# node in the game — the combat screen is a Control and it is the current scene —
 	# and they are not the same node in the screenshot harness, which parents a
@@ -1531,16 +1551,64 @@ static func inspect_card(anchor: Node, card: CardData, live: CombatEngine = null
 		side_w, big.y)
 	side.add_theme_font_size_override("font_size", UITheme.font())
 
-	if note != "":
-		var n := _card_label(veil, note, Color(0.72, 0.86, 0.68))
-		n.clip_text = false
-		n.vertical_alignment = VERTICAL_ALIGNMENT_TOP
-		_place(n, holder.position.x - side_w - UITheme.px(20), holder.position.y,
-			side_w, big.y)
-		n.add_theme_font_size_override("font_size", UITheme.font())
+	# Built even when empty, and hidden instead, because an action below can give it
+	# something to say — and a label that only exists when it starts out non-empty is a
+	# label the buttons cannot update.
+	var n := _card_label(veil, note_text.call(), Color(0.72, 0.86, 0.68))
+	n.clip_text = false
+	n.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	_place(n, holder.position.x - side_w - UITheme.px(20), holder.position.y,
+		side_w, big.y)
+	n.add_theme_font_size_override("font_size", UITheme.font())
+	n.visible = n.text != ""
 
-	var hint := _card_label(veil, "Click anywhere to close", Color(0.62, 0.60, 0.66))
-	_place(hint, 0.0, holder.position.y + big.y + UITheme.px(10), vp.x, UITheme.px(26))
+	var below := holder.position.y + big.y + UITheme.px(10)
+	if actions.is_valid():
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", UITheme.sep(8))
+		# IGNORE so the gaps between buttons are not a dead strip: a press that lands
+		# between two of them falls through to the veil and closes the overlay, which is
+		# what a press anywhere else on the screen does. Children are still hit-tested —
+		# IGNORE removes this control from the test, not its contents.
+		row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		veil.add_child(row)
+		_place(row, 0.0, below, vp.x, float(UITheme.min_button_height()))
+		# The rebuild has to reach itself after a press, and a GDScript lambda cannot name
+		# itself — so it is parked on the row and read back out. `row` is captured by value
+		# like every other local, which is why it is built BEFORE this and not after.
+		var redraw := func() -> void:
+			for c in row.get_children():
+				row.remove_child(c)
+				c.queue_free()
+			for spec in actions.call():
+				var btn := Button.new()
+				UITheme.style_button(btn)
+				btn.text = String(spec.get("text", ""))
+				btn.disabled = bool(spec.get("disabled", false))
+				btn.focus_mode = Control.FOCUS_NONE
+				if String(spec.get("hint", "")) != "":
+					hoverable(btn, String(spec["hint"]))
+				var press: Callable = spec.get("press", Callable())
+				if press.is_valid():
+					btn.pressed.connect(func() -> void:
+						press.call()
+						# The screen underneath has just changed, so everything the overlay
+						# is quoting about it is a frame out of date: the note, and the row
+						# of buttons that decides what is still possible.
+						n.text = note_text.call()
+						n.visible = n.text != ""
+						var again: Callable = row.get_meta("redraw", Callable())
+						if again.is_valid():
+							again.call())
+				row.add_child(btn)
+		row.set_meta("redraw", redraw)
+		redraw.call()
+		below += float(UITheme.min_button_height()) + UITheme.px(10)
+
+	var hint := _card_label(veil, "Click anywhere else to close" if actions.is_valid()
+		else "Click anywhere to close", Color(0.62, 0.60, 0.66))
+	_place(hint, 0.0, below, vp.x, UITheme.px(26))
 	hint.add_theme_font_size_override("font_size", UITheme.font())
 	return veil
 
@@ -1600,7 +1668,8 @@ static func inspect_thumb(parent: Node, card: CardData, side: float,
 ## deliberately REPLACES whatever the row was going to say on hover, because the row's
 ## tooltip is `Icons.card_tooltip` and this cell now leads somewhere that shows the same
 ## reading at four times the size.
-static func inspect_text(label: Label, card: CardData, note: String = "") -> Label:
+static func inspect_text(label: Label, card: CardData, note: Variant = "",
+		actions: Callable = Callable()) -> Label:
 	if label == null or card == null:
 		return label
 	label.mouse_filter = Control.MOUSE_FILTER_STOP
@@ -1616,7 +1685,7 @@ static func inspect_text(label: Label, card: CardData, note: String = "") -> Lab
 		if mb.button_index != MOUSE_BUTTON_LEFT and mb.button_index != MOUSE_BUTTON_RIGHT:
 			return
 		label.accept_event()
-		inspect_card(label, card, null, note))
+		inspect_card(label, card, null, note, actions))
 	return label
 
 ## One card in a WANT-LIST: its effect symbol, its name, and whether it is yours.

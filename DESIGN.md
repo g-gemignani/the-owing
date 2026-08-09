@@ -209,6 +209,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D218** | [The half of the damage that was joined to the field, so nothing had ever looked for it](#d218--the-half-of-the-damage-that-was-joined-to-the-field-so-nothing-had-ever-looked-for-it) |
 | **D219** | [Six plates the restore could not save, and the generator that had been leaving scars](#d219--six-plates-the-restore-could-not-save-and-the-generator-that-had-been-leaving-scars) |
 | **D220** | [The mark on the Marrow-Priest was never a hole, and the tool that says so](#d220--the-mark-on-the-marrow-priest-was-never-a-hole-and-the-tool-that-says-so) |
+| **D220b** | [Every way into a card was a gesture a finger cannot make](#d220b--every-way-into-a-card-was-a-gesture-a-finger-cannot-make) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14386,3 +14387,103 @@ correctly beside Marrow-Abbot, Pale Acolyte and Rot-Priest — flatter in the sh
 plate it replaces, which is the cost of a fresh chat with no reference attached. Worth it
 here because the alternative was a hand-placed eraser box, and a coordinate in a tool is a
 number nobody can check later.
+
+### D220b — Every way into a card was a gesture a finger cannot make
+
+Two reports in one message: *"the deck building screen is still buggy if used on android"*, and
+*"I would move the lvl up option in the card preview instead of having the user click on the
+symbol"*. They turned out to be the same fix, which is why they are one entry.
+
+**Count the ways D213's grid let you act on a card.** Drag it to the bay. Double-click it. Press
+a 40x14 badge in its corner. Every one of those is a mouse gesture, and on a touchscreen:
+
+| gesture | on a phone |
+|---|---|
+| drag to the deck bay | Godot's drag-and-drop runs off emulated mouse motion; a swipe is as likely to scroll the grid |
+| double-click to add | `double_click` is not reliably set on touch-emulated buttons |
+| LV+ badge | 40x14 unscaled — the smallest target on the screen, and smaller than a fingertip |
+
+So on Android the grid had **no working way to put a card in a deck**, and the one control it
+did have could not be hit. The table view was still fine, which is what made this survivable and
+also what hid it: a toggle away, everything worked.
+
+**And a fourth thing, which was the actual crash-shaped bug.** `UI.card_button` installs a
+two-tap handler on touch — tap once to enlarge, tap again to commit — and it installed it
+whether or not there was anything to commit. The grid passes `Callable()` for the press, because
+`CardGrid._wire_face` owns the taps. So on a phone the first tap scaled a card to 1.45 and the
+second tap did nothing at all, and nothing ever put it back: a touchscreen sends no mouse-exit,
+so the card stayed enlarged under the overlay the grid's own handler had opened on top of it.
+The desktop branch of that `if` has always tested `on_press.is_valid()`. The touch branch never
+did. One `and`.
+
+#### The fix is the second report
+
+The card preview was already the one place in this game where a card is shown at a size you can
+read. It is now the one place where you can *act* on it: **Add a copy**, **Take one out**, and
+the priced **Level** buttons that used to live behind the badge.
+
+```
+Add a copy   Take one out   Level +1  (3 copies, 20g)   Level +2  (6 copies, 71g)
+```
+
+That is one large, named, unambiguous target per verb, which is what a phone needs, and on a
+desktop it is *faster* than what it replaces — the card you are deciding about is the thing you
+just clicked. Drag and double-click stay as shortcuts for anyone who has learned them. Nothing
+was taken away from the mouse.
+
+`inspect_card` takes the actions as a **supplier, not a list**, and `note` may now be a Callable
+for the same reason: pressing "Add a copy" changes what the row should say next, and a list
+captured when the overlay opened is stale on its own first button. The row rebuilds itself after
+every press, and so does the line beside the card that says how many copies the deck is asking
+for.
+
+**Which exposed a real staleness one level down.** `CardGrid.Ctx.counts` was
+`selection.duplicate()` — a defensive snapshot, so that nothing could mutate the deck while the
+grid laid itself out. That hazard never existed; nothing clicks during a layout pass. What does
+exist is this row: against a snapshot it re-read a deck frozen at the moment the overlay opened,
+so adding a copy left "Take one out" greyed and "Add a copy" cheerfully offering an eleventh
+copy of a card you own four of. A Dictionary is a reference, so handing over the real one is the
+whole fix, and the suite catches it — *"after adding a copy the preview still refuses to take
+one out — the row is stale"*.
+
+#### The badge is a mark now, not a button
+
+It keeps its job — D215 added it precisely so a player can see that levelling exists before they
+can afford it — and loses its press. `MOUSE_FILTER_IGNORE`, so a tap that lands on it falls
+**through** to the card face underneath and opens the preview. The whole card is one target and
+no part of it is dead, which is better than shrinking a gesture nobody could hit.
+
+That costs it its tooltip, because an unreachable tooltip is exactly what `tooltip_test.gd`
+exists to fail on. The price moved to the card's own hover (`_level_line`), which keeps D133's
+rule — a shop states its prices before the click that spends — and keeps D215's sentence about
+the blocked case, where "need 4 copies" is a wall and "need 4 copies, and it takes this to 16
+damage" is a goal.
+
+The `first_fuse` hint said *"press LV+ in a card's corner"* and now says *"open a card and press
+Level on it"*. A hint that teaches a gesture the screen no longer has is worse than no hint: the
+player does exactly what it says, nothing happens, and now they distrust the line as well as the
+mechanic.
+
+`_fuse_panel` — the overlay the badge used to open — is deleted, 100 lines. Its three priced
+buttons are the preview's three priced buttons, built from the same `_bulk_steps` and
+`_price_of`, so there is still one fuse curve in the game.
+
+#### What is tested, and what is not
+
+`CardGridTest.tscn` gains two checks. **Levelling is reachable from the preview at the table
+view's prices** — compared against `_price_of` rather than a hard-coded figure, because D133 only
+allows the prices to move on the understanding that they do not change, and pressing the button
+must actually raise the level. **The preview adds and removes and re-reads itself** — including
+that "Take one out" is refused at zero copies, becomes available after an add, and that "Add a
+copy" refuses once every owned copy is committed. The badge checks were rewritten rather than
+deleted: the mark must still be drawn on a card that cannot be paid for, it must be
+`MOUSE_FILTER_IGNORE`, and the reason must be on the face and in the preview's greyed button.
+
+**Not tested, and stated plainly: none of this ran on a phone.** There is no Android device in
+this loop and `UI.touch_ui()` reads `DisplayServer.is_touchscreen_available()`, which a headless
+suite cannot make true. What the suite proves is that the preview's row is a complete control
+surface on a desktop — every verb present, priced, refusing when it should, and re-reading
+itself — and the argument that this fixes Android is that the row needs no gesture beyond a tap
+on a button. The `card_button` touch guard is reasoned, not measured; its desktop half is
+unchanged and asserted by everything that already presses a card. The README already warns that
+Android has never been tested on real hardware, and this does not change that.

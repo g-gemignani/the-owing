@@ -36,7 +36,8 @@ func _ready() -> void:
 	await _check_drop_adds()
 	await _check_deck_row_removes()
 	await _check_drag_refused_when_spent()
-	await _check_badge_opens_prices()
+	await _check_preview_offers_levelling()
+	await _check_preview_adds_and_removes()
 	await _check_badge_shows_when_it_cannot_be_paid()
 	await _check_hover_survives_an_add()
 	await _check_relics_stay_one_line()
@@ -210,13 +211,19 @@ func _check_drag_refused_when_spent() -> void:
 		_fail("a card with every copy already in the deck was allowed to be dragged")
 	await _drop(inst)
 
-## The badge on a levelable card opens the priced buttons, and the prices it opens are
-## the table view's prices.
+## Levelling is reachable from the card PREVIEW, at the table view's prices (D220b).
 ##
-## The second half is the point. D133 refused to hide a fuse price behind a click, and
-## the grid only gets to move the prices because it does not CHANGE them — so the panel
-## is checked against `_price_of`, the same function the table row quotes.
-func _check_badge_opens_prices() -> void:
+## It used to be reachable from the LV+ badge, which opened a panel of its own. The
+## badge is a mark now — 40x14 is unusable with a thumb — so the claim moved with the
+## control: the preview a card opens must carry the priced level buttons, and the price
+## must still be readable before the click that spends, which is now the card's own
+## hover.
+##
+## Checked against `_price_of`, the same function the table row quotes, because D133
+## only allows the prices to MOVE on the understanding that they do not CHANGE. A
+## hard-coded figure would pass a grid that priced levelling differently from the table
+## beside it.
+func _check_preview_offers_levelling() -> void:
 	var inst := await _screen(true)
 	var id := ""
 	for cid in MetaState.collection:
@@ -224,36 +231,103 @@ func _check_badge_opens_prices() -> void:
 			id = String(cid)
 			break
 	if id == "":
-		_fail("no card in a stocked collection can be levelled — the badge can never appear")
+		_fail("no card in a stocked collection can be levelled — levelling can never appear")
 		await _drop(inst)
 		return
-	var badge: Button = null
 	var face := _face_for(inst, id)
-	if face != null:
-		for c in face.get_parent().get_children():
-			var b := c as Button
-			if b != null and b.text == "LV+":
-				badge = b
-				break
-	if badge == null:
-		_fail("no level badge on %s, which can be levelled" % id)
+	if face == null:
+		_fail("no face for %s in the grid" % id)
 		await _drop(inst)
 		return
 	var want: Dictionary = inst._price_of(id, 1)
-	if badge.tooltip_text.find("%d copies and %d gold" % [
-			int(want["copies"]), int(want["gold"])]) == -1:
-		_fail("the badge on %s does not quote the +1 price before it is pressed: %s" % [
-			id, badge.tooltip_text])
-	badge.pressed.emit()
+	var priced := "%d copies and %d gold" % [int(want["copies"]), int(want["gold"])]
+	# Before the click that spends: the card's own hover carries the +1 price now that
+	# the badge carries nothing.
+	if face.tooltip_text.find(priced) == -1:
+		_fail("the face of %s does not quote the +1 price before anything is opened: '%s'" % [
+			id, face.tooltip_text])
+	# ...and the preview offers it as a button.
+	UI.inspect_card(face, CardGrid.card_of(id), null, "", CardGrid.actions_for.bind(id, inst._ctx()))
 	await get_tree().process_frame
-	var priced := 0
-	for c in _controls(inst):
+	var level_btn: Button = null
+	for c in _controls(UI._inspecting):
 		var b := c as Button
-		if b != null and b.text.begins_with("+") and b.text.find("gold") != -1:
-			priced += 1
-	if priced == 0:
-		_fail("pressing the level badge on %s opened no priced buttons" % id)
+		if b != null and b.text.begins_with("Level +"):
+			level_btn = b
+			break
+	if level_btn == null:
+		_fail("the preview of %s offers no level button" % id)
+	elif level_btn.text.find("%d copies, %dg" % [int(want["copies"]), int(want["gold"])]) == -1:
+		_fail("the preview prices a level as '%s', the table says %s" % [level_btn.text, priced])
+	else:
+		var before: int = int(MetaState.collection[id]["level"])
+		level_btn.pressed.emit()
+		await get_tree().process_frame
+		if int(MetaState.collection[id]["level"]) <= before:
+			_fail("pressing the preview's level button did not level %s" % id)
+	if UI._inspecting != null and is_instance_valid(UI._inspecting):
+		UI._inspecting.queue_free()
+		UI._inspecting = null
 	await _drop(inst)
+
+## The preview is the whole control surface for a card: add, remove, and level, and the
+## row re-reads itself after every press (D220b).
+##
+## The row rebuilding is the half worth guarding. Every button on it is a statement
+## about what is still possible — "Add a copy" is refused once the deck holds them all —
+## and a row captured when the overlay opened would go stale on its own first press.
+## That matters most on a phone, where this row is the ONLY way in: drag and double-click
+## are gestures a finger cannot do.
+func _check_preview_adds_and_removes() -> void:
+	var inst := await _screen(true)
+	var id := _some_id()
+	inst.selection.erase(id)
+	inst._refresh()
+	await get_tree().process_frame
+	var face := _face_for(inst, id)
+	UI.inspect_card(face, CardGrid.card_of(id), null, inst._card_note.bind(id),
+		CardGrid.actions_for.bind(id, inst._ctx()))
+	await get_tree().process_frame
+
+	var add := _preview_button("Add a copy")
+	var drop := _preview_button("Take one out")
+	if add == null or drop == null:
+		_fail("the preview offers add=%s remove=%s — a phone has no other way in" % [add, drop])
+	else:
+		if not drop.disabled:
+			_fail("'Take one out' is pressable with no copies in the deck")
+		add.pressed.emit()
+		await get_tree().process_frame
+		if int(inst.selection.get(id, 0)) != 1:
+			_fail("the preview's add button did not put a copy in the deck")
+		# the row must have re-read itself: removal is possible now, and it was not
+		var drop2 := _preview_button("Take one out")
+		if drop2 == null or drop2.disabled:
+			_fail("after adding a copy the preview still refuses to take one out — the row is stale")
+		# ...and add must refuse once every copy is committed
+		var owned: int = MetaState.owned(id)
+		for i in owned:
+			var a := _preview_button("Add a copy")
+			if a != null and not a.disabled:
+				a.pressed.emit()
+				await get_tree().process_frame
+		var spent := _preview_button("Add a copy")
+		if spent == null or not spent.disabled:
+			_fail("the preview still offers a copy of %s with all %d already in the deck" % [id, owned])
+	if UI._inspecting != null and is_instance_valid(UI._inspecting):
+		UI._inspecting.queue_free()
+		UI._inspecting = null
+	await _drop(inst)
+
+## A button in the open preview, by the text the player reads.
+func _preview_button(text: String) -> Button:
+	if UI._inspecting == null or not is_instance_valid(UI._inspecting):
+		return null
+	for c in _controls(UI._inspecting):
+		var b := c as Button
+		if b != null and b.text == text:
+			return b
+	return null
 
 ## A card that CANNOT be levelled today still shows the badge, greyed, with the reason
 ## on it (D215).
@@ -271,16 +345,41 @@ func _check_badge_shows_when_it_cannot_be_paid() -> void:
 	MetaState.gold = 0
 	var inst := await _screen(true)
 	var badge := _badge_for(inst, id)
+	var face := _face_for(inst, id)
 	if badge == null:
 		_fail("no level badge on %s once it cannot be afforded — the mechanic is invisible" % id)
+	elif badge.mouse_filter != Control.MOUSE_FILTER_IGNORE:
+		# A mark that answers to a press is a 40x14 target again, and on a phone a tap
+		# that lands on it must reach the card face underneath (D220b).
+		_fail("the level mark on %s is still swallowing input" % id)
+	# The reason moved off the mark and onto the card, which is where a mouse looks and
+	# where the tap now goes. Asserted on the FACE, or this check would go vacuous the
+	# moment the mark stopped carrying a tooltip.
+	var why: String = MetaState.fuse_blocked_reason(id)
+	if face == null:
+		_fail("no face for %s to carry the blocked reason" % id)
 	else:
-		if not badge.disabled:
-			_fail("the level badge on %s is pressable with no gold to pay for it" % id)
-		var why: String = MetaState.fuse_blocked_reason(id)
-		if why != "" and badge.tooltip_text.find(why) == -1:
-			_fail("the blocked badge on %s does not say why: '%s'" % [id, badge.tooltip_text])
-		if badge.tooltip_text.find("Level ") == -1:
-			_fail("the blocked badge on %s does not say what the level would buy" % id)
+		if why != "" and face.tooltip_text.find(why) == -1:
+			_fail("the face of blocked %s does not say why: '%s'" % [id, face.tooltip_text])
+		if face.tooltip_text.find("LV+") == -1:
+			_fail("the face of blocked %s does not say what the level would buy" % id)
+		var blocked_btn := ""
+		UI.inspect_card(face, CardGrid.card_of(id), null, "",
+			CardGrid.actions_for.bind(id, inst._ctx()))
+		await get_tree().process_frame
+		for c in _controls(UI._inspecting):
+			var b := c as Button
+			if b != null and b.text.begins_with("Level up"):
+				blocked_btn = b.text
+				if not b.disabled:
+					_fail("the preview offers a level of %s it cannot sell" % id)
+		if blocked_btn == "":
+			_fail("the preview of blocked %s says nothing about levelling at all" % id)
+		elif why != "" and blocked_btn.find(why) == -1:
+			_fail("the preview's blocked level button does not say why: '%s'" % blocked_btn)
+		if UI._inspecting != null and is_instance_valid(UI._inspecting):
+			UI._inspecting.queue_free()
+			UI._inspecting = null
 	await _drop(inst)
 	MetaState.gold = gold
 	MetaState.collection[id]["count"] = had
@@ -403,15 +502,20 @@ func _visible_face(inst: Control, frame: Rect2) -> Button:
 			return b
 	return null
 
-## The LV+ badge on a given card, or null.
-func _badge_for(inst: Control, id: String) -> Button:
+## The LV+ MARK on a given card, or null.
+##
+## A Label since D220b, not a Button: at 40x14 it was the smallest target on the screen
+## and unusable with a thumb, so it stopped answering to anything and taps now fall
+## through it to the card face. Looked up by text rather than by class, because what
+## this suite is about is whether the player can SEE that the card can be levelled.
+func _badge_for(inst: Control, id: String) -> Label:
 	var face := _face_for(inst, id)
 	if face == null:
 		return null
 	for c in face.get_parent().get_children():
-		var b := c as Button
-		if b != null and b.text == "LV+":
-			return b
+		var l := c as Label
+		if l != null and l.text == "LV+":
+			return l
 	return null
 
 ## Move the real pointer, so the engine updates what it thinks is hovered.

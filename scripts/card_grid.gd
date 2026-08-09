@@ -186,20 +186,26 @@ static func tile(flow: Node, id: String, ctx: Ctx) -> Control:
 	col.custom_minimum_size.x = size.x
 	flow.add_child(col)
 
-	var note: String = ctx.note.call(id) if ctx.note.is_valid() else ""
+	# A supplier rather than a string: the preview this card opens can now add a copy or
+	# level it, and the note says how many copies the deck is asking for — a number its
+	# own buttons change while the player is reading it (D220b).
+	var note: Callable = ctx.note.bind(id) if ctx.note.is_valid() else Callable()
 	# `Callable()` for the press, deliberately: the click is handled below, where it
 	# can tell a single click from the first half of a double one. `card_button`'s own
 	# handler fires on every press and would open the card under the second click.
-	var b := UI.card_button(col, card, size, Callable(), "", null, note)
+	var b := UI.card_button(col, card, size, Callable(), "", null,
+		String(note.call()) if note.is_valid() else "")
 	var holder := b.get_parent() as Control
 	# The promise, in the words `tests/tooltip_test.gd` looks for and the player reads:
 	# a gesture nobody is told about is not a feature (`UI.inspect_thumb`'s rule).
-	# ...and the LV+ corner is named here as well, because a badge is only discoverable
-	# to somebody who already looked at it. This is the tooltip a player reads while
-	# working out what the grid does with a card (D215).
-	var lv: String = "\nLV+ in the corner levels it." if (ctx.fusing and _levelable(id, card)) else ""
+	#
+	# The LV+ price is stated HERE rather than on the badge, because the badge stopped
+	# being a control (D220b). It is the card's own hover that has to carry it now, and it
+	# must: D133 refused to hide a fuse price behind a click and the preview's Level
+	# button is a click away.
 	b.tooltip_text += "\n\n%s — click to see the whole card%s%s" % [
-		card.name, "" if ctx.ledger else ", double-click or drag it to the deck", lv]
+		card.name, "" if ctx.ledger else ", double-click or drag it to the deck",
+		_level_line(id, card, ctx)]
 
 	# A card whose every copy is already committed is still SHOWN — you may want to
 	# read it, or level it — but it is dimmed, because the one thing you cannot do with
@@ -211,8 +217,88 @@ static func tile(flow: Node, id: String, ctx: Ctx) -> Control:
 	_wire_face(b, holder, card, id, ctx, note)
 	if ctx.fusing and _levelable(id, card):
 		_badge(holder, size, id, card, ctx)
-	_footer(col, card, id, held, owned, note)
+	_footer(col, card, id, held, owned, note, ctx)
 	return col
+
+## What the LV+ mark means, in words, on the card's own hover.
+##
+## The badge is a mark and not a button (D220b), so this is where the price lives — and
+## it has to be somewhere, because D133's rule is that a shop states its prices before
+## the click that spends. A blocked card still quotes the level it is refusing to sell:
+## "need 4 copies" is a wall, "need 4 copies, and it takes this to 16 damage" is a goal
+## (D215).
+static func _level_line(id: String, card: CardData, ctx: Ctx) -> String:
+	if not ctx.fusing or not _levelable(id, card):
+		return ""
+	var gain: String = card.level_up_text(card.level + 1)
+	var what: String = gain if gain != "" else "no change to its numbers"
+	var blocked: String = MetaState.fuse_blocked_reason(id)
+	if blocked != "":
+		return "\nLV+ — not yet: %s. One more level: %s" % [blocked, what]
+	var one: Dictionary = ctx.price.call(id, 1) if ctx.price.is_valid() else {}
+	return "\nLV+ — one more level: %s, for %d copies and %d gold. Open the card to buy it." % [
+		what, int(one.get("copies", 0)), int(one.get("gold", 0))]
+
+## What the card's preview can DO to it, rebuilt by `UI.inspect_card` after every press.
+##
+## This is where levelling moved, and where adding a copy joined it (D220b). Both were
+## gestures before — a 40x14 badge, a double click, a drag — and all three are things a
+## finger either cannot do or cannot aim at. A row of named buttons under a card held up
+## at full size is the one place on this screen that is unambiguous on a phone and still
+## the fastest thing on a desktop, because the card you are deciding about is the thing
+## you just clicked.
+##
+## Every entry is priced and every refusal says why, so nothing here is a door onto a
+## wall: the blocked level is drawn greyed with its reason on it, the way the table
+## view's price button has always drawn it.
+static func actions_for(id: String, ctx: Ctx) -> Array:
+	var out: Array = []
+	var card := card_of(id)
+	if card == null or ctx.ledger:
+		return out
+	var owned: int = MetaState.owned(id)
+	var held: int = ctx.held(id)
+	if ctx.add.is_valid():
+		out.append({
+			"text": "Add a copy",
+			"hint": "Put one more %s in the deck.\nYou own %d and the deck is asking for %d." % [
+				card.name, owned, held],
+			"disabled": held >= owned,
+			"press": func() -> void: ctx.add.call(id),
+		})
+	if ctx.remove.is_valid():
+		out.append({
+			"text": "Take one out",
+			"hint": "Drop one %s from the deck.\nThe deck is asking for %d." % [card.name, held],
+			"disabled": held <= 0,
+			"press": func() -> void: ctx.remove.call(id),
+		})
+	if not ctx.fusing or not _levelable(id, card):
+		return out
+	var cap: int = MetaState.max_level(id)
+	var blocked: String = MetaState.fuse_blocked_reason(id)
+	if blocked != "":
+		out.append({
+			"text": "Level up — %s" % blocked,
+			"hint": "%s is level %d of %d. Not yet: %s." % [card.name, card.level, cap, blocked],
+			"disabled": true,
+		})
+		return out
+	if not ctx.steps.is_valid() or not ctx.price.is_valid():
+		return out
+	for step in ctx.steps.call(id):
+		var n := int(step)
+		var p: Dictionary = ctx.price.call(id, n)
+		var target: int = card.level + n
+		var buys: String = card.level_up_text(target)
+		out.append({
+			"text": "Level +%d  (%d copies, %dg)" % [n, int(p.get("copies", 0)), int(p.get("gold", 0))],
+			"hint": "To level %d of %d: %s\nCosts %d copies and %d gold." % [
+				target, cap, buys if buys != "" else "no change to its numbers",
+				int(p.get("copies", 0)), int(p.get("gold", 0))],
+			"press": func() -> void: ctx.fuse.call(id, n),
+		})
+	return out
 
 ## Click, double-click and drag on one card face.
 ##
@@ -222,7 +308,7 @@ static func tile(flow: Node, id: String, ctx: Ctx) -> Control:
 ## `MOUSE_FILTER_PASS` passes to the PARENT, not to the sibling underneath, so it
 ## would kill it just the same.
 static func _wire_face(b: Button, holder: Control, card: CardData, id: String,
-		ctx: Ctx, note: String) -> void:
+		ctx: Ctx, note: Callable) -> void:
 	# One timer per card rather than one per screen. A shared timer would have to be
 	# told which card it belongs to on every click, and the first thing that breaks is
 	# clicking one card while another's grace period is still running.
@@ -230,7 +316,12 @@ static func _wire_face(b: Button, holder: Control, card: CardData, id: String,
 	wait.one_shot = true
 	wait.wait_time = DOUBLE_GRACE
 	holder.add_child(wait)
-	wait.timeout.connect(func(): UI.inspect_card(b, card, null, note))
+	# The preview is the screen's ONE complete control surface for a card (D220b): the
+	# card at a size you can read, and under it every verb that applies to it. On a
+	# desktop the drag and the double click are faster and stay; on a phone neither
+	# exists, and this is the whole of it.
+	wait.timeout.connect(func():
+		UI.inspect_card(b, card, null, note, actions_for.bind(id, ctx)))
 
 	b.gui_input.connect(func(ev: InputEvent) -> void:
 		var mb := ev as InputEventMouseButton
@@ -310,17 +401,23 @@ static func _drag_ghost(card: CardData) -> Control:
 static func _levelable(id: String, card: CardData) -> bool:
 	return card.level < MetaState.max_level(id)
 
-## The one mark this view adds to a card face: it can be levelled, and here is where
-## you press.
+## The one mark this view adds to a card face: this card has a level left to buy.
 ##
-## D133 refused to put the fuse prices behind a click on the table view, and was right
-## to — the prices are what you shop on, and a shop that hides them behind a click has
-## stopped being a shop. This does not undo that. The prices are still stated before
-## anything is spent, in two places: on this badge's own hover, and on the priced
-## buttons in the panel it opens, which are the same buttons the table row carries.
-## What moved is only WHERE they are stated, and it moved because a 104px card face
-## has no room for three price buttons — which is the honest reason, and the reason
-## the table view still exists one toggle away for anyone who wants the whole column.
+## A MARK and not a button (D220b). It was a button, and at 40x14 unscaled it is the
+## smallest target on this screen — fine under a mouse, unusable under a thumb, and the
+## reported Android fault in one control. It is `MOUSE_FILTER_IGNORE` now, so a tap on
+## it falls through to the card face underneath and opens the preview, where levelling
+## lives beside everything else you can do to a card. The whole card is one target and
+## no part of it is dead.
+##
+## Which also means it carries no tooltip: an unreachable tooltip is exactly what
+## `tests/tooltip_test.gd` exists to fail on. The price it used to hold moved to the
+## card's own hover (`_level_line`), where a mouse still finds it and D133's rule — a
+## shop states its prices before the click that spends — is still kept.
+##
+## Still DRAWN when the purchase is refused, greyed rather than withheld: a control
+## that only appears once you can afford it cannot teach anyone that the purchase
+## exists (D215), which was reported as "it is not clear how to evolve a card".
 static func _badge(holder: Control, size: Vector2, id: String, card: CardData,
 		ctx: Ctx) -> void:
 	var pad := roundf(size.x * UITheme.CARD_PAD)
@@ -332,52 +429,36 @@ static func _badge(holder: Control, size: Vector2, id: String, card: CardData,
 	if w <= 0.0:
 		return
 
-	# Blocked is DRAWN, not withheld: a control that only exists once you can afford it
-	# cannot teach anyone that the purchase exists (D215). Greyed and unpressable, with
-	# the reason on the hover — the same treatment, and the same sentence, the table
-	# view's price button has always given it.
-	var blocked: String = MetaState.fuse_blocked_reason(id)
-	var up := Button.new()
-	up.text = "LV+"
-	up.focus_mode = Control.FOCUS_NONE
-	up.disabled = blocked != ""
-	up.add_theme_font_size_override("font_size", maxi(9, int(h * 0.72)))
-	up.add_theme_color_override("font_color", Color(0.72, 0.94, 0.66))
-	up.add_theme_color_override("font_hover_color", Color(0.88, 1.0, 0.82))
-	up.add_theme_color_override("font_disabled_color", Color(0.60, 0.64, 0.58, 0.72))
-	for state in [["normal", 0.72], ["hover", 0.92], ["pressed", 1.0], ["disabled", 0.34]]:
-		var sb := StyleBoxFlat.new()
-		var off: bool = String(state[0]) == "disabled"
-		sb.bg_color = (Color(0.07, 0.07, 0.08, float(state[1])) if off
-			else Color(0.05, 0.10, 0.05, float(state[1])))
-		sb.border_color = (Color(0.42, 0.44, 0.40, float(state[1])) if off
-			else Color(0.50, 0.80, 0.46, float(state[1])))
-		sb.set_border_width_all(1)
-		sb.set_corner_radius_all(int(h * 0.4))
-		sb.set_content_margin_all(0)
-		up.add_theme_stylebox_override(String(state[0]), sb)
-	holder.add_child(up)
-	up.set_anchors_preset(Control.PRESET_TOP_LEFT)
-	up.position = Vector2(x, pad)
-	up.size = Vector2(w, h)
-	up.custom_minimum_size = Vector2.ZERO
+	# Greyed when the purchase is refused, drawn either way. Colours only — there are no
+	# button states to style, because this answers to nothing.
+	var blocked: bool = MetaState.fuse_blocked_reason(id) != ""
+	var plate := Panel.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.07, 0.08, 0.34) if blocked else Color(0.05, 0.10, 0.05, 0.72)
+	sb.border_color = Color(0.42, 0.44, 0.40, 0.34) if blocked else Color(0.50, 0.80, 0.46, 0.72)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(int(h * 0.4))
+	plate.add_theme_stylebox_override("panel", sb)
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(plate)
+	plate.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	plate.position = Vector2(x, pad)
+	plate.size = Vector2(w, h)
+	plate.custom_minimum_size = Vector2.ZERO
 
-	# The next level's price, on the badge itself. This is the sentence that keeps the
-	# move honest: the cheapest purchase behind this door is quoted before the door is
-	# opened, so nobody clicks it to find out what it costs.
-	var one: Dictionary = ctx.price.call(id, 1) if ctx.price.is_valid() else {}
-	var gain: String = card.level_up_text(card.level + 1)
-	# A blocked badge still quotes the level it is refusing to sell. "Need 4 copies" on
-	# its own is a wall; "need 4 copies, and it would take this to 16 damage" is a goal,
-	# and it is the sentence that makes somebody go and earn the copies.
-	up.tooltip_text = "Level %s: %s\n%s" % [
-		card.name, gain if gain != "" else "no change to its numbers",
-		("Costs %d copies and %d gold.\nClick for the bulk prices." % [
-			int(one.get("copies", 0)), int(one.get("gold", 0))]) if blocked == ""
-		else "Not yet: %s." % blocked]
-	if blocked != "":
-		return
-	up.pressed.connect(func(): _fuse_panel(up, id, ctx))
+	var lbl := Label.new()
+	lbl.text = "LV+"
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl.add_theme_font_size_override("font_size", maxi(9, int(h * 0.72)))
+	lbl.add_theme_color_override("font_color",
+		Color(0.60, 0.64, 0.58, 0.72) if blocked else Color(0.72, 0.94, 0.66))
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	holder.add_child(lbl)
+	lbl.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	lbl.position = Vector2(x, pad)
+	lbl.size = Vector2(w, h)
+	lbl.custom_minimum_size = Vector2.ZERO
 
 ## How many copies of this card the deck is asking for, out of how many exist.
 ##
@@ -386,7 +467,7 @@ static func _badge(holder: Control, size: Vector2, id: String, card: CardData,
 ## many did I take" at all, which is the one thing the table's stepper column said at
 ## a glance.
 static func _footer(col: VBoxContainer, card: CardData, id: String, held: int,
-		owned: int, note: String) -> void:
+		owned: int, note: Callable, ctx: Ctx) -> void:
 	var foot := Label.new()
 	foot.custom_minimum_size = Vector2(UITheme.px(TILE_W), UITheme.px(FOOT_H))
 	foot.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -399,107 +480,9 @@ static func _footer(col: VBoxContainer, card: CardData, id: String, held: int,
 	# The second way into the card, and the one `tooltip_test.gd` counts as the TEXT
 	# half of the pair: every card in every list is openable from its picture and from
 	# its words, or the affordance is only half shipped (D205b).
-	UI.inspect_text(foot, card, note)
-
-# --- the fuse panel ----------------------------------------------------------
-
-## The priced level buttons, over the card they belong to.
-##
-## Deliberately the same three purchases the table row offers — `+1`, `+10`, and
-## everything you can afford — built from the screen's own `steps` and `price`, so
-## there is one fuse curve in the game and not a second one that drifts. A player who
-## learns the prices in one view knows them in the other.
-static func _fuse_panel(anchor: Control, id: String, ctx: Ctx) -> void:
-	var card := card_of(id)
-	if card == null or not ctx.steps.is_valid() or not ctx.price.is_valid():
-		return
-	# The OUTERMOST Control above the badge, never `current_scene` — `UI.inspect_card`
-	# spells out why and this is the same problem: the two are the same node in the game
-	# and are not the same node under a harness that parents a screen beneath a plain
-	# Node, which gets a null host and silently opens nothing. Hanging the panel off the
-	# screen's own root also means it dies with the screen.
-	var host: Control = null
-	var walk: Node = anchor
-	while walk != null:
-		if walk is Control:
-			host = walk as Control
-		walk = walk.get_parent()
-	if host == null:
-		return
-
-	var veil := ColorRect.new()
-	veil.color = Color(0, 0, 0, 0.72)
-	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
-	veil.z_index = 120
-	veil.mouse_filter = Control.MOUSE_FILTER_STOP
-	host.add_child(veil)
-	# Anywhere off the panel closes it. Same gesture as `UI.inspect_card`'s veil, so
-	# the two overlays this screen can raise are dismissed the same way.
-	veil.gui_input.connect(func(ev: InputEvent) -> void:
-		var mb := ev as InputEventMouseButton
-		if mb != null and mb.pressed:
-			veil.queue_free())
-
-	var centre := CenterContainer.new()
-	centre.set_anchors_preset(Control.PRESET_FULL_RECT)
-	centre.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	veil.add_child(centre)
-
-	var bay := PanelContainer.new()
-	bay.add_theme_stylebox_override("panel", Icons.card_style(card.rarity, 0.10))
-	centre.add_child(bay)
-	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", UITheme.sep(8))
-	bay.add_child(col)
-
-	var cap: int = MetaState.max_level(id)
-	var head := Label.new()
-	head.text = "%s — level %d of %d" % [card.name, card.level, cap]
-	head.add_theme_color_override("font_color", Icons.rarity_colour(card.rarity))
-	col.add_child(head)
-
-	var purse := Label.new()
-	purse.text = "%d copies owned, %d gold in the purse" % [MetaState.owned(id), MetaState.gold]
-	purse.add_theme_color_override("font_color", Color(0.78, 0.76, 0.82))
-	col.add_child(purse)
-
-	# What the next level BUYS, beside what it costs, and not only on a hover. This is
-	# the half D133 added to the table row — a shop that states its prices and not its
-	# goods is asking for a decision nobody can make well — and it would have been the
-	# easiest thing in the world to leave in a tooltip here and call the prices moved.
-	var gain: String = card.level_up_text(card.level + 1)
-	if gain != "":
-		var buys := Label.new()
-		buys.text = "One more level: %s" % gain
-		buys.add_theme_color_override("font_color", Color(0.72, 0.86, 0.68))
-		col.add_child(buys)
-
-	for step in ctx.steps.call(id):
-		var n := int(step)
-		var p: Dictionary = ctx.price.call(id, n)
-		var target: int = card.level + n
-		var buys: String = card.level_up_text(target)
-		var f := Button.new()
-		UITheme.style_button(f)
-		f.text = "+%d   %d copies, %d gold" % [n, int(p.get("copies", 0)), int(p.get("gold", 0))]
-		UI.hoverable(f, "To level %d: %s\nCosts %d copies and %d gold." % [
-			target, buys if buys != "" else "no change to its numbers",
-			int(p.get("copies", 0)), int(p.get("gold", 0))])
-		# The panel closes on the purchase because the screen rebuilds underneath it:
-		# the card is now a level higher and every price on this panel is stale.
-		f.pressed.connect(func():
-			veil.queue_free()
-			if ctx.fuse.is_valid():
-				ctx.fuse.call(id, n))
-		col.add_child(f)
-
-	var never := Button.new()
-	UITheme.style_button(never)
-	never.text = "Never mind"
-	never.pressed.connect(func():
-		Audio.play("ui_back")
-		veil.queue_free())
-	col.add_child(never)
+	# ...and it opens the same preview the face does, actions and all: two ways in must
+	# lead to one place, or the count under a card is a door to a lesser room (D220b).
+	UI.inspect_text(foot, card, note, actions_for.bind(id, ctx))
 
 # --- the deck bay ------------------------------------------------------------
 
@@ -756,7 +739,8 @@ static func _deck_row(parent: Node, id: String, ctx: Ctx) -> void:
 			return
 		b.accept_event()
 		UI.inspect_card(b, card, null,
-			ctx.note.call(id) if ctx.note.is_valid() else ""))
+			ctx.note.bind(id) if ctx.note.is_valid() else "",
+			actions_for.bind(id, ctx)))
 	holder.add_child(b)
 	b.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	# The row is `ROW_H`, or as tall as the button needs — whichever is more. Anchoring a

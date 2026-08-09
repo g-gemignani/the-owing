@@ -854,7 +854,7 @@ These are failure modes that have actually bitten this project. Treat each as a 
   direction: **judge at the size the defect is visible, which is not always the size the
   thing is drawn.**
 
-  **And not every mark on a sprite is a hole (D220).** The one on the Marrow-Priest was the
+  **And not every mark on a sprite is a hole (D220b).** The one on the Marrow-Priest was the
   generator's watermark left OPAQUE in the field beside his arm — no detector that looks for
   missing alpha can see it, and at 1:1 over a dark corridor it reads as a smudge on the
   robe. It took 10x on magenta to tell "beside the arm" from "on the arm", and those are
@@ -1132,6 +1132,20 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `glossary.gd` reads `MetaState` again. **The same split decides where new information
   goes:** a rule goes on the rules screen, a fact about this save goes on the screen that
   owns the thing it is a fact about.
+
+- **Count the ways into a feature, and check how many of them a finger can make.** D213's
+  grid offered three — drag to the bay, double-click, and a 40x14 badge — and on Android all
+  three are unusable: touch drag fights the scroll, `double_click` is not reliable on
+  emulated mouse events, and a fingertip is bigger than the badge. The screen had no working
+  way to build a deck and nothing failed (D220b). **A gesture is not a control. If every way
+  in is a gesture, there is no way in on a touchscreen** — the fix was to put every verb in
+  the card preview as a named button, which is also faster with a mouse.
+
+- **Ship the mark, drop the press.** When a target is too small to hit, making it
+  `MOUSE_FILTER_IGNORE` so taps fall through to the large thing underneath beats shrinking
+  the gesture or growing the target (D220b). It keeps whatever the mark was teaching and
+  leaves nothing dead. Remember its tooltip has to move somewhere reachable, or
+  `tooltip_test.gd` fails — correctly.
 
 - **A gesture that opens a modal cannot also be half of a compound gesture.** Clicking a
   card face opens `UI.inspect_card`, which raises a full-screen veil that swallows the next

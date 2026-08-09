@@ -616,12 +616,17 @@ func _refresh_list() -> void:
 	CardGrid.fill_deck(deck_bay, ctx)
 	if _cards_view():
 		CardGrid.fill(list_box, shown, ctx)
-		# Levelling is a whole mechanic reachable only from a badge in a card's corner,
-		# so it is said once in words the first time the player is somewhere they could
-		# use it. Same flag as the table view's hint (`_build_fuse_cell`), so nobody is
-		# told twice — only the gesture differs between the two views.
+		# Levelling is a whole mechanic and in this view it is one screen in, so it is
+		# said once in words the first time the player is somewhere they could use it.
+		# Same flag as the table view's hint (`_build_fuse_cell`), so nobody is told
+		# twice — only the route differs between the two views.
+		#
+		# It named the LV+ badge as the thing to press until D220b took the press off it.
+		# A hint that teaches a gesture the screen no longer has is worse than none: the
+		# player does exactly what it says, nothing happens, and now they distrust the
+		# line as well as the mechanic.
 		if _fusing_allowed() and MetaState.hint_once("first_fuse"):
-			_say("Levelling spends copies AND gold: press LV+ in a card's corner. Deck width and purse, traded for power.")
+			_say("Levelling spends copies AND gold: open a card and press Level on it. Deck width and purse, traded for power.")
 		# The row snapper measures the CHILDREN of `list_box` and trims the frame so the
 		# last whole one ends at the bottom edge. In the grid there is one child — the
 		# flow container — and its height is the whole grid, so the measurement says
@@ -715,17 +720,28 @@ func _rebuild() -> void:
 
 ## Everything `CardGrid` is allowed to do to this screen, and nothing more.
 ##
-## Built fresh on each refresh rather than kept, because `counts` is a SNAPSHOT: the
-## grid reads it while it lays out and must not be handed a dictionary that the next
-## click mutates underneath it. Every verb routes back through the methods the table
-## view already uses — `_adjust`, `_on_fuse`, `_bulk_steps`, `_price_of` — so the two
-## views cannot come to different conclusions about a price or a clamp.
+## Built fresh on each refresh rather than kept. Every verb routes back through the
+## methods the table view already uses — `_adjust`, `_on_fuse`, `_bulk_steps`,
+## `_price_of` — so the two views cannot come to different conclusions about a price or
+## a clamp.
+##
+## `counts` is `selection` ITSELF and not a copy of it, and that changed in D220b. It was
+## duplicated, defensively, so that nothing could mutate the deck while the grid was
+## laying itself out — a hazard that never existed, because nothing is clicking during a
+## layout pass. What does exist is the card preview: it now carries Add, Take out and
+## Level, it rebuilds its own row after every press, and against a snapshot that row
+## re-read a deck frozen at the moment the overlay opened. Add a copy and the preview
+## went on insisting the deck held none. A Dictionary is a reference, so handing over
+## the real one is the whole fix.
+##
+## In a run it is a fresh tally of `GameState.run_deck` instead, which is not live and
+## does not need to be: the deck is dealt and LEDGER offers no verbs at all.
 func _ctx() -> CardGrid.Ctx:
 	var c := CardGrid.Ctx.new()
 	c.ledger = mode == Mode.LEDGER
 	c.fusing = _fusing_allowed()
 	c.grid = _cards_view()
-	c.counts = _run_counts() if c.ledger else selection.duplicate()
+	c.counts = _run_counts() if c.ledger else selection
 	c.add = func(id: String) -> void:
 		var before: int = int(selection.get(id, 0))
 		_adjust(id, 1)
