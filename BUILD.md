@@ -2,10 +2,10 @@
 
 ## Just playing it
 
-Don't build it — download it. Every green push to `main` publishes Linux, Windows and
-macOS binaries under a permanent link:
+Don't build it — download it. Every `v*` tag publishes Linux, Windows, macOS and Android
+binaries, and this link always serves the newest of them:
 
-**<https://github.com/g-gemignani/the-owing/releases/tag/latest>**
+**<https://github.com/g-gemignani/the-owing/releases/latest>**
 
 Or, from a checkout with **Godot 4.7**:
 
@@ -15,9 +15,15 @@ GODOT=/path/to/godot ./run.sh      # or put godot on PATH and run ./run.sh
 
 ## The release pipeline
 
-`.github/workflows/ci.yml` runs the suite, checks every preset is still exportable, and
-then — only from `main`, only after both of those pass — builds **all five platforms**
-and republishes them under the fixed tag `latest`.
+`.github/workflows/ci.yml` runs the suite and checks every preset is still exportable on
+**every push and every pull request**. It builds and publishes only when a **`v*` tag** is
+pushed, and only after both of those pass (D227). Cutting a release is therefore two
+commands, and the second one is the decision:
+
+```bash
+git tag -a v0.2.0 -m "what changed"
+git push origin v0.2.0
+```
 
 | job | runner | why |
 |---|---|---|
@@ -25,17 +31,29 @@ and republishes them under the fixed tag `latest`.
 | `build-android` | `ubuntu-latest` | the runner image already carries a JDK and the SDK; Godot finds both through `JAVA_HOME` and `ANDROID_HOME` |
 | ~~`build-ios`~~ | `macos-latest` | written, **commented out** — it never got past `xcodebuild` (D147) |
 
-Five things about it are deliberate and easy to undo by accident:
+Eight things about it are deliberate and easy to undo by accident:
 
-* **The tag is fixed, and there is no version history.** The README links to
-  `releases/download/latest/<file>`, which is only a stable URL because the tag never
-  moves off that name. A release channel that depends on somebody remembering to cut a
-  version tag is a download link that goes stale, which is worse than no link. Add a
-  `v*`-triggered job beside it the day there is a v1; do not repoint this one.
+* **The suite and the builders run on different triggers, on purpose.** A regression should
+  be caught on the push that caused it; a binary should exist only for a state somebody
+  decided to name. Widening the builders back to every push to `main` is what D227 undid.
+* **The download links contain no version, and still need no fixed tag.**
+  `releases/latest/download/<file>` is resolved by GitHub to the current release's asset, so
+  the README's links never change while the releases behind them do. This is why the release
+  is published with `--latest` and **not** with `--prerelease`: that endpoint skips
+  prereleases, and setting the flag would silently take every download link on the page down.
+* **`gh release delete` runs without `--cleanup-tag`.** On the old rolling channel the tag was
+  an output and deleting it was free. A `v*` tag is the pipeline's *input* — the thing that
+  asked for the build — so cleaning it up would erase the version being published and make a
+  re-run impossible.
+* **A tag that disagrees with `config/version` fails the build.** `tools/stamp_build.sh` is
+  given the tag and refuses to stamp if it does not match, because the alternative is a
+  release page saying 0.2.0 over a binary that reports 0.1.0 in Settings — visible only in a
+  bug report, which is the one place it cannot be corrected. Bump `config/version` in
+  `project.godot` in the commit you are about to tag.
 * **The release is deleted and recreated, not edited.** Force-moving a git tag under an
   existing GitHub release leaves the release still recording the *old* commit, and
   nothing in `gh release edit` can correct it — so the page would state a provenance
-  that is false. The cost is a few seconds where the download 404s.
+  that is false.
 * **The exit code of `--export-release` is not trusted.** It returns non-zero on import
   warnings that did not stop it, so the job checks the output file exists and clears a
   size floor instead — the same verdict `tests/export_ready.sh` uses, for the same

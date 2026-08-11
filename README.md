@@ -1,6 +1,6 @@
 # The Owing
 
-[![latest build](https://img.shields.io/github/release-date-pre/g-gemignani/the-owing?label=latest%20build&color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/tag/latest)
+[![latest release](https://img.shields.io/github/v/release/g-gemignani/the-owing?label=latest%20release&color=brightgreen)](https://github.com/g-gemignani/the-owing/releases/latest)
 [![platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-brightgreen)](#get-it)
 [![licence](https://img.shields.io/badge/licence-Apache_2.0-brightgreen)](LICENSE)
 
@@ -25,10 +25,10 @@ Pick your machine, download, open. There is no installer and no account.
 
 | | download | opening it |
 |---|---|---|
-| **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-windows-x86_64.zip) (77 MB) | Unzip and run **TheOwing.exe**. Windows shows a blue "unrecognised app" box the first time — click **More info**, then **Run anyway** |
-| **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-macos-universal.zip) (98 MB) | Unzip, then **right-click the app and choose Open** (not double-click) so macOS offers you the Open button |
-| **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-linux-x86_64.zip) (68 MB) | Unzip, then run `TheOwing.x86_64`. If it will not start, mark it executable first: `chmod +x TheOwing.x86_64` |
-| **Android phone or tablet** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/download/latest/TheOwing-android.apk) (92 MB) | Copy it to your phone and tap it. Android 7 or newer. If it says *App not installed*, delete the older copy first |
+| **Windows** | [`TheOwing-windows-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/latest/download/TheOwing-windows-x86_64.zip) (77 MB) | Unzip and run **TheOwing.exe**. Windows shows a blue "unrecognised app" box the first time — click **More info**, then **Run anyway** |
+| **macOS** | [`TheOwing-macos-universal.zip`](https://github.com/g-gemignani/the-owing/releases/latest/download/TheOwing-macos-universal.zip) (98 MB) | Unzip, then **right-click the app and choose Open** (not double-click) so macOS offers you the Open button |
+| **Linux** | [`TheOwing-linux-x86_64.zip`](https://github.com/g-gemignani/the-owing/releases/latest/download/TheOwing-linux-x86_64.zip) (68 MB) | Unzip, then run `TheOwing.x86_64`. If it will not start, mark it executable first: `chmod +x TheOwing.x86_64` |
+| **Android phone or tablet** | [`TheOwing-android.apk`](https://github.com/g-gemignani/the-owing/releases/latest/download/TheOwing-android.apk) (92 MB) | Copy it to your phone and tap it. Android 7 or newer. If it says *App not installed*, delete the older copy first |
 
 <sub>Sizes read from the current build by `tools/readme_downloads.sh` — not typed here,
 because typed ones were three megabytes stale and nobody could tell (D207).</sub>
@@ -121,7 +121,7 @@ is and how much of it you decide to turn over.
 
 **Tell me which build it was.** Every copy stamps its own version in the corner of the title
 screen, and Settings spells it out under *Build*. That string identifies the exact code you were
-running; the filename doesn't, because the download link always points at the newest build.
+running; the filename doesn't, because every release names its assets the same way.
 Then [open an issue](https://github.com/g-gemignani/the-owing/issues).
 
 Known rough edges, so you don't waste time reporting them:

@@ -213,6 +213,10 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D221** | [Twice I called a severed limb a painted drip, and the test that settles it existed](#d221--twice-i-called-a-severed-limb-a-painted-drip-and-the-test-that-settles-it-existed) |
 | **D222** | [Two contacts and nothing between them, which is a slide rather than a walk](#d222--two-contacts-and-nothing-between-them-which-is-a-slide-rather-than-a-walk) |
 | **D223** | [Thirty relics with no gate on them, so the collection emptied halfway to the end](#d223--thirty-relics-with-no-gate-on-them-so-the-collection-emptied-halfway-to-the-end) |
+| **D224** | [Rarity was a colour, not a claim, and the score that could have settled it was wrong about half the game](#d224--rarity-was-a-colour-not-a-claim-and-the-score-that-could-have-settled-it-was-wrong-about-half-the-game) |
+| **D225** | [The powers were never re-filed either, and on a phone no list could be moved at all](#d225--the-powers-were-never-re-filed-either-and-on-a-phone-no-list-could-be-moved-at-all) |
+| **D226** | [The game is not fun, and the pillar that keeps it honest is the reason](#d226--the-game-is-not-fun-and-the-pillar-that-keeps-it-honest-is-the-reason) |
+| **D227** | [Builds only happen for a version somebody named](#d227--builds-only-happen-for-a-version-somebody-named) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -14885,3 +14889,262 @@ What is NOT fixed: the Powers screen still fits its frame to the pixel, and a sc
 slack is one system inset away from hiding its own last row. That is a layout budget question of
 the kind D133 spent an entry on, and it wants a capture from the device rather than another
 arithmetic argument here.
+
+---
+
+### D226 — The game is not fun, and the pillar that keeps it honest is the reason
+
+The complaint was flat: *"I find it boring."* The wanted feeling was named precisely — Hearthstone
+**Duels** and **Dungeon Run**, and, unpacked: you bring a build, you find the broken thing, and the
+escalation feels earned rather than handed over.
+
+That is not a content gap. Every one of those three is blocked by something the project decided on
+purpose, and the first one is a **pillar**.
+
+**Priced power must equal delivered power is an anti-escalation invariant.** `combat_engine.setup`
+recomputes `Balance.power_ratio(deck, relics, power)` on every fight, and `power_ratio` adds
+`relic_power(relics) / RELIC_POWER_PER_RATIO` and multiplies by `throughput_multiplier(relics, …)`.
+So a relic taken off the elite on floor 2 makes floors 3–8 harder. The gift is taxed at the moment
+it is received. Dungeon Run's whole pleasure is *untaxed* escalation — you leave the dungeon absurd —
+and this machine was built, deliberately and with measurements behind it (D180, D208), to do the
+opposite. The two cannot both hold. **A pillar that has been defended five times can still be the
+thing standing between the game and the feeling it is for**, and no amount of content gets past it.
+
+Two things make the crossing cheaper than it reads:
+
+* `scaling_ratio()` clamps the multiplied ratio to `ratio_ceiling(difficulty)`, and D209 measured
+  that clamp as **a no-op in 25 of 42 cells**. Over half the game already hands out free power. This
+  is an extension of what happens at depth, not an invention.
+* The clamp stays as the only rail, so nothing can run away.
+
+#### The decision: relics stop persisting
+
+Relics move **into the run**. They are discovered on the floors, they are what makes a run go broken
+or go weak, and they leave when the run does. The rule that replaces the pillar is one sentence:
+
+> **Persistent power lives in the deck and is priced. Found power is free and temporary.**
+
+That is Duels' own resolution — the collection is a deck source, not a power source — with the
+collection kept, because fusion is *inside* the deck and `power_ratio` already prices it correctly.
+
+It also deletes the worst tuning problem in the project. D208's pain was that a sim profile must
+derive its relic count from `clears`, because a boss drops one per clear and relics are never lost;
+getting that arithmetic wrong moved **42 cells by a mean of +17 points**. With no persistence,
+`clears` drives max HP and the collection and nothing else. The hardest half of the profile model
+evaporates rather than being fixed again.
+
+#### What it costs, which is more than the change itself
+
+* **Thirty relics is not enough, and it is the wrong thirty.** A run would see 4–6. REVIEW.md's
+  count stands: **18 of 30 are numeric tiers of five templates** — five `+N max HP`, five
+  `start with N Block`, three gold-percent, two that are word-for-word identical, two `N Strength`.
+  As wallpaper on a persistent character that is survivable. As the *discovery mechanic* it is fatal:
+  most runs would find nothing worth telling anyone about. So the rule-breaker rewrite is a
+  **prerequisite**, not a follow-up.
+* **Three effects do not survive the move.** `bonus_max_hp` is nearly worthless found on floor 4;
+  `gold_percent` is a meta-economy effect in a run that no longer feeds a meta economy;
+  `heal_after_combat` was tuned against a whole progression's attrition.
+* **The pool wants roughly doubling.** With choice-of-three across ~6 drops a run touches 18 of 30
+  slots — over half the pool, every single time. Dungeon Run ran about ninety.
+* **The balance target stops being a number.** Random in-run relics turn every cell of
+  `sim_balance` into a spread, so the report becomes p10/p50/p90 and the target becomes *p50 in
+  band, p90 above it (that is the broken run, and it is the product), p10 not zero (that is the bad
+  run you can still win)*. More work on the instrument than on the game.
+
+#### Two rules the design does not work without
+
+**Always offer three; never hand one.** `encounter.gd:147`, `combat.gd:2123` and `combat.gd:2268`
+each grant a single rolled relic. Variance is fun and a wasted forty minutes is not, and the whole
+difference between them is whether the player chose. It also deletes the branch at `combat.gd:2129`
+that has to explain *"No relic here — N are still sealed"*. Offers are bucketed by the run deck's
+leading archetype, off `resources/builds/*.tres`, which already lists each archetype's ten cards —
+the same generator that buckets the post-fight card offers, because a random card offer *dilutes* a
+focused deck while a bucketed one sharpens it.
+
+**No fight in the dungeon pays nothing.** This is the exploit the change opens, and it is precise.
+Relics drop from elites and bosses only. If the escalation lives on elites, the optimal line becomes
+*shake off every normal fight, fight only elites* — strictly better than today's optimum, and it
+hollows the crawl into a walk between four elites. Normal fights do not need to pay relics; under
+the bucketed offer a normal fight pays a coherent card, which is now real power. The chain just
+cannot have a gap in it.
+
+Read that against `TALLY_DECLINES`, which already exists for the same worry: an errand may count a
+`shaken` but may never pay for one, because *"declining content and doing nothing are different
+failures, and only one of them is visible in the counters."* The new model makes the decline
+**self-pricing** — it costs HP *and* forfeits the only compounding reward in the run — which is
+stronger than the prohibition. So the doctrine is restated: **a decline must forfeit escalation, not
+merely cost HP.** And the skip has to be *counted*, or the D124 hole opens in a new place: if the
+sim driver never shakes off, the report cannot tell whether skipping is optimal. `shaken` per run,
+before and after, and if the rate does not fall the reward is invisible or too small.
+
+Farming the other way is already closed: the walker population is dealt at `generate`
+(`traversal_iso.gd:2065`) and the only thing that adds to it is the crowded stone through
+`_spawn_late`. Under this model that stone becomes **a treasure** — opt into more fights, opt into
+more relics — which is an existing price turning into a gamble for nothing.
+
+#### Does the iso crawl fit
+
+Better than a node map on the thing that matters most, worse on one thing that is serious.
+
+**The strong fit is that treasure comes from places rather than from a menu.** Dungeon Run offers
+three off a list after each win. This game has sealed pockets behind marked walls with a penned
+elite standing over the prize, revealed *with* the pocket so the wager is made on full information
+(D182/D183, `traversal_iso.gd:1279`); locked chests wanting a key that is lying off-route in a far
+corner (D167); tolls; and chest tiers already lit by tier so the value reads from the doorway
+(D172). A relic detoured three rooms for and killed a guard over is a better story than one picked
+off a list. Encounter count is ~6 a dungeon against Dungeon Run's 8, so the *shape* needs nothing
+done to it.
+
+**The serious problem is that the beat is smeared.** Dungeon Run's escalation reads because it is
+eight discrete steps and the player always knows how many remain. Multi-floor crawls of 130-tile
+floors, with keys, detours, errands, variations and back doors, spread the curve across an hour of
+walking — and escalation whose shape cannot be felt does not read as escalation. **So the floor
+becomes the beat:** exactly one guaranteed treasure decision per floor, announced on arrival, which
+makes floors countable. The frame is already there — a floor announces itself with a ledger in its
+own lit room, and the architecture changes with depth (D176, D177, D184).
+
+Three more, all worth knowing before building:
+
+* **The crawl will out-compete the fight, and the metric will get blamed on the relics.** Forty-six
+  errands, sixteen debts, seven architectures, pockets, tolls, back doors — against one Power per
+  fight. Escalation lands *in the fight*, which is the thinnest system in the game. The run would
+  stay interesting because of the crawl while the relics did nothing legible, the escalation number
+  would come back flat, and the conclusion would be wrong. This is the argument for doing the
+  rule-breakers first: escalation needs somewhere to land.
+* **`ISO_MOVES_PER_ENCOUNTER_MAX` will resist, mildly.** A guaranteed treasure room adds tiles
+  without adding a fight. D84 is the encouraging precedent — chests took a floor 78 → 130 tiles and
+  the measured walk *fell* 7.1 → 6.8, because there was more worth walking toward; keys cost 0.1 of
+  a 7.5 ceiling. Do the arithmetic before building, per D79.
+* **There is no mirror, and that is the one piece of Duels that does not port.** Duels' escalation
+  felt earned because the opponent's was visible too. A crawl has no opponent; this game's is the
+  boss, named at the door (D211). So the boss has to visibly answer what the place has paid — or the
+  power fantasy reads as handed over rather than won.
+
+#### The instruments, because "is it fun" is currently unmeasurable here
+
+Forty-six suites and a simulator, and every one of them measures **difficulty**. `sim_balance` can
+prove a run completes 52% of the time; nothing in the tree can say whether anyone wanted a second
+one. That asymmetry is visible in REVIEW.md: the fun defects were diagnosed correctly and are still
+open, while difficulty got D175, D180, D208 and D209. **Rigor flows to whatever is measured**, so
+four numbers are added to `sim_balance` before the content changes:
+
+| number | what it is | why |
+|---|---|---|
+| **escalation ratio** | final-fight damage-per-turn ÷ first-fight damage-per-turn | the Dungeon Run feeling as one number; at 1.4 there is no power fantasy whatever the relics say |
+| **percentiles** | p10/p50/p90 per cell, not the mean | every run landing at 52% is boring by construction; the tails are the product |
+| **decision density** | the spread between the driver's best play and its second-best, per turn | the only number that can say whether the FIGHTS are flat rather than the loot — and which of the two it is, is currently unknown |
+| **run divergence** | distance between two runs' end-of-run relic sets and decks, same starting deck | if runs converge, the escalation is not doing anything |
+
+All four are diagnostic and none is pass/fail, deliberately: a fun metric with a hard threshold
+becomes a thing that gets tuned toward instead of a thing that gets looked at.
+
+Two tests no simulator can run, and they are not optional. **Can the run be described in one
+sentence?** *"The one where the free-first-card relic turned up and the exhaust deck went stupid"*
+means the run had a story; *"I played the Ossuary"* means it did not. **And is another run started
+voluntarily?** Logged honestly, dated — the moment a run is played to test rather than because it is
+wanted, that is data.
+
+#### The order, so a half-done migration is still an improvement
+
+1. Rewrite the pool for rule-breakers — modifier hooks at `card_damage()`, `card_block()`,
+   `play_cost()` and `_resolve()`, which D204 already forced every consumer through, the simulator
+   included. Relics still persist. Safe, and measurable with the instrument as it stands.
+2. Choice-of-three at all three grant points, bucketed off the deck's leading archetype.
+3. *Then* flip persistence off: drop the relic terms from `power_ratio` (`balance.gd:779,781`), keep
+   `scaling_ratio`'s ceiling as the only rail, rebuild `relics_screen` as a found-log whose gold
+   buys **pool influence** rather than power — drop a relic out of the pool, add a second copy of
+   one — so every meta screen keeps a job, the gold keeps a sink, and none of it touches
+   `power_ratio`. `escrow_relics` deletes itself with the D68 die-on-purpose exploit it existed for.
+4. Re-fit difficulty against percentiles.
+
+Steps 1 and 2 are improvements under today's rules. Nothing here strands the tree.
+
+**The kill criteria, written before the build rather than the rationale after it.** This project's
+reverts are the best thing in it — D175 deleted a difficulty knob that read fine on paper, D88 killed
+three traversal models, D96 threw away two derivations of a zone label — and they work because a
+number was named first:
+
+* If the **escalation ratio** does not clear **3x** by the Ossuary, step 1 is wrong and comes out.
+* If `shaken` per run does not **fall** once relics are in-run, the reward is invisible and the
+  offer, not the pool, is the bug.
+* If **run divergence** on a fixed starting deck stays inside the noise floor — and the noise floor
+  is established first, because `sim_balance` does not seed its RNG and two runs of identical code
+  differ by a mean of 0.4 with one cell swinging 15 (D120) — then the pool is too small and no
+  amount of tuning fixes it.
+* If **decision density** does not move while the escalation ratio does, the loot got better and the
+  fights did not, and step 1 addressed the wrong system.
+
+Nothing in this entry is built yet. It is written first because the change undoes four earlier
+decisions on purpose, and a reversal that is not written down is a reversal the next person argues
+back the other way.
+
+---
+
+### D227 — Builds only happen for a version somebody named
+
+Asked for directly: *"tag the current version"* and *"make the pipeline build only a tagged version
+so that I have control on when to build what."*
+
+The channel it replaces was a rolling `latest`: every green push to `main` deleted and recreated one
+GitHub release, so the README could link to a URL that never changed. The reasoning written into
+`ci.yml` was that *"a release channel that depends on somebody remembering to cut a tag is a
+download link that goes stale"*, and it was correct for as long as every push was an improvement to
+a prototype. **D226 is what ends it.** A tree part-way through a design inversion publishes its
+half-built states as the thing to download, and a rolling channel has no way to say *not that one*.
+
+What changed:
+
+* `on:` gained `tags: ["v*"]`. The **suite and the export-readiness check still run on every push
+  and every PR** — a regression should be caught on the push that caused it. Only the three builders
+  and the release moved to the tag, because a binary should exist only for a state somebody named.
+* Their conditions read `startsWith(github.ref, 'refs/tags/v')` rather than matching `ref_name`, so
+  a branch called `v-something` cannot satisfy them.
+* `concurrency` is per tag rather than one `release-latest` group, so two tags publish in parallel
+  instead of queueing.
+
+Three things about it were not obvious, and two of them would have been silent:
+
+**`--prerelease` had to go, and dropping it is what keeps the README working.** The download links
+had to stay version-free, and `releases/latest/download/<file>` does that — GitHub resolves it to
+the current release's asset, which is the exact property the fixed `latest` tag existed to provide,
+kept without needing the tag. But that endpoint **skips prereleases**. Keeping the flag would have
+left every download link on the README resolving to nothing, with the release page itself looking
+perfectly healthy. `--latest` is passed explicitly rather than left to GitHub's ordering, which
+picks by tag date and would hand the pointer to a hotfix cut from an older branch.
+
+**`--cleanup-tag` had to go, and it is the same word in a different direction.** On the rolling
+channel the tag was an *output* of the pipeline and deleting it cost nothing. A `v*` tag is the
+pipeline's **input** — the thing that was pushed to ask for this build — so `gh release delete
+--cleanup-tag` would erase the version it had been asked to publish, and a re-run of the same tag
+would then have nothing to run on. The delete stays (force-moving a tag under an existing release
+leaves the release recording the *old* commit and `gh release edit` cannot correct it, D146); only
+the tag cleanup goes.
+
+**A tag can disagree with the version the binary reports, and only a bug report would ever show
+it.** `tools/stamp_build.sh` reads `config/version` from `project.godot` and stamps
+`<base>+<date>.<sha>` into the build. Tagging `v0.2.0` on a tree that still says `0.1.0-dev` would
+have published a release page titled 0.2.0 over a binary that says 0.1.0 in Settings — two places
+stating one fact, which is the D34 shape in the worst possible field, because the only person who
+ever compares them is someone filing a bug that then cannot be traced. The tag is now passed as
+`stamp_build.sh`'s third argument and the script **refuses to stamp** on a mismatch, naming the edit
+to make. It is checked rather than *derived*: deriving would let a tag silently become the version
+and skip the human edit that is supposed to mean "this is what the next release is called".
+
+Two documented rationales elsewhere in the tree were true only of the rolling channel and were
+rewritten rather than left to rot — `test_content.gd`'s downloads-badge check (D158's reason was
+"the release is recreated per push"; a per-release count would now be *true*, and the badge stays
+deleted for D158's other half, that a number resetting to zero on every version reads as "how many
+people play this") and the same file's build-stamp rationale.
+
+`tools/readme_downloads.sh` no longer names a tag at all: it reads the current release through
+`gh release view` with no argument, and writes `releases/latest/download/` links. Only the sizes in
+that table are release-specific now, so cutting a version does not make the block stale.
+
+The first tag is **v0.1.0** — the value already committed in `project.godot`, and the last state of
+the game before D226 starts inverting it. Cutting a release is two commands, and the second one is
+the decision:
+
+```bash
+git tag -a v0.2.0 -m "what changed"
+git push origin v0.2.0
+```

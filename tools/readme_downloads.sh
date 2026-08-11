@@ -24,7 +24,13 @@ cd "$(dirname "$0")/.."
 
 DOC=README.md
 REPO=g-gemignani/the-owing
-TAG=latest
+
+# There is no fixed tag any more (D227): releases are cut from `v*` tags, so the newest one
+# is found rather than named. The LINKS still contain no version — `/releases/latest/download/`
+# is resolved by GitHub to the current release's asset — which is the property the old fixed
+# `latest` tag existed to provide, kept without the tag. It is also why the table does not
+# need regenerating when a version is cut: only the sizes here are release-specific.
+LATEST_PATH=releases/latest/download
 BEGIN='<!-- BEGIN GENERATED DOWNLOADS -- tools/readme_downloads.sh -->'
 END='<!-- END GENERATED DOWNLOADS -->'
 
@@ -80,15 +86,18 @@ opening_for() {
 # genuinely got bigger.
 mib() { echo $(( ($1 + 524288) / 1048576 )); }
 
+# `gh release view` with no tag, and the `/releases/latest` endpoint, both mean "the current
+# release" — the same one `/releases/latest/download/` serves. Asking for a tag by name would
+# make this script need updating on every version, which is the staleness it exists to end.
 fetch() {
 	if command -v gh >/dev/null 2>&1 \
-			&& gh release view "$TAG" --repo "$REPO" --json assets >/dev/null 2>&1; then
-		gh release view "$TAG" --repo "$REPO" --json assets \
+			&& gh release view --repo "$REPO" --json assets >/dev/null 2>&1; then
+		gh release view --repo "$REPO" --json assets \
 			--jq '.assets[] | "\(.name)\t\(.size)"'
 		return
 	fi
 	curl -sS --fail --max-time 30 \
-		"https://api.github.com/repos/$REPO/releases/tags/$TAG" \
+		"https://api.github.com/repos/$REPO/releases/latest" \
 		| python3 -c '
 import json, sys
 for a in json.load(sys.stdin).get("assets", []):
@@ -99,7 +108,7 @@ for a in json.load(sys.stdin).get("assets", []):
 build() {
 	local assets
 	assets=$(fetch)
-	[ -n "$assets" ] || { echo "no release assets found for $REPO@$TAG" >&2; return 1; }
+	[ -n "$assets" ] || { echo "no assets on the current release of $REPO" >&2; return 1; }
 
 	echo "$BEGIN"
 	echo
@@ -110,8 +119,8 @@ build() {
 		printf '%s\t%s\t%s\t%s\n' "$(rank_for "$name")" "$(label_for "$name")" "$name" "$size"
 	done <<<"$assets" | sort -t$'\t' -k1,1n -k2,2 \
 			| while IFS=$'\t' read -r _rank label name size; do
-		printf '| **%s** | [`%s`](https://github.com/%s/releases/download/%s/%s) (%s MB) | %s |\n' \
-			"$label" "$name" "$REPO" "$TAG" "$name" "$(mib "$size")" "$(opening_for "$name")"
+		printf '| **%s** | [`%s`](https://github.com/%s/%s/%s) (%s MB) | %s |\n' \
+			"$label" "$name" "$REPO" "$LATEST_PATH" "$name" "$(mib "$size")" "$(opening_for "$name")"
 	done
 	echo
 	echo "<sub>Sizes read from the current build by \`tools/readme_downloads.sh\` — not typed here,"

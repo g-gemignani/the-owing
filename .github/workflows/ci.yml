@@ -7,9 +7,13 @@ name: ci
 # be threaded through by hand. The JOB names are unchanged, so any required status
 # check still resolves.
 
+# The suite runs on everything; the BUILDERS run only on a `v*` tag (D227). Those are
+# deliberately different triggers: a regression should be caught on the push that caused
+# it, and a binary should exist only for a state somebody decided to name.
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -68,16 +72,19 @@ jobs:
   # --- builders -----------------------------------------------------------------
   #
   # One job per platform family rather than one job that exports everything, because
-  # they no longer share a machine: iOS can only be built on macOS. They run only on
-  # main, for the same reason the release does — a PR gets the suite and the
-  # export-readiness check, which is what catches a project-side regression, and the
-  # binaries are only wanted for something that is going to be published.
+  # they no longer share a machine: iOS can only be built on macOS. They run only on a
+  # `v*` TAG (D227), for the same reason the release does — every push and every PR gets
+  # the suite and the export-readiness check, which is what catches a project-side
+  # regression, and the binaries are only wanted for a state somebody chose to publish.
+  #
+  # `startsWith(github.ref, 'refs/tags/v')` rather than a match on `github.ref_name`,
+  # because a BRANCH called `v-something` would satisfy the second and not the first.
 
   build-desktop:
     needs: [test, export-ready]
     if: >-
       github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
+      && startsWith(github.ref, 'refs/tags/v')
       && github.repository_owner == 'g-gemignani'
     runs-on: ubuntu-latest
     steps:
@@ -87,12 +94,18 @@ jobs:
           version: ${{ env.GODOT_VERSION }}
           templates: "true"
 
-      # Stamp the commit into the build before exporting. The release channel is a rolling
-      # tag, so every published APK has the same filename and a downloaded copy cannot
-      # otherwise say which one it is (D156). Never committed stamped — `test_content.gd`
-      # fails if it is.
+      # Stamp the commit into the build before exporting, so a downloaded copy can say
+      # which one it is (D156). Never committed stamped — `test_content.gd` fails if it is.
+      #
+      # The tag is passed as the third argument, and `stamp_build.sh` FAILS if it disagrees
+      # with `config/version` in `project.godot` (D227). Tagging `v0.2.0` on a tree that
+      # still says `0.1.0` would otherwise publish a release called 0.2.0 containing a
+      # binary that reports 0.1.0 in Settings — a provenance bug that only shows up in a
+      # bug report months later, which is the one place it cannot be corrected.
       - name: Stamp the build
-        run: tools/stamp_build.sh "$(git rev-parse --short=7 HEAD)" "${{ github.run_number }}"
+        run: >-
+          tools/stamp_build.sh "$(git rev-parse --short=7 HEAD)"
+          "${{ github.run_number }}" "${{ github.ref_name }}"
 
       # `--export-release` is not reliably a truthful exit code — it returns non-zero
       # on import warnings that did not stop it, which is why `tests/export_ready.sh`
@@ -152,7 +165,7 @@ jobs:
       signing: ${{ steps.key.outputs.signing }}
     if: >-
       github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
+      && startsWith(github.ref, 'refs/tags/v')
       && github.repository_owner == 'g-gemignani'
     runs-on: ubuntu-latest
     steps:
@@ -176,8 +189,8 @@ jobs:
       # REPOSITORY secrets, and not environment secrets: this job declares no `environment:`,
       # so an environment secret would simply not be here and the build would fall back to a
       # throwaway key with nothing to say about it. Environments buy approval gates and
-      # per-target keys, neither of which one rolling channel with one key has any use for
-      # (D161).
+      # per-target keys, neither of which one release channel with one key has any use for
+      # (D161) — and since D227 the tag itself is the approval gate.
       #
       # With the secret set, every build installs over the last one. Without it the old
       # behaviour stands — a fresh self-signed key per build, installable but never
@@ -252,12 +265,18 @@ jobs:
           echo "::add-mask::$pass"
           echo "pass=$pass" >> "$GITHUB_OUTPUT"
 
-      # Stamp the commit into the build before exporting. The release channel is a rolling
-      # tag, so every published APK has the same filename and a downloaded copy cannot
-      # otherwise say which one it is (D156). Never committed stamped — `test_content.gd`
-      # fails if it is.
+      # Stamp the commit into the build before exporting, so a downloaded copy can say
+      # which one it is (D156). Never committed stamped — `test_content.gd` fails if it is.
+      #
+      # The tag is passed as the third argument, and `stamp_build.sh` FAILS if it disagrees
+      # with `config/version` in `project.godot` (D227). Tagging `v0.2.0` on a tree that
+      # still says `0.1.0` would otherwise publish a release called 0.2.0 containing a
+      # binary that reports 0.1.0 in Settings — a provenance bug that only shows up in a
+      # bug report months later, which is the one place it cannot be corrected.
       - name: Stamp the build
-        run: tools/stamp_build.sh "$(git rev-parse --short=7 HEAD)" "${{ github.run_number }}"
+        run: >-
+          tools/stamp_build.sh "$(git rev-parse --short=7 HEAD)"
+          "${{ github.run_number }}" "${{ github.ref_name }}"
 
       - name: Export the APK
         env:
@@ -358,7 +377,7 @@ jobs:
   #     needs: [test, export-ready]
   #     if: >-
   #       github.event_name == 'push'
-  #       && github.ref == 'refs/heads/main'
+  #       && startsWith(github.ref, 'refs/tags/v')
   #       && github.repository_owner == 'g-gemignani'
   #     runs-on: macos-latest
   #     continue-on-error: true
@@ -437,25 +456,32 @@ jobs:
 
   # --- publish ------------------------------------------------------------------
   #
-  # A rolling build of main under the fixed tag `latest`, so the README can link to a
-  # URL that never changes and always resolves to today's binary. No version history,
-  # on purpose: this is a prototype with nothing to version, and a release channel that
-  # depends on somebody remembering to cut a tag is a download link that goes stale.
-  # Add a tag-triggered job beside this one the day there is a v1.
+  # One release per `v*` tag (D227). It was a rolling build of main under the fixed tag
+  # `latest`, published on every green push; the reasoning was that a channel depending on
+  # somebody remembering to cut a tag is a download link that goes stale. That held while
+  # every push was an improvement to a prototype. It stops holding the moment the tree is
+  # mid-way through a design inversion (D226): a rolling channel publishes the half-built
+  # state as the thing to download, and there is no way to say "not that one".
+  #
+  # The README's links stay permanent WITHOUT a fixed tag name, because
+  # `/releases/latest/download/<file>` is resolved by GitHub to the newest non-prerelease
+  # release. That is the whole reason `--prerelease` is gone below: the flag is a mechanism,
+  # not a claim, and setting it would take the stable URL away. The notes still say
+  # prototype, which is where that claim belongs.
   release:
     needs: [build-desktop, build-android]
     if: >-
       github.event_name == 'push'
-      && github.ref == 'refs/heads/main'
+      && startsWith(github.ref, 'refs/tags/v')
       && github.repository_owner == 'g-gemignani'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # Two pushes in quick succession would otherwise race to delete and recreate the
-    # same release. Queued, not cancelled: the loser publishing a slightly older commit
-    # is recoverable, and half a release is not.
+    # Per tag, so two tags pushed together publish in parallel instead of queueing behind
+    # one group. Queued rather than cancelled within a tag: a re-run of the same tag racing
+    # itself would otherwise leave half a release standing.
     concurrency:
-      group: release-latest
+      group: release-${{ github.ref_name }}
       cancel-in-progress: false
     steps:
       - uses: actions/download-artifact@v4
@@ -486,9 +512,9 @@ jobs:
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
-          An automatic build of the newest commit on `main`, replaced on every green
-          push. It is a **prototype**, not a version: this tag always points at whatever
-          is current, and there is no history behind it.
+          A build of the commit this tag names. It is a **prototype**: the version number
+          orders the releases and promises nothing beyond that. Saves carry their own
+          version and are migrated forward, so an existing character survives the upgrade.
 
           | platform | file | first run |
           |---|---|---|
@@ -515,8 +541,9 @@ jobs:
 
           **Which build is this?** Every build stamps its own commit: the title screen shows
           it in the bottom corner and Settings spells it out, as
-          `v0.1.0+<date>.<commit>`. Quote that in a bug report — the filenames here never
-          change, because this tag is replaced in place on every push.
+          `v<version>+<date>.<commit>`. Quote that in a bug report — the asset filenames are
+          the same in every release, so a downloaded copy cannot otherwise say which one it
+          came from.
 
           On **NixOS** the Linux binary needs `steam-run`, or a `patchelf
           --set-interpreter` — see
@@ -552,10 +579,15 @@ jobs:
       # Deleted and recreated rather than edited in place. Force-moving a git tag under
       # an existing release leaves the release still recording the OLD commit, and
       # `gh release edit` has no way to correct it — so the page would claim a build
-      # came from a commit it did not. The cost is a few seconds where the download URL
-      # 404s, on a rolling dev channel. The assets go up in the create call itself, so a
+      # came from a commit it did not. The assets go up in the create call itself, so a
       # failed upload cannot leave an empty release standing where a good one was.
-      - name: Publish the rolling build
+      #
+      # **Without `--cleanup-tag`, and that is the important word here.** On the rolling
+      # channel the tag was an output of the pipeline and deleting it was free. A `v*` tag
+      # is the pipeline's INPUT — the thing the developer pushed to ask for this build — and
+      # `--cleanup-tag` would delete it from the repository, so a re-run of the same tag
+      # would erase the version it was asked to publish.
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
           # `gh` resolves the repository from the git remote, and this job has no
@@ -566,21 +598,26 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
+          tag="$GITHUB_REF_NAME"
           # Checked, then deleted WITHOUT `|| true`. The first version swallowed the
           # delete's exit code, so when a repository rename made the API 301 the delete
           # away, the failure surfaced three lines later as "a release with that tag
           # already exists" — a true message about the wrong cause (D146).
-          if gh release view latest >/dev/null 2>&1; then
-            gh release delete latest --yes --cleanup-tag
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release delete "$tag" --yes
           fi
-          gh release create latest staged/* \
+          # `--latest` is explicit rather than left to GitHub's own ordering, which picks by
+          # tag date and would hand the pointer to a hotfix cut from an older branch. It is
+          # what `/releases/latest/download/<file>` resolves, so it is what the README's
+          # download links serve — the one flag holding those links up.
+          gh release create "$tag" staged/* \
             --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "Latest build of main" \
+            --latest \
+            --title "The Owing $tag" \
             --notes-file "$RUNNER_TEMP/notes.md"
           {
             echo "### Published"
-            echo "<https://github.com/${GITHUB_REPOSITORY}/releases/tag/latest>"
+            echo "<https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}>"
             echo
             find staged -maxdepth 1 -type f -printf '- %f\n' | sort
           } >> "$GITHUB_STEP_SUMMARY"

@@ -221,6 +221,14 @@ effects are drawn at runtime by `scripts/fx.gd`.
   caught for total-deck power, per-card power, block-vs-damage, relics, powers and
   triggered relics.
 
+  **This pillar is scheduled to be cut in half, and the half that goes is relics (D226).**
+  It is an anti-escalation invariant: a relic taken on floor 2 makes floors 3–8 harder,
+  which is the exact opposite of the feeling the game is being changed to deliver. The
+  replacement is one sentence — *persistent power lives in the deck and is priced; found
+  power is free and temporary* — with relics moving into the run and leaving with it.
+  Nothing is built yet; the ordering, the costs and the kill criteria are in D226. **Until
+  step 3 of it lands, the rule above still holds and still binds.**
+
 - **Difficulty comes from depth, not from your own growth.** A dungeon scales to the
   player only up to a ceiling set by its difficulty (D36). You outgrow the Crypt; you
   never outgrow the Maw. Progression should *feel* like progression — HP lost per
@@ -698,7 +706,7 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `_save` boundary**, and assert the round trip *cell by cell*, because a restored run
   with no map still reports the same counts and offers the same moves.
 - **`|| true` chooses which error message you get; it does not avoid one.** `gh release
-  delete latest --yes || true` was written because a missing release is not an error —
+  delete <tag> --yes || true` was written because a missing release is not an error —
   correct reasoning, wrong code: it cannot tell "nothing to delete" from "the call did not
   work", so the real fault surfaced three lines later as "a release with that tag already
   exists". True, specific, and about the wrong cause (D146). **Ask first, then let the
@@ -1103,21 +1111,27 @@ These are failure modes that have actually bitten this project. Treat each as a 
   throwaway as a fallback so a fork with no secrets still builds. **An update needs a newer
   `version/code` AND a matching signature; each missing half fails with its own message.**
 
-- **A rolling release makes the link permanent and the download anonymous.** `latest` is
-  replaced in place on every green push, so the README's URLs never go stale — and every
+- **A permanent link makes the download anonymous, whatever provides the permanence.** The
+  README's URLs never go stale — `releases/latest/download/<file>` is resolved by GitHub to the
+  current release (D227; it was a tag that never moved off `latest` before that) — and every
   Android build ever published is called `TheOwing-android.apk`, same name, same size. So the
   build carries its own name: `application/config/version` is stamped per export by
   `tools/stamp_build.sh` and shown by `BuildInfo` on the title screen and in Settings (D156).
   The committed value must stay `-dev` and `test_content.gd` enforces that, because a version
   string that lies is worse than one that admits it was built by hand. **A footnote on the
   title screen earns its place by being different tomorrow** — which is the test D128's
-  catalogue-sizes line failed and this one passes.
+  catalogue-sizes line failed and this one passes. Since D227 the stamp is also what a `v*`
+  tag is checked against: `stamp_build.sh` refuses to export when the tag and
+  `config/version` disagree, because a release page and a Settings screen stating different
+  versions is the D34 shape in the one field only a bug report would ever compare.
 
-  The same property kills a downloads badge: GitHub counts per release object, the release is
-  recreated on every push, so the counter resets several times a day and reads 0 after real
-  downloads (D158). It is deleted and a test keeps it deleted. **Before adding a badge, ask
-  what it reads when the thing it measures is working** — and if the honest label would be
-  "since the last commit", there is no fact there to display.
+  A downloads badge stays deleted through both channels, for two different reasons. On the
+  rolling one GitHub counted per release object and the object was recreated on every push, so
+  the counter reset several times a day and read 0 after real downloads (D158). Per tag it
+  would at last be true — and still resets to zero every time a version is cut, while a reader
+  takes it for "how many people play this". **Before adding a badge, ask what it reads when the
+  thing it measures is working** — and if the honest label would be "since the last release",
+  there is no fact there to display.
 
 - **A file that exists is invisible to a list of what is missing.** ART_PROMPTS.md asks
   for what is absent, which is right, and is why a file that landed *wrong* had nowhere to
@@ -1381,14 +1395,17 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
 docs/        the README's screenshots, and nothing else. Carries a .gdignore:
              nothing in the game loads them and Godot would otherwise write a
              .import and a .uid beside each one
-.github/     ci.yml — suite, then export-readiness, then (main only) three
-             build-* jobs and one release job, all on Ubuntu. The iOS job is
-             written and COMMENTED OUT — three rounds, never past xcodebuild,
-             and its log needs admin rights to read (D147); it is preserved
-             verbatim because the preset patch and the macOS setup do work. No
-             secret is involved: the Android key is a per-build throwaway. The
-             tag never moves off `latest` — the README's download links are only
-             stable URLs because of it (D142). actions/setup-godot/ is the shared
+.github/     ci.yml — suite and export-readiness on every push and PR, then
+             (on a `v*` TAG only, D227) three build-* jobs and one release job,
+             all on Ubuntu. The iOS job is written and COMMENTED OUT — three
+             rounds, never past xcodebuild, and its log needs admin rights to
+             read (D147); it is preserved verbatim because the preset patch and
+             the macOS setup do work. The Android key is a per-build throwaway
+             unless the repository holds one secret. The README's download links
+             are stable without naming a version because
+             `releases/latest/download/` resolves to the current release, which
+             is why the release is published `--latest` and never
+             `--prerelease` (D142, D227). actions/setup-godot/ is the shared
              cache-and-install step, and runs on both Linux and macOS
 README.md    the front page, and the ONLY file here written for a PLAYER rather
              than for whoever works on this. What the game is, how to get it,

@@ -355,13 +355,18 @@ func _init() -> void:
 			if claims == 0:
 				fails += 1
 				print("FAIL README states no suite count at all — there are %d" % suites)
-			# A per-release download counter cannot survive a rolling release: the release
-			# object is deleted and recreated on every green push, and the counts go with
-			# it, so the badge reads "downloads since the last commit" — usually 0, and
-			# never what a reader takes it for (D158). Deleted, and kept deleted here.
+			# A per-release download counter counted nothing on the rolling channel: the
+			# release object was deleted and recreated on every green push and the counts
+			# went with it, so the badge read "downloads since the last commit" — usually 0,
+			# and never what a reader takes it for (D158). Since D227 a release is per `v*`
+			# tag and survives, so a per-release count would at last be true; the badge stays
+			# deleted for the other half of D158's reasoning, which did not depend on the
+			# channel. A count of downloads of the NEWEST release is a number that starts at
+			# zero every time a version is cut, and a reader reads it as "how many people
+			# play this".
 			if text.find("img.shields.io/github/downloads") != -1:
 				fails += 1
-				print("FAIL README has a downloads badge — the release is recreated per push, so it counts nothing (D158)")
+				print("FAIL README has a downloads badge — it resets on every release, so a reader misreads it (D158, D227)")
 
 			# The licence badge is a STATIC string too, and for a better reason than the
 			# suite count: the dynamic one read the licence off the GitHub API, and when
@@ -387,11 +392,12 @@ func _init() -> void:
 
 	# --- the build says which build it is, and the committed value is never a stamped one ---
 	#
-	# The release channel is a rolling tag: `latest` is deleted and recreated on every green
-	# push, so the README's download links always serve the newest build AND every published
-	# APK has the identical filename. That is a good property for the link and a bad one for
-	# a bug report — hence the stamp (D156), and hence this check, which guards the two ways
-	# it can quietly stop working.
+	# Every release names its assets for the game and the platform rather than for the
+	# version, and the README links through `releases/latest/download/`, so a downloaded copy
+	# carries nothing that says which build it is. That is a good property for the link and a
+	# bad one for a bug report — hence the stamp (D156), and hence this check, which guards
+	# the two ways it can quietly stop working. The stamp is the reason a `v*` tag has to
+	# agree with `config/version`: `tools/stamp_build.sh` refuses the export otherwise (D227).
 	var stamp := String(ProjectSettings.get_setting(BuildInfo.KEY, ""))
 	if stamp == "":
 		fails += 1; print("FAIL %s is not set — a build cannot say which build it is" % BuildInfo.KEY)
