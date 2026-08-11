@@ -1401,24 +1401,55 @@ func _init() -> void:
 		ht.generate(Balance.dungeon(didh))
 		var d0 := ht._dist_from(ht.pos)
 		var was_at: Array = []
+		var before := {}
 		for m in ht.mons:
 			was_at.append(int(m["cell"]))
+			before[int(m["cell"])] = true
 		ht._floor_turn(d0)
+		# Where everything ended up, because occupancy is what makes "nowhere to go" legal and
+		# it changes DURING the turn: `_floor_turn` walks `mons` in order and frees each cell as
+		# its owner leaves, so a hunter's only gap may be taken by an earlier mover or opened by
+		# one. Neither snapshot alone is the occupancy the hunter was actually offered, so a
+		# hunter is only accused of holding its ground when it had a legal step under BOTH.
+		var after := {}
+		for m in ht.mons:
+			after[int(m["cell"])] = true
 		for k in ht.mons.size():
-			if int((ht.mons[k] as Dictionary)["cell"]) != int(was_at[k]):
+			var mon: Dictionary = ht.mons[k]
+			if int(mon["cell"]) != int(was_at[k]):
 				continue
 			var here := int(was_at[k])
 			if int(d0[here]) <= 1:
 				continue                      # it is on you; holding ground is the engagement
+			# The ways this hunter could LEGALLY have gone, by the three rules `_hunt_step`
+			# obeys — rock, the pen, and another hunter's tile. Restated here rather than read
+			# off `_hunt_step`, because a test that asks the implementation what it is allowed to
+			# do agrees with it by construction.
+			#
+			# It used to count every non-WALL neighbour, which is neither of the two exemptions
+			# the comment above has always named. A hunter with both its neighbours occupied
+			# stood still correctly and was reported as a broken chase — 1 floor in ~2400, so it
+			# passed locally and fell over in CI on a commit that touched none of this (D228).
+			var pen := int(mon.get("pen", -1))
 			var ways := 0
+			var ways_after := 0
 			for n in ht._neighbours(here):
-				if int(ht.enc[n]) != TraversalIso.WALL and n != here:
+				if int(ht.enc[n]) == TraversalIso.WALL or n == here:
+					continue
+				# A guard is penned to its pocket and never leaves it (D183, D197), so a
+				# neighbour outside the pocket is not a way out for it. A sealed pocket has no
+				# EMPTY cells at all, which is the same statement one step earlier.
+				if pen >= 0 and ht._pocket_of(n) != pen:
+					continue
+				if n != ht.pos and not before.has(n):
 					ways += 1
-			if ways > 0:
+				if n != ht.pos and not after.has(n):
+					ways_after += 1
+			if ways > 0 and ways_after > 0:
 				stood_still += 1
 				fails += 1
-				print("FAIL %s: a hunter %d steps away held its ground with %d ways to go" % [
-					didh, int(d0[here]), ways])
+				print("FAIL %s: a hunter %d steps away held its ground with %d legal ways to go (pen %d)" % [
+					didh, int(d0[here]), ways, pen])
 		# ...and it is a CHASE. The player never moves, so the only thing that can shorten
 		# this is the floor walking toward them.
 		var nearest := 9999

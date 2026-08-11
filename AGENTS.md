@@ -315,6 +315,21 @@ effects are drawn at runtime by `scripts/fx.gd`.
   directories (D89). The check now walks `assets/` and accounts for every PNG. An
   invariant guarded by a hand-kept list of places is guarded nowhere new.
 
+- **An assertion and the code it guards must agree on the vocabulary, and a relaxed guard has
+  to be shown to still fail.** `test_traversal`'s "nothing holds its ground" clause counted
+  every non-rock neighbour as a way out, while `_hunt_step` refuses three kinds — rock, a cell
+  outside a penned guard's pocket, and a cell another hunter occupies. The clause's own comment
+  had always named the second exemption and the code never implemented it, so a hunter boxed in
+  by a crowd stood still correctly and was reported as a broken chase (D228). It fired once in
+  ~2,400 generated floors, which is once in five hundred suite runs: it passed on every
+  developer machine for months and then went red in CI on a commit that touched nothing near
+  it. Two lessons, and the second is the one that costs money. **A guard written in different
+  words from the code it guards is a guard that will accuse the exemption.** And **loosening one
+  is indistinguishable from deleting it unless you measure that it still fails on the thing it
+  was written for** — the fix here was checked against a deliberately broken sidestep and kept
+  361 of 365 detections, which is what made it a correction rather than a quiet removal (D47
+  from the other direction).
+
 - **Depth order is bent exactly once, and everything with height obeys the same gate.** The
   player is drawn last, over everything, because correct depth hides her behind the rock in
   front — realistic and unplayable. What makes that survivable is that anything occluding her

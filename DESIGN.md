@@ -217,6 +217,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D225** | [The powers were never re-filed either, and on a phone no list could be moved at all](#d225--the-powers-were-never-re-filed-either-and-on-a-phone-no-list-could-be-moved-at-all) |
 | **D226** | [The game is not fun, and the pillar that keeps it honest is the reason](#d226--the-game-is-not-fun-and-the-pillar-that-keeps-it-honest-is-the-reason) |
 | **D227** | [Builds only happen for a version somebody named](#d227--builds-only-happen-for-a-version-somebody-named) |
+| **D228** | [A guard that had always been wrong went red on the one commit that touched none of it](#d228--a-guard-that-had-always-been-wrong-went-red-on-the-one-commit-that-touched-none-of-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -15031,12 +15032,29 @@ four numbers are added to `sim_balance` before the content changes:
 | number | what it is | why |
 |---|---|---|
 | **escalation ratio** | final-fight damage-per-turn ÷ first-fight damage-per-turn | the Dungeon Run feeling as one number; at 1.4 there is no power fantasy whatever the relics say |
-| **percentiles** | p10/p50/p90 per cell, not the mean | every run landing at 52% is boring by construction; the tails are the product |
+| **spread** | p10/p50/p90 of end-of-run HP fraction and of fights survived; after step 3, completion bucketed by the relic set drawn | every run landing at 52% is boring by construction, and the tails are the product. **Not percentiles of completion** — see the correction below |
 | **decision density** | the spread between the driver's best play and its second-best, per turn | the only number that can say whether the FIGHTS are flat rather than the loot — and which of the two it is, is currently unknown |
 | **run divergence** | distance between two runs' end-of-run relic sets and decks, same starting deck | if runs converge, the escalation is not doing anything |
 
 All four are diagnostic and none is pass/fail, deliberately: a fun metric with a hard threshold
 becomes a thing that gets tuned toward instead of a thing that gets looked at.
+
+**The first draft of that table asked for p10/p50/p90 of RUN COMPLETION, which cannot exist.**
+`_measure_run` counts `completed` across trials and returns a rate; completion is *binary per
+trial*, so its percentiles are 0, 0, 1, 1 and carry no information. The metric was written down
+before anyone looked at what the per-trial quantity was — the same shape as D124, an instrument
+asked for a number it has no subject for. What does have a distribution is **end-of-run HP as a
+fraction of max** (a death is 0, so p10 = 0 reads directly as *the bottom decile died*, and p50/p90
+say whether the wins are narrow or comfortable) and **fights survived** (which separates dying on
+the boss from dying on floor 1). The third form only becomes available at step 3: with relics rolled
+per run, group the trials **by the relic set drawn** and take the spread of completion across
+groups — that is the only number that can tell "every run is a coin flip" from "half the draws win
+outright and half lose outright", and those are the same 50% today.
+
+**And the noise floor comes first, not afterwards.** The tool does not seed its RNG: D120 measured
+two runs of identical code differing by a mean of 0.4 points with one cell swinging 15. Each of the
+four numbers above prints its own noise band before any of them is read as evidence, or the first
+delta seen will be weather.
 
 Two tests no simulator can run, and they are not optional. **Can the run be described in one
 sentence?** *"The one where the free-first-card relic turned up and the exhaust deck went stupid"*
@@ -15046,18 +15064,47 @@ wanted, that is data.
 
 #### The order, so a half-done migration is still an improvement
 
+**The instrument goes first, and that is a change from this entry's first draft.** It originally
+opened on the rule-breaker rewrite, with the four numbers above as a parallel task. Wrong way round:
+step 1 is the step whose kill criterion is an escalation ratio, and building the subject before the
+measurement is how this project ends up arguing about whether a change worked. It is also the
+cheaper order — see step 0b, which is a go/no-go on the whole design for a few hours of work and no
+content at all.
+
+0. **Add the four numbers to `tools/sim_balance.gd`**, noise floor first. Three of the four have
+   their data already in scope: `_measure_run` builds a real `CombatEngine` per fight
+   (`sim_balance.gd:407`) and `fight_tally()` returns `TALLY_DAMAGE` and `TALLY_TURNS`, so the
+   escalation ratio is the last fight's damage-per-turn over the first's; the loop already
+   accumulates `completed` / `fights_total` / `avoided_total` and discards each trial, so the
+   spreads are a matter of keeping the per-trial values rather than computing anything new; and
+   `_best_by_value` (`sim_balance.gd:1549`) already scores every legal play and keeps only the
+   winner, so decision density is its top-two ratio recorded instead of dropped.
+0b. **Then measure the headroom before building any of it.** A throwaway `--spoils N` flag that
+   hands each simulated run N random relics as it walks, exempt from `power_ratio`, and prints the
+   escalation ratio. No game code, no `.tres` files, nothing to revert. It answers the question the
+   whole design rests on — *does untaxed in-run power move the number, and by how much* — against
+   the ceiling headroom D209 already found. **If the ratio barely moves at N=5 the pool is not the
+   problem and steps 1-4 are aimed at the wrong system**, which is a conclusion worth having for a
+   few hours rather than for a milestone.
 1. Rewrite the pool for rule-breakers — modifier hooks at `card_damage()`, `card_block()`,
    `play_cost()` and `_resolve()`, which D204 already forced every consumer through, the simulator
-   included. Relics still persist. Safe, and measurable with the instrument as it stands.
+   included. Relics still persist. Safe, and measurable with the instrument as it stands. Watch the
+   escalation ratio and decision density TOGETHER: if the first moves and the second does not, the
+   loot got better and the fights did not.
 2. Choice-of-three at all three grant points, bucketed off the deck's leading archetype.
-3. *Then* flip persistence off: drop the relic terms from `power_ratio` (`balance.gd:779,781`), keep
+3. **The floor becomes the beat** — one guaranteed treasure decision per floor, announced on
+   arrival. This is the only step that touches the crawl, and the `ISO_MOVES_PER_ENCOUNTER_MAX`
+   arithmetic goes on paper before anything is built: a treasure room adds tiles without adding a
+   fight, which moves the ratio the wrong way, and D79 killed two designs at exactly this step.
+4. *Then* flip persistence off: drop the relic terms from `power_ratio` (`balance.gd:779,781`), keep
    `scaling_ratio`'s ceiling as the only rail, rebuild `relics_screen` as a found-log whose gold
    buys **pool influence** rather than power — drop a relic out of the pool, add a second copy of
    one — so every meta screen keeps a job, the gold keeps a sink, and none of it touches
    `power_ratio`. `escrow_relics` deletes itself with the D68 die-on-purpose exploit it existed for.
-4. Re-fit difficulty against percentiles.
+5. Re-fit difficulty against the spreads.
 
-Steps 1 and 2 are improvements under today's rules. Nothing here strands the tree.
+Steps 0 through 2 are improvements, or pure measurement, under today's rules — the tree stays
+playable after any of them and nothing here strands it.
 
 **The kill criteria, written before the build rather than the rationale after it.** This project's
 reverts are the best thing in it — D175 deleted a difficulty knob that read fine on paper, D88 killed
@@ -15148,3 +15195,87 @@ the decision:
 git tag -a v0.2.0 -m "what changed"
 git push origin v0.2.0
 ```
+
+---
+
+### D228 — A guard that had always been wrong went red on the one commit that touched none of it
+
+The tag-cut pipeline of D227 pushed `main` and `v0.1.0` within six seconds of each other, both on
+`3caee0e`. The tag run passed. **The `main` run failed `test_traversal` on the identical commit**,
+with a message that named nothing in the diff:
+
+```
+FAIL ossuary: a hunter 16 steps away held its ground with 2 ways to go
+45 passed, 1 failed in 58s (-P 2)
+```
+
+Two runs of one commit disagreeing is the whole diagnosis: nothing in D227 is reachable from the
+traversal model, so this was a landmine that had been in the tree and was stepped on by the extra
+run rather than by the change. **A pipeline that runs the suite twice finds flakes twice as fast**,
+which is a property worth having and not what it was built for.
+
+#### What it was
+
+The clause is D197's, and its own comment has always stated the rule correctly:
+
+> *NOTHING HOLDS ITS GROUND. A hunter may stay put only if it has already reached the player — that
+> is what an engagement IS — **or if every neighbour is rock or occupied**.*
+
+The code counted `enc[n] != WALL`. Rock, and nothing else. So the second exemption the comment
+names — occupied — was never implemented, and the pen rule that arrived later with the pocket guards
+(D183: *a guard walks its pocket and never leaves it*) was never reflected here at all. Meanwhile
+`_hunt_step` refuses three kinds of neighbour: rock, a cell outside a penned guard's own pocket, and
+a cell another hunter is standing on. **The assertion and the thing it asserts about disagreed on
+what a way out is**, and had done since the pockets landed.
+
+A hunter with both its free neighbours occupied by other hunters therefore stood still *correctly*
+and was reported as a broken chase.
+
+#### Why it took this long to fire
+
+The clause generates one floor per dungeon, twelve floors a run. A probe over 6,000 floors — forty
+suite runs' worth — found the crowd case **once**. That is one suite run in five hundred: frequent
+enough to be certain to appear eventually, rare enough that it never appeared on a developer machine
+and, when it did appear, appeared on a commit with no relationship to it. The first hypothesis was
+wrong for exactly this reason — a sealed pocket's guard has no EMPTY cell to step to and looked like
+the obvious culprit, and the probe found *no* penned case at all. `pen=-1`, `ways=2`, `legal=0`,
+`blocked(taken=2)`: an ordinary hunter in a traffic jam.
+
+#### The fix, and the check that it is still a check
+
+`ways` is now the ways the hunter could **legally** have gone, by the same three rules `_hunt_step`
+obeys — restated in the test rather than read off `_hunt_step`, because a test that asks the
+implementation what it is allowed to do agrees with it by construction.
+
+Occupancy needed one more thought than rock did, because **it changes during the turn**:
+`_floor_turn` walks `mons` in order and frees each cell as its owner leaves, so a hunter's only gap
+may be taken by an earlier mover or opened by one. Neither the before- nor the after-snapshot is the
+occupancy that hunter was actually offered. So a hunter is accused only when it had a legal step
+under **both**.
+
+Loosening a guard is how a guard becomes decoration, so the fix was measured against the rot it
+exists to catch — a hunter that only ever takes a strictly closer tile, which is what a broken
+sidestep looks like from outside:
+
+| over 6,000 floors | old rule | new rule |
+|---|---|---|
+| shipping code | **1** (the false positive) | **0** |
+| sidestep deleted | 365 | **361** |
+
+Ninety-nine percent of the detection retained, and the false positive gone. **A relaxed assertion has
+to be shown to still fail on the thing it was written for**, or the fix and a deletion are
+indistinguishable from a green suite — which is D47's lesson (a black screen shipped and the suite
+stayed green for five commits) arriving from the other direction.
+
+#### What this says about the suite
+
+The failure message is now `... held its ground with %d legal ways to go (pen %d)`, because the old
+one could not distinguish the bug from the exemption and a future reader would start where this one
+did: on the wrong hypothesis. **A count in a failure message must be the count the assertion
+actually made.**
+
+The clause stays unseeded. A seeded probe would have made this reproducible and would also have
+stopped it from ever being found — the value of twelve fresh floors a run is that it explores, and
+the price is that a one-in-five-hundred fault arrives on somebody else's commit. That is the right
+trade for a generator, but only if the message is good enough to survive the arrival, which is what
+was actually fixed here.
