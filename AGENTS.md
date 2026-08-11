@@ -204,6 +204,19 @@ effects are drawn at runtime by `scripts/fx.gd`.
    over rolls, turns and tiers, and never take a value because that guard happened to go
    green.
 
+   **And it measures difficulty only — until D229 nothing in the tree could see fun.** The tool
+   now prints a second line per cell: `esc` (median last-fight damage-per-turn over first-fight,
+   the escalation a run delivered), end-of-run HP and fights-survived percentiles, deck
+   divergence between consecutive runs, and the share of card choices with a live runner-up.
+   All diagnostic, none pass/fail, because a fun metric with a threshold becomes a thing that
+   gets tuned toward. `--noise` reads every cell twice and prints the gap, which is the only
+   thing that says whether a delta is a change: at 400 trials `esc` moves ±0.05x, at 60 trials
+   ±0.11x. **The baseline is `esc` 0.78-1.32x across all 51 cells, mean 1.08x** — no cell in
+   the game reaches 1.5x, and three end weaker per turn than they started. That is the
+   measurement D226 is aimed at. It also refuted half of D226's own reasoning: `real` 48% and
+   `solved` 8% say the turn-level decision is live, so the flatness is in the ARC and not in
+   the turn.
+
    And when you add a rule to that policy, **count how often it fires.** The first
    version of the draw gate looked principled and declined nothing at all — 1,498
    opportunities, zero refusals — because every card it would have caught costs zero

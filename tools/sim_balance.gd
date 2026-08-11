@@ -8,6 +8,18 @@ extends SceneTree
 ## the report and one at full precision, not fifteen at full precision:
 ##     godot --headless --script tools/sim_balance.gd -- --trials=120
 const DEFAULT_TRIALS := 400
+
+## Print each cell twice and the gap between them. See `--noise`.
+static var NOISE := false
+
+## Percentile of an already-SORTED array, by nearest rank. Nearest rather than interpolated
+## because two of the three subjects are integer counts (fights survived) and an interpolated
+## 6.5 fights is a run nobody had.
+static func _pct(sorted_vals: Array, p: float) -> float:
+	if sorted_vals.is_empty():
+		return 0.0
+	var i := clampi(int(round(p * float(sorted_vals.size() - 1))), 0, sorted_vals.size() - 1)
+	return float(sorted_vals[i])
 static var TRIALS := DEFAULT_TRIALS
 
 ## Narrowing, for when the thing being retuned is ONE cell.
@@ -67,6 +79,13 @@ static func _read_args() -> void:
 		# measured exactly as it would be in a full run.
 		elif arg == "--no-calibration":
 			CALIBRATE = false
+		# Measure every selected cell TWICE and print the gap between the two readings
+		# (D229). The tool does not seed its RNG, so a delta smaller than this gap is
+		# weather — D120 measured a mean of 0.4 points with one cell swinging 15, and every
+		# number the fun block adds has its own band that nobody has measured yet. Narrow
+		# with --only= first; this doubles the wall clock.
+		elif arg == "--noise":
+			NOISE = true
 		elif arg.begins_with("--difficulty="):
 			Balance.difficulty = clampi(int(arg.substr(13)), 0, Balance.DIFFICULTIES.size() - 1)
 		# Raw multiplier overrides, for SWEEPING candidate rungs before any of them are
@@ -127,7 +146,18 @@ func _init() -> void:
 	print("=== Balance report (%d trials per cell) ===" % TRIALS)
 	print(_difficulty_line())
 	print("RUN = full-dungeon completion with persistent HP (the metric that matters).")
-	print("Per-fight rates are full-HP diagnostics only.\n")
+	print("Per-fight rates are full-HP diagnostics only.")
+	# Named here rather than left to be inferred, because four of these have no precedent in
+	# this tool and one of them (esc) is the acceptance test for a whole design (D226/D229).
+	print("fun  = esc: median last-fight damage-per-turn / first-fight, per run — the escalation.")
+	print("       hp: end-of-run HP percentiles, a death counted as 0, so p10=0 means the")
+	print("           bottom decile died. fights: p10-p90 of fights survived.")
+	print("       div: mean Jaccard distance between consecutive runs' final decks.")
+	print("       real/forced/solved: share of card choices with a live runner-up / only one")
+	print("           legal play / a best play worth 3x the next. DIAGNOSTIC, not pass/fail.")
+	if NOISE:
+		print("--noise: every cell measured twice; believe no delta smaller than the gap.")
+	print("")
 	for profile in _profiles():
 		var deck: Array[CardData] = profile["deck"]
 		var prof_power := _power_of(profile)
@@ -173,6 +203,21 @@ func _init() -> void:
 				line += " %s %.0f%%(%.1ft,-%.0f%%hp)" % [
 					_tier_short(tier), r["win_rate"] * 100.0, r["avg_turns"], r["hp_lost_pct"] * 100.0]
 			print(line)
+			print(_fun_line(run))
+			# The gap between two readings of the SAME cell, which is the only thing that says
+			# whether a delta in the numbers above is a change or the weather (D229). Only the
+			# run is re-measured: the tier diagnostics are not part of the fun block and cost
+			# three quarters of the cell.
+			if NOISE:
+				var run2 := _measure_run(dungeon_id, deck, relics, roster, Policy.SMART,
+					TRIALS, clears, _power_of(profile))
+				print(_fun_line(run2))
+				print("      noise  RUN %+.0f pts | esc %+.2fx | hpP50 %+.0f%% | div %+.3f | real %+.0f pts" % [
+					(run2["complete"] - run["complete"]) * 100.0,
+					run2["escalation"] - run["escalation"],
+					(run2["hp_p50"] - run["hp_p50"]) * 100.0,
+					run2["divergence"] - run["divergence"],
+					(run2["dd_real"] - run["dd_real"]) * 100.0])
 		print("")
 	# 50-70 until D197, when the floor stopped letting anything stand still and the game was
 	# asked to be meaner than it was. The band moved with the intent, not to fit the numbers:
@@ -294,6 +339,24 @@ func _avoid_calibration() -> void:
 ## Because Traversal is pure logic, ONE walker measures every dungeon through the
 ## same interface — a per-model walker would be the first thing to rot when a second
 ## model is added, which is why this one stayed generic after D94 left only the crawl.
+## The fun block for one cell (D229), on its own line under the difficulty line.
+##
+## Separate line rather than more columns on the first one: the difficulty line is already 120
+## characters and these four numbers answer a different question. They are printed for every
+## cell from the day they exist, because a diagnostic behind a flag is a diagnostic nobody reads
+## — and the whole reason this block exists is that forty-six suites and this tool could all
+## report a healthy game that nobody wanted to play twice.
+func _fun_line(run: Dictionary) -> String:
+	# `esc` is the MEDIAN of the runs that had an escalation to measure, and `n` says how many
+	# that was. A ratio averaged over runs that never landed damage is a number about the
+	# driver, not the deck (D124).
+	return "      fun    esc %.2fx(n%d) | hp p10/p50/p90 %.0f/%.0f/%.0f%% | fights %.0f-%.0f | div %.2f | real %.0f%% forced %.0f%% solved %.0f%%" % [
+		run["escalation"], int(run["esc_n"]),
+		run["hp_p10"] * 100.0, run["hp_p50"] * 100.0, run["hp_p90"] * 100.0,
+		run["fights_p10"], run["fights_p90"],
+		run["divergence"],
+		run["dd_real"] * 100.0, run["dd_forced"] * 100.0, run["dd_solved"] * 100.0]
+
 func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		roster: Array = [], mode: int = Policy.SMART, trials: int = TRIALS,
 		clears: int = 0, power: PowerData = null) -> Dictionary:
@@ -303,6 +366,14 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 	var fights_total := 0
 	var avoided_total := 0
 	var avoidable_total := 0
+	# --- the fun block (D229) --------------------------------------------------------------
+	# Per-TRIAL, because the four numbers here are about the shape of a run and the report has
+	# only ever kept means. A mean cannot tell one coin-flip cell from two populations.
+	var hp_left: Array = []       # end-of-run HP as a fraction of max; a death is 0.0
+	var fights_seen: Array = []   # fights survived, which separates dying on the boss from floor 1
+	var esc_ratios: Array = []    # last fight's damage-per-turn over the first fight's
+	var deck_sigs: Array = []     # the SET of card ids each run finished with
+	_dd_reset()
 	# What fights here have been costing, learned across the trials of this cell and
 	# carried between them: a player who has walked this dungeon before knows.
 	var cost_est := {}
@@ -336,6 +407,11 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		var alive := true
 		var fights := 0
 		var guard := 0
+		# Damage per turn in this run's FIRST fight and its most recent one. The ratio of the
+		# two is the escalation this run actually delivered — the Dungeon Run feeling as one
+		# number, and the acceptance test for every step of D226.
+		var dpt_first := -1.0
+		var dpt_last := -1.0
 		# The iso floor is mostly open ground now (D77), so a run is tens of MOVES for
 		# the same handful of fights. At 60 this truncated every iso run mid-floor and
 		# reported the model as costing a third of its budget.
@@ -432,6 +508,15 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						eng.end_turn()
 					_tick("fight_play", t_fi)
 					fights += 1
+					# Read off the same tally the game reads (D204). `_t` skips a zero, so a
+					# fight that landed nothing has no `damage` key at all — hence `.get`.
+					var ft := eng.fight_tally()
+					var f_turns := maxi(1, int(ft.get(Balance.TALLY_TURNS, 1)))
+					var f_dpt := float(int(ft.get(Balance.TALLY_DAMAGE, 0))) / float(f_turns)
+					if f_dpt > 0.0:
+						if dpt_first < 0.0:
+							dpt_first = f_dpt
+						dpt_last = f_dpt
 					if eng.lost():
 						alive = false
 						var nd: int = int(cost_n.get(enc_kind, 0)) + 1
@@ -471,8 +556,41 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 							run_deck.append(won_card)
 						tv.clear_pending()
 		fights_total += fights
-		if alive and tv.is_complete():
+		var won_run := alive and tv.is_complete()
+		if won_run:
 			completed += 1
+		# A death is 0.0 rather than the HP it died holding, which is none: the point of the
+		# spread is that p10 = 0 reads as "the bottom decile died" without a second column.
+		hp_left.append((float(hp) / float(maxi(1, max_hp))) if won_run else 0.0)
+		fights_seen.append(float(fights))
+		# Only a run that had at least two fights HAS an escalation, and a run that never
+		# landed damage has no ratio at all rather than a ratio of zero. Excluded rather than
+		# defaulted, because a default would drag the mean toward a number nobody measured.
+		if dpt_first > 0.0 and dpt_last > 0.0 and fights >= 2:
+			esc_ratios.append(dpt_last / dpt_first)
+		var sig := {}
+		for c2 in run_deck:
+			sig[c2.id] = true
+		deck_sigs.append(sig)
+	hp_left.sort()
+	fights_seen.sort()
+	esc_ratios.sort()
+	# Divergence over CONSECUTIVE pairs, not all of them: every pair is 80,000 comparisons at
+	# 400 trials for a number that reads the same off 400. Jaccard on the id SET, so a run that
+	# took the same ten cards in a different order is correctly not a different run.
+	var div_sum := 0.0
+	var div_n := 0
+	for i in maxi(0, deck_sigs.size() - 1):
+		var a: Dictionary = deck_sigs[i]
+		var b: Dictionary = deck_sigs[i + 1]
+		var inter := 0
+		for k in a:
+			if b.has(k):
+				inter += 1
+		var uni: int = a.size() + b.size() - inter
+		if uni > 0:
+			div_sum += 1.0 - float(inter) / float(uni)
+			div_n += 1
 	return {
 		"complete": float(completed) / float(trials),
 		"avg_fights": float(fights_total) / float(trials),
@@ -480,6 +598,19 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		# of the encounters that COULD be dodged, how many were: 0.0 here for a whole
 		# report is the signal that the driver is ignoring the mechanic again
 		"avoid_rate": float(avoided_total) / float(maxi(1, avoidable_total)),
+		# --- the fun block (D229). Diagnostic, none of it pass/fail: a fun metric with a
+		# threshold becomes a thing that gets tuned toward instead of a thing that gets read.
+		"escalation": (esc_ratios[esc_ratios.size() / 2] as float) if not esc_ratios.is_empty() else 0.0,
+		"esc_n": esc_ratios.size(),
+		"hp_p10": _pct(hp_left, 0.10),
+		"hp_p50": _pct(hp_left, 0.50),
+		"hp_p90": _pct(hp_left, 0.90),
+		"fights_p10": _pct(fights_seen, 0.10),
+		"fights_p90": _pct(fights_seen, 0.90),
+		"divergence": (div_sum / float(div_n)) if div_n > 0 else 0.0,
+		"dd_real": float(_dd_real) / float(maxi(1, _dd_calls)),
+		"dd_forced": float(_dd_forced) / float(maxi(1, _dd_calls)),
+		"dd_solved": float(_dd_solved) / float(maxi(1, _dd_calls)),
 	}
 
 ## Resolve an event the way a reasonable player would: take the cheapest option
@@ -1546,9 +1677,39 @@ func _burn_is_worth_it(eng: CombatEngine, c: CardData) -> bool:
 			best_lost = maxi(best_lost, maxi(eng.card_damage(other), eng.card_block(other)))
 	return maxi(eng.card_damage(c), eng.card_block(c)) >= best_lost
 
+## Decision density (D229). This function is where the driver chooses WHICH card, so it is the
+## one place in the tool that can say whether a choice existed. It already scores every legal
+## play and keeps only the winner; the runner-up is thrown away, and the gap between the two is
+## the whole measurement.
+##
+## Counted per CALL rather than per turn, because a turn asks this question more than once —
+## once for damage, once for block, once per pass of `_spend_rest` — and each of those is a
+## separate choice among the hand. Reset by `_measure_run` at the start of a cell and read at
+## the end of it, so the number belongs to the run fights and not to the per-tier diagnostics
+## `_measure` plays afterwards.
+##
+## Three buckets, because "no decision" has two different causes and only one of them is a
+## complaint about the CARDS:
+##   * forced  — one legal play, or none. Nothing was chosen. A hand problem, not a card problem.
+##   * solved  — the best play is worth 3x the next. The turn plays itself.
+##   * real    — the best two are within 25%. This is the number that should go up.
+## The remainder is the ordinary middle and is not reported: it is whatever is left.
+var _dd_forced := 0
+var _dd_solved := 0
+var _dd_real := 0
+var _dd_calls := 0
+
+func _dd_reset() -> void:
+	_dd_forced = 0
+	_dd_solved = 0
+	_dd_real = 0
+	_dd_calls = 0
+
 func _best_by_value(eng: CombatEngine, want_damage: bool) -> CardData:
 	var best: CardData = null
 	var best_val := 0.0
+	var second_val := 0.0
+	var legal := 0
 	for c in eng.hand:
 		if not eng.can_play(c) or not _burn_is_worth_it(eng, c):
 			continue
@@ -1556,7 +1717,26 @@ func _best_by_value(eng: CombatEngine, want_damage: bool) -> CardData:
 		if amount <= 0:
 			continue
 		var val := float(amount) / _live_cost(eng, c)
+		legal += 1
 		if val > best_val:
+			second_val = best_val
 			best_val = val
 			best = c
+		elif val > second_val:
+			second_val = val
+	# A call with NOTHING legal is not a decision that went badly, it is a question that did not
+	# apply: this function is asked separately for damage and for block, and a hand holding no
+	# block card at all answers the block question with zero candidates. Counting those as
+	# "forced" inflated the share to 62% on the first run of this block and would have been read
+	# as "most turns have no decision in them", which is a claim about the CARDS made out of an
+	# artifact of how the driver asks. Excluded from the denominator entirely.
+	if legal == 0:
+		return best
+	_dd_calls += 1
+	if legal == 1:
+		_dd_forced += 1
+	elif second_val <= 0.0 or best_val >= second_val * 3.0:
+		_dd_solved += 1
+	elif best_val <= second_val * 1.25:
+		_dd_real += 1
 	return best

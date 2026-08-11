@@ -218,6 +218,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D226** | [The game is not fun, and the pillar that keeps it honest is the reason](#d226--the-game-is-not-fun-and-the-pillar-that-keeps-it-honest-is-the-reason) |
 | **D227** | [Builds only happen for a version somebody named](#d227--builds-only-happen-for-a-version-somebody-named) |
 | **D228** | [A guard that had always been wrong went red on the one commit that touched none of it](#d228--a-guard-that-had-always-been-wrong-went-red-on-the-one-commit-that-touched-none-of-it) |
+| **D229** | [Four numbers about fun, and the first one settles the argument](#d229--four-numbers-about-fun-and-the-first-one-settles-the-argument) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -15279,3 +15280,103 @@ stopped it from ever being found — the value of twelve fresh floors a run is t
 the price is that a one-in-five-hundred fault arrives on somebody else's commit. That is the right
 trade for a generator, but only if the message is good enough to survive the arrival, which is what
 was actually fixed here.
+
+---
+
+### D229 — Four numbers about fun, and the first one settles the argument
+
+D226 step 0: forty-six suites and this tool all measure **difficulty**, and nothing in the tree can
+say whether a run was worth having twice. So `tools/sim_balance.gd` grew a second line per cell
+before any content changed, because the alternative is building the relic rewrite and then arguing
+about whether it worked.
+
+```
+   The Crypt        d1  60hp RUN  78% (4.1 fights, 0.5 avoided) | N 100%(4.0t,-10%hp) ...
+      fun    esc 0.98x(n400) | hp p10/p50/p90 0/37/73% | fights 3-5 | div 0.60 | real 64% forced 32% solved 0%
+```
+
+Printed for every cell rather than behind a flag: a diagnostic nobody reads is the reason this
+block is being added twelve hundred entries late.
+
+#### What each one is, and the one that was wrong on paper
+
+* **`esc`** — the median over the trials of *(last fight's damage per turn) / (first fight's)*.
+  `_measure_run` already builds a real `CombatEngine` per fight, and `fight_tally()` already
+  returns `TALLY_DAMAGE` and `TALLY_TURNS`, so this is the escalation the run actually delivered
+  and it cost nothing to read. Runs with fewer than two fights, or that never landed damage, are
+  **excluded rather than defaulted** — a default drags the median toward a number nobody measured,
+  which is D124's shape.
+* **`hp` / `fights`** — percentiles over trials, because D226's first draft asked for percentiles of
+  RUN COMPLETION and **that metric cannot exist**: completion is binary per trial, so its
+  percentiles are 0, 0, 1, 1. Corrected before it was built, to end-of-run HP as a fraction of max
+  with a death counted as 0 — so `p10 = 0` reads as *the bottom decile died* without a second
+  column — and to the p10–p90 of fights survived, which separates dying on the boss from dying on
+  floor one.
+* **`div`** — mean Jaccard distance between *consecutive* runs' final decks. Consecutive, not all
+  pairs: 80,000 comparisons at 400 trials for a number that reads the same off 400.
+* **`real` / `forced` / `solved`** — `_best_by_value` already scores every legal play and throws
+  the runner-up away; the gap between the top two is the measurement. `real` is a live runner-up
+  within 25%, `solved` is a best play worth 3x the next, `forced` is exactly one legal play.
+
+**`forced` read 62% on its first run and that number was an artifact.** The function is asked
+separately for damage and for block, so a hand holding no block card at all answered the block
+question with zero candidates, and `legal <= 1` counted every one of those as *forced*. Read
+literally it says "most turns have no decision in them" — a claim about the cards, manufactured out
+of how the driver asks the question. Calls with nothing legal are now excluded from the denominator
+entirely and the share fell to 31%. **A ratio is only about its subject if its denominator is.**
+
+#### The noise floor, measured first
+
+The tool does not seed. `--noise` measures every selected cell twice and prints the gap, because
+D120's 0.4-point mean with one cell swinging 15 is a fact about run completion and says nothing
+about four numbers that did not exist then. At 400 trials on the Crypt:
+
+| | gap between two reads |
+|---|---|
+| RUN completion | ±5 pts |
+| `esc` | **±0.05x** |
+| `hp` p50 | ±2 pts |
+| `div` | ±0.005 |
+| `real` | ±4 pts |
+
+At 60 trials the same gaps are ±0.11x on `esc` and ±13 points on `hp` p50, so the flag also prices
+the trial count: **a cheap report cannot see the escalation move.**
+
+#### The baseline, and it is the whole argument for D226
+
+Fifty-one cells, 400 trials, no calibration:
+
+| | min | mean | max |
+|---|---|---|---|
+| **`esc`** | 0.78x | **1.08x** | 1.32x |
+
+Against a noise band of ±0.05x, and against D226's kill criterion of **3x**. Not one cell in the
+game reaches 1.5x. The three lowest are the Drowned Market at 0.78x, the Warrens at 0.79x and the
+Slag Pits at 0.80x — **runs that end weaker per turn than they started**, which is what a deck
+diluted by random rewards while the enemies scale to it actually produces. The claim that this game
+has no escalation was an argument from reading `power_ratio`; it is now a measurement, and the
+number to beat is written down before the thing that is supposed to beat it exists.
+
+#### And one part of the diagnosis was wrong
+
+The D226 write-up said the fights themselves are thin — *"play cards by size, block, repeat"* — and
+used that to argue escalation had nowhere to land. **The numbers do not support it.** Across the
+same 51 cells: `real` **48%**, `solved` **8%**, `forced` 23%. About half of all card choices have a
+live runner-up and one in twelve plays itself. The turn-level decision is *not* the problem, and
+`div` at 0.42 says runs already differ from one another in what they end up holding.
+
+So the flatness is in the **arc**, not in the turn: the game asks a real question every turn and
+then never changes what the answer is worth. That narrows step 1 — the rule-breakers have to change
+what a turn is *worth*, not add another thing to choose between — and it retires the fear that step
+1 would land on a system too thin to carry it. Kept as a correction rather than edited out of D226,
+because the wrong half of that reasoning is what made the right half convincing.
+
+#### What this instrument still cannot see
+
+`esc` divides by the first fight's damage per turn, and a fight's damage per turn is partly a fact
+about the enemy in it: the last fight is a named boss with a larger pool, so a rising number is
+"stronger player" and "longer fight" mixed. Isolating the player would mean fighting a fixed
+reference enemy at both ends of a run, which doubles the cost and changes the run it is measuring.
+Not built. **The number is a proxy and the confound points the same way for every cell**, which is
+enough for a before-and-after on one dungeon and not enough to compare the Crypt's 0.98x with the
+Foundry's 1.31x as though they were the same measurement.
