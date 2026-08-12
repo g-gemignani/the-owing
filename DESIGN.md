@@ -219,6 +219,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D227** | [Builds only happen for a version somebody named](#d227--builds-only-happen-for-a-version-somebody-named) |
 | **D228** | [A guard that had always been wrong went red on the one commit that touched none of it](#d228--a-guard-that-had-always-been-wrong-went-red-on-the-one-commit-that-touched-none-of-it) |
 | **D229** | [Four numbers about fun, and the first one settles the argument](#d229--four-numbers-about-fun-and-the-first-one-settles-the-argument) |
+| **D230** | [Untaxed relics were measured before they were built, and they buy the wrong thing](#d230--untaxed-relics-were-measured-before-they-were-built-and-they-buy-the-wrong-thing) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -15380,3 +15381,92 @@ reference enemy at both ends of a run, which doubles the cost and changes the ru
 Not built. **The number is a proxy and the confound points the same way for every cell**, which is
 enough for a before-and-after on one dungeon and not enough to compare the Crypt's 0.98x with the
 Foundry's 1.31x as though they were the same measurement.
+
+---
+
+### D230 — Untaxed relics were measured before they were built, and they buy the wrong thing
+
+D226 step 0b: hand every simulated run N relics as it walks, exempt them from enemy scaling, and
+see what the escalation does. The point of doing it this way round is that it is a few hours and it
+can say *no* — and it very nearly did.
+
+#### The seam
+
+`CombatEngine.setup` gained a trailing `p_untaxed: Array = []`. Relics in it are appended to
+`relics`, so every existing consumer — per-turn bonuses, combat-start effects, `_fire_relics` — sees
+them, while `power_ratio` is computed against `p_relics` alone. Read **before** `_spawn_enemies`,
+which is the line that actually scales to it.
+
+Two arrays rather than a flag on `RelicData`, because **whether a relic is taxed is a fact about how
+it was acquired, not about the relic**: the same Bone Charm is priced when you own it and free when
+the floor lends it to you. That is also why this is the seam D226 step 3 needs, so it is not
+scaffolding.
+
+`tests/test_relic.gd` asserts all three halves — owning it raises the ratio, being lent it does not
+(exact equality; `power_ratio` is deterministic on its inputs), and it still delivers its Block.
+Mutation-checked, because nothing in the *game* passes `p_untaxed` yet and a seam whose only caller
+is one hand-run tool is the seam that rots before step 3 arrives:
+
+| mutation | result |
+|---|---|
+| exemption removed (`ratio` reads the combined array) | `FAIL p_untaxed raised the ratio: bare 1.000, untaxed 1.128` |
+| untaxed relics never appended to `relics` | `FAIL a lent relic did not apply: taxed gave 8 block, untaxed gave 0` |
+
+#### The sweep
+
+Eighteen cells over the Crypt, Ossuary, Foundry and Maw, 200 trials, `--spoils=` 0/3/5/8:
+
+| | 0 | 3 | 5 | 8 |
+|---|---|---|---|---|
+| **`esc`** | 1.09x | 1.16x | 1.20x | **1.18x** |
+| RUN completion | 56% | 62% | 63% | **63%** |
+| `hp` p50 | 27% | 31% | 33% | **33%** |
+| `real` | 52% | 52% | 52% | 52% |
+
+**Eight free relics buy +0.11x of escalation, against a target of 3x — and it saturates by five.**
+The 1.20 → 1.18 step is inside the noise band, so the fifth relic is the last one that does
+anything at all.
+
+What the same eight relics *do* buy is eight points of run completion and six of end-of-run HP. The
+extremes say it more clearly than the mean: Starter at the Ossuary goes **4% → 44%** on three
+spoils — free power rescues a deck that was over-reaching — while every Maw cell stays under 5%, so
+it does not rescue depth. The best escalation in the sweep is Early at the Foundry, 1.12x → 1.55x,
+and it is the only cell that gets anywhere near interesting.
+
+#### Why, measured rather than asserted
+
+The catalogue was asked what kind of strength it is made of:
+
+| of 30 relics | |
+|---|---|
+| raise what a turn is worth (strength, dexterity, energy, draw) | **5** |
+| keep you alive (max HP, start block, heal, thorns) | 11 |
+| pay you (gold %) | 3 |
+| carry any triggered effect at all | 11 |
+
+Five. A random draw of eight expects about **1.3** relics that can raise damage per turn. So the
+flat `esc` is not a fact about the exemption, it is arithmetic about the pool — and REVIEW.md's
+"18 of 30 are numeric tiers of five templates" is the same observation counted a different way.
+
+#### The verdict, and it is not the obvious one
+
+**Go on D226, and the ordering it already has is the load-bearing part.** But the naive version of
+this change — *make relics untaxed and stop there* — does not deliver a power fantasy. It delivers a
+**difficulty reduction**: +8 points of completion, +6 of HP, and a turn that is worth what it was
+worth before. A player would report that the game got easier, not that they broke it. That is a
+worse outcome than doing nothing, because it spends the pillar and buys a tuning change.
+
+So step 0b converts step 1 from "the thing to do first" into a precondition with a number on it:
+
+* **After step 1, `esc` must clear 1.5x on the Foundry cells before persistence is touched.** The
+  sweep already reaches 1.55x in one cell with the pool as it stands, so 1.5x is the floor of
+  "the rule-breakers did something the existing numeric relics could not".
+* **And `real` must not fall.** It sat at 52% through every leg of this sweep, which is the
+  evidence that free power changes nothing about the turn-level choice. A rule-breaker that raises
+  `esc` by collapsing the decision — one obvious play, every turn — would be visible here and
+  nowhere else in the suite.
+
+The original 3x criterion stands for the finished design and is not reachable by exemption alone,
+which is the single most useful thing this measurement produced: **the pillar was never the only
+thing standing between this game and the feeling it is for.** It was the one that could be found by
+reading the code, and the pool is the one that had to be measured.

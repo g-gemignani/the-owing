@@ -9,6 +9,9 @@ extends SceneTree
 ##     godot --headless --script tools/sim_balance.gd -- --trials=120
 const DEFAULT_TRIALS := 400
 
+## How many untaxed relics a run is handed as it walks. See `--spoils=`.
+static var SPOILS := 0
+
 ## Print each cell twice and the gap between them. See `--noise`.
 static var NOISE := false
 
@@ -86,6 +89,13 @@ static func _read_args() -> void:
 		# with --only= first; this doubles the wall clock.
 		elif arg == "--noise":
 			NOISE = true
+		# Hand every run N relics as it walks, exempt from enemy scaling, and see what the
+		# escalation does (D226 step 0b, D230). A MEASUREMENT, not a design: no content is
+		# written, nothing in the game passes `p_untaxed`, and the flag is the whole change.
+		# If `esc` barely moves at 5, untaxed in-run power is not the lever D226 thinks it is
+		# and four steps of that plan are aimed at the wrong system.
+		elif arg.begins_with("--spoils="):
+			SPOILS = clampi(int(arg.substr(9)), 0, 12)
 		elif arg.begins_with("--difficulty="):
 			Balance.difficulty = clampi(int(arg.substr(13)), 0, Balance.DIFFICULTIES.size() - 1)
 		# Raw multiplier overrides, for SWEEPING candidate rungs before any of them are
@@ -155,6 +165,10 @@ func _init() -> void:
 	print("       div: mean Jaccard distance between consecutive runs' final decks.")
 	print("       real/forced/solved: share of card choices with a live runner-up / only one")
 	print("           legal play / a best play worth 3x the next. DIAGNOSTIC, not pass/fail.")
+	if SPOILS > 0:
+		print("--spoils=%d: every run is lent up to %d relics as it walks, EXEMPT from enemy" % [
+			SPOILS, SPOILS])
+		print("           scaling. A measurement of untaxed in-run power (D226 step 0b), not a design.")
 	if NOISE:
 		print("--noise: every cell measured twice; believe no delta smaller than the gap.")
 	print("")
@@ -407,6 +421,9 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		var alive := true
 		var fights := 0
 		var guard := 0
+		# What the floor has lent this run so far (D230). Empty unless `--spoils=` is set, and
+		# thrown away with the trial — which is the whole model: found power that leaves.
+		var spoils: Array = []
 		# Damage per turn in this run's FIRST fight and its most recent one. The ratio of the
 		# two is the escalation this run actually delivered — the Dungeon Run feeling as one
 		# number, and the acceptance test for every step of D226.
@@ -494,9 +511,12 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					# its fights at generation time (D85), and a sim that kept rolling its
 					# own would be measuring a different enemy distribution than the one
 					# being played — the D72/D74/D77 mistake for a fourth time.
+					# `spoils` goes in the UNTAXED slot: its effects apply, and `power_ratio`
+					# is computed against `relics` alone, so the enemies do not scale to it.
+					# That exemption is the entire experiment (D230).
 					eng.setup(run_deck, hp, max_hp, difficulty, tier,
 						String(node.get("enemy", "")), relics, roster,
-						power, dd.boss if dd != null else "")
+						power, dd.boss if dd != null else "", spoils)
 					_tick("fight_setup", t_su)
 					var t_fi := Time.get_ticks_usec()
 					var g2 := 0
@@ -532,9 +552,22 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						# pure attrition. Applied before the cost estimate below, because
 						# what a fight here costs is what it costs AFTER the heal; that is
 						# the number the driver is deciding on.
-						var heal := Balance.relic_field_sum(relics, "heal_after_combat")
+						# Between-fights relic effects read the FULL set, spoils included, or a
+						# lent Healing Idol would be the D180 bug reintroduced by the flag that
+						# is supposed to measure past it.
+						var all_relics: Array = relics.duplicate()
+						all_relics.append_array(spoils)
+						var heal := Balance.relic_field_sum(all_relics, "heal_after_combat")
 						if heal > 0:
 							hp = mini(max_hp, hp + heal)
+						# The floor pays for the fight (D230). One per win until the budget is
+						# spent, which front-loads them relative to a real dungeon where only
+						# elites and pockets pay — deliberately, because this is measuring the
+						# CEILING of untaxed power and a stingier schedule measures a schedule.
+						if SPOILS > 0 and spoils.size() < SPOILS:
+							var pool := _spoils_pool()
+							if not pool.is_empty():
+								spoils.append(pool[randi() % pool.size()])
 						# the driver's only source of "what does a fight here cost me"
 						var n: int = int(cost_n.get(enc_kind, 0)) + 1
 						var prev: float = float(cost_est.get(enc_kind, 0.0))
@@ -1253,6 +1286,26 @@ func _power_of(profile: Dictionary) -> PowerData:
 	pd = pd.duplicate()
 	pd.level = int(profile.get("power_level", 1))
 	return pd
+
+## Every relic in the catalogue, for `--spoils=`. Loaded once: the flag draws from it per fight
+## and `load()` on thirty resources per draw dominated the run before this was cached.
+##
+## The WHOLE catalogue, deliberately — not the depth-gated pool `MetaState.unowned_relics()`
+## serves. This measurement asks what untaxed power does to a run, and gating the draw by clears
+## would answer a different question with the same flag while looking like the same one.
+var _spoil_pool: Array = []
+
+func _spoils_pool() -> Array:
+	if not _spoil_pool.is_empty():
+		return _spoil_pool
+	# `MetaState.RELIC_CATALOG` is the one list of what relics exist, and it maps id -> path, so
+	# the path is read from it rather than rebuilt out of `RELIC_DIR` — a second way of naming
+	# the same file is the D34 shape, and this tool has been bitten by it (D34 itself).
+	for id in MetaState.RELIC_CATALOG:
+		var r := load(String(MetaState.RELIC_CATALOG[id])) as RelicData
+		if r != null:
+			_spoil_pool.append(r)
+	return _spoil_pool
 
 func _relics(ids: Array) -> Array:
 	var out: Array = []

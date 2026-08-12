@@ -371,11 +371,12 @@ func _init() -> void:
 	if str(e4.relic_fired) != str(e3.relic_fired):
 		fails += 1; print("FAIL spent relic triggers not persisted")
 
+	fails += _check_untaxed(relic_dir)
 	fails += _simulator_reads_every_relic_field()
 	fails += _simulator_plays_every_trigger_and_effect()
 
 	if fails == 0:
-		print("RELIC TEST: PASS (ownership, persistence, scaling, effects, death-safety, simulator parity)")
+		print("RELIC TEST: PASS (ownership, persistence, scaling, effects, death-safety, untaxed slot, simulator parity)")
 	else:
 		print("RELIC TEST: FAIL (%d)" % fails)
 	_cleanup_sandbox()
@@ -468,6 +469,55 @@ func _simulator_reads_every_relic_field() -> int:
 		if sim.find(name) == -1:
 			fails += 1
 			print("FAIL relic field '%s' is applied by the game but never by tools/sim_balance.gd — the simulator prices it in power_ratio and never delivers it" % name)
+	return fails
+
+## The untaxed slot: `setup`'s `p_untaxed` must deliver a relic's EFFECT while keeping its power
+## out of `power_ratio` (D230). Both halves, because either one alone is a different bug that
+## looks like this one working — effect with no exemption is the pillar still applying, and
+## exemption with no effect is a relic that does nothing for free.
+##
+## It matters that this is tested at all: nothing in the GAME passes `p_untaxed` yet, so its only
+## caller is `tools/sim_balance.gd --spoils=`, and an argument exercised by one tool run by hand
+## is exactly the seam that rots before D226 step 3 arrives to use it.
+func _check_untaxed(relic_dir: String) -> int:
+	var fails := 0
+	var Engine_ = load("res://scripts/combat_engine.gd")
+	# Kite Shield: 8 Block at the start of every combat. Chosen because the effect is visible on
+	# turn one with no dice in it, so a failure here is the slot and never the roll.
+	var shield := load(relic_dir + "kite_shield.tres") as RelicData
+	if shield == null:
+		print("FAIL kite_shield.tres is gone — the untaxed check needs a start-of-combat relic")
+		return 1
+
+	var bare = Engine_.new()
+	bare.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "cultist")
+	var taxed = Engine_.new()
+	taxed.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "cultist", [shield])
+	var free = Engine_.new()
+	free.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "cultist", [], [], null, "", [shield])
+
+	# 1. Owning it raises enemy scaling. If this stops being true the pillar has gone and the
+	#    comparison below is measuring nothing.
+	if not (taxed.ratio > bare.ratio):
+		fails += 1
+		print("FAIL a relic in p_relics did not raise the ratio: bare %.3f, taxed %.3f" % [
+			bare.ratio, taxed.ratio])
+	# 2. Being lent it does not. Exact equality: `power_ratio` is deterministic on its inputs
+	#    and the two calls differ only in which argument the relic went into.
+	if not is_equal_approx(free.ratio, bare.ratio):
+		fails += 1
+		print("FAIL p_untaxed raised the ratio: bare %.3f, untaxed %.3f (it must be free)" % [
+			bare.ratio, free.ratio])
+	# 3. ...and it still does its job. `start_block` is applied in `setup` from `relics`, so this
+	#    is the assertion that `p_untaxed` actually joined that array.
+	if free.player.block != taxed.player.block:
+		fails += 1
+		print("FAIL a lent relic did not apply: taxed gave %d block, untaxed gave %d" % [
+			taxed.player.block, free.player.block])
+	if free.player.block <= bare.player.block:
+		fails += 1
+		print("FAIL a lent relic gave no block at all (%d, bare %d)" % [
+			free.player.block, bare.player.block])
 	return fails
 
 ## And every TRIGGER and EFFECT kind must be held by some profile (D180).

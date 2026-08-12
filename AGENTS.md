@@ -234,6 +234,16 @@ effects are drawn at runtime by `scripts/fx.gd`.
   caught for total-deck power, per-card power, block-vs-damage, relics, powers and
   triggered relics.
 
+  **And cutting it is necessary but nowhere near sufficient, which was measured before it was
+  built (D230).** `CombatEngine.setup` has a trailing `p_untaxed` slot — relics whose effects
+  apply and whose power is kept out of `power_ratio` — and `tools/sim_balance.gd --spoils=N`
+  lends every run N of them. Eight free relics move the escalation from 1.09x to **1.18x**,
+  saturating by five, against a target of 3x; what they do buy is eight points of run completion
+  and six of end-of-run HP. Because only **5 of 30 relics raise what a turn is worth** — eleven
+  keep you alive, three pay you — so a draw of eight expects 1.3 that can raise damage per turn.
+  **Untaxing the relics as they exist today is a difficulty reduction wearing a power fantasy's
+  clothes**, and shipping it alone would spend the pillar to buy a tuning change.
+
   **This pillar is scheduled to be cut in half, and the half that goes is relics (D226).**
   It is an anti-escalation invariant: a relic taken on floor 2 makes floors 3–8 harder,
   which is the exact opposite of the feeling the game is being changed to deliver. The

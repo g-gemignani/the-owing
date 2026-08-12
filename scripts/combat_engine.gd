@@ -138,16 +138,31 @@ var enemy_intent: int:
 				total += enemies[i].outgoing_damage(int(intents[i]["value"]))
 		return total
 
+## `p_untaxed` is relics whose EFFECTS apply and whose power is deliberately NOT folded into
+## enemy scaling — free strength, on purpose. Nothing in the game passes it yet; it exists so
+## `tools/sim_balance.gd --spoils=N` can price untaxed in-run power before D226 commits to it,
+## and it is the seam D226 step 3 needs either way. Default empty, so every existing caller is
+## unchanged and the pillar still holds everywhere it is not passed.
+##
+## Two arrays rather than a flag on RelicData: whether a relic is taxed is a fact about HOW IT
+## WAS ACQUIRED — found in this run, or owned — and not about the relic. The same Bone Charm is
+## priced when you own it and free when the floor lends it to you.
 func setup(deck: Array[CardData], hp: int, max_hp: int, p_dungeon: int, p_tier: int,
 		forced_archetype: String = "", p_relics: Array = [],
-		p_roster: Array = [], p_power: PowerData = null, p_boss: String = "") -> void:
+		p_roster: Array = [], p_power: PowerData = null, p_boss: String = "",
+		p_untaxed: Array = []) -> void:
 	dungeon = p_dungeon
 	tier = p_tier
-	relics = p_relics
+	# Everything below this line — per-turn bonuses, combat-start effects, `_fire_relics` —
+	# reads `relics`, so an untaxed relic is a relic in every respect except the one.
+	relics = p_relics.duplicate()
+	relics.append_array(p_untaxed)
 	power = p_power
 	# relics and the equipped power are throughput outside the deck, so they must
-	# raise enemy scaling too — otherwise they are free strength
-	ratio = Balance.power_ratio(deck, relics, power)
+	# raise enemy scaling too — otherwise they are free strength. `p_untaxed` is the
+	# exception and is the whole point of it: priced against `p_relics` alone, and read
+	# BEFORE `_spawn_enemies` below, which is what actually scales to it.
+	ratio = Balance.power_ratio(deck, p_relics, power)
 
 	player = Combatant.new()
 	player.name = "Hero"
