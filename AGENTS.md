@@ -252,6 +252,16 @@ effects are drawn at runtime by `scripts/fx.gd`.
   Nothing is built yet; the ordering, the costs and the kill criteria are in D226. **Until
   step 3 of it lands, the rule above still holds and still binds.**
 
+- **Completion percentage is a constraint, not the goal (D231).** The tool has printed
+  `Target: RUN completion ~40-60%` since D54 and every difficulty entry since has been an
+  argument about moving cells into that band. Under the goal this project is now aimed at —
+  *the minutes are good whether or not you win* — that target scores a thrilling loss as a
+  failure and a walkover as perfect. Completion must not be 0% and must not be 100%, because
+  both mean the outcome was decided before the run started; nothing is tuned toward the middle.
+  What is steered by is `esc` and the spread. **And escalation has to arrive EARLY** — a run
+  that is flat for six fights and triples on the boss had six ordinary fights — which is why
+  `esc@3` and a won/lost split of every fun number come before the content work.
+
 - **Difficulty comes from depth, not from your own growth.** A dungeon scales to the
   player only up to a ceiling set by its difficulty (D36). You outgrow the Crypt; you
   never outgrow the Maw. Progression should *feel* like progression — HP lost per
@@ -279,6 +289,15 @@ effects are drawn at runtime by `scripts/fx.gd`.
 - **A run is a risk with an arc.** You commit a deck, earn cards that dilute it, and
   can thin or sharpen it at shops and rests (D46). Death forfeits the run's takings;
   the meta layer is what survives.
+
+  **And death costs what you chose to risk, never what you already owned (D231).** Dying
+  currently costs three things: the escrow, a cut of the *collection* (25% of banked gold at
+  the first dungeon rising to 80%, plus 1-6 cards deleted outright), and the door stake. The
+  middle one is scheduled for deletion rather than another retune — `balance.gd` already
+  concedes it was double punishment and reduced it instead of removing it, and a penalty that
+  needs a `MIN_KEEP` softlock guard is a penalty arguing with the game. The escrow will pay by
+  depth rather than all-or-nothing, and discoveries will bank win or lose. The stake stays
+  forfeit *because* it is the one cost the player consciously placed.
 
 - **The voice is content, and it belongs on the things the player handles.** Plain
   Anglo-Saxon, concrete nouns, mortuary and debt imagery, understatement — *"Cold stone

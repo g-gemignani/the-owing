@@ -220,6 +220,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D228** | [A guard that had always been wrong went red on the one commit that touched none of it](#d228--a-guard-that-had-always-been-wrong-went-red-on-the-one-commit-that-touched-none-of-it) |
 | **D229** | [Four numbers about fun, and the first one settles the argument](#d229--four-numbers-about-fun-and-the-first-one-settles-the-argument) |
 | **D230** | [Untaxed relics were measured before they were built, and they buy the wrong thing](#d230--untaxed-relics-were-measured-before-they-were-built-and-they-buy-the-wrong-thing) |
+| **D231** | [Death should cost what you chose to risk, and never what you already owned](#d231--death-should-cost-what-you-chose-to-risk-and-never-what-you-already-owned) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -15470,3 +15471,127 @@ The original 3x criterion stands for the finished design and is not reachable by
 which is the single most useful thing this measurement produced: **the pillar was never the only
 thing standing between this game and the feeling it is for.** It was the one that could be found by
 reading the code, and the pool is the one that had to be measured.
+
+---
+
+### D231 — Death should cost what you chose to risk, and never what you already owned
+
+Two exchanges changed the goal, and the second one changed it more than the first.
+
+The proposal was *"make the player die way more often, but when it wins it should break the game"*.
+The objection raised against it was that dying in fight seven wastes an evening — and the answer to
+that objection was **"dying in fight 7 is a wasted evening if it's no fun"**, which is correct and
+retires the objection. Length is not the problem. A long run that was a pleasure and ended in a loss
+is a good evening; a short one that was fine and ended in a win is a forgettable one. **What makes
+time wasted is boredom, not the outcome.**
+
+That single sentence invalidates the north star this project has steered by for two hundred
+decisions.
+
+#### Completion percentage stops being the goal
+
+`tools/sim_balance.gd` has printed `Target: RUN completion ~40-60% at matched progression` since D54,
+and every difficulty entry since — D175, D208, D209 — has been an argument about moving cells into
+that band. Under the new goal that target measures the wrong thing in both directions: **a run that
+was thrilling and lost is a success it scores as a failure, and a walkover it scores as perfect.**
+
+Completion becomes a **constraint**, not a target: it must not be 0% and must not be 100%, because
+both mean the outcome was decided before the run started. The band is wide on purpose — roughly
+15–85% — and nothing is tuned *toward* the middle of it. What is steered by instead is `esc` and the
+spread, which is what D229 built and D230 priced.
+
+This is a demotion, not a deletion. The Maw at 0–4% and the Foundry at 100% are both still faults,
+for the same reason they always were.
+
+#### Escalation has to arrive early, and nothing currently measures when
+
+If a run only becomes absurd on fight seven, it had six ordinary fights and then ended. **"The
+minutes are good" is a claim about the middle of the run**, and `esc` — last fight's damage per turn
+over the first's — cannot see the shape between the ends. A run that is flat for six fights and then
+triples on the boss scores identically to one that doubles by fight three and doubles again.
+
+So the instrument needs a second reading, **`esc@3`**: damage per turn at the third fight over the
+first. Early escalation is `esc@3` well above 1, and a design that saves its power for the finale
+shows up as `esc` high with `esc@3` flat. That is step 0c, and it is a few lines beside the existing
+counter in `_measure_run`.
+
+And the metrics have to be **split by outcome — won runs and lost runs reported separately.** The
+entire claim being made is that a lost run should have been worth playing, and every number in the
+fun block today is dominated by the runs that finished. If lost runs read `esc` 1.0 while won runs
+read 2.5, the design has failed at precisely the thing this entry is about, and the current report
+cannot tell.
+
+#### What dying costs today, which is three separate things
+
+1. **The escrow** — every card, coin, relic and sealed pack earned this run (D20).
+2. **A cut of the collection** (D3) — `gold_loss_fraction` takes **25% of banked gold at the first
+   dungeon rising to 80%** at depth, and `cards_lost_on_death` **deletes 1 to 6 cards** from the
+   collection outright.
+3. **The door stake** — the gold paid to take the debt on (D191, D205, D211).
+
+`balance.gd`'s own comment on the second one already concedes the ground: *"Retuned downward when
+run-escrow landed: forfeiting everything earned in the run is now the main sting, so stacking the
+old full card loss on top was double punishment."* It was reduced when it should have been removed.
+
+#### The decision: a lost run banks something, and the rule is about consent
+
+> **Death costs what you chose to risk. It never costs what you already owned.**
+
+That is the whole principle, and it sorts the three costs above without a judgement call:
+
+* **The collection penalty goes.** Deleted, not retuned. Taking cards and up to 80% of banked gold
+  out of a collection the player already earned is the mechanism that turns a good evening into a bad
+  one, and it is the one cost of the three that was never consented to. It also carries the
+  `MIN_KEEP` softlock guard, a floor derived from `MIN_DECK_SIZE` to stop the collection falling
+  below a legal deck — **a penalty that needs a softlock guard is a penalty arguing with the game**,
+  and the guard goes with it.
+* **The escrow keeps its teeth, but pays by depth.** Not all-or-nothing: a run that reached the
+  fourth floor of five banks more of its takings than one that died on the first. The tension D20
+  exists for survives — carrying more means risking more — while *how far you got* becomes a reward
+  curve instead of a binary. This is the clause that makes the minutes pay.
+* **Discoveries always bank, win or lose.** Every relic met, every dungeon variation seen, logged
+  permanently and immediately. Zero power, so it cannot destabilise scaling, and it is **the same
+  mechanism D226 step 3 needs** to make the meta layer a pool source rather than a power source. It
+  is also the clause that guarantees a lost run is never worth nothing.
+* **The door stake stays forfeit, and is the only cost that should.** It is priced up front, named on
+  the screen that charges it, and can be declined (D211). It is the one death cost the player
+  consciously placed, which under the rule above is exactly why it survives.
+
+#### Why this does not simply make the game easier
+
+The obvious objection is that removing a punishment lowers difficulty. It does not touch difficulty
+at all: none of the three costs is inside a fight, and `power_ratio` never sees them. What they
+change is **how much a loss discourages the next run**, which is a different axis and the one the
+whole complaint was about. Meanwhile D230 measured what actually happens when the player is handed
+free strength — completion 56% → 63% — so if the ladder needs re-fitting after all of this, the
+lever is `DMG_POWER_K` and the difficulty rungs, exactly as D209 established, and not the corpse-tax.
+
+The comparison worth keeping in view: Slay the Spire, Hades and Dungeon Run all let you die happily.
+Two of the three bank something for having tried and the third costs nothing but the time, which the
+player enjoyed. **The Owing was built to make death expensive, and that was the right instinct
+pointed at the wrong noun** — the *stake* should be expensive, because the player chose it. The
+collection should not, because they did not.
+
+#### The plan, restated
+
+0. **Done** — the fun block (D229) and the untaxed-relic measurement (D230).
+0c. **`esc@3`, and every fun number split won/lost.** Cheap, and it is the only way to check the
+   claim this entry rests on. Before step 1, because step 1's acceptance test is now *early*
+   escalation rather than escalation.
+1. **Rule-breakers** — modifier hooks at `card_damage()`, `card_block()`, `play_cost()`, `_resolve()`.
+   Gate: `esc` clears 1.5x on the Foundry cells (D230), **`esc@3` above 1.2x**, and `real` does not
+   fall from 52%.
+2. **Choice of three, bucketed** by the run deck's leading archetype — and **reachable from floor
+   one**, which is a change D231 makes to D226: the good relics cannot be gated behind depth inside a
+   run, or the escalation lands too late to be enjoyed. (D223's rarity seals are a *meta* gate on
+   what enters the pool at all and are untouched.)
+3. **Death stops taxing the collection**, the escrow pays by depth, discoveries bank always. Can land
+   before or after step 1 — it is independent of the relic work, and it is the step that most
+   directly answers the complaint this whole thread started from.
+4. **The floor becomes the beat** — one guaranteed treasure decision per floor, with the
+   `ISO_MOVES_PER_ENCOUNTER_MAX` arithmetic done on paper first (D79).
+5. **Relics stop persisting** (D226 step 3's original subject), then re-fit the ladder against the
+   spreads.
+
+Step 3 moved up. It was fourth in D226 and it is the one the player would notice on the first
+evening.

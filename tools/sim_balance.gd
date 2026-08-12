@@ -236,7 +236,16 @@ func _init() -> void:
 	# 50-70 until D197, when the floor stopped letting anything stand still and the game was
 	# asked to be meaner than it was. The band moved with the intent, not to fit the numbers:
 	# a run this deck is matched to should fail about half the time.
-	print("Target: RUN completion ~40-60%% at matched progression; <15%% when over-reaching.")
+	#
+	# D231 DEMOTED this from a target to a constraint. The goal is now that the minutes are good
+	# whether or not the run is won, so a band on completion scores a thrilling loss as a failure
+	# and a walkover as perfect. It is printed as a constraint — not 0, not 100, because both mean
+	# the outcome was settled before the run began — and nothing is tuned toward its middle. The
+	# old band is kept beside it because the cells that offend it (the Maw at 0-4%, the Foundry at
+	# 100%) are still faults, for the reason they always were.
+	print("Constraint: RUN completion must be neither ~0%% nor ~100%% — both mean the dungeon,")
+	print("            not the run, decided it. Historic band was 40-60%% at matched progression.")
+	print("Steer by: esc (and, once D231 step 0c lands, esc@3 and the won/lost split). Not the mean.")
 	# Said out loud, because a report that does not name its route is a report whose numbers
 	# cannot be compared with another one (D179). Two runs of this tool differ by a mean of
 	# 0.4 points already (D120); a route change is a much larger difference wearing the same
