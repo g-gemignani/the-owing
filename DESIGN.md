@@ -221,6 +221,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D229** | [Four numbers about fun, and the first one settles the argument](#d229--four-numbers-about-fun-and-the-first-one-settles-the-argument) |
 | **D230** | [Untaxed relics were measured before they were built, and they buy the wrong thing](#d230--untaxed-relics-were-measured-before-they-were-built-and-they-buy-the-wrong-thing) |
 | **D231** | [Death should cost what you chose to risk, and never what you already owned](#d231--death-should-cost-what-you-chose-to-risk-and-never-what-you-already-owned) |
+| **D232** | [`esc@3`, a won/lost split, and the confound the split found in `esc` itself](#d232--esc3-a-wonlost-split-and-the-confound-the-split-found-in-esc-itself) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -15595,3 +15596,95 @@ collection should not, because they did not.
 
 Step 3 moved up. It was fourth in D226 and it is the one the player would notice on the first
 evening.
+
+---
+
+### D232 — `esc@3`, a won/lost split, and the confound the split found in `esc` itself
+
+D231 step 0c. Two additions to the fun block, and the second one broke the first.
+
+**`esc@3`** is damage per turn at the third won fight over the first. `esc` alone cannot see *when*
+the escalation happened, and D231's goal is that the middle of the run is good — a run that is flat
+for six fights and triples on the boss had six ordinary fights.
+
+**The won/lost split** reports both ratios separately for the runs that finished and the runs that
+did not. This is the load-bearing one: the whole plan rests on a lost run being worth playing, and
+every number in the fun block is dominated by the runs that won.
+
+#### The split immediately falsified `esc`
+
+Its first output, at the Ossuary: **won runs 0.64x, lost runs 1.00x.** Winning appeared to escalate
+*less*.
+
+It is not the deck. **Damage per turn rises with the number of enemies in the fight**, because one
+AoE card hits all of them. A won run's last fight is always the boss, which is one enemy. A lost
+run's last surviving fight is usually an ordinary one holding two or three. The split was comparing
+boss output against normal-fight output and reporting the difference as escalation.
+
+So readings are now taken only from **NORMAL-tier fights the player won**. Lost fights measure the
+enemy rather than the player, and one tier keeps the enemy count comparable at both ends of the
+ratio. The cost is that escalation which only appears against a boss is invisible here, which is
+the right trade: the boss is one fight and the claim is about the whole run.
+
+D229 anticipated exactly this and then did not act on it — it recorded that *"a fight's damage per
+turn is partly a fact about the enemy in it"* and called the confound tolerable because it "points
+the same way for every cell". **It does not point the same way for won and lost runs, and adding the
+split is what made that visible.** A confound that is uniform across the cells you are comparing
+becomes a lie the moment you compare a new pair.
+
+#### Which forces a correction to D229's headline
+
+D229 reported the baseline as **0.78x to 1.32x, mean 1.08x**, and singled out three cells — the
+Drowned Market at 0.78x, the Warrens at 0.79x, the Slag Pits at 0.80x — as *"runs that end weaker
+per turn than they started"*. **That claim was an artifact of the confound and is withdrawn.** With
+the boss and the enemy count out of it, the same 51 cells read:
+
+| | min | mean | max |
+|---|---|---|---|
+| `esc` | 0.94x | **1.05x** | 1.18x |
+| `esc@3` (46 cells with a reading) | 0.93x | **1.05x** | 1.18x |
+| `esc` on won runs | 0.94x | 1.07x | 1.26x |
+| `esc` on lost runs | 0.93x | 1.02x | 1.12x |
+
+Nothing ends meaningfully weaker than it started. The real finding is duller and worse: **`esc@3`
+equals `esc` to two decimal places on the mean.** Whatever tiny escalation exists is already there
+by the third fight and nothing further happens. The curve is not back-loaded, which was the fear
+D231 named — **it is flat end to end**, so there is nothing to move to the front. The conclusion
+D226 and D230 rest on is unchanged and the number supporting it is smaller than first reported.
+
+Won runs at 1.07x against lost runs at 1.02x says the same thing from the other side: winning is
+barely more escalated than losing, so the outcome is decided by attrition and the deck brought to
+the door, not by anything the run builds.
+
+#### Two reporting rules, both learned here
+
+**A median needs a minimum sample, and the count goes beside it.** The Ossuary's nine wins reported
+0.67x — one unlucky deck from anything. Any median over fewer than 30 readings now prints `--`, with
+its count still shown so a blank says why it is blank. This is D96's rule (*derive the claim, and if
+the data cannot hold it up, do not print it*) applied to a new subject.
+
+**And an absent reading must not print as zero.** Five cells reported `@3 0.00x`, the Maw among them,
+where runs die at the third fight and no run ever wins three normal fights. A zero beside a healthy
+`esc` reads as a collapse. It prints `--` with `n0`, which is a different fact and now looks like
+one.
+
+#### One unexplained failure, recorded rather than tidied away
+
+A single full-suite run failed `test_traversal` while this work was in progress, and the message was
+lost. It did not reproduce in **14 further full-suite runs** or **8 runs of the suite alone**.
+
+Two hypotheses were formed and both were measured and killed. The first was that the chase assertion
+15 lines below D228's fix has the same bug — it takes `nearest` as the minimum over *all* hunters,
+and a penned guard cannot approach — so a probe walked 4,800 floors: the assertion fired **0** times
+and the nearest hunter was penned **0** times, because pockets are far off the route by construction.
+The second was cross-process interference from the simulator run that preceded it, which cannot
+happen: separate processes share no state but the user directory, and this suite reads none of it.
+
+So: an unreproduced failure in a 1,900-line suite whose assertions run over randomly generated
+floors, in a file that has already yielded one 1-in-500 flake (D228). **The likeliest reading is a
+second flake of the same family in a different assertion, and there is no evidence for it.** Written
+down because the next occurrence should start here rather than at the beginning, and because a
+failure that is quietly not mentioned again is a failure the next person rediscovers.
+
+The lesson for the operator is smaller and entirely practical: the suite prints the failing
+assertion, and this one was lost by reading only the last lines of the output. Capture all of it.

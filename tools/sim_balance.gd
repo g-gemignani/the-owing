@@ -15,6 +15,13 @@ static var SPOILS := 0
 ## Print each cell twice and the gap between them. See `--noise`.
 static var NOISE := false
 
+## Median of an already-SORTED array, or 0.0 when it is empty. Median rather than mean, because
+## one run that met a lucky hand skews a mean and the report reads it as a trend.
+static func _median(sorted_vals: Array) -> float:
+	if sorted_vals.is_empty():
+		return 0.0
+	return float(sorted_vals[sorted_vals.size() / 2])
+
 ## Percentile of an already-SORTED array, by nearest rank. Nearest rather than interpolated
 ## because two of the three subjects are integer counts (fights survived) and an interpolated
 ## 6.5 fights is a run nobody had.
@@ -159,12 +166,19 @@ func _init() -> void:
 	print("Per-fight rates are full-HP diagnostics only.")
 	# Named here rather than left to be inferred, because four of these have no precedent in
 	# this tool and one of them (esc) is the acceptance test for a whole design (D226/D229).
-	print("fun  = esc: median last-fight damage-per-turn / first-fight, per run — the escalation.")
+	print("fun  = esc: median damage-per-turn of the last NORMAL fight a run won, over its first.")
+	print("           Lost fights measure the enemy, and elites and bosses hold a different number")
+	print("           of enemies, which moves damage-per-turn on its own. @3 is the same ratio at")
+	print("           the third won normal fight: that is where 'early' lives (D231).")
 	print("       hp: end-of-run HP percentiles, a death counted as 0, so p10=0 means the")
 	print("           bottom decile died. fights: p10-p90 of fights survived.")
 	print("       div: mean Jaccard distance between consecutive runs' final decks.")
 	print("       real/forced/solved: share of card choices with a live runner-up / only one")
 	print("           legal play / a best play worth 3x the next. DIAGNOSTIC, not pass/fail.")
+	print("split= the same escalation for the runs that WON and the runs that LOST. A lost run")
+	print("       must also be worth playing, and no other line here can say whether it was.")
+	print("       `--` means fewer than %d readings: the count is printed, the median is" % MEDIAN_MIN_N)
+	print("       not, because a median over nine runs reads like a fact and is not one.")
 	if SPOILS > 0:
 		print("--spoils=%d: every run is lent up to %d relics as it walks, EXEMPT from enemy" % [
 			SPOILS, SPOILS])
@@ -218,6 +232,7 @@ func _init() -> void:
 					_tier_short(tier), r["win_rate"] * 100.0, r["avg_turns"], r["hp_lost_pct"] * 100.0]
 			print(line)
 			print(_fun_line(run))
+			print(_split_line(run))
 			# The gap between two readings of the SAME cell, which is the only thing that says
 			# whether a delta in the numbers above is a change or the weather (D229). Only the
 			# run is re-measured: the tier diagnostics are not part of the fun block and cost
@@ -243,9 +258,11 @@ func _init() -> void:
 	# the outcome was settled before the run began — and nothing is tuned toward its middle. The
 	# old band is kept beside it because the cells that offend it (the Maw at 0-4%, the Foundry at
 	# 100%) are still faults, for the reason they always were.
-	print("Constraint: RUN completion must be neither ~0%% nor ~100%% — both mean the dungeon,")
-	print("            not the run, decided it. Historic band was 40-60%% at matched progression.")
-	print("Steer by: esc (and, once D231 step 0c lands, esc@3 and the won/lost split). Not the mean.")
+	# Single `%` here, not `%%`. These lines take no format arguments, so GDScript prints the
+	# string as written and `%%` reached the terminal literally.
+	print("Constraint: RUN completion must be neither ~0% nor ~100% — both mean the dungeon,")
+	print("            not the run, decided it. Historic band was 40-60% at matched progression.")
+	print("Steer by: esc, esc@3 and the won/lost split. Not the mean, and not completion.")
 	# Said out loud, because a report that does not name its route is a report whose numbers
 	# cannot be compared with another one (D179). Two runs of this tool differ by a mean of
 	# 0.4 points already (D120); a route change is a much larger difference wearing the same
@@ -373,12 +390,47 @@ func _fun_line(run: Dictionary) -> String:
 	# `esc` is the MEDIAN of the runs that had an escalation to measure, and `n` says how many
 	# that was. A ratio averaged over runs that never landed damage is a number about the
 	# driver, not the deck (D124).
-	return "      fun    esc %.2fx(n%d) | hp p10/p50/p90 %.0f/%.0f/%.0f%% | fights %.0f-%.0f | div %.2f | real %.0f%% forced %.0f%% solved %.0f%%" % [
-		run["escalation"], int(run["esc_n"]),
+	# `@3` prints `--` when NO run reached a third won normal fight, which is not the same fact as
+	# an escalation of zero. Five cells read `@3 0.00x` on the first full report — the Maw among
+	# them, where runs die at the third fight — and a zero beside a healthy `esc` reads as a
+	# collapse rather than as an absence. Each side carries its own count for the same reason.
+	return "      fun    esc %s(n%d) @3 %s(n%d) | hp p10/p50/p90 %.0f/%.0f/%.0f%% | fights %.0f-%.0f | div %.2f | real %.0f%% forced %.0f%% solved %.0f%%" % [
+		_esc_or_blank(run["escalation"], int(run["esc_n"])), int(run["esc_n"]),
+		_esc_or_blank(run["esc3"], int(run["esc3_n"])), int(run["esc3_n"]),
 		run["hp_p10"] * 100.0, run["hp_p50"] * 100.0, run["hp_p90"] * 100.0,
 		run["fights_p10"], run["fights_p90"],
 		run["divergence"],
 		run["dd_real"] * 100.0, run["dd_forced"] * 100.0, run["dd_solved"] * 100.0]
+
+## Fewest runs on one side of the split before its median is printed at all.
+##
+## A median over nine runs sitting beside one over a hundred-and-eleven gets read as the same kind
+## of fact. The Ossuary's nine wins reported 0.67x, which is one unlucky deck away from anything.
+## D96 settled this shape already: derive the claim, and if the data cannot hold it up, do not
+## print it. The COUNT is always printed, so a suppressed cell says why it is empty.
+const MEDIAN_MIN_N := 30
+
+static func _esc_or_blank(value: float, n: int, min_n: int = MEDIAN_MIN_N) -> String:
+	if n < min_n:
+		return "  --  "
+	return "%.2fx" % value
+
+## The same escalation, split by whether the run finished (D231).
+##
+## Its own line because it answers the question the plan turns on: was the run that LOST worth
+## playing? A design that only escalates on the way to a win reads as healthy on the line above.
+func _split_line(run: Dictionary) -> String:
+	var nw := int(run["n_won"])
+	var nl := int(run["n_lost"])
+	# `esc3` on one side is blanked when that side has no reading at all, even where the side is
+	# big enough: at the Maw the lost runs are 377 and not one of them won three normal fights.
+	var nw3: int = nw if run["esc3_won"] > 0.0 else 0
+	var nl3: int = nl if run["esc3_lost"] > 0.0 else 0
+	return "      split  won  n%-4d esc %s @3 %s (%.0f fights)  |  lost n%-4d esc %s @3 %s (%.0f fights)" % [
+		nw, _esc_or_blank(run["esc_won"], nw), _esc_or_blank(run["esc3_won"], nw3),
+		run["fights_won_p50"],
+		nl, _esc_or_blank(run["esc_lost"], nl), _esc_or_blank(run["esc3_lost"], nl3),
+		run["fights_lost_p50"]]
 
 func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		roster: Array = [], mode: int = Policy.SMART, trials: int = TRIALS,
@@ -394,8 +446,18 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 	# only ever kept means. A mean cannot tell one coin-flip cell from two populations.
 	var hp_left: Array = []       # end-of-run HP as a fraction of max; a death is 0.0
 	var fights_seen: Array = []   # fights survived, which separates dying on the boss from floor 1
-	var esc_ratios: Array = []    # last fight's damage-per-turn over the first fight's
+	var esc_ratios: Array = []    # last won fight's damage-per-turn over the first won fight's
+	var esc3_ratios: Array = []   # ...and the THIRD won fight's, which is where "early" lives
 	var deck_sigs: Array = []     # the SET of card ids each run finished with
+	# Split by outcome (D231). The claim this whole plan rests on is that a LOST run must be
+	# worth playing. Every number above is dominated by the runs that finished, so a design that
+	# only escalates when it wins reads as healthy here and fails the goal. These four say which.
+	var esc_won: Array = []
+	var esc_lost: Array = []
+	var esc3_won: Array = []
+	var esc3_lost: Array = []
+	var fights_won: Array = []
+	var fights_lost: Array = []
 	_dd_reset()
 	# What fights here have been costing, learned across the trials of this cell and
 	# carried between them: a player who has walked this dungeon before knows.
@@ -437,7 +499,9 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		# two is the escalation this run actually delivered — the Dungeon Run feeling as one
 		# number, and the acceptance test for every step of D226.
 		var dpt_first := -1.0
+		var dpt_third := -1.0
 		var dpt_last := -1.0
+		var won_fights := 0
 		# The iso floor is mostly open ground now (D77), so a run is tens of MOVES for
 		# the same handful of fights. At 60 this truncated every iso run mid-floor and
 		# reported the model as costing a third of its budget.
@@ -539,12 +603,32 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					fights += 1
 					# Read off the same tally the game reads (D204). `_t` skips a zero, so a
 					# fight that landed nothing has no `damage` key at all — hence `.get`.
+					#
+					# Only NORMAL fights the player WON are counted (D231). Two exclusions, and the
+					# second one was found by the split it exists to serve.
+					#
+					# A fight you lost measures the enemy, not your escalation: the run met
+					# something it could not handle and its damage per turn says so.
+					#
+					# And damage per turn rises with the NUMBER of enemies in the fight, because
+					# an AoE card hits all of them. A won run's last fight is always the boss,
+					# which is one enemy; a lost run's last won fight is usually an ordinary one
+					# with two or three. So the split read Ossuary wins at 0.64x against losses
+					# at 1.00x — winning appeared to escalate LESS — and that was the tier
+					# distribution, not the deck. Restricted to one tier, the two are comparable.
+					#
+					# The cost is that escalation which only shows against a boss is invisible
+					# here. That is the right trade: the boss is one fight and the claim being
+					# measured is about the whole run.
 					var ft := eng.fight_tally()
 					var f_turns := maxi(1, int(ft.get(Balance.TALLY_TURNS, 1)))
 					var f_dpt := float(int(ft.get(Balance.TALLY_DAMAGE, 0))) / float(f_turns)
-					if f_dpt > 0.0:
+					if f_dpt > 0.0 and not eng.lost() and tier == Balance.Tier.NORMAL:
+						won_fights += 1
 						if dpt_first < 0.0:
 							dpt_first = f_dpt
+						if won_fights == 3:
+							dpt_third = f_dpt
 						dpt_last = f_dpt
 					if eng.lost():
 						alive = false
@@ -608,15 +692,35 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		# Only a run that had at least two fights HAS an escalation, and a run that never
 		# landed damage has no ratio at all rather than a ratio of zero. Excluded rather than
 		# defaulted, because a default would drag the mean toward a number nobody measured.
-		if dpt_first > 0.0 and dpt_last > 0.0 and fights >= 2:
-			esc_ratios.append(dpt_last / dpt_first)
+		if dpt_first > 0.0 and dpt_last > 0.0 and won_fights >= 2:
+			var e := dpt_last / dpt_first
+			esc_ratios.append(e)
+			if won_run:
+				esc_won.append(e)
+			else:
+				esc_lost.append(e)
+		# `esc@3` needs three won fights. A run that never got that far has no early escalation to
+		# report, which is different from having a flat one.
+		if dpt_first > 0.0 and dpt_third > 0.0:
+			var e3 := dpt_third / dpt_first
+			esc3_ratios.append(e3)
+			if won_run:
+				esc3_won.append(e3)
+			else:
+				esc3_lost.append(e3)
+		if won_run:
+			fights_won.append(float(fights))
+		else:
+			fights_lost.append(float(fights))
 		var sig := {}
 		for c2 in run_deck:
 			sig[c2.id] = true
 		deck_sigs.append(sig)
 	hp_left.sort()
 	fights_seen.sort()
-	esc_ratios.sort()
+	for arr in [esc_ratios, esc3_ratios, esc_won, esc_lost, esc3_won, esc3_lost,
+			fights_won, fights_lost]:
+		(arr as Array).sort()
 	# Divergence over CONSECUTIVE pairs, not all of them: every pair is 80,000 comparisons at
 	# 400 trials for a number that reads the same off 400. Jaccard on the id SET, so a run that
 	# took the same ten cards in a different order is correctly not a different run.
@@ -642,8 +746,20 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		"avoid_rate": float(avoided_total) / float(maxi(1, avoidable_total)),
 		# --- the fun block (D229). Diagnostic, none of it pass/fail: a fun metric with a
 		# threshold becomes a thing that gets tuned toward instead of a thing that gets read.
-		"escalation": (esc_ratios[esc_ratios.size() / 2] as float) if not esc_ratios.is_empty() else 0.0,
+		"escalation": _median(esc_ratios),
 		"esc_n": esc_ratios.size(),
+		# D231: where the escalation happened, not just how much of it there was. A run that is
+		# flat for six fights and then triples on the boss had six ordinary fights.
+		"esc3": _median(esc3_ratios),
+		"esc3_n": esc3_ratios.size(),
+		"esc_won": _median(esc_won),
+		"esc_lost": _median(esc_lost),
+		"esc3_won": _median(esc3_won),
+		"esc3_lost": _median(esc3_lost),
+		"n_won": fights_won.size(),
+		"n_lost": fights_lost.size(),
+		"fights_won_p50": _median(fights_won),
+		"fights_lost_p50": _median(fights_lost),
 		"hp_p10": _pct(hp_left, 0.10),
 		"hp_p50": _pct(hp_left, 0.50),
 		"hp_p90": _pct(hp_left, 0.90),

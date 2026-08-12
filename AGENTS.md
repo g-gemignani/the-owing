@@ -211,8 +211,12 @@ effects are drawn at runtime by `scripts/fx.gd`.
    All diagnostic, none pass/fail, because a fun metric with a threshold becomes a thing that
    gets tuned toward. `--noise` reads every cell twice and prints the gap, which is the only
    thing that says whether a delta is a change: at 400 trials `esc` moves ±0.05x, at 60 trials
-   ±0.11x. **The baseline is `esc` 0.78-1.32x across all 51 cells, mean 1.08x** — no cell in
-   the game reaches 1.5x, and three end weaker per turn than they started. That is the
+   ±0.11x. The first baseline read 0.78-1.32x, mean 1.08x, and that spread was an artifact:
+   damage per turn rises with the NUMBER of enemies in a fight, and a won run's last fight is
+   always the single-target boss. Readings now come only from NORMAL fights the run won (D232).
+   **The corrected baseline is `esc` 0.94-1.18x, mean 1.05x, and `esc@3` is 1.05x too** — so
+   the curve is not back-loaded, it is flat end to end, and no cell reaches 1.5x. Won runs read
+   1.07x against lost runs at 1.02x: winning is barely more escalated than losing. That is the
    measurement D226 is aimed at. It also refuted half of D226's own reasoning: `real` 48% and
    `solved` 8% say the turn-level decision is live, so the flatness is in the ARC and not in
    the turn.
