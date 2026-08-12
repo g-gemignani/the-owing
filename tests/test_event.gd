@@ -91,11 +91,18 @@ func _init() -> void:
 	# --- card loss from events must respect the softlock floor ---
 	var m = Meta.new()
 	m.new_save()
-	# drive the collection to the floor, then confirm nothing more can be removed
-	var guard := 0
-	while m.total_copies() > Balance.MIN_KEEP and guard < 100:
-		guard += 1
-		m.penalize_death(1)
+	# Drive the collection to the floor, then confirm nothing more can be removed. This used to
+	# call `penalize_death` to do the driving; that mechanism is gone (D235) and it was only ever
+	# a tool here, so the collection is set directly. Fewer moving parts in the setup of a test
+	# about events.
+	var floor_ids: Array = m.collection.keys()
+	m.collection = {}
+	for i in Balance.MIN_KEEP:
+		var id: String = String(floor_ids[i % floor_ids.size()])
+		if m.collection.has(id):
+			m.collection[id]["count"] += 1
+		else:
+			m.collection[id] = {"count": 1, "level": 1}
 	if m.total_copies() < Balance.MIN_KEEP:
 		fails += 1; print("FAIL collection already below floor: %d" % m.total_copies())
 	# an event's "lose a card" must refuse at the floor (same rule as death)

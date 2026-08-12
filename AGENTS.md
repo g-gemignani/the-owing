@@ -97,7 +97,7 @@ Two-tier state makes this work:
 ## Content at a glance
 
 100 cards · 8 build archetypes · 35 enemy archetypes (all painted) · 12 bosses (one named per
-dungeon) · 37 relics (12 of them rule-breakers, D233) ·
+dungeon) · 38 relics (19 of them rule-breakers, D233/D237, no two alike) ·
 10 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 46 errands and 16 debts over 44 counters · 3 aspects ·
@@ -294,14 +294,15 @@ effects are drawn at runtime by `scripts/fx.gd`.
   can thin or sharpen it at shops and rests (D46). Death forfeits the run's takings;
   the meta layer is what survives.
 
-  **And death costs what you chose to risk, never what you already owned (D231).** Dying
-  currently costs three things: the escrow, a cut of the *collection* (25% of banked gold at
-  the first dungeon rising to 80%, plus 1-6 cards deleted outright), and the door stake. The
-  middle one is scheduled for deletion rather than another retune — `balance.gd` already
-  concedes it was double punishment and reduced it instead of removing it, and a penalty that
-  needs a `MIN_KEEP` softlock guard is a penalty arguing with the game. The escrow will pay by
-  depth rather than all-or-nothing, and discoveries will bank win or lose. The stake stays
-  forfeit *because* it is the one cost the player consciously placed.
+  **And death costs what you chose to risk, never what you already owned (D231, built in
+  D235).** It cost three things and now costs one and a fraction: the escrow pays a share set by
+  depth (`Balance.escrow_salvage`, half at the bottom, almost none on the first floor), the
+  collection pays **nothing** — `gold_loss_fraction`, `cards_lost_on_death` and
+  `penalize_death` are deleted — and the door stake stays forfeit *because* it is the one cost
+  the player consciously placed. Discoveries bank win or lose in `MetaState.relics_seen`, at
+  zero power, which is also the mechanism step 5 needs. `MIN_KEEP` STAYS: D231 said the softlock
+  guard would go with the penalty and that was wrong, because `can_fuse` needs the same floor.
+  A guard with two subjects only loses the one that went.
 
 - **The voice is content, and it belongs on the things the player handles.** Plain
   Anglo-Saxon, concrete nouns, mortuary and debt imagery, understatement — *"Cold stone

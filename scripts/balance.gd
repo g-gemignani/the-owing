@@ -3387,12 +3387,38 @@ const WEIGHTS := {
 	Tier.BOSS: [10, 30, 50, 30, 10],
 }
 
-# --- death penalty (D3, retuned by D20) ---
-## Cards permanently lost on death, by dungeon difficulty. Retuned downward when
-## run-escrow landed: forfeiting everything earned in the run is now the main
-## sting, so stacking the old full card loss on top was double punishment.
-static func cards_lost_on_death(dungeon: int) -> int:
-	return maxi(1, int(ceil(float(dungeon) / 2.0)))
+# --- what dying costs (D3, retuned by D20, rewritten by D235) ---
+#
+# It cost three things: the run's escrow, a cut of the COLLECTION, and the door stake. The middle
+# one is gone. The rule that decides which survive is one sentence:
+#
+#     Death costs what you chose to risk. It never costs what you already owned.
+#
+# `cards_lost_on_death` deleted 1 to 6 cards out of the collection and `gold_loss_fraction` took
+# 25% of banked gold at the first dungeon rising to 80% at depth. Neither was consented to, and
+# the comment on the first one already conceded the ground — it was "retuned downward" when escrow
+# landed, because stacking it on top was double punishment. Reduced when it should have been
+# removed (D231).
+#
+# `MIN_KEEP` stays. It was cited in D231 as a guard that would go with the penalty, and that was
+# wrong: `can_fuse` needs the same floor, because fusion also consumes copies. A softlock guard
+# with two subjects only loses the one that went.
+
+## How much of a lost run's takings still come home, as a fraction, given how deep it got.
+##
+## Escrow was all-or-nothing: reach the boss and lose to it, and the run paid exactly what a run
+## that died on the first floor paid. Depth is the thing the player actually spent the evening on,
+## so depth is what it pays for — the arc gets a reward curve instead of a coin flip, and "how far
+## did I get" stops being a number only the defeat screen mentions.
+##
+## Linear, and capped well below 1. At the bottom of a dungeon a loss brings home half; on the
+## first floor of five it brings home a tenth. The cap is what keeps escrow a real risk: if a loss
+## paid everything, carrying loot home would stop being a decision and the Escape Rope would stop
+## being worth anything (D21).
+const ESCROW_SALVAGE_AT_BOTTOM := 0.5
+
+static func escrow_salvage(depth_frac: float) -> float:
+	return clampf(depth_frac, 0.0, 1.0) * ESCROW_SALVAGE_AT_BOTTOM
 
 
 ## Floor on total collection size. DERIVED from MIN_DECK_SIZE, never a loose
@@ -3400,5 +3426,4 @@ static func cards_lost_on_death(dungeon: int) -> int:
 ## cannot build a deck, cannot enter a dungeon, and therefore cannot earn cards —
 ## an unrecoverable softlock. Any future sink on the collection must respect this.
 const MIN_KEEP := MIN_DECK_SIZE
-static func gold_loss_fraction(dungeon: int) -> float:
-	return clampf(0.25 + 0.1 * (dungeon - 1), 0.25, 0.8)
+

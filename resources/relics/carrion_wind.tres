@@ -4,8 +4,8 @@
 
 [resource]
 script = ExtResource("1")
-id = "padded_vest"
-name = "Padded Vest"
-description = "Your Block is 50% stronger."
-rarity = 2
-block_pct = 50
+id = "carrion_wind"
+name = "Carrion Wind"
+description = "A debuff aimed at one enemy lands on every one."
+rarity = 1
+debuffs_spread = true

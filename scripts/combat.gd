@@ -2293,10 +2293,14 @@ func _lose() -> void:
 		c.queue_free()
 	Audio.play("defeat")
 	GameState.combat_state = {}
-	# D20: the run's earnings are forfeited — that is now the primary cost of dying.
-	var lost := GameState.forfeit_escrow()
-	# D3: plus a (retuned) permanent penalty scaled by dungeon difficulty.
-	var pen := MetaState.penalize_death(GameState.dungeon)
+	# D20/D235: the run's earnings are the ONLY cost of dying, and how much of them comes home
+	# depends on how deep the run got. The permanent penalty on the collection is gone — death
+	# costs what you chose to risk and never what you already owned (D231).
+	var iso := GameState.traversal as TraversalIso
+	var depth_frac := 0.0
+	if iso != null and iso.floors > 0:
+		depth_frac = float(iso.depth + 1) / float(iso.floors)
+	var lost := GameState.forfeit_escrow(depth_frac)
 	var dd := GameState.dungeon_data()
 	# Hand the whole reckoning to a screen the player dismisses themselves. This
 	# used to be one line of status text and a forced 2.5 second wait.
@@ -2309,8 +2313,12 @@ func _lose() -> void:
 		"forfeited_cards": int(lost["cards"]),
 		"forfeited_gold": int(lost["gold"]),
 		"forfeited_packs": int(lost.get("packs", 0)),
-		"penalty_gold": int(pen["gold_lost"]),
-		"penalty_cards": pen["cards_lost"],
+		"kept_cards": int(lost.get("kept_cards", 0)),
+		"kept_gold": int(lost.get("kept_gold", 0)),
+		"kept_packs": int(lost.get("kept_packs", 0)),
+		"salvage": float(lost.get("salvage", 0.0)),
+		"depth": iso.depth + 1 if iso != null else 1,
+		"floors": iso.floors if iso != null else 1,
 	}
 	status_label.text = "DEFEAT."
 	buffs_label.visible = false

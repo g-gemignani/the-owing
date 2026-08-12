@@ -158,14 +158,21 @@ func _init() -> void:
 		fails += 1; print("FAIL relics not persisted")
 
 	# --- relics are NOT lost on death (unlike cards/gold) ---
+	#
+	# Asserted against `forfeit_escrow` since D235: dying no longer touches the collection at all,
+	# so the only thing that could take a banked relic is the escrow settlement, and that is where
+	# the claim now has to hold.
 	m2.add_gold(200)
 	for i in 12:
 		m2.add_card("hack")
 	var before: int = m2.relics.size()
-	for i in 5:
-		m2.penalize_death(4)
+	var GSr = load("res://scripts/game_state.gd")
+	var gr = GSr.new()
+	gr.escrow_gold = 50
+	gr.escrow_relics = ["iron_heart"]
+	gr.forfeit_escrow(1.0)
 	if m2.relics.size() != before:
-		fails += 1; print("FAIL death removed relics (%d -> %d)" % [before, m2.relics.size()])
+		fails += 1; print("FAIL a death removed banked relics (%d -> %d)" % [before, m2.relics.size()])
 
 	# --- grant_relic hands out unowned UNLOCKED relics, then runs dry (D223) ---
 	#

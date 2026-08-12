@@ -223,6 +223,9 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D231** | [Death should cost what you chose to risk, and never what you already owned](#d231--death-should-cost-what-you-chose-to-risk-and-never-what-you-already-owned) |
 | **D232** | [`esc@3`, a won/lost split, and the confound the split found in `esc` itself](#d232--esc3-a-wonlost-split-and-the-confound-the-split-found-in-esc-itself) |
 | **D233** | [Seven relics that change a rule, and a gate that could not have measured them](#d233--seven-relics-that-change-a-rule-and-a-gate-that-could-not-have-measured-them) |
+| **D235** | [Dying stops reaching into the collection, and a lost run pays for its depth](#d235--dying-stops-reaching-into-the-collection-and-a-lost-run-pays-for-its-depth) |
+| **D236** | [The second flake was the same bug, and its message finally said which](#d236--the-second-flake-was-the-same-bug-and-its-message-finally-said-which) |
+| **D237** | [Culling the numeric relics made the number worse, because the profiles hold them](#d237--culling-the-numeric-relics-made-the-number-worse-because-the-profiles-hold-them) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -15817,3 +15820,202 @@ rule-breakers make runs much easier, exactly as D230 warned when the same lever 
 numbers (56% → 63%). That is step 5's re-fit and not a reason to weaken the modifiers — the whole
 point of D231 demoting completion to a constraint is that this number is allowed to move while the
 design is being built, and the ladder is re-fitted last, against the spreads.
+
+---
+
+### D235 — Dying stops reaching into the collection, and a lost run pays for its depth
+
+D231 step 3, and the first change in this whole sequence a player would notice on the first evening.
+
+Dying cost three things. It now costs one and a fraction of another, and the rule that sorted them is
+the one D231 settled: **death costs what you chose to risk, and never what you already owned.**
+
+| cost | before | now |
+|---|---|---|
+| the run's escrow | all of it | **a share set by depth** |
+| the collection | 25% of banked gold rising to 80%, plus 1–6 cards deleted | **nothing** |
+| the door stake | forfeit | forfeit — the one cost consciously placed |
+
+`Balance.gold_loss_fraction` and `Balance.cards_lost_on_death` are deleted, and
+`MetaState.penalize_death` with them. Its two private helpers — `_pick_losable_card` and
+`_is_attack` — went too, because a "never strip the last attack card" guard has no subject once
+nothing strips anything.
+
+**`MIN_KEEP` stays, and D231 was wrong about it.** That entry said the softlock guard would go with
+the penalty, on the grounds that a penalty needing a guard against bricking the save is a penalty
+arguing with the game. The first half holds; the conclusion did not. `can_fuse` needs the same floor,
+because fusion also consumes copies. **A guard with two subjects only loses the one that went**, and
+`tests/test_softlock.gd` now says so where it used to name death.
+
+#### The salvage curve
+
+`Balance.escrow_salvage(depth_frac)` is linear and capped at `ESCROW_SALVAGE_AT_BOTTOM` = 0.5. Reach
+the bottom and lose, and half the haul comes home; die on the first floor of five and almost none
+does. `floor()` and not `round()`, so half of one card is nothing — rounding would make the first
+card free at any depth above a tenth.
+
+The cap is what keeps escrow a risk. If a loss paid everything, carrying loot home would stop being
+a decision and the Escape Rope would have nothing to sell (D21). `tests/test_escrow.gd` asserts that
+gap directly now, in place of the card-count assertions it used to make about the penalty.
+
+**Relics are not salvaged.** They are the one thing in escrow that is a rule rather than a quantity —
+half a relic is not a thing — and D226 step 5 is about to stop them persisting at all, so paying them
+out on a death would build a mechanism already scheduled for deletion.
+
+#### Discoveries always bank
+
+`MetaState.relics_seen` logs every relic the character has ever met, whether the run came home or
+not, and `note_relic_seen` is called from `add_relic` and from `GameState.earn_relic` — so a relic
+that goes into escrow and is then left on the floor is still *met*. It grants no power, so it cannot
+destabilise scaling, which is exactly why it can be paid out on a death with none of the arguments
+D226 has to have about relics. It is also the mechanism step 5 needs to make the meta layer a pool
+source rather than a power source, so it is not scaffolding.
+
+Unknown ids are dropped on LOAD rather than in migration, the same way packs and cleared dungeons
+are (D15): renaming a relic must never corrupt a save. A save written before this reads as having met
+none, which is accepted — the alternative is inventing a history the file cannot support.
+
+#### The defeat screen leads with what came home
+
+It used to open on *"Left behind in the dungeon"* and then state what the collection paid. Under a
+design where a lost run is meant to have been worth playing, the first thing it says should be what
+the run **paid**, with the depth that set the figure beside it — a percentage with no cause reads as
+a dice roll. The loss is still stated in full underneath, because escrow only means something if the
+player can see what it cost.
+
+#### Six suites had to change, and one of them is now a better test
+
+`test_death.gd` asserted the penalty's arithmetic. It now asserts the opposite: that
+`penalize_death` does not exist, that `balance.gd` declares neither deleted function, that the
+salvage curve is **monotonic across eleven depths** — a non-monotonic salvage would make "get
+further" the wrong advice at some depth, and no pair of endpoint readings could see that — and that
+kept plus lost equals everything at every depth, because the defeat screen states both halves and a
+drift between them would show up nowhere else.
+
+`test_event.gd` and `test_softlock.gd` had used `penalize_death` as a *tool* to drive a collection
+down to its floor. Both now do that directly, and `test_softlock` makes the stronger claim available
+to it: forty deaths at four depths must not cost a single card or a single coin.
+
+**The strongest statement about a deleted mechanic is a test that fails if it comes back.**
+
+---
+
+### D236 — The second flake was the same bug, and its message finally said which
+
+D232 recorded an unexplained `test_traversal` failure, guessed it was *"a second flake of the same
+family in a different assertion"*, and said there was no evidence for it. There is now, and the guess
+was right.
+
+```
+FAIL 'prowling' always answers [0] — that is a fixed riddle, not a question about the floor
+```
+
+That is D186's clause: **no toll question may be a constant.** An answer that is the same wherever
+and whenever it is asked is a fixed riddle with extra steps, solved once by the player or once by a
+wiki.
+
+#### It was the sample, and the game was never at fault
+
+`toll_answer(TOLL_PROWLING)` returns `mons.size()`. **It never reads `pos`.** The assertion swept
+every walkable tile of one partly-walked floor per dungeon, so for that one kind the entire inner
+loop contributed a single value, and its variation had to come from the twelve floors happening to
+hold twelve different hunter counts.
+
+Measured rather than argued, because the first guess was wrong twice over:
+
+| sample | `prowling` collapses to one answer |
+|---|---|
+| one partly-walked floor per dungeon (shipped) | **75%** of 300 rounds |
+| three *re-generated* floors per dungeon | 47% |
+| four floors per dungeon, **descending between them** | 0 of 20 suite runs |
+
+Re-generating barely helped, which is the part worth keeping: `generate()` deals a dungeon's FIRST
+floor again, so three generations sample the same slice three times. A floor is only re-dealt on a
+**descent**, and descending is what moves the number.
+
+And the game is fine. Over 40 rounds the question answers **1, 2 or 3 hunters**, and **9 of the 12
+dungeons hold different counts at different depths**. `exits` and `trodden` collapsed in 0 rounds at
+every sample size, because both read `pos` and the tile sweep is the right axis for them.
+
+**So this is D228 exactly: an assertion sampling an axis its subject does not move along.** D228's
+`ways` counted neighbours by a rule the code did not use; this counted floors along an axis the
+answer ignores. Both passed for months, both fired on a commit that touched nothing near them, and
+both were a fact about the check rather than the game.
+
+#### The durable half of the fix is the message
+
+Two failures from this one clause, both about the sample, and **neither message said so** — which is
+why the first was written off as unexplainable and the second cost another round of wrong hypotheses
+(a penned guard, then cross-process interference, then re-generation). It now prints the sample size
+beside the answer:
+
+```
+   (sampled 48 floors across 12 dungeons)
+FAIL 'prowling' always answers [2] — ...
+```
+
+A reader who sees *"always answers [2] over 48 floors"* starts on the right hypothesis. One who sees
+only *"[2]"* starts on the wrong one, twice.
+
+**When a generative assertion fires, the sample is evidence and belongs in the failure.** That is the
+general form of D124's lesson — *a number the simulator reports about difficulty may be a fact about
+its policy* — moved from the simulator to the suite.
+
+---
+
+### D237 — Culling the numeric relics made the number worse, because the profiles hold them
+
+D233 measured the pool's composition as the bottleneck: rule-breakers drawn alone reached `esc`
+1.48x where the whole pool reached 1.17x. The obvious next move was to cull — rewrite the redundant
+numeric relics into rules so the draw is mostly rule-breakers. Nine were converted, keeping their
+names, and `Carrion Wind` was added when one conversion had to be reverted (below). The pool went to
+**38 relics, 19 of them rule-breakers**, with **zero identical-effect pairs** — which also retires
+REVIEW.md's Keen Lens / Scholar's Lens complaint.
+
+**And `esc` fell from 1.17x to 1.12x.**
+
+| 18 cells, 200 trials | before culling | after culling | rule-breakers only |
+|---|---|---|---|
+| `esc` at spoils=8 | 1.17x | **1.12x** | 1.48x |
+| `esc@3` at spoils=8 | 1.20x | 1.16x | 1.52x |
+| RUN at spoils=**0** | 52% | **64%** | — |
+
+The RUN column at spoils=0 is the tell, and it is a twelve-point jump with no spoils involved at all.
+**The simulator's profiles hold specific relic ids** — `iron_ration`, `hearth_stone`, `tower_shield`
+among them — and those are the relics that were converted. So every profile now carries
+rule-breakers **from the first fight**, which raises the baseline and leaves the ratio alone. A
+relic held all run cannot escalate, which is the exact fact D233 had to establish before it could
+write its own gate.
+
+So the culling did not fail. **The instrument stopped being able to see it**, and it stopped for the
+reason D208 named: *is this profile a player the game can produce?* It is — you can own Tower Shield —
+but a player who owns the rule-breakers up front is the wrong player to measure in-run escalation on,
+and there was no way to know that without converting them and watching the baseline move.
+
+#### What it actually means for the plan
+
+**Steps 1 and 5 cannot be measured independently.** `esc` is a ratio across one run, so it can only
+see relic power that ARRIVES during the run. While relics persist, the sim hands them over at fight
+one and the modifiers are structurally invisible to the metric built to price them. The 1.48x figure
+from `--spoils-rules` is the honest reading of what the modifiers do, and it is the only reading
+available until persistence is off.
+
+That is the plan's own ordering arriving as a measurement rather than an argument: step 5 is not the
+last step because it is the biggest, it is load-bearing for judging every step before it.
+
+#### And one conversion had to be reverted, by a guard doing its job
+
+`scholars_lens` was converted to `debuffs_spread`, and `tests/card_text_test.gd` failed with:
+
+```
+FAIL the content now supplies only 10 draws against a cap of 10 — this check has stopped measuring a capped hand
+```
+
+That suite builds a full-hand scenario out of real content and **asserts that its own premise still
+holds** before testing anything. Converting the relic removed the draw the scenario was built on, so
+the check said it had stopped measuring its subject rather than passing on a hand that was no longer
+capped. The relic was restored and `Carrion Wind` carries the rule instead.
+
+**A test that names its own preconditions turns a silent no-op into a failure**, which is the
+counter-example to D124's whole family of bugs and the reason this one cost ten minutes instead of a
+milestone.

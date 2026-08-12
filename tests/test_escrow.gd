@@ -76,25 +76,25 @@ func _init() -> void:
 	if g.escrow_gold != 0 or not g.escrow_cards.is_empty():
 		fails += 1; print("FAIL reset_run_progress left escrow populated")
 
-	# --- the retuned death penalty: fewer cards than the old raw difficulty ---
-	for d in [1, 2, 4, 7]:
-		var n: int = Balance.cards_lost_on_death(d)
-		if n < 1:
-			fails += 1; print("FAIL death takes no cards at difficulty %d" % d)
-		if n > d:
-			fails += 1; print("FAIL death takes MORE cards than difficulty %d: %d" % [d, n])
-	if Balance.cards_lost_on_death(7) >= 7:
-		fails += 1; print("FAIL deep-dungeon card loss was not retuned")
-	# and it must still rise with difficulty
-	if Balance.cards_lost_on_death(7) <= Balance.cards_lost_on_death(1):
-		fails += 1; print("FAIL card loss does not scale with difficulty")
-
-	# --- the death penalty still respects the softlock floor ---
-	var m2 = Meta.new(); m2.new_save()
-	for i in 30:
-		m2.penalize_death(7)
-	if m2.total_copies() < Balance.MIN_KEEP:
-		fails += 1; print("FAIL deaths breached the collection floor: %d" % m2.total_copies())
+	# --- a rope beats a death, at every depth (D235) ---
+	#
+	# The old block here asserted the death PENALTY's card counts. That penalty is gone, and what
+	# matters about escrow now is the gap it leaves: a Rope carries everything out, a death carries
+	# a fraction set by depth. If a bottom-floor death ever paid as much as a rope, the rope would
+	# stop being worth finding and D21 would have nothing to sell.
+	if Balance.ESCROW_SALVAGE_AT_BOTTOM >= 1.0:
+		fails += 1
+		print("FAIL a death at the bottom salvages everything — the Escape Rope is now worthless (D21)")
+	if Balance.escrow_salvage(0.0) != 0.0:
+		fails += 1; print("FAIL a first-floor death salvages something: %f" % Balance.escrow_salvage(0.0))
+	if Balance.escrow_salvage(1.0) <= Balance.escrow_salvage(0.5):
+		fails += 1; print("FAIL salvage does not rise with depth")
+	# Out-of-range depth is clamped rather than trusted: the caller derives it from a floor index
+	# over a floor count, and an off-by-one there must not pay more than the bottom does.
+	if Balance.escrow_salvage(9.0) != Balance.escrow_salvage(1.0):
+		fails += 1; print("FAIL salvage is not clamped above the bottom")
+	if Balance.escrow_salvage(-3.0) != 0.0:
+		fails += 1; print("FAIL salvage is not clamped below the first floor")
 
 	# ---------------------------------------------------------------
 	# Escape Ropes: the only way to leave a dungeon with your earnings.

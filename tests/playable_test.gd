@@ -488,14 +488,19 @@ func _the_fight_shows_its_state() -> void:
 ## --- 9. dying is reported, not flashed past -----------------------------------
 ##
 ## Death used to be one line of status text and `await create_timer(2.5)` before
-## the player was moved on. Escrow, ropes and the death penalty all exist to make
-## that moment weigh; it has to be readable, and dismissed by the player.
+## the player was moved on. Escrow and ropes exist to make that moment weigh; it has to be
+## readable, and dismissed by the player.
+##
+## Since D235 the screen leads with what the run CARRIED OUT, and there is no penalty on the
+## collection to report. So the strings checked below are the salvage, the loss and the depth that
+## set the split — the numbers a player would quote in a bug report about a death.
 func _dying_is_reported() -> void:
 	GameState.last_defeat = {
 		"dungeon": "The Crypt", "difficulty": 1, "killer": "Crypt Hound",
 		"tier": Balance.Tier.NORMAL, "turns": 6,
 		"forfeited_cards": 3, "forfeited_gold": 140,
-		"penalty_gold": 25, "penalty_cards": ["hack"],
+		"kept_cards": 2, "kept_gold": 70, "kept_packs": 1,
+		"salvage": 0.5, "depth": 4, "floors": 5,
 	}
 	UI.clear_escape(self)
 	var inst = (load("res://scenes/Defeat.tscn") as PackedScene).instantiate()
@@ -503,7 +508,8 @@ func _dying_is_reported() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	var text := _all_text(inst)
-	for needed in ["Crypt Hound", "The Crypt", "3", "140", "25"]:
+	# "70" and "2" are the salvage, "140" and "3" the loss, "4" and "5" the depth that set it.
+	for needed in ["Crypt Hound", "The Crypt", "3", "140", "70", "4", "5"]:
 		if text.find(needed) == -1:
 			_fails += 1
 			print("FAIL the defeat screen never mentions '%s'" % needed)

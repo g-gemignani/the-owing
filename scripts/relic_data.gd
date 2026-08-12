@@ -54,6 +54,14 @@ extends Resource
 @export var block_carries: bool = false
 ## The first attack each turn resolves a second time. Read by `_resolve`.
 @export var repeat_first_attack: bool = false
+## Debuffs you apply do not decay on the target. Read by `end_turn`.
+@export var debuffs_persist: bool = false
+## A debuff aimed at one enemy lands on all of them. Read by `_resolve`.
+@export var debuffs_spread: bool = false
+## Every kill refunds this much Energy. Read by `_resolve`.
+@export var energy_per_kill: int = 0
+## Exhausted cards go to the discard pile instead of out of the fight. Read by `_resolve`.
+@export var exhaust_returns: bool = false
 
 ## When a triggered effect fires. Relics used to be nine flat stat fields — every
 ## one of them "+15 max HP" — so a relic changed your numbers but never how you
@@ -186,6 +194,22 @@ func modifier_power() -> float:
 	# Priced as 6 points of block a turn, which is under half a defensive card.
 	if block_carries:
 		v += 6.0 * CardData.BLOCK_VALUE * float(Balance.TARGET_NORMAL_TURNS) * 0.4
+	# ESTIMATE. A stack that never decays is worth roughly the whole fight's worth of re-applying
+	# it: about half the debuff cards a status deck would otherwise spend. Priced at two stacks
+	# a turn held rather than re-bought.
+	if debuffs_persist:
+		v += 2.0 * float(Balance.TARGET_NORMAL_TURNS) * 1.5
+	# Derived from CardData.AOE_SPREAD, the same way `attacks_hit_all` is: spreading a debuff is
+	# the AoE premium applied to the status half of a card.
+	if debuffs_spread:
+		v += 35.0 * 0.6 * CardData.BLOCK_VALUE
+	# ESTIMATE, and priced off GAIN_ENERGY's own rate (15.0 a point) times the kills a fight
+	# realistically has — the same 1.3 `_expected_fires` uses for ON_KILL.
+	v += float(energy_per_kill) * 15.0 * 1.3
+	# ESTIMATE. An exhaust deck's cost is that its engine burns down; returning the cards is
+	# worth about the cards it saves, at CardData's 5.0 a card, for two or three a fight.
+	if exhaust_returns:
+		v += 2.5 * 5.0
 	return v
 
 ## Total worth of the relic, for display and for relic pricing.

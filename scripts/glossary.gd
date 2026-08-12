@@ -127,15 +127,14 @@ func _at_risk(list: Node) -> void:
 		+ "so no relic and no unlock. %d%% of chests hold one and %d%% of bosses drop one on top of "
 		+ "their relic. No merchant has ever stocked them — a way out you could buy is not a "
 		+ "risk.") % [Balance.TREASURE_ROPE_CHANCE, Balance.BOSS_ROPE_CHANCE], "rope")
-	# Both ends of the penalty, not one: it is a fraction and a count that both climb
-	# with the dungeon's difficulty, and quoting only the shallow end would read as a
-	# promise the deep end breaks.
-	var deep := _deepest_difficulty()
-	_entry(body, "Dying", ("The haul stays on the floor, and the collection pays on top of it. In the "
-		+ "shallows that is %d%% of your banked gold and %d card; at the bottom it is %d%% and %d "
-		+ "cards. It can never take you below a legal deck.") % [
-			roundi(Balance.gold_loss_fraction(1) * 100.0), Balance.cards_lost_on_death(1),
-			roundi(Balance.gold_loss_fraction(deep) * 100.0), Balance.cards_lost_on_death(deep)],
+	# Both ends of the curve, not one: what a death pays depends on depth, and quoting only the
+	# shallow end would read as a promise the deep end breaks — which is the same reason the old
+	# penalty entry quoted both of its ends.
+	_entry(body, "Dying", ("Most of the haul stays on the floor, and how much of it you carry out "
+		+ "depends on how far down you got: almost none from the first floor, about %d%% from the "
+		+ "bottom. Nothing is taken from your collection — your gold, your card levels and your "
+		+ "relics are yours already, and dying cannot reach them.") % [
+			roundi(Balance.ESCROW_SALVAGE_AT_BOTTOM * 100.0)],
 		"skull")
 	_entry(body, "Quitting", ("Costs nothing. The run is written down mid-fight and picks up exactly "
 		+ "where you put it down. Dying is the only thing that takes."))
@@ -356,17 +355,6 @@ func _chip_term(spec: Array) -> Array:
 	var term := parts[0].replace("+%d", "").replace("%d", "").strip_edges()
 	var text := parts[1].replace("%%", "%")
 	return [term, text.substr(0, 1).to_upper() + text.substr(1)]
-
-## The deepest difficulty rating any dungeon carries, for the death penalty's far end.
-## Read off the dungeons rather than off the size of the list: the penalty scales on
-## the rating, and the two are not the same number.
-func _deepest_difficulty() -> int:
-	var deep := 1
-	for did in Balance.DUNGEONS:
-		var d := Balance.dungeon(did)
-		if d != null:
-			deep = maxi(deep, d.difficulty)
-	return deep
 
 ## Enemies act on a repeating cycle, and the honest way to say how long one is is to
 ## count one. The old version of this entry was its own section — "Statuses on enemies"

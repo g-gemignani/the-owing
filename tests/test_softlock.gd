@@ -25,8 +25,13 @@ func _init() -> void:
 	seed(FUZZ_SEED)
 
 	# --- the floor must be derived from the deck minimum, not set loosely ---
+	#
+	# The floor's subject changed with D235. Death no longer removes cards at all, so it can no
+	# longer softlock; `MIN_KEEP` now guards FUSION, which still consumes copies. The assertion is
+	# unchanged because the arithmetic is — a collection that can fall below a legal deck cannot
+	# build one, whatever spent the cards.
 	if Balance.MIN_KEEP < Balance.MIN_DECK_SIZE:
-		fails += 1; print("FAIL MIN_KEEP (%d) below MIN_DECK_SIZE (%d): death can softlock" % [
+		fails += 1; print("FAIL MIN_KEEP (%d) below MIN_DECK_SIZE (%d): fusion can softlock" % [
 			Balance.MIN_KEEP, Balance.MIN_DECK_SIZE])
 
 	# --- fusing as hard as possible must never softlock ---
@@ -48,16 +53,34 @@ func _init() -> void:
 	if not _can_build(m):
 		fails += 1; print("FAIL not buildable after fusion spree")
 
-	# --- deaths must never softlock, at any dungeon depth ---
-	for depth in [1, 3, 6, 12]:
+	# --- dying must not remove a single card, at any depth (D235) ---
+	#
+	# This used to drive 40 deaths per depth and assert the collection stayed buildable. The
+	# stronger statement is now available and is asserted instead: a death cannot reduce the
+	# collection AT ALL, so there is no depth at which it could softlock. Driven through the one
+	# call a death makes, so a future change that reintroduces a collection cost through some
+	# other route still fails here.
+	var GSs = load("res://scripts/game_state.gd")
+	for depth_frac in [0.0, 0.25, 0.5, 1.0]:
 		var m2 = Meta.new()
 		m2.new_save()
+		var was: int = m2.total_copies()
+		var was_gold: int = m2.gold
 		for i in 40:
-			m2.penalize_death(depth)
-			if not _can_build(m2):
-				fails += 1
-				print("FAIL death softlocked at depth %d: total=%d" % [depth, m2.total_copies()])
-				break
+			var gs = GSs.new()
+			gs.escrow_gold = 40
+			gs.escrow_cards = ["hack", "cover"]
+			gs.forfeit_escrow(float(depth_frac))
+		if m2.total_copies() < was:
+			fails += 1
+			print("FAIL 40 deaths at depth %.2f cost %d cards" % [
+				depth_frac, was - m2.total_copies()])
+		if m2.gold < was_gold:
+			fails += 1
+			print("FAIL 40 deaths at depth %.2f cost %d banked gold" % [
+				depth_frac, was_gold - m2.gold])
+		if not _can_build(m2):
+			fails += 1; print("FAIL not buildable after deaths at depth %.2f" % depth_frac)
 
 	# --- fuzz: interleave every sink and source at random ---
 	var ids := ["hack", "cover", "stave_in", "shoulder", "clear_mind",
@@ -77,7 +100,12 @@ func _init() -> void:
 						if f.can_fuse(id):
 							f.fuse(id)
 				2:
-					f.penalize_death(1 + randi() % 8)
+					# Was `penalize_death`. Death is no longer a card sink (D235), so the fuzz
+					# drives the sink that remains — fusion is exercised by branch 1 — and this
+					# branch spends the escrow instead, which is the only thing a death now does.
+					var fg = load("res://scripts/game_state.gd").new()
+					fg.escrow_gold = randi() % 60
+					fg.forfeit_escrow(randf())
 				3:
 					f.spend_gold(randi() % 50)
 			if not _can_build(f):

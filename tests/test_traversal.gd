@@ -924,27 +924,62 @@ func _init() -> void:
 	# every position of a partly-walked floor in every dungeon, because two of the three only
 	# start to vary once there is a route behind you — a sweep of FRESH floors reported all
 	# three as constant, which was true of the sample and false of the game.
+	# Sampled over several FLOORS per dungeon and not one, because the three kinds do not vary
+	# along the same axis and a per-position sweep cannot see all of them. `prowling` answers
+	# `mons.size()`, which never reads `pos` at all — so for that kind the whole inner loop over
+	# tiles contributes exactly one value, and its variation lives entirely between floors. A probe
+	# over 300 rounds collapsed `prowling` to a single answer in **75%** of them when only the
+	# position sweep fed it; `exits` and `trodden` collapsed in none. That is D228's shape again:
+	# an assertion sampling an axis its subject does not move along, passing on the sample and
+	# failing on the game (D236).
+	var sampled_floors := 0
 	for didc in Balance.DUNGEONS:
 		var ct := TraversalIso.new()
 		ct.generate(Balance.dungeon(didc))
-		for w2 in 15:
-			if ct.is_complete() or ct.options().is_empty():
+		# Sampled at several DEPTHS, and that is the load-bearing word. The three kinds do not vary
+		# along the same axis: `exits` and `trodden` read `pos`, so a sweep of one floor's tiles
+		# sees them, while `prowling` answers `mons.size()` and never reads `pos` at all. Its
+		# variation lives between FLOORS, and a floor is only re-dealt on a descent.
+		#
+		# Fed by one partly-walked floor per dungeon, `prowling` collapsed to a single answer in
+		# **75%** of 300 probe rounds, and three floors per dungeon only brought that to 47% —
+		# because re-generating a dungeon deals its FIRST floor again, which is the same slice.
+		# Descending is what moves it: over 40 rounds the answer is 1, 2 or 3 hunters, and 9 of the
+		# 12 dungeons hold different counts at different depths. So the game was never the fault
+		# here and the assertion was right to exist; the sample was walking the wrong axis (D236).
+		for stage in 4:
+			sampled_floors += 1
+			var keep := ct.pos
+			for i in ct.enc.size():
+				if int(ct.enc[i]) == TraversalIso.WALL:
+					continue
+				ct.pos = i
+				for kindc in Balance.TOLLS:
+					spread.get_or_add(String(kindc), {})[ct.toll_answer(String(kindc))] = true
+			ct.pos = keep
+			# ...then go down. `select(0)` gets on with the dungeon, so this is the shortest route
+			# to the next floor; the loop stops as soon as the depth actually changes.
+			var was_depth := ct.depth
+			for w2 in 80:
+				if ct.is_complete() or ct.options().is_empty():
+					break
+				if not ct.select(0).is_empty():
+					ct.clear_pending()
+				if ct.depth != was_depth:
+					break
+			if ct.depth == was_depth:
 				break
-			if not ct.select(0).is_empty():
-				ct.clear_pending()
-		var keep := ct.pos
-		for i in ct.enc.size():
-			if int(ct.enc[i]) == TraversalIso.WALL:
-				continue
-			ct.pos = i
-			for kindc in Balance.TOLLS:
-				spread.get_or_add(String(kindc), {})[ct.toll_answer(String(kindc))] = true
-		ct.pos = keep
 	var flat: Array = []
 	for kindc2 in Balance.TOLLS:
 		var vals: Dictionary = spread.get(String(kindc2), {})
 		if vals.size() < 2:
 			fails += 1
+			# The SAMPLE SIZE is printed with the answer, because the two failures this assertion
+			# has produced were both about the sample and not about the game, and neither message
+			# said so (D232, D236). A reader seeing "always answers [2] over 9 floors" starts on
+			# the right hypothesis; one seeing only "[2]" starts on the wrong one.
+			print("   (sampled %d floors across %d dungeons)" % [
+				sampled_floors, Balance.DUNGEONS.size()])
 			print("FAIL '%s' always answers %s — that is a fixed riddle, not a question about the floor" % [
 				kindc2, str(vals.keys())])
 		flat.append("%s:%d" % [kindc2, vals.size()])

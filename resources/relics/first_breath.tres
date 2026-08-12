@@ -7,5 +7,5 @@ script = ExtResource("1")
 id = "first_breath"
 name = "First Breath"
 description = "The first card you play each turn costs nothing."
-rarity = 4
+rarity = 3
 free_first_card = true

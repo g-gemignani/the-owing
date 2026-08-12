@@ -184,15 +184,51 @@ func commit_escrow() -> Dictionary:
 	escrow_packs = []
 	return result
 
-## Died or walked away: the run's earnings are lost.
-func forfeit_escrow() -> Dictionary:
-	var result := {"cards": escrow_cards.size(), "gold": escrow_gold,
-		"relics": escrow_relics.size(), "packs": escrow_packs.size()}
+## Died or walked away: most of the run's earnings are lost, and how much comes home depends on
+## how deep it got (D235).
+##
+## It used to be all-or-nothing, so reaching the boss and losing to it paid exactly what dying on
+## the first floor paid. Depth is what the player actually spent the evening on, so depth is what
+## it pays for. `Balance.escrow_salvage` owns the curve; this only spends it.
+##
+## Returns what came home AND what was left behind, because the defeat screen states both and a
+## caller that had to subtract would be a second place holding the same arithmetic.
+func forfeit_escrow(depth_frac: float = 0.0) -> Dictionary:
+	var salvage := Balance.escrow_salvage(depth_frac)
+	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+	# Counted before anything is banked, so "lost" is a subtraction from the whole and cannot
+	# drift from what was actually carried.
+	var had_cards := escrow_cards.size()
+	var had_gold := escrow_gold
+	var had_packs := escrow_packs.size()
+	var had_relics := escrow_relics.size()
+	# `floor`, not `round`: a run that salvages "half of one card" brings home nothing, and a
+	# rounding that paid out on 0.5 would make the first card free at every depth above a tenth.
+	var keep_cards := int(floor(float(had_cards) * salvage))
+	var keep_gold := int(floor(float(had_gold) * salvage))
+	var keep_packs := int(floor(float(had_packs) * salvage))
+	if meta != null:
+		for i in keep_cards:
+			meta.add_card(String(escrow_cards[i]))
+		if keep_gold > 0:
+			meta.add_gold(keep_gold)
+		for i in keep_packs:
+			var p: Dictionary = escrow_packs[i]
+			meta.add_pack(String(p.get("kind", Balance.PACK_TREASURE)),
+				String(p.get("dungeon", "")))
+	# Relics are NOT salvaged. They are the one thing in escrow that is a rule rather than a
+	# quantity — half a relic is not a thing — and D226 is about to stop them persisting at all,
+	# so paying them out on a death now would build a mechanism due for deletion.
 	escrow_cards = []
 	escrow_gold = 0
 	escrow_relics = []
 	escrow_packs = []
-	return result
+	return {
+		"cards": had_cards - keep_cards, "gold": had_gold - keep_gold,
+		"relics": had_relics, "packs": had_packs - keep_packs,
+		"kept_cards": keep_cards, "kept_gold": keep_gold, "kept_packs": keep_packs,
+		"salvage": salvage,
+	}
 
 ## A sealed pack, found in a treasure or left by an elite or a boss. Carried out
 ## or lost with everything else.
@@ -293,6 +329,12 @@ func keys_phrase() -> String:
 func earn_relic(id: String) -> void:
 	if id != "" and not (id in escrow_relics):
 		escrow_relics.append(id)
+		# Met, and banked immediately even though the relic itself is at risk (D235). The escrow
+		# holds the OBJECT; the log holds the fact that you saw it, and only the object can be
+		# left on the floor.
+		var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+		if meta != null:
+			meta.note_relic_seen(id)
 
 # --- run persistence (D22) ---
 ## Serialized combat, when the player quit mid-fight. Empty otherwise.

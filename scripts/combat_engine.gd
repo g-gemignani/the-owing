@@ -729,20 +729,32 @@ func play_card(card: CardData) -> String:
 	# burning is not in what it burns — and after `_resolve`, so that everything which
 	# read `projected_exhausted()` (the face included) was looking at the same intact
 	# hand. Move this earlier and Cull starts paying out on a tally it has already moved.
+	# `exhaust_returns` (D234) sends burnt cards to the discard instead of out of the fight. The
+	# TALLY still counts them: an exhaust deck's `per_exhausted` cards and the `exhaust` errand
+	# both ask what was burnt, and the relic changes where the card GOES, not whether it burned.
+	# Counting it otherwise would make the relic quietly switch off the build it most helps.
+	var returns := _mod_flag("exhaust_returns")
 	if card.exhaust_hand and not hand.is_empty():
 		var burned := hand.size()
 		exhausted_this_combat += burned
 		for _i in burned:
 			_t(Balance.TALLY_EXHAUST)
+		if returns:
+			discard_pile.append_array(hand)
 		hand.clear()
-		msg += "Burned %d card%s out of your hand. " % [burned, "" if burned == 1 else "s"]
+		msg += "Burned %d card%s out of your hand%s. " % [
+			burned, "" if burned == 1 else "s", " (they return to the pile)" if returns else ""]
 	# exhausted cards leave the combat entirely instead of returning to the discard
 	if not card.exhaust:
 		discard_pile.append(card)
 	else:
 		exhausted_this_combat += 1
 		_t(Balance.TALLY_EXHAUST)
-		msg += "(exhausted) "
+		if returns:
+			discard_pile.append(card)
+			msg += "(burnt, and back in the pile) "
+		else:
+			msg += "(exhausted) "
 	previous_card = card
 	x_energy = -1
 	# AFTER the relic fire, because both the card's own draw and an ON_CARDS_PLAYED
@@ -938,6 +950,12 @@ func _resolve(card: CardData) -> String:
 		if killed and card.energy_on_kill:
 			energy += 1
 			msg += "Energy +1. "
+		# The relic's version (D234), beside the card's for the same reason `start_block` sits
+		# beside a Block card: one mechanism, two authors.
+		var per_kill := _mod("energy_per_kill")
+		if killed and per_kill > 0:
+			energy += per_kill
+			msg += "Energy +%d. " % per_kill
 		# D204: the empowered swing has landed, so the bonus is spent. HERE rather than
 		# further down is what lets an attack empower the attack AFTER it without
 		# empowering itself: this card's damage was computed at the top of the function,
@@ -967,7 +985,7 @@ func _resolve(card: CardData) -> String:
 
 	# --- statuses on the target (AoE spreads debuffs too) ---
 	var debuff_targets: Array = []
-	if card.aoe:
+	if card.aoe or _mod_flag("debuffs_spread"):
 		for e in enemies:
 			if not e.is_dead():
 				debuff_targets.append(e)
@@ -1070,11 +1088,23 @@ func end_turn() -> String:
 		parts.append(extra)
 
 	# poison bites at end of turn, ignoring block
+	# `debuffs_persist` (D234) stops the decay on the ENEMIES only. The player's own Vulnerable
+	# and Weak still tick down: a relic that froze those would be a relic that makes the enemies
+	# permanently better at hurting you, which is the opposite of what it says on the tin.
 	var pdot := player.end_turn()
 	if pdot > 0:
 		parts.append("Poison deals %d to you." % pdot)
 	for e in enemies:
+		var held_v := e.vulnerable
+		var held_w := e.weak
+		var held_p := e.poison
 		var edot := e.end_turn()
+		if _mod_flag("debuffs_persist"):
+			e.vulnerable = held_v
+			e.weak = held_w
+			# Poison still BITES — `end_turn` already took the damage above — it just does not
+			# spend a stack. Restoring the pre-tick value is what "does not decay" means here.
+			e.poison = held_p
 		if edot > 0:
 			parts.append("Poison deals %d to %s." % [edot, e.name])
 	# poison can finish an enemy off

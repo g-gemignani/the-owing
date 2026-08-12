@@ -247,6 +247,7 @@ const RELIC_CATALOG := {
 	"broad_iron": "res://resources/relics/broad_iron.tres",
 	"bulwark_plate": "res://resources/relics/bulwark_plate.tres",
 	"chipped_whetstone": "res://resources/relics/chipped_whetstone.tres",
+	"carrion_wind": "res://resources/relics/carrion_wind.tres",
 	"coin_purse": "res://resources/relics/coin_purse.tres",
 	"crown_of_thorns": "res://resources/relics/crown_of_thorns.tres",
 	"cruel_edge": "res://resources/relics/cruel_edge.tres",
@@ -438,6 +439,7 @@ func new_save(kit: String = "blade", persist: bool = true) -> void:
 	debt_taken = {}
 	debt_credits = 0
 	packs = []
+	relics_seen = []
 	highest_dungeon = 1
 	gold = 0
 	# A fresh save starts on the shipped rung, and the STATIC has to be written here as
@@ -773,6 +775,10 @@ func add_relic(id: String) -> bool:
 	if not RELIC_CATALOG.has(id) or has_relic(id):
 		return false
 	relics.append(id)
+	# Meeting it is logged here too (D235). Owning implies having met, and a second call site that
+	# has to remember is the shape this project keeps paying for — `note_relic_seen` is idempotent,
+	# so the overlap with `pick_relic` below costs nothing.
+	note_relic_seen(id)
 	save_game()
 	return true
 
@@ -841,6 +847,9 @@ func total_clears() -> int:
 ## Roll a relic WITHOUT taking it. Split out so an elite's drop can go into escrow
 ## (D68) — granting it immediately would let a player kill the elite, die on
 ## purpose and keep it, which is the D20 abandon exploit with a different noun.
+## NOTE: also logs the roll as MET (D235). A relic that goes into escrow and is then lost on a
+## death was still met, and that is the whole point of the log — a lost run banks the knowledge
+## even when it banks nothing else.
 func pick_relic(tier: int) -> String:
 	var pool: Array = unowned_relics()
 	if pool.is_empty():
@@ -1149,50 +1158,25 @@ func total_copies() -> int:
 		t += collection[id]["count"]
 	return t
 
-func _is_attack(id: String) -> bool:
-	var c := load(CATALOG[id]) as CardData
-	return c != null and c.damage > 0
+## Relic ids this character has ever MET, whether the run came home or not (D235).
+##
+## The clause that makes a lost run worth something. It is a log and not an inventory: it grants no
+## power, so it cannot destabilise scaling, and it can therefore be paid out on a death without any
+## of the arguments D226 has to have about relics. It is also the mechanism the meta layer needs
+## once relics stop persisting (D226 step 5) — at that point this is what the relics screen shows
+## and what a pool purchase reads.
+var relics_seen: Array = []
 
-## Pick one random removable copy's card id, or "" if nothing may be removed.
-## Protects: minimum collection size, and the last remaining attack card.
-func _pick_losable_card() -> String:
-	if total_copies() <= MIN_KEEP:
-		return ""
-	var attack_copies := 0
-	for id in collection:
-		if _is_attack(id):
-			attack_copies += collection[id]["count"]
-	var pool: Array = []  # flat, weighted by count
-	for id in collection:
-		if _is_attack(id) and attack_copies <= 1:
-			continue  # never strip the last attack
-		for i in collection[id]["count"]:
-			pool.append(id)
-	if pool.is_empty():
-		return ""
-	return pool[randi() % pool.size()]
+## Log a relic as met. Returns true the FIRST time, so a caller can say "new".
+func note_relic_seen(id: String) -> bool:
+	if id == "" or id in relics_seen:
+		return false
+	relics_seen.append(id)
+	mark_meta_dirty()
+	return true
 
-## Apply death penalty for dying in the given dungeon tier.
-## Returns {gold_lost:int, cards_lost:[String names]} for the UI.
-func penalize_death(dungeon: int) -> Dictionary:
-	var result := {"gold_lost": 0, "cards_lost": []}
-	# gold: lose a fraction that grows with dungeon difficulty
-	var frac := Balance.gold_loss_fraction(dungeon)
-	var gl := int(round(gold * frac))
-	gold -= gl
-	result["gold_lost"] = gl
-	# cards: lose a (retuned) number of random copies, respecting floors
-	for i in Balance.cards_lost_on_death(dungeon):
-		var id := _pick_losable_card()
-		if id == "":
-			break
-		var c := load(CATALOG[id]) as CardData
-		result["cards_lost"].append(c.name if c else id)
-		collection[id]["count"] -= 1
-		if collection[id]["count"] <= 0:
-			collection.erase(id)
-	save_game()
-	return result
+func seen_relic(id: String) -> bool:
+	return id in relics_seen
 
 # --- persistence ---
 ## The in-progress run, so a dungeon can be resumed. Fetched by path because
@@ -1224,6 +1208,7 @@ func _write_meta() -> void:
 		"debt_taken": debt_taken,
 		"debt_credits": debt_credits,
 		"packs": packs,
+		"relics_seen": relics_seen,
 		"highest_dungeon": highest_dungeon, "gold": gold,
 	}
 	var f := FileAccess.open(save_file(), FileAccess.WRITE)
@@ -1471,6 +1456,15 @@ func _apply(parsed: Dictionary) -> void:
 		debt_taken = {"kind": String(dt["kind"]), "dungeon": String(dt["dungeon"]),
 			"stake": maxi(0, int(dt.get("stake", 0)))}
 	debt_credits = maxi(0, int(parsed.get("debt_credits", 0)))
+
+	# Unknown ids dropped on LOAD rather than in migration, exactly as packs and cleared
+	# dungeons are (D15): renaming a relic must never corrupt a save. A save written before
+	# D235 has no log, and a character who has already met thirty relics reads as having met
+	# none — accepted, because the alternative is inventing a history the save cannot support.
+	relics_seen = []
+	for rid in parsed.get("relics_seen", []):
+		if String(rid) in RELIC_CATALOG and not String(rid) in relics_seen:
+			relics_seen.append(String(rid))
 
 	highest_dungeon = int(parsed.get("highest_dungeon", 1))
 	gold = maxi(0, int(parsed.get("gold", 0)))

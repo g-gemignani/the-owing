@@ -28,42 +28,53 @@ func _ready() -> void:
 		_tier_word(int(d.get("tier", Balance.Tier.NORMAL)))])
 	UI.label(col, "")
 
-	# What the run was carrying. This is the number escrow exists to make hurt, so
-	# it is stated first and in full, not summarised.
+	# What came home, FIRST (D235). The screen used to open on what was confiscated, and under a
+	# design where a lost run is meant to have been worth playing, the first thing it says should
+	# be what the run paid. How deep you got is stated beside it, because depth is what set the
+	# figure and a percentage with no cause reads as a dice roll.
+	var kc := int(d.get("kept_cards", 0))
+	var kg := int(d.get("kept_gold", 0))
+	var kp := int(d.get("kept_packs", 0))
+	var depth := int(d.get("depth", 1))
+	var floors := int(d.get("floors", 1))
+	UI.label(col, "Carried out, for getting as far as floor %d of %d" % [depth, floors])
+	if kc == 0 and kg == 0 and kp == 0:
+		UI.label(col, "   nothing — you did not get deep enough to salvage anything")
+	else:
+		var parts := PackedStringArray()
+		if kc > 0:
+			parts.append("%d card%s" % [kc, "" if kc == 1 else "s"])
+		if kg > 0:
+			parts.append("%d gold" % kg)
+		if kp > 0:
+			parts.append("%d sealed pack%s" % [kp, "" if kp == 1 else "s"])
+		UI.label(col, "   %s" % ", ".join(parts))
+	UI.hoverable(UI.label(col, "   (the deeper a run gets, the more of it survives losing)"),
+		"A run that reaches the bottom brings home half of what it found. One that dies on the first floor brings home almost none of it.")
+	UI.label(col, "")
+
+	# ...and what did not. Still stated in full: escrow only means something if the player can see
+	# what it cost, and the Rope is only worth carrying if the loss is legible.
 	UI.label(col, "Left behind in the dungeon")
 	var fc := int(d.get("forfeited_cards", 0))
 	var fg := int(d.get("forfeited_gold", 0))
 	if fc == 0 and fg == 0:
 		UI.label(col, "   nothing — you had not found anything yet")
 	else:
-		UI.label(col, "   %d card%s and %d gold, earned on this run" % [
-			fc, "" if fc == 1 else "s", fg])
+		UI.label(col, "   %d card%s and %d gold" % [fc, "" if fc == 1 else "s", fg])
 		var fp := int(d.get("forfeited_packs", 0))
 		if fp > 0:
 			UI.label(col, "   %d sealed pack%s, never opened" % [fp, "" if fp == 1 else "s"])
-		UI.hoverable(UI.label(col, "   (an Escape Rope would have carried these out)"),
+		UI.hoverable(UI.label(col, "   (an Escape Rope would have carried all of it out)"),
 			"Ropes are found in treasures and dropped by bosses. They are never sold.")
 	UI.label(col, "")
 
-	# ...and what dying cost on top of it, which is a different thing and was
-	# previously run together with the above in one sentence.
-	UI.label(col, "Taken from your collection")
-	var pg := int(d.get("penalty_gold", 0))
-	var pc: Array = d.get("penalty_cards", [])
-	if pg == 0 and pc.is_empty():
-		UI.label(col, "   nothing")
-	else:
-		if pg > 0:
-			UI.label(col, "   %d banked gold" % pg)
-		if not pc.is_empty():
-			UI.label(col, "   %s" % ", ".join(pc))
-	UI.label(col, "")
-
-	# The reassurance is part of the information: relics and levels are the axis
-	# that survives death, and a player who does not know that reads a loss as
-	# having undone the whole game.
-	UI.label(col, "You keep your relics (%d), your card levels, and %d gold." % [
-		MetaState.relics.size(), MetaState.gold])
+	# The reassurance is part of the information, and since D235 it is a stronger sentence than it
+	# was: dying no longer takes anything out of the collection at all. A player who does not know
+	# that reads a loss as having undone the whole game.
+	UI.label(col, "Nothing was taken from your collection. You keep your %d gold, your card levels," % MetaState.gold)
+	UI.label(col, "your relics (%d), and every relic you have ever met (%d)." % [
+		MetaState.relics.size(), MetaState.relics_seen.size()])
 	UI.spacer(col)
 	UI.exit_button(col, "Back to the world", func():
 		GameState.last_defeat = {}
