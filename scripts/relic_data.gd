@@ -28,6 +28,33 @@ extends Resource
 @export var heal_after_combat: int = 0
 @export var gold_percent: int = 0
 
+## Modifiers on the resolve pipeline (D233). Everything above changes a NUMBER; these change a
+## RULE, and that is the whole reason they exist.
+##
+## D230 measured the pool and found 5 relics of 30 that raise what a turn is worth, against 11
+## that keep you alive. Lending a run eight free relics moved the escalation from 1.09x to 1.18x
+## — arithmetic, not a fault in the exemption. A pool of numbers cannot escalate, because enemy
+## scaling is denominated in the same numbers.
+##
+## Each field is read at exactly one chokepoint, and D204 already forced every consumer of a
+## card's numbers through those four functions — `play_cost`, `card_damage`, `card_block` and
+## `_resolve`. That is why this is seven fields and not a rewrite.
+@export_group("Rule modifiers")
+## Every card costs this much less, floored at 0. Read by `play_cost`.
+@export var cost_reduction: int = 0
+## The first card each turn costs nothing. Read by `play_cost`.
+@export var free_first_card: bool = false
+## Percent added to every attack's damage. Read by `card_damage`.
+@export var damage_pct: int = 0
+## Percent added to every card's Block. Read by `card_block`.
+@export var block_pct: int = 0
+## Single-target attacks hit every living enemy. Read by `_resolve`.
+@export var attacks_hit_all: bool = false
+## Block is not cleared at the start of your turn. Read by `start_turn`.
+@export var block_carries: bool = false
+## The first attack each turn resolves a second time. Read by `_resolve`.
+@export var repeat_first_attack: bool = false
+
 ## When a triggered effect fires. Relics used to be nine flat stat fields — every
 ## one of them "+15 max HP" — so a relic changed your numbers but never how you
 ## played. A trigger is what turns "+2 Strength" into "kill something and draw".
@@ -125,6 +152,40 @@ func flat_power() -> float:
 	v += heal_after_combat * 1.5
 	v += gold_percent * 0.3
 	v += triggered_power()
+	v += modifier_power()
+	return v
+
+## Power of the rule modifiers (D233), in the same units as everything above.
+##
+## These rates are DERIVED where a derivation exists and estimated where none does, and the
+## estimates are stated as estimates. Rarity is written from `power_value()` by
+## `tools/rerarify.gd` (D224/D225), so a wrong rate here does not produce a mispriced relic
+## quietly — it produces a relic in the wrong rarity band, which the rarity suite reports.
+##
+## `cost_reduction` and `free_first_card` are excluded and priced in `power_value()` instead,
+## for the reason `bonus_energy` is: they raise throughput MULTIPLICATIVELY, and folding a
+## multiplier in additively badly undervalues it.
+func modifier_power() -> float:
+	var v := 0.0
+	# Derived: a percent of damage is worth that percent of what a card's damage is worth, and
+	# CardData prices one point of damage at 1.0. A reference attack of ~6 damage makes +10%
+	# worth 0.6 of a point.
+	v += float(damage_pct) * 0.6
+	# The same, scaled by CardData.BLOCK_VALUE (0.65), which is what block is worth against
+	# damage in this game.
+	v += float(block_pct) * 0.6 * CardData.BLOCK_VALUE
+	# Derived from CardData.AOE_SPREAD (1.35): making every attack an AoE is the same premium
+	# the card catalogue already pays for one, so it is priced as +35% damage.
+	if attacks_hit_all:
+		v += 35.0 * 0.6
+	# ESTIMATE. One attack a turn resolves twice, and a turn plays about three cards of which
+	# roughly two are attacks, so it is worth about half a turn's attack damage — call it +25%.
+	if repeat_first_attack:
+		v += 25.0 * 0.6
+	# ESTIMATE. Unspent Block is what carries, and a turn that spends all of it carries nothing.
+	# Priced as 6 points of block a turn, which is under half a defensive card.
+	if block_carries:
+		v += 6.0 * CardData.BLOCK_VALUE * float(Balance.TARGET_NORMAL_TURNS) * 0.4
 	return v
 
 ## Total worth of the relic, for display and for relic pricing.
@@ -134,5 +195,10 @@ func flat_power() -> float:
 ## turns, that is 25 — it was 14, set against a per-card rate of 1.5 that made a
 ## drawn card a tenth of an energy. The two have to move together or a relic and a
 ## card that do the same thing are priced from different books.
+## `cost_reduction` and `free_first_card` sit here with `bonus_energy` because all three are
+## throughput multipliers. Cost reduction is the strongest of the three: +1 energy buys one more
+## card of average cost, while -1 on every card buys one more card AND makes the expensive ones
+## reachable, so it is priced above it. `free_first_card` is the same effect restricted to one
+## card a turn, and the card it frees is the one the player chooses, so it is not a third of it.
 func power_value() -> float:
-	return flat_power() + bonus_energy * 45.0 + extra_draw * 25.0
+	return flat_power() + bonus_energy * 45.0 + extra_draw * 25.0 		+ cost_reduction * 55.0 + (35.0 if free_first_card else 0.0)

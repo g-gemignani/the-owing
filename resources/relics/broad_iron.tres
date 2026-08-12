@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="RelicData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/relic_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "broad_iron"
+name = "Broad Iron"
+description = "Attacks that strike one enemy strike them all."
+rarity = 3
+attacks_hit_all = true

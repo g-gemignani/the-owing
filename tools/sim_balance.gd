@@ -12,6 +12,9 @@ const DEFAULT_TRIALS := 400
 ## How many untaxed relics a run is handed as it walks. See `--spoils=`.
 static var SPOILS := 0
 
+## Restrict the spoil pool to rule-breakers. See `--spoils-rules`.
+static var SPOILS_RULES := false
+
 ## Print each cell twice and the gap between them. See `--noise`.
 static var NOISE := false
 
@@ -103,6 +106,12 @@ static func _read_args() -> void:
 		# and four steps of that plan are aimed at the wrong system.
 		elif arg.begins_with("--spoils="):
 			SPOILS = clampi(int(arg.substr(9)), 0, 12)
+		# Draw spoils ONLY from relics that break a rule (D234). Isolates the pool's COMPOSITION
+		# from the modifiers' own strength: with 7 rule-breakers among 37, eight draws expect about
+		# 1.5 of them, so a flat report says nothing about whether the modifiers work. Not a play
+		# mode — no version of the game draws from this pool.
+		elif arg == "--spoils-rules":
+			SPOILS_RULES = true
 		elif arg.begins_with("--difficulty="):
 			Balance.difficulty = clampi(int(arg.substr(13)), 0, Balance.DIFFICULTIES.size() - 1)
 		# Raw multiplier overrides, for SWEEPING candidate rungs before any of them are
@@ -180,8 +189,8 @@ func _init() -> void:
 	print("       `--` means fewer than %d readings: the count is printed, the median is" % MEDIAN_MIN_N)
 	print("       not, because a median over nine runs reads like a fact and is not one.")
 	if SPOILS > 0:
-		print("--spoils=%d: every run is lent up to %d relics as it walks, EXEMPT from enemy" % [
-			SPOILS, SPOILS])
+		print("--spoils=%d%s: every run is lent up to %d relics as it walks, EXEMPT from enemy" % [
+			SPOILS, " (rule-breakers only)" if SPOILS_RULES else "", SPOILS])
 		print("           scaling. A measurement of untaxed in-run power (D226 step 0b), not a design.")
 	if NOISE:
 		print("--noise: every cell measured twice; believe no delta smaller than the gap.")
@@ -1428,9 +1437,18 @@ func _spoils_pool() -> Array:
 	# the same file is the D34 shape, and this tool has been bitten by it (D34 itself).
 	for id in MetaState.RELIC_CATALOG:
 		var r := load(String(MetaState.RELIC_CATALOG[id])) as RelicData
-		if r != null:
-			_spoil_pool.append(r)
+		if r == null:
+			continue
+		if SPOILS_RULES and not _breaks_a_rule(r):
+			continue
+		_spoil_pool.append(r)
 	return _spoil_pool
+
+## Does this relic change a RULE rather than a number (D233)? Derived from the modifier fields
+## themselves, so a field added later joins without anybody remembering this function.
+static func _breaks_a_rule(r: RelicData) -> bool:
+	return r.cost_reduction > 0 or r.free_first_card or r.damage_pct > 0 or r.block_pct > 0 \
+		or r.attacks_hit_all or r.repeat_first_attack or r.block_carries
 
 func _relics(ids: Array) -> Array:
 	var out: Array = []

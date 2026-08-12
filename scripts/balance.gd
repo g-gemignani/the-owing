@@ -703,6 +703,71 @@ static func relic_field_sum(relics: Array, field: String) -> int:
 			n += int(r.get(field))
 	return n
 
+## Which axis a deck leans on, as three weights that sum to 1: attack, defence, and everything
+## else (status, draw, utility). Read by `MetaState.relic_offer` (D234).
+##
+## DERIVED from the deck rather than read off a tag. Tagging every relic with the archetypes it
+## suits was the obvious build and was not built: 37 relics against 8 builds is 296 hand-kept
+## facts, and this project's recurring failure is a hand-kept list that goes stale the first time
+## content moves (D34, D89, D180). What the offer actually needs is not "which archetype is this"
+## but "does this help what the deck already does", and a deck answers that itself.
+static func deck_lean(deck: Array) -> Dictionary:
+	var atk := 0.0
+	var def := 0.0
+	var other := 0.0
+	for c in deck:
+		if c == null:
+			continue
+		atk += float(c.eff_damage()) * maxf(1.0, float(c.hits))
+		def += float(c.eff_block()) * BLOCK_VALUE_REF
+		# Everything that is neither a hit nor a wall. Priced off `power_value` minus the two
+		# above rather than enumerated, so a card mechanic added later lands here by default
+		# instead of being invisible until somebody remembers this function.
+		other += maxf(0.0, c.power_value() - float(c.eff_damage()) - float(c.eff_block()))
+	var total := maxf(1.0, atk + def + other)
+	return {"attack": atk / total, "defence": def / total, "other": other / total}
+
+## `CardData.BLOCK_VALUE` restated for `deck_lean`, which cannot reach a const on another script
+## from a static function without loading it. Asserted equal in `tests/test_relic.gd`, because two
+## places holding one number is exactly the D34 shape this project keeps paying for.
+const BLOCK_VALUE_REF := 0.65
+
+## How well one relic serves a deck that leans this way, as a multiplier on its draw weight.
+##
+## Deliberately gentle. A hard filter would hand a block deck nothing but Block and turn the
+## offer into a different kind of no-choice — the point is that picks push you FURTHER into what
+## you already are, not that the game refuses to show you anything else.
+static func relic_affinity(r, lean: Dictionary) -> float:
+	if r == null:
+		return 1.0
+	var atk := 0.0
+	var def := 0.0
+	atk += float(r.damage_pct) * 0.6
+	atk += float(r.start_strength) * 4.5
+	if r.attacks_hit_all:
+		atk += 21.0
+	if r.repeat_first_attack:
+		atk += 15.0
+	def += float(r.block_pct) * 0.4
+	def += float(r.start_block) * 0.8
+	def += float(r.start_dexterity) * 4.0
+	def += float(r.bonus_max_hp) * 0.5
+	if r.block_carries:
+		def += 6.0
+	var directed := atk + def
+	# A relic with no axis — energy, draw, gold, a trigger — serves every deck equally and keeps
+	# its base weight. Neutral rather than penalised: those are the relics that make a build do
+	# something new, and squeezing them out would be the opposite of the point.
+	if directed <= 0.0:
+		return 1.0
+	var share_atk := atk / directed
+	return 1.0 + AFFINITY_TILT * (share_atk * float(lean["attack"])
+		+ (1.0 - share_atk) * float(lean["defence"]))
+
+## How hard the tilt pulls. At 1.5 a perfectly-matched relic is about twice as likely as a
+## mismatched one, which is a nudge and not a filter.
+const AFFINITY_TILT := 1.5
+
 static func relic_power(relics: Array) -> float:
 	var p := 0.0
 	for r in relics:

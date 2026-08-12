@@ -222,6 +222,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D230** | [Untaxed relics were measured before they were built, and they buy the wrong thing](#d230--untaxed-relics-were-measured-before-they-were-built-and-they-buy-the-wrong-thing) |
 | **D231** | [Death should cost what you chose to risk, and never what you already owned](#d231--death-should-cost-what-you-chose-to-risk-and-never-what-you-already-owned) |
 | **D232** | [`esc@3`, a won/lost split, and the confound the split found in `esc` itself](#d232--esc3-a-wonlost-split-and-the-confound-the-split-found-in-esc-itself) |
+| **D233** | [Seven relics that change a rule, and a gate that could not have measured them](#d233--seven-relics-that-change-a-rule-and-a-gate-that-could-not-have-measured-them) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -15688,3 +15689,131 @@ failure that is quietly not mentioned again is a failure the next person redisco
 
 The lesson for the operator is smaller and entirely practical: the suite prints the failing
 assertion, and this one was lost by reading only the last lines of the output. Capture all of it.
+
+---
+
+### D233 — Seven relics that change a rule, and a gate that could not have measured them
+
+D226 step 1. D230 counted the pool and found **5 relics of 30 that raise what a turn is worth**
+against 11 that keep you alive, which is why lending a run eight free relics moved the escalation
+from 1.09x to 1.18x. A pool of numbers cannot escalate, because enemy scaling is denominated in the
+same numbers. So the pool needed a kind of relic it did not have.
+
+#### The gate was unmeasurable, and that came first
+
+Step 1's acceptance test was written as *"`esc` clears 1.5x on the Foundry cells"*. **It cannot,
+and no relic could have made it.**
+
+`esc` is the ratio of a late fight's damage per turn to an early one, **within one run**. A profile's
+relics are fixed for the whole run: `_measure_run` reads `profile["relics"]` once and hands the same
+array to every fight. A relic held throughout raises damage per turn in fight one and fight five by
+the same factor, and the ratio does not move. Only `--spoils` delivers relics *during* a run.
+
+So the gate measured nothing, and a green result would have been a fact about the instrument. **This
+is D124 in a new place** — *"a tool that cannot play the build cannot price it"* — and it was caught
+by asking where the numbers come from before writing any content, rather than after a flat report.
+The gate is now: **run the D230 sweep again and compare.** Same cells, same trials, same flag.
+
+#### The seven fields
+
+Each is read at exactly one chokepoint, which is only possible because D204 already forced every
+consumer of a card's numbers through four functions.
+
+| field | rule it breaks | read by |
+|---|---|---|
+| `cost_reduction` | every card costs N less | `play_cost` |
+| `free_first_card` | the turn's first card is free | `play_cost` |
+| `damage_pct` | attacks deal N% more | `_outgoing` |
+| `block_pct` | Block is N% stronger | `card_block` |
+| `attacks_hit_all` | single-target attacks spread | `_resolve` |
+| `repeat_first_attack` | the turn's first attack swings twice | `_resolve` |
+| `block_carries` | Block does not expire | `setup`, via `Combatant.retain_block` |
+
+Two of those deserve their reasoning written down.
+
+**`damage_pct` was applied in the wrong place first, and the bug was invisible to the face.** It went
+into `card_damage`, which is what the card face reads — and `_resolve`, which is what actually hits,
+calls `player.outgoing_damage(base_dmg)` directly. The card would have advertised 8 and dealt 6.
+That is **D50's rule broken from the other direction**: D50 says a card must not lie about itself,
+and every test written for it checks that the face matches the rules, so a face that overstates a
+correct hit passes all of them. Both paths now go through one `_outgoing()`, which is the shape D204
+imposed on the other three numbers for the same reason.
+
+**`block_carries` reuses `Combatant.retain_block`** rather than adding a second way to keep Block.
+A Legendary power already sets that flag and `begin_turn` already honours it, so the relic inherits a
+mechanism every `retain_block` card in the catalogue already tests. A second mechanism for one
+sentence of rules is the D34 shape.
+
+#### Pricing, and what it did to the rest of the catalogue
+
+`modifier_power()` prices four of the seven and `power_value()` prices `cost_reduction` and
+`free_first_card` beside `bonus_energy`, for the reason that field is there: they multiply
+throughput, and folding a multiplier in additively undervalues it badly.
+
+Three rates are **derived** and stated as such — `damage_pct` from CardData's one-point-of-damage
+unit, `block_pct` from `CardData.BLOCK_VALUE`, `attacks_hit_all` from `CardData.AOE_SPREAD` (1.35,
+so it is priced as +35% damage, the same premium the card catalogue already pays for one AoE). Three
+are **estimates and say so** in the comment. That is survivable because **rarity is derived, not
+authored** (D224/D225): a wrong rate does not ship a mispriced relic quietly, it files a relic in
+the wrong band and the rarity suite has something to say about it.
+
+`tools/rerarify.gd` then moved **22 of 37 relics** between bands. Not drift — the band sizes are
+absolute counts, so seven new relics at the top of the power order push the numeric ones down:
+
+| | |
+|---|---|
+| Forgiven Ledger 55.0, First Breath 35.0 | → LEGENDARY |
+| Broad Iron 21.0 | → EPIC |
+| Cruel Edge 18.0, Barrow-Wall 15.6, Echo in the Stone 15.0 | → RARE |
+| Iron Heart, Tower Shield, Hearth Stone, Eternal Furnace, Coin Purse | RARE → UNCOMMON |
+| Kite Shield, Bone Charm, Crown of Thorns, Reliquary Heart, Iron Ration | UNCOMMON → COMMON |
+
+**This is a real gameplay change and not only a label**, because rarity sets the level cap, the
+growth rate, the drop weight, the shop price and how many clears a relic waits for (D223). Iron
+Heart getting cheaper and dropping sooner is the derived system saying it was never a rare. It is
+the intended behaviour of D224 and it is the first time that system has been asked to absorb new
+content rather than re-file old.
+
+The pool is now **37 relics**, of which **12** raise what a turn is worth, against 5 before.
+
+#### The measurement, and it says the content was not the problem
+
+Same sweep as D230 — 18 cells over the Crypt, Ossuary, Foundry and Maw, 200 trials — re-run with the
+seven new relics in the pool. **`esc` moved 1.05x → 1.17x at eight spoils, and the gate wanted
+1.5x on the Foundry cells. The best Foundry cell reached 1.28x. Step 1 failed.**
+
+Before rewriting anything, the obvious arithmetic: 7 rule-breakers among 37 relics means eight draws
+expect about **1.5** of them. Six of the eight are still numbers. So a flat report says nothing about
+whether the modifiers work — it says the player rarely sees one. `--spoils-rules` was added to
+separate those two claims: it draws the spoils only from relics that break a rule, which no version
+of the game does, and is a measurement and not a play mode.
+
+| 18 cells, 200 trials | spoils=0 | spoils=8, whole pool | spoils=8, **rule-breakers only** |
+|---|---|---|---|
+| `esc` | 1.05x | 1.17x | **1.48x** |
+| `esc@3` | 1.05x | 1.20x | **1.52x** |
+| RUN completion | 52% | 64% | 72% |
+| `real` | 50% | 50% | 49% |
+
+Foundry cells, rule-breakers only: Mid **1.81x** (from 1.04x), Draw 1.64x, Status 1.62x, Barricade
+1.59x, Deep 1.57x. Six of eighteen cells clear 1.5x, and `esc@3` at 1.52x clears its 1.2x gate
+comfortably — so the escalation is **early**, not saved for the finale, which is the property D231
+demanded and D232 found missing everywhere.
+
+`real` fell 50% → 49%, inside the ±4-point band, so the second gate holds: these modifiers raise
+what a turn is worth without collapsing the choice inside it. That mattered — `cost_reduction` and
+`free_first_card` both make cards affordable, and the obvious failure mode was a turn with no
+decision left in it.
+
+**So the seven relics pass, and the pool does not.** The remaining work in step 1 is not more
+content, it is **culling**: eleven relics keep you alive and three pay you, and while they are two
+thirds of the draw the player will not meet a rule-breaker often enough for any of this to be felt.
+D226 said as much from the armchair — *"18 of 30 are numeric tiers … as the discovery mechanic it is
+fatal"* — and the number is now 1.17x against 1.48x, which is the whole distance between a design
+that works and one that is technically present.
+
+**And the honest reading of the RUN column: 52% → 72% is a difficulty collapse.** Free untaxed
+rule-breakers make runs much easier, exactly as D230 warned when the same lever was pulled with
+numbers (56% → 63%). That is step 5's re-fit and not a reason to weaken the modifiers — the whole
+point of D231 demoting completion to a constraint is that this number is allowed to move while the
+design is being built, and the ladder is re-fitted last, against the spreads.

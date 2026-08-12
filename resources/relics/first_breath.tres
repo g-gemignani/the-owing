@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="RelicData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/relic_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "first_breath"
+name = "First Breath"
+description = "The first card you play each turn costs nothing."
+rarity = 4
+free_first_card = true

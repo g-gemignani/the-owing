@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="RelicData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/relic_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "cruel_edge"
+name = "Cruel Edge"
+description = "Your attacks deal 30% more damage."
+rarity = 2
+damage_pct = 30

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="RelicData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/relic_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "echo_in_the_stone"
+name = "Echo in the Stone"
+description = "The first attack you play each turn strikes twice."
+rarity = 2
+repeat_first_attack = true

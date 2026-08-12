@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="RelicData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/relic_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = "barrow_wall"
+name = "Barrow-Wall"
+description = "Your Block is 40% stronger."
+rarity = 2
+block_pct = 40

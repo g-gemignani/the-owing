@@ -42,6 +42,8 @@ var power_used: bool = false
 ## the one in progress, so an intent shown at the top of a turn cannot be falsified
 ## by what the player does during it.
 var cards_played_this_turn: int = 0
+## Has `repeat_first_attack` already been spent this turn? Reset by `start_turn`.
+var repeated_attack_this_turn: bool = false
 var cards_played_last_turn: int = 0
 ## Block the player was holding when the enemies last acted — what a
 ## block-punishing enemy is reacting to.
@@ -177,6 +179,11 @@ func setup(deck: Array[CardData], hp: int, max_hp: int, p_dungeon: int, p_tier: 
 		extra_draw += r.extra_draw
 		player.strength += r.start_strength
 		player.dexterity += r.start_dexterity
+		# `block_carries` (D233) reuses `Combatant.retain_block`, which a Legendary power already
+		# sets and `begin_turn` already honours. A second mechanism for one sentence of rules is
+		# the D34 shape, and this one is tested by every retain_block card in the catalogue.
+		if r.block_carries:
+			player.retain_block = true
 
 	tally = {}
 	turn_damage = 0
@@ -378,6 +385,7 @@ func start_turn() -> void:
 	energy = Balance.MAX_ENERGY + bonus_energy
 	power_used = false
 	cards_played_this_turn = 0
+	repeated_attack_this_turn = false
 	# D204: the three per-turn combo carriers expire with the turn, exactly like Block.
 	# An enabler you did not cash in is gone, which is what forces a combo deck to
 	# assemble its turn rather than bank a discount over three of them.
@@ -455,8 +463,31 @@ func take_draw_notice() -> String:
 ## every read of a card's damage goes through `card_damage` (D50). A discount the
 ## player was promised has to apply at the place the game checks affordability AND on
 ## the badge that quotes the price, or the two disagree and one of them is lying.
+## Sum of one rule-modifier field over every relic held, including the untaxed ones (D233).
+##
+## `Balance.relic_field_sum` does the same job for the run loop and the simulator. This exists
+## because the engine holds its relics in `relics` and asks this question at four chokepoints,
+## and four hand-written loops is the D34 shape waiting to happen.
+func _mod(field: String) -> int:
+	var n := 0
+	for r in relics:
+		if r is RelicData:
+			n += int(r.get(field))
+	return n
+
+## Is any relic held setting this flag?
+func _mod_flag(field: String) -> bool:
+	for r in relics:
+		if r is RelicData and bool(r.get(field)):
+			return true
+	return false
+
 func play_cost(card: CardData) -> int:
-	return maxi(0, card.eff_cost() - next_card_discount)
+	# `free_first_card` before `cost_reduction`, because a card that is already free cannot be
+	# made cheaper and the order would otherwise decide whether the reduction is wasted.
+	if _mod_flag("free_first_card") and cards_played_this_turn == 0:
+		return 0
+	return maxi(0, card.eff_cost() - next_card_discount - _mod("cost_reduction"))
 
 ## How many cards will have left this combat for good once `card` has resolved.
 ##
@@ -799,13 +830,32 @@ func card_block_bonus(card: CardData) -> int:
 	return bonus
 
 ## What one hit actually leaves the player's hands as: Strength added, Weak applied.
+## One point of outgoing damage, with the player's own modifiers and then any `damage_pct` relic.
+##
+## It exists because `card_damage` is the FACE and `_resolve` is the HIT, and they read the same
+## base through two different call sites. The first version of `damage_pct` was applied in
+## `card_damage` alone, so the card advertised a number it did not deal — D50's rule ("a card must
+## not lie about itself") broken from the other direction, and invisible to every test that reads
+## only the face. Percent last, so it multiplies the Strength and Vulnerable the fight has already
+## worked out rather than the card's printed number.
+func _outgoing(base: int) -> int:
+	var d := player.outgoing_damage(base)
+	var pct := _mod("damage_pct")
+	if pct != 0 and d > 0:
+		d = maxi(1, int(round(float(d) * (1.0 + float(pct) / 100.0))))
+	return d
+
 func card_damage(card: CardData) -> int:
-	return player.outgoing_damage(card_base_damage(card))
+	return _outgoing(card_base_damage(card))
 
 func card_block(card: CardData) -> int:
 	if card.eff_block() <= 0 and card_block_bonus(card) <= 0:
 		return 0
-	return player.outgoing_block(card.eff_block() + card_block_bonus(card))
+	var b := player.outgoing_block(card.eff_block() + card_block_bonus(card))
+	var pct := _mod("block_pct")
+	if pct != 0 and b > 0:
+		b = maxi(1, int(round(float(b) * (1.0 + float(pct) / 100.0))))
+	return b
 
 ## The face text with this fight's numbers in it.
 func card_text(card: CardData) -> String:
@@ -826,18 +876,29 @@ func _resolve(card: CardData) -> String:
 	var base_dmg := card_base_damage(card)
 	if base_dmg > 0:
 		var targets: Array = []
-		if card.aoe:
+		# `attacks_hit_all` (D233) makes a single-target attack spread. Read here rather than on
+		# the card, because the card is shared data and a relic must not edit it — the same
+		# reason `grows` is reset per fight.
+		if card.aoe or _mod_flag("attacks_hit_all"):
 			for e in enemies:
 				if not e.is_dead():
 					targets.append(e)
 		elif foe != null:
 			targets.append(foe)
+		# `repeat_first_attack` (D233): the turn's first attack swings twice. Counted per TURN and
+		# not per card, so a second attack in the same turn is not doubled — and tracked on the
+		# engine rather than derived from `cards_played_this_turn`, because a skill played first
+		# must not spend it.
+		var swings := maxi(1, card.hits)
+		if _mod_flag("repeat_first_attack") and not repeated_attack_this_turn:
+			repeated_attack_this_turn = true
+			swings *= 2
 		var total := 0
 		for tgt in targets:
-			for h in maxi(1, card.hits):
+			for h in swings:
 				if tgt.is_dead():
 					break
-				var dealt := player.outgoing_damage(base_dmg)
+				var dealt := _outgoing(base_dmg)
 				var landed: int = tgt.predicted_damage(dealt)
 				# Damage the target could not absorb because it did not have the HP: what an
 				# `overkill` errand asks you to waste. Measured before the hit, because
@@ -857,7 +918,9 @@ func _resolve(card: CardData) -> String:
 			_t(Balance.TALLY_HEAL, player.hp - before_heal)
 			msg += "Drained %d. " % total
 		if not targets.is_empty():
-			var who: String = "all enemies" if card.aoe else String(targets[0].name)
+			# Reads the TARGET LIST rather than `card.aoe`, because `attacks_hit_all` makes a
+			# single-target card hit everything and the sentence has to say what happened.
+			var who: String = "all enemies" if targets.size() > 1 else String(targets[0].name)
 			msg += "%s hits %s for %d%s. " % [
 				card.name, who, total, (" x%d" % card.hits) if card.hits > 1 else ""]
 		var killed := false

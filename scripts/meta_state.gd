@@ -242,14 +242,20 @@ const CATALOG := {
 const RELIC_CATALOG := {
 	"ancient_battery": "res://resources/relics/ancient_battery.tres",
 	"balanced_grip": "res://resources/relics/balanced_grip.tres",
+	"barrow_wall": "res://resources/relics/barrow_wall.tres",
 	"bone_charm": "res://resources/relics/bone_charm.tres",
+	"broad_iron": "res://resources/relics/broad_iron.tres",
 	"bulwark_plate": "res://resources/relics/bulwark_plate.tres",
 	"chipped_whetstone": "res://resources/relics/chipped_whetstone.tres",
 	"coin_purse": "res://resources/relics/coin_purse.tres",
 	"crown_of_thorns": "res://resources/relics/crown_of_thorns.tres",
+	"cruel_edge": "res://resources/relics/cruel_edge.tres",
 	"duelists_glove": "res://resources/relics/duelists_glove.tres",
+	"echo_in_the_stone": "res://resources/relics/echo_in_the_stone.tres",
 	"eternal_furnace": "res://resources/relics/eternal_furnace.tres",
 	"field_kit": "res://resources/relics/field_kit.tres",
+	"first_breath": "res://resources/relics/first_breath.tres",
+	"forgiven_ledger": "res://resources/relics/forgiven_ledger.tres",
 	"giants_marrow": "res://resources/relics/giants_marrow.tres",
 	"healing_idol": "res://resources/relics/healing_idol.tres",
 	"hearth_stone": "res://resources/relics/hearth_stone.tres",
@@ -263,6 +269,7 @@ const RELIC_CATALOG := {
 	"padded_vest": "res://resources/relics/padded_vest.tres",
 	"reliquary_heart": "res://resources/relics/reliquary_heart.tres",
 	"scholars_lens": "res://resources/relics/scholars_lens.tres",
+	"setting_mortar": "res://resources/relics/setting_mortar.tres",
 	"surgeons_thread": "res://resources/relics/surgeons_thread.tres",
 	"tin_cup": "res://resources/relics/tin_cup.tres",
 	"tower_shield": "res://resources/relics/tower_shield.tres",
@@ -852,6 +859,51 @@ func pick_relic(tier: int) -> String:
 		if roll < 0:
 			return pool[i]
 	return pool[0]
+
+## Three relics to choose from, bucketed toward what the run deck already does (D234).
+##
+## Replaces the single rolled relic every drop used to hand over. The difference is not generosity
+## — it is that "the dice took my run" becomes "I chose wrong", and only the second one gets
+## replayed. It also deletes the branch that had to explain *"No relic here, N are still sealed"*:
+## an offer that comes up empty is an offer with nothing in it, and the caller shows no panel.
+##
+## Returns FEWER than `n` when the pool cannot fill it, and an empty array when nothing is left.
+## The depth gate (D223) still applies, because it governs what may enter the pool at all and that
+## is a different question from which three of the pool you see.
+func relic_offer(tier: int, deck: Array = [], n: int = 3) -> Array:
+	var pool: Array = unowned_relics()
+	if pool.is_empty():
+		return []
+	var lean := Balance.deck_lean(deck)
+	var wtbl: Array = Balance.WEIGHTS[tier]
+	var ids: Array = []
+	var weights: Array = []
+	for id in pool:
+		var r := load(RELIC_CATALOG[id]) as RelicData
+		var w: float = float(wtbl[clampi(r.rarity if r else 0, 0, wtbl.size() - 1)])
+		ids.append(id)
+		weights.append(w * Balance.relic_affinity(r, lean))
+	# Drawn WITHOUT replacement, so an offer never shows the same relic twice. The alternative —
+	# roll three times and hope — produces a duplicate often enough to be seen, and a duplicate
+	# in a choice of three is a choice of two wearing three buttons.
+	var out: Array = []
+	for _k in mini(n, ids.size()):
+		var total := 0.0
+		for w in weights:
+			total += float(w)
+		if total <= 0.0:
+			break
+		var roll := randf() * total
+		var pick := ids.size() - 1
+		for i in ids.size():
+			roll -= float(weights[i])
+			if roll < 0.0:
+				pick = i
+				break
+		out.append(ids[pick])
+		ids.remove_at(pick)
+		weights.remove_at(pick)
+	return out
 
 func grant_relic(tier: int) -> String:
 	var pool: Array = unowned_relics()
