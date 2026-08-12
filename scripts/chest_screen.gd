@@ -93,6 +93,23 @@ func _open() -> void:
 			row.add_theme_color_override("font_color",
 				Icons.pack_tier_colour(String(p.get("tier", Balance.PACK_WORN))))
 		UI.label(body, "Sealed. They leave with you, if you do.")
+		# A chest is the other place a floor can pay a relic (D240). The elite is the first, and a
+		# floor holding neither is a floor with no escalation on it at all — which is what made
+		# "one decision per floor" the intent of D231 step 4. Three to choose from, bucketed toward
+		# what the deck already does, exactly as the elite offers them: the point is not the relic,
+		# it is that the player chose it.
+		#
+		# It costs the movement budget NOTHING. A chest already stands on the floor and is already
+		# walked to; the tile is paid for. D84 established that adding a REASON to walk somewhere
+		# lowers moves-per-encounter rather than raising it, and D79 established that adding tiles
+		# to reach it is the part that has to be budgeted first. This adds a reason and no tiles.
+		var offer: Array = MetaState.relic_offer(Balance.Tier.NORMAL, GameState.run_deck, 3,
+			GameState.run_relics)
+		if not offer.is_empty():
+			UI.spacer(body)
+			var rh := UI.label(body, "And something older, under the packs. Take one.")
+			rh.add_theme_color_override("font_color", Color(1.0, 0.84, 0.40))
+			_relic_row(offer)
 	else:
 		UI.label(body, "Whatever was inside stays inside.")
 
@@ -110,6 +127,34 @@ func _open() -> void:
 	# resolved by the time it is on screen — there is nothing left to decide, so
 	# trapping the player on it would be ceremony.
 	UI.escape(self, _finish)
+
+## The three on offer, and the one press that resolves them.
+##
+## Rebuilt on a pick rather than disabled, for the reason the combat reward panel is: a dead row of
+## buttons above a live Continue reads as a bug.
+func _relic_row(offer: Array) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UITheme.sep())
+	body.add_child(row)
+	for rid in offer:
+		var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
+		if rd == null:
+			continue
+		var b := Button.new()
+		UITheme.style_button(b)
+		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		b.custom_minimum_size.x = UITheme.px(190)
+		b.text = "%s\n%s" % [rd.name, rd.description]
+		UI.hoverable(b, ("You have met this one before." if MetaState.seen_relic(String(rid))
+			else "You have never seen this one.") + " It is yours until this run ends.")
+		b.pressed.connect(func():
+			GameState.earn_relic(String(rid))
+			Audio.play("treasure")
+			for c in row.get_children():
+				(c as Button).disabled = true
+			(row.get_parent() as VBoxContainer).move_child(row, row.get_index())
+			UI.label(body, "   You take %s." % rd.name))
+		row.add_child(b)
 
 ## Does the run satisfy this vault? Every check reads state the player can see on
 ## the screen they came from, which is what makes the condition a decision rather

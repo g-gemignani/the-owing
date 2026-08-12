@@ -351,6 +351,15 @@ effects are drawn at runtime by `scripts/fx.gd`.
   the same ratio (6.9 → 7.0 of a 7.5 ceiling, D167), which is what a detour that is worth
   taking is supposed to cost.
 
+- **The floor is the beat, and it cost no tiles (D240).** A chest offers three relics and the
+  arrival line says what the floor is carrying, so the escalation is countable — and both halves
+  reuse tiles that were already walked to, so the measured walk stayed at 6.7 moves per encounter
+  against a ceiling of 7.5. The arithmetic was done BEFORE building, per D79, and it said not to
+  spend the 0.8 of headroom it had found. What is still unbuilt is a *guaranteed* decision on the
+  minority of floors holding neither an elite nor a chest; that is the half that costs tiles, and
+  the budget for it is written down rather than guessed. **A budget you have measured is a decision
+  somebody else can make.**
+
 - **A spatial model must not bury the card game.** An encounter count can be perfect while
   the player spends sixty moves between fights, and no other assertion in the suite can
   see that. So **moves per encounter** is bounded too (`ISO_MOVES_PER_ENCOUNTER_MAX`,

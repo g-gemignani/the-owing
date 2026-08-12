@@ -2315,7 +2315,13 @@ func _on_pick(i: int) -> void:
 			# arriving somewhere below. `enter` is the run-entry sound and this is the same
 			# event — going down is going down, and it should not have two voices.
 			Audio.play("enter")
-			log_label.text = "You take the stairs down to floor %d." % (tv.depth + 1)
+			# ...and what this floor is carrying, announced on ARRIVAL (D231 step 4, D240). The
+			# escalation has to be countable or it does not read as escalation: a player who knows
+			# a floor holds something worth taking is a player counting floors, and one who finds
+			# out by walking into it is a player wandering. Named without saying WHERE, so the
+			# announcement is a reason to search the floor rather than a route through it.
+			log_label.text = "You take the stairs down to floor %d.%s" % [
+				tv.depth + 1, _floor_promise(tv)]
 		elif not was_seen:
 			log_label.text = "You press on into the dark."
 		else:
@@ -2352,3 +2358,29 @@ func _after_rest() -> void:
 
 func _leave() -> void:
 	get_tree().change_scene_to_file(RunFlow.leave_run())
+
+
+## What this floor is offering, in one clause, for the arrival line (D240).
+##
+## Read off the floor rather than the plan, so it cannot promise something the carving dropped —
+## the same rule that makes `keys_wanted` count `chestplan` instead of estimating from difficulty
+## (D172). Says WHAT and never WHERE: a floor that names its own corner stops being explored.
+##
+## Silent when there is nothing, because a line that always appears stops being read, and a floor
+## with no relic decision on it is a real state the player should be able to feel.
+func _floor_promise(tv: TraversalIso) -> String:
+	var elites := 0
+	var chests := 0
+	for m in tv.mons:
+		if int((m as Dictionary).get("type", 0)) == Traversal.Enc.ELITE:
+			elites += 1
+	for i in tv.enc.size():
+		if int(tv.enc[i]) == Traversal.Enc.TREASURE:
+			chests += 1
+	if elites > 0 and chests > 0:
+		return " Something down here is guarded, and something else is only locked."
+	if elites > 0:
+		return " Something down here is standing over what it took."
+	if chests > 0:
+		return " There is a chest on this floor."
+	return ""

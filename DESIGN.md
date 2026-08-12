@@ -228,6 +228,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D237** | [Culling the numeric relics made the number worse, because the profiles hold them](#d237--culling-the-numeric-relics-made-the-number-worse-because-the-profiles-hold-them) |
 | **D238** | [Relics stop persisting, and the pillar never had to be weakened](#d238--relics-stop-persisting-and-the-pillar-never-had-to-be-weakened) |
 | **D239** | [The measurement was modelling a player who does not choose](#d239--the-measurement-was-modelling-a-player-who-does-not-choose) |
+| **D240** | [The floor becomes the beat, and it costs no tiles at all](#d240--the-floor-becomes-the-beat-and-it-costs-no-tiles-at-all) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16133,3 +16134,46 @@ of them had already produced a report that read as a verdict on the design.
 The mean is short of 1.5x and the honest reading is that the pool still holds nineteen relics that
 are numbers. That is a content job with a measured target now, which is the difference between this
 and where D226 started.
+
+---
+
+### D240 — The floor becomes the beat, and it costs no tiles at all
+
+D231 step 4. The intent was *one guaranteed treasure decision per floor, announced on arrival* —
+because escalation that cannot be counted does not read as escalation, and D232 measured a curve that
+was flat end to end.
+
+D79 says do the arithmetic before building, so it was done first. **The measured walk is 6.7 moves per
+encounter against a ceiling of 7.5**, which is 0.8 of headroom for a change that wants to add a room
+to every floor. D84 is the encouraging half of the precedent — chests took a floor from 78 to 130
+tiles and the measured walk *fell* 7.1 → 6.8, because there was more worth walking toward — and keys
+cost 0.1 of the same ratio.
+
+**And then the arithmetic said not to spend any of it.** Both halves of the intent were available
+without a single new tile:
+
+* **A chest now offers three relics.** Chests already stand on floors and are already walked to; the
+  tile is paid for. So this adds a *reason* to go there and no distance, which is the side of D84's
+  finding that lowers the ratio rather than raising it. The elite was already the first source
+  (D238); a chest is the second, and between them most floors hold one.
+* **The arrival line says what the floor is carrying.** `_floor_promise` reads the floor rather than
+  the plan, so it cannot promise something the carving dropped — the rule that makes `keys_wanted`
+  count `chestplan` instead of estimating from difficulty (D172). It says WHAT and never WHERE: *"Something
+  down here is standing over what it took."* A floor that names its own corner stops being explored.
+  Silent when there is nothing, because a line that always appears stops being read, and **a floor
+  with no relic decision on it is a real state the player should be able to feel.**
+
+Re-measured after: **6.7 moves per encounter.** Unchanged, to the printed precision, and 13.7
+encounters against a budget of 13.2 exactly as before.
+
+#### What is NOT built, and the arithmetic for whoever builds it
+
+A *guaranteed* decision on every floor still needs the encounter plan to place a relic-bearing site
+on floors that have neither an elite nor a chest. That is the half that costs tiles, and the budget
+for it is now written down rather than guessed: **0.8 of ratio headroom**, against a precedent of 0.1
+for keys and a NEGATIVE cost for chests. It is affordable. It was not done here because the two
+cheap halves deliver the feeling and the expensive half only closes the gap on the minority of floors
+that hold nothing — and D79's whole lesson is that this is the order to find that out in.
+
+**A budget you have measured is a decision somebody else can make.** The version of this entry that
+spent the headroom first would have had to justify it afterwards.
