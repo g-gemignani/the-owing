@@ -238,7 +238,15 @@ effects are drawn at runtime by `scripts/fx.gd`.
   caught for total-deck power, per-card power, block-vs-damage, relics, powers and
   triggered relics.
 
-  **And cutting it is necessary but nowhere near sufficient, which was measured before it was
+  **The pillar was never cut, and three earlier entries were wrong to say it would be (D238).**
+  `power_ratio` still prices everything it is given; relics are simply no longer given to it. They
+  reach a fight through `CombatEngine.setup`'s `p_untaxed` slot and the priced argument is `[]`. A
+  rule stated correctly does not need changing when its subject moves. Relics now live in
+  `GameState.run_relics` and are lost when the run ends however it ends; `escrow_relics`,
+  `grant_relic` and the sim's `_worn_relics` are deleted, and the D68 die-on-purpose exploit stops
+  existing rather than being guarded.
+
+  **And moving them was necessary but nowhere near sufficient, which was measured before it was
   built (D230).** `CombatEngine.setup` has a trailing `p_untaxed` slot — relics whose effects
   apply and whose power is kept out of `power_ratio` — and `tools/sim_balance.gd --spoils=N`
   lends every run N of them. Eight free relics move the escalation from 1.09x to **1.18x**,
@@ -248,13 +256,15 @@ effects are drawn at runtime by `scripts/fx.gd`.
   **Untaxing the relics as they exist today is a difficulty reduction wearing a power fantasy's
   clothes**, and shipping it alone would spend the pillar to buy a tuning change.
 
-  **This pillar is scheduled to be cut in half, and the half that goes is relics (D226).**
-  It is an anti-escalation invariant: a relic taken on floor 2 makes floors 3–8 harder,
-  which is the exact opposite of the feeling the game is being changed to deliver. The
-  replacement is one sentence — *persistent power lives in the deck and is priced; found
-  power is free and temporary* — with relics moving into the run and leaving with it.
-  Nothing is built yet; the ordering, the costs and the kill criteria are in D226. **Until
-  step 3 of it lands, the rule above still holds and still binds.**
+  **The rule now reads: persistent power lives in the deck and is priced; found power is free
+  and temporary.** Relics are found in a run and leave with it (D238), so the invariant above
+  binds the deck, the equipped power and every run removal — and binds them exactly as hard as
+  it did. What it no longer reaches is a relic, because a relic is no longer something you own.
+
+  Measured end to end: escalation went from **1.05x** (D229's corrected baseline, no cell above
+  1.18x) to **1.29x mean and 1.53x at best**, with `esc@3` at 1.32x — the escalation arrives
+  early rather than at the boss (D239). The pool still holds nineteen relics that are numbers,
+  and that is the remaining content job with a measured target on it.
 
 - **Completion percentage is a constraint, not the goal (D231).** The tool has printed
   `Target: RUN completion ~40-60%` since D54 and every difficulty entry since has been an

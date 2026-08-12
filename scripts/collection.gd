@@ -198,7 +198,10 @@ func _build_ui() -> void:
 	# the Relics screen that exists for it. What this screen needs is which ones you are
 	# carrying, because that is the part that changes what you build. Nothing at all
 	# when you carry none — an empty line still costs a row of cards.
-	var relics: Array = MetaState.relic_data()
+	# The RUN's relics (D238). The deck builder is where you decide what to take in, and a relic is
+	# no longer something you take in — but a run in progress is resumable from here, and what it is
+	# currently holding is exactly the thing that changes what the rest of the deck is worth.
+	var relics: Array = GameState.run_relic_data()
 	var new_relic := GameState.last_relic
 	GameState.last_relic = ""
 	if not relics.is_empty() or new_relic != "":

@@ -64,8 +64,13 @@ func _init() -> void:
 		fails += 1; print("FAIL unknown relic accepted")
 	if not m.has_relic("iron_heart"):
 		fails += 1; print("FAIL has_relic false after add")
-	if "iron_heart" in m.unowned_relics():
-		fails += 1; print("FAIL owned relic still in unowned pool")
+	# The pool no longer excludes what the character OWNS, because nothing is owned any more
+	# (D238): a relic is found on a run and leaves with it. What it excludes is what the RUN
+	# asking has already picked up, which the caller passes in.
+	if not ("iron_heart" in m.unowned_relics()):
+		fails += 1; print("FAIL the pool excludes an owned relic — ownership is gone (D238)")
+	if "iron_heart" in m.unowned_relics(["iron_heart"]):
+		fails += 1; print("FAIL the pool ignored the run's exclude list")
 
 	# --- the depth gate (D223) -------------------------------------------------------
 	#
@@ -145,10 +150,24 @@ func _init() -> void:
 		fails += 1; print("FAIL a sealed relic could not be held even when awarded")
 	g.writes_disabled = true
 
-	# --- relic_bonus sums the right field ---
+	# --- relic_bonus sums the right field, over the RUN (D238) ---
+	#
+	# Its subject moved with the relics: it summed the collection and now sums what the run holds.
+	# Asserted through `Balance.relic_field_sum` on a hand-built array, because `relic_bonus` reaches
+	# the GameState AUTOLOAD and this suite drives sandboxed instances.
 	var ih := load(m.RELIC_CATALOG["iron_heart"]) as RelicData
-	if m.relic_bonus("bonus_max_hp") != ih.bonus_max_hp:
-		fails += 1; print("FAIL relic_bonus wrong: %d" % m.relic_bonus("bonus_max_hp"))
+	if Balance.relic_field_sum([ih], "bonus_max_hp") != ih.bonus_max_hp:
+		fails += 1
+		print("FAIL relic_field_sum wrong: %d" % Balance.relic_field_sum([ih], "bonus_max_hp"))
+	# ...and that `relic_bonus` reads the run and not the collection any more, which is the half a
+	# sum over an array cannot show.
+	var ms := FileAccess.open("res://scripts/meta_state.gd", FileAccess.READ)
+	if ms != null:
+		var msrc := ms.get_as_text()
+		ms.close()
+		if msrc.find("func relic_bonus") != -1 and msrc.find("gs.run_relic_data()") == -1:
+			fails += 1
+			print("FAIL relic_bonus no longer reads the run's relics (D238)")
 
 	# --- persistence ---
 	m.save_game()
@@ -169,17 +188,22 @@ func _init() -> void:
 	var GSr = load("res://scripts/game_state.gd")
 	var gr = GSr.new()
 	gr.escrow_gold = 50
-	gr.escrow_relics = ["iron_heart"]
+	gr.run_relics = ["iron_heart"]
 	gr.forfeit_escrow(1.0)
 	if m2.relics.size() != before:
-		fails += 1; print("FAIL a death removed banked relics (%d -> %d)" % [before, m2.relics.size()])
+		fails += 1; print("FAIL a death changed the collection's relics (%d -> %d)" % [
+			before, m2.relics.size()])
+	# ...and the run's own relics are not salvaged by a deep death either. Half a relic is not a
+	# thing, and a relic that came home would be a relic that persists (D238).
+	if not gr.run_relics.is_empty() and gr.run_relics.size() != 1:
+		fails += 1; print("FAIL forfeit_escrow edited the run's relics")
 
-	# --- grant_relic hands out unowned UNLOCKED relics, then runs dry (D223) ---
+	# --- the depth gate still paces the pool, and every relic stays REACHABLE (D223, D238) ---
 	#
-	# Two ceilings now, and the test asserts both because they fail differently: a
-	# shallow save runs dry at the end of what its depth has opened, and only a deep
-	# one can be granted the whole catalogue. This block asserted the second against a
-	# FRESH save before the gate existed, which is the pacing the report was about.
+	# `grant_relic` is gone: nothing adds a relic to the collection any more. What the gate governs
+	# is what may ENTER the pool, and that is unchanged — so the assertion moves from "granting runs
+	# dry" to "the pool grows with depth and eventually holds everything". Draining it by granting
+	# was only ever a way to count it.
 	var m3 = Meta.new()
 	m3.path_prefix = SANDBOX
 	m3.slot = 4
@@ -189,36 +213,39 @@ func _init() -> void:
 		fails += 1
 		print("FAIL a fresh save can already roll every relic (%d of %d)" % [
 			open_now, m3.RELIC_CATALOG.size()])
-	var granted := {}
-	for i in open_now:
-		var got: String = m3.grant_relic(Balance.Tier.BOSS)
-		if got == "":
-			fails += 1; print("FAIL grant returned empty while unlocked relics remained"); break
-		if granted.has(got):
-			fails += 1; print("FAIL granted duplicate relic: %s" % got); break
-		granted[got] = true
-	if m3.grant_relic(Balance.Tier.BOSS) != "":
-		fails += 1; print("FAIL granted a relic past what this save's depth has opened")
+	if open_now <= 0:
+		fails += 1; print("FAIL a fresh save can roll nothing at all — the gate is a wall")
+	# An offer never repeats within one run, which is what the exclude list is for. A duplicate in a
+	# choice of three is a choice of two wearing three buttons.
+	var offered: Array = m3.relic_offer(Balance.Tier.ELITE, [], 3, [])
+	if offered.size() != mini(3, open_now):
+		fails += 1; print("FAIL an offer of three returned %d" % offered.size())
+	var seen_ids := {}
+	for oid in offered:
+		if seen_ids.has(oid):
+			fails += 1; print("FAIL an offer repeated %s" % oid)
+		seen_ids[oid] = true
+	# ...and a relic the run already holds is never offered again.
+	if not offered.is_empty():
+		var held := [String(offered[0])]
+		for _k in 12:
+			for oid2 in m3.relic_offer(Balance.Tier.ELITE, [], 3, held):
+				if String(oid2) in held:
+					fails += 1
+					print("FAIL offered %s again although the run already holds it" % oid2)
 
-	# ...and the same save, taken deep, can be granted the rest. Every relic must
-	# still be REACHABLE — a gate that permanently withholds one is a broken
-	# collection, not a slower one.
+	# ...and the same save, taken deep, opens the rest. Every relic must still be REACHABLE — a
+	# gate that permanently withholds one is a broken collection, not a slower one.
 	for did in Balance.DUNGEONS:
 		m3.clear_counts[did] = Balance.RELIC_UNLOCK[CardData.Rarity.LEGENDARY]
 	var rest: int = m3.unowned_relics().size()
-	if rest + granted.size() != m3.RELIC_CATALOG.size():
+	if rest != m3.RELIC_CATALOG.size():
 		fails += 1
-		print("FAIL %d granted + %d still open != %d in the catalogue" % [
-			granted.size(), rest, m3.RELIC_CATALOG.size()])
-	for i in rest:
-		if m3.grant_relic(Balance.Tier.BOSS) == "":
-			fails += 1; print("FAIL a deep save could not be granted every remaining relic"); break
-	if m3.relics.size() != m3.RELIC_CATALOG.size():
+		print("FAIL a fully-cleared save can still only roll %d of %d relics" % [
+			rest, m3.RELIC_CATALOG.size()])
+	if m3.sealed_relics() != 0:
 		fails += 1
-		print("FAIL the set is not completable: %d of %d held at %d clears" % [
-			m3.relics.size(), m3.RELIC_CATALOG.size(), m3.total_clears()])
-	if m3.grant_relic(Balance.Tier.BOSS) != "":
-		fails += 1; print("FAIL granted a relic when all are owned")
+		print("FAIL %d relics are still sealed at full depth" % m3.sealed_relics())
 
 	# --- engine applies relic effects ---
 	var kite := load(m.RELIC_CATALOG["kite_shield"]) as RelicData

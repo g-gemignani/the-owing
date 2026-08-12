@@ -782,7 +782,11 @@ func add_relic(id: String) -> bool:
 	save_game()
 	return true
 
-## Loaded RelicData for everything owned, for effects and for enemy scaling.
+## Loaded RelicData for everything the character owns.
+##
+## Nothing owns relics since D238, so this answers about a list that only a pre-D238 save can have
+## anything in. Kept because `relics` is still read and migrated, and a save carrying old relics
+## should not silently lose them from the log — `note_relic_seen` is called for each on load.
 func relic_data() -> Array:
 	var out: Array = []
 	for id in relics:
@@ -791,14 +795,21 @@ func relic_data() -> Array:
 			out.append(r)
 	return out
 
-## Relic ids that could still be rolled: not owned, and deep enough to have unlocked
-## (D223). This is the grant pool, and both `pick_relic` and `grant_relic` read it, so
-## the gate applies to the elite drop, the boss drop and the events alike.
-func unowned_relics() -> Array:
+## Relic ids that could still be rolled: deep enough to have unlocked (D223), and not already
+## found on the run asking.
+##
+## It used to exclude what the character OWNED. Nothing is owned any more (D238) — a relic is found
+## on a run and leaves with it — so the exclusion moved to the run: `exclude` is
+## `GameState.run_relics`, and the caller passes it because MetaState must not reach into the run
+## (the same rule that keeps a traversal from touching meta state, D13).
+##
+## The depth gate stays exactly as it was. It governs what may enter the pool at all, which is a
+## different question from what this run has already picked up.
+func unowned_relics(exclude: Array = []) -> Array:
 	var reach := total_clears()
 	var out: Array = []
 	for id in RELIC_CATALOG:
-		if has_relic(id):
+		if id in exclude:
 			continue
 		if relic_locked(id, reach):
 			continue
@@ -850,8 +861,8 @@ func total_clears() -> int:
 ## NOTE: also logs the roll as MET (D235). A relic that goes into escrow and is then lost on a
 ## death was still met, and that is the whole point of the log — a lost run banks the knowledge
 ## even when it banks nothing else.
-func pick_relic(tier: int) -> String:
-	var pool: Array = unowned_relics()
+func pick_relic(tier: int, exclude: Array = []) -> String:
+	var pool: Array = unowned_relics(exclude)
 	if pool.is_empty():
 		return ""
 	var wtbl: Array = Balance.WEIGHTS[tier]
@@ -879,8 +890,8 @@ func pick_relic(tier: int) -> String:
 ## Returns FEWER than `n` when the pool cannot fill it, and an empty array when nothing is left.
 ## The depth gate (D223) still applies, because it governs what may enter the pool at all and that
 ## is a different question from which three of the pool you see.
-func relic_offer(tier: int, deck: Array = [], n: int = 3) -> Array:
-	var pool: Array = unowned_relics()
+func relic_offer(tier: int, deck: Array = [], n: int = 3, exclude: Array = []) -> Array:
+	var pool: Array = unowned_relics(exclude)
 	if pool.is_empty():
 		return []
 	var lean := Balance.deck_lean(deck)
@@ -914,32 +925,26 @@ func relic_offer(tier: int, deck: Array = [], n: int = 3) -> Array:
 		weights.remove_at(pick)
 	return out
 
-func grant_relic(tier: int) -> String:
-	var pool: Array = unowned_relics()
-	if pool.is_empty():
-		return ""
-	var wtbl: Array = Balance.WEIGHTS[tier]
-	var weights: Array = []
-	var total := 0
-	for id in pool:
-		var r := load(RELIC_CATALOG[id]) as RelicData
-		var w: int = wtbl[clampi(r.rarity if r else 0, 0, wtbl.size() - 1)]
-		weights.append(w)
-		total += w
-	var roll := randi() % maxi(1, total)
-	for i in pool.size():
-		roll -= int(weights[i])
-		if roll < 0:
-			add_relic(pool[i])
-			return pool[i]
-	add_relic(pool[0])
-	return pool[0]
+## `grant_relic` is GONE (D238). It added a relic to the collection permanently, which is the one
+## thing a relic may no longer do. Every drop site now calls `relic_offer` and puts the result in
+## `GameState.run_relics`, where it is lost with the run.
+##
+## `sealed_relics()` above survives it: how many relics a save is not yet deep enough to be offered
+## is still a true and useful thing to say, and the elite reward line still says it.
 
 ## Summed relic bonuses, for run setup and rewards.
 ## Delegates the sum to `Balance` (D180) so the simulator, which holds its relics as a
 ## plain Array rather than as a save, asks the same question through the same code.
+## Sum of one relic field over what the RUN is holding (D238).
+##
+## It read the collection until relics stopped persisting. Kept on MetaState rather than moved to
+## GameState because every caller already has MetaState to hand and the alternative was five call
+## sites changing to reach a different singleton — but the SUBJECT is the run, and the body says so.
 func relic_bonus(field: String) -> int:
-	return Balance.relic_field_sum(relic_data(), field)
+	var gs := (get_node_or_null("/root/GameState") if is_inside_tree() else null)
+	if gs == null:
+		return 0
+	return Balance.relic_field_sum(gs.run_relic_data(), field)
 
 func add_gold(n: int) -> void:
 	gold = max(0, gold + n)
@@ -1465,6 +1470,12 @@ func _apply(parsed: Dictionary) -> void:
 	for rid in parsed.get("relics_seen", []):
 		if String(rid) in RELIC_CATALOG and not String(rid) in relics_seen:
 			relics_seen.append(String(rid))
+	# A save written before D238 owns relics and has no log. Owning one means having met it, so the
+	# owned list is folded in — otherwise the upgrade would present a character who has cleared the
+	# game as having met nothing, and the one screen that survived the change would read as empty.
+	for rid2 in relics:
+		if String(rid2) in RELIC_CATALOG and not String(rid2) in relics_seen:
+			relics_seen.append(String(rid2))
 
 	highest_dungeon = int(parsed.get("highest_dungeon", 1))
 	gold = maxi(0, int(parsed.get("gold", 0)))

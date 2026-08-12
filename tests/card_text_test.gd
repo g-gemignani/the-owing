@@ -494,9 +494,13 @@ func _check_fan(inst: Node, cards: Array[Control], tag: String) -> void:
 ## Assembling ten widgets by hand would have been ten lines shorter and would have
 ## proved something about the test instead of the game.
 func _check_large_hand() -> void:
+	# Put in the RUN and not the collection (D238). Relics are found on a run and leave with it, so
+	# `GameState.run_relics` is the only place a fight reads them from — a relic added to the
+	# collection reaches nothing now, and the check above would have measured a hand one card
+	# short and said so.
 	for rid in ["keen_lens", "scholars_lens"]:
-		if not MetaState.add_relic(rid):
-			_fails += 1; print("FAIL cannot grant %s to build a large hand" % rid)
+		if not (rid in GameState.run_relics):
+			GameState.run_relics.append(rid)
 	# A new save equips Bulwark; the largest hand needs the power that draws instead.
 	MetaState.powers["foresight"] = 1
 	MetaState.equipped_power = "foresight"

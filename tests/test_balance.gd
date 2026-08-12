@@ -162,21 +162,27 @@ func _init() -> void:
 				["dd.boss", "the dungeon's named boss"],
 				["_reward_card(", "cards won during the run"],
 				["Balance.effective_gate(", "the clears a dungeon requires"],
-				# D208. `clears` grew the HP bar and nothing else, so eleven of fifteen
-				# profiles were paid for their clears in hit points and stripped of the
-				# relics the same clears hand out — a boss drops one on every clear and
-				# relics are never lost. Half a progression is a player nobody plays.
-				["_worn_relics(", "the relics a profile's clears have already paid for"]]:
+				# D238. This row used to demand `_worn_relics(` — the helper that dressed every
+				# profile in the relics its clears had paid for (D208), because a boss dropped one
+				# per clear and relics were never lost. Relics do not persist any more, so that
+				# guarantee is gone and dressing a profile in them would model a player the game
+				# cannot produce. What must be modelled instead is ARRIVAL, which is `--spoils=`.
+				["SPOILS", "relics arriving DURING a run rather than owned before it"],
+				# ...and the untaxed slot, which is the whole of why the escalation is free.
+				["p_untaxed", "relics reaching the fight without raising enemy scaling"]]:
 			if sim.find(String(needed[0])) == -1:
 				fails += 1
 				print("FAIL the simulator does not model %s" % needed[1])
-		# ...and that it is WIRED IN, not merely defined. `_worn_relics` present but
-		# called from nowhere passes the check above while every profile stays as naked
-		# as it was — the same silent pass D180's first guard had, where writing ABOUT
-		# the fix satisfied a check meant to see the code do it.
-		if sim.find("p[\"relics\"] = _worn_relics(") == -1:
+		# ...and that the priced slot is EMPTY at the call. `p_untaxed` present in the file while
+		# `relics` is still passed as priced would satisfy the check above and scale the enemies to
+		# the relics anyway — the same silent pass D180's first guard had, where writing ABOUT the
+		# fix satisfied a check meant to see the code do it.
+		if sim.find("String(node.get(\"enemy\", \"\")), [], roster,") == -1:
 			fails += 1
-			print("FAIL the simulator defines _worn_relics but never dresses a profile in it")
+			print("FAIL the simulator still prices relics into enemy scaling (D238)")
+		if sim.find("func _worn_relics") != -1:
+			fails += 1
+			print("FAIL _worn_relics is back — profiles must not wear relics they cannot own (D238)")
 
 	# --- reward must climb at least as fast as risk ---
 	#

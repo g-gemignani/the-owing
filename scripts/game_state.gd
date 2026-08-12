@@ -73,7 +73,9 @@ var escrow_packs: Array = []
 ## relic — the D20 abandon exploit with a different noun. Relics are still never
 ## LOST once banked; they are simply not banked until the boss falls or a rope is
 ## spent.
-var escrow_relics: Array = []  # relic ids
+# `escrow_relics` is GONE (D238). Relics no longer persist, so there is nothing to hold at risk —
+# and the D68 exploit it existed for (kill an elite, die on purpose, keep the relic) stops existing
+# with it. `run_relics` above is where a found relic lives now, and it is lost either way.
 
 ## Keys picked up off the dungeon floor this run, spent on locked chests (D84, D167).
 ##
@@ -166,21 +168,20 @@ func spend_gold(n: int) -> bool:
 ## Boss cleared: everything earned this run becomes permanent.
 func commit_escrow() -> Dictionary:
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+	# `relics` is reported as 0 rather than dropped from the dictionary: `victory.gd` and the haul
+	# line both read the key, and a missing key would read as a crash rather than as "none".
 	var result := {"cards": escrow_cards.size(), "gold": escrow_gold,
-		"relics": escrow_relics.size(), "packs": escrow_packs.size()}
+		"relics": 0, "packs": escrow_packs.size()}
 	if meta != null:
 		for id in escrow_cards:
 			meta.add_card(id)
 		if escrow_gold > 0:
 			meta.add_gold(escrow_gold)
-		for rid in escrow_relics:
-			meta.add_relic(rid)
 		for p in escrow_packs:
 			meta.add_pack(String(p.get("kind", Balance.PACK_TREASURE)),
 				String(p.get("dungeon", "")))
 	escrow_cards = []
 	escrow_gold = 0
-	escrow_relics = []
 	escrow_packs = []
 	return result
 
@@ -201,7 +202,7 @@ func forfeit_escrow(depth_frac: float = 0.0) -> Dictionary:
 	var had_cards := escrow_cards.size()
 	var had_gold := escrow_gold
 	var had_packs := escrow_packs.size()
-	var had_relics := escrow_relics.size()
+
 	# `floor`, not `round`: a run that salvages "half of one card" brings home nothing, and a
 	# rounding that paid out on 0.5 would make the first card free at every depth above a tenth.
 	var keep_cards := int(floor(float(had_cards) * salvage))
@@ -216,16 +217,12 @@ func forfeit_escrow(depth_frac: float = 0.0) -> Dictionary:
 			var p: Dictionary = escrow_packs[i]
 			meta.add_pack(String(p.get("kind", Balance.PACK_TREASURE)),
 				String(p.get("dungeon", "")))
-	# Relics are NOT salvaged. They are the one thing in escrow that is a rule rather than a
-	# quantity — half a relic is not a thing — and D226 is about to stop them persisting at all,
-	# so paying them out on a death now would build a mechanism due for deletion.
 	escrow_cards = []
 	escrow_gold = 0
-	escrow_relics = []
 	escrow_packs = []
 	return {
 		"cards": had_cards - keep_cards, "gold": had_gold - keep_gold,
-		"relics": had_relics, "packs": had_packs - keep_packs,
+		"relics": 0, "packs": had_packs - keep_packs,
 		"kept_cards": keep_cards, "kept_gold": keep_gold, "kept_packs": keep_packs,
 		"salvage": salvage,
 	}
@@ -276,9 +273,6 @@ func earn_pack(kind: String, dungeon_of: String = "", tier_of: String = "") -> v
 func risk_parts() -> PackedStringArray:
 	var parts := PackedStringArray(["%d cards" % escrow_cards.size(),
 		"%d gold" % escrow_gold])
-	if not escrow_relics.is_empty():
-		parts.append("%d relic%s" % [escrow_relics.size(),
-			"" if escrow_relics.size() == 1 else "s"])
 	if not escrow_packs.is_empty():
 		parts.append("%d pack%s" % [escrow_packs.size(),
 			"" if escrow_packs.size() == 1 else "s"])
@@ -306,7 +300,7 @@ func risk_line() -> String:
 ## taken off you.
 func at_risk() -> bool:
 	return (not escrow_cards.is_empty()) or escrow_gold > 0 \
-		or (not escrow_relics.is_empty()) or (not escrow_packs.is_empty())
+		or (not escrow_packs.is_empty())
 
 ## Keys in hand, as a phrase, or "" when there are none.
 ##
@@ -326,12 +320,36 @@ func keys_phrase() -> String:
 	return "" if keys <= 0 else "Keys %d" % keys
 
 ## An elite yielded a relic. Held at risk until the boss falls.
+## Relics found on this run (D238). They are the run's escalation, and they LEAVE with it — won or
+## lost, cleared or died. Nothing here is ever banked.
+##
+## This is the other half of D226's one sentence: *persistent power lives in the deck and is priced;
+## found power is free and temporary.* `Balance.power_ratio` is untouched and still prices
+## everything it is given — it is simply never given these, because they reach the fight through
+## `CombatEngine.setup`'s `p_untaxed` slot (D230). The pillar did not need weakening; it needed the
+## relics moved out from under it.
+var run_relics: Array = []
+
+## Loaded RelicData for everything found this run, for the engine's untaxed slot.
+func run_relic_data() -> Array:
+	var out: Array = []
+	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+	if meta == null:
+		return out
+	for id in run_relics:
+		if not meta.RELIC_CATALOG.has(id):
+			continue
+		var r := load(String(meta.RELIC_CATALOG[id])) as RelicData
+		if r != null:
+			out.append(r)
+	return out
+
 func earn_relic(id: String) -> void:
-	if id != "" and not (id in escrow_relics):
-		escrow_relics.append(id)
-		# Met, and banked immediately even though the relic itself is at risk (D235). The escrow
-		# holds the OBJECT; the log holds the fact that you saw it, and only the object can be
-		# left on the floor.
+	if id != "" and not (id in run_relics):
+		run_relics.append(id)
+		# Met, and logged permanently even though the relic itself is going nowhere (D235). The run
+		# holds the OBJECT and loses it at the door; the log holds the fact that you saw it, and
+		# that is the only part of a relic that survives a run now.
 		var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
 		if meta != null:
 			meta.note_relic_seen(id)
@@ -356,7 +374,7 @@ func run_to_dict() -> Dictionary:
 		"removals": run_removals,
 		"traversal": traversal.save_state(),
 		"escrow_cards": escrow_cards, "escrow_gold": escrow_gold,
-		"escrow_relics": escrow_relics, "escrow_packs": escrow_packs,
+		"run_relics": run_relics, "escrow_packs": escrow_packs,
 		"keys": keys,
 		"shop_stock": shop_stock,
 		"combat": combat_state,
@@ -402,10 +420,10 @@ func run_from_dict(d: Dictionary) -> bool:
 			escrow_cards.append(id)
 	escrow_gold = maxi(0, int(d.get("escrow_gold", 0)))
 	# a relic renamed or removed since the save is simply dropped, like a card
-	escrow_relics = []
-	for rid in d.get("escrow_relics", []):
+	run_relics = []
+	for rid in d.get("run_relics", []):
 		if meta.RELIC_CATALOG.has(rid):
-			escrow_relics.append(rid)
+			run_relics.append(rid)
 	escrow_packs = []
 	for p in d.get("escrow_packs", []):
 		# a pack from a dungeon that no longer exists cannot be opened, so drop it
@@ -482,6 +500,12 @@ func clear_run() -> void:
 	pending_debt = false
 	combat_state = {}
 	shop_stock = []
+	# The run's relics leave with the run (D238), and THIS is where every ending meets — boss
+	# beaten, killed, roped out, abandoned, or a saved run that could not be rebuilt. Clearing them
+	# only in `reset_run_progress` left them standing between runs: the next dungeon opened holding
+	# the last one's rules, which is the exact opposite of what makes them found rather than owned.
+	# Caught by `tests/test_escrow.gd` asserting the sentence rather than trusting it.
+	run_relics = []
 
 ## Mark the run as needing a write. Called wherever progress could be lost —
 ## encounter boundaries and every combat action. Writes are coalesced, so a whole
@@ -526,7 +550,7 @@ func reset_run_progress() -> void:
 	shop_stock = []
 	escrow_cards = []
 	escrow_gold = 0
-	escrow_relics = []
+	run_relics = []
 	escrow_packs = []
 	keys = 0
 	combat_state = {}

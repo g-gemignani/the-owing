@@ -154,6 +154,10 @@ func _init() -> void:
 	M2.path_prefix = SANDBOX + "relic_"
 	M2.slot = 0
 	M2.new_save()
+	# Relics are no longer escrowed at all (D238): they are found on a run, they never enter the
+	# collection, and they leave when the run does. So the claim this block makes has changed from
+	# "an elite's relic is held at risk" to "an elite's relic is never banked in the first place",
+	# which is a stronger statement and needs no escrow to carry it.
 	var owned_before: int = M2.relics.size()
 	var rid: String = M2.pick_relic(Balance.Tier.ELITE)
 	if rid == "":
@@ -161,16 +165,21 @@ func _init() -> void:
 	elif M2.relics.size() != owned_before:
 		fails += 1; print("FAIL pick_relic granted the relic instead of only rolling it")
 	G2.earn_relic(rid)
-	if G2.escrow_relics.size() != 1:
-		fails += 1; print("FAIL an elite's relic did not go into escrow")
-	var dropped: Dictionary = G2.forfeit_escrow()
-	if int(dropped.get("relics", 0)) != 1 or not G2.escrow_relics.is_empty():
-		fails += 1; print("FAIL dying did not forfeit the elite's relic")
-	# ...and it must survive being quit out of, or the escrow is a lie on reload
-	G2.earn_relic(rid)
-	var blob := {"escrow_relics": G2.escrow_relics.duplicate()}
-	if not (rid in blob["escrow_relics"]):
-		fails += 1; print("FAIL escrowed relics are not serialized with the run")
+	if G2.run_relics.size() != 1:
+		fails += 1; print("FAIL an elite's relic did not go into the run")
+	if M2.relics.size() != owned_before:
+		fails += 1; print("FAIL finding a relic added it to the collection — relics do not persist (D238)")
+	# Meeting it is banked too (D235), but not assertable here: `earn_relic` logs through the
+	# MetaState AUTOLOAD, and `M2` is a separate sandboxed instance. `tests/test_death.gd` drives
+	# `note_relic_seen` directly and asserts the log and its persistence there.
+	# It must survive being quit out of, or a resumed run loses the rules it was playing under.
+	var blob := {"run_relics": G2.run_relics.duplicate()}
+	if not (rid in blob["run_relics"]):
+		fails += 1; print("FAIL a run's relics are not serialized with the run")
+	# ...and it is gone when the run ends, however the run ended.
+	G2.clear_run()
+	if not G2.run_relics.is_empty():
+		fails += 1; print("FAIL relics survived the end of the run")
 	M2.writes_disabled = true
 
 	# --- repeat clears must pay less than first ones (D69) ----------------------

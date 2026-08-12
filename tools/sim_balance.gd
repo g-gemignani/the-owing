@@ -203,7 +203,7 @@ func _init() -> void:
 			relic_hp0 += r0.bonus_max_hp
 		print("%s  (%d cards, ratio %.2f, %d clears, %d HP, %d relics, power %s)%s" % [
 			profile["name"], deck.size(),
-			Balance.power_ratio(deck, profile.get("relics", []), prof_power),
+			Balance.power_ratio(deck, [], prof_power),
 			int(profile.get("clears", 0)),
 			Balance.max_hp_for(int(profile.get("clears", 0)), relic_hp0),
 			(profile.get("relics", []) as Array).size(),
@@ -596,9 +596,14 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					# `spoils` goes in the UNTAXED slot: its effects apply, and `power_ratio`
 					# is computed against `relics` alone, so the enemies do not scale to it.
 					# That exemption is the entire experiment (D230).
+					# Everything a run holds goes in the UNTAXED slot now (D238): relics are found
+					# and free, and only the deck and the equipped power are priced. `relics` is
+					# what an authored profile still declares, `spoils` is what the floor lent.
+					var untaxed: Array = relics.duplicate()
+					untaxed.append_array(spoils)
 					eng.setup(run_deck, hp, max_hp, difficulty, tier,
-						String(node.get("enemy", "")), relics, roster,
-						power, dd.boss if dd != null else "", spoils)
+						String(node.get("enemy", "")), [], roster,
+						power, dd.boss if dd != null else "", untaxed)
 					_tick("fight_setup", t_su)
 					var t_fi := Time.get_ticks_usec()
 					var g2 := 0
@@ -669,7 +674,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						if SPOILS > 0 and spoils.size() < SPOILS:
 							var pool := _spoils_pool()
 							if not pool.is_empty():
-								spoils.append(pool[randi() % pool.size()])
+								spoils.append(_choose_spoil(pool, run_deck, spoils))
 						# the driver's only source of "what does a fight here cost me"
 						var n: int = int(cost_n.get(enc_kind, 0)) + 1
 						var prev: float = float(cost_est.get(enc_kind, 0.0))
@@ -1348,7 +1353,15 @@ func _profiles() -> Array:
 	for p in out:
 		if bool(p.get("fixed_relics", false)):
 			continue
-		p["relics"] = _worn_relics(int(p.get("clears", 0)), p.get("relics", []))
+		# D238: relics do not persist, so a profile that WEARS them is a player the game can no
+		# longer produce — which is the exact test D208 imposed on this line when it added it. The
+		# dressing is deleted rather than reduced: every relic a run has now arrives during it, and
+		# `--spoils=` is the flag that models arrival. A profile's authored `relics` array is kept
+		# where it exists, because two rows are ABOUT holding specific relics and say so.
+		if bool(p.get("fixed_relics", false)):
+			pass
+		else:
+			p["relics"] = []
 	return out
 
 ## One reward card from this dungeon's pool, at the level the player's cards sit at.
@@ -1444,6 +1457,38 @@ func _spoils_pool() -> Array:
 		_spoil_pool.append(r)
 	return _spoil_pool
 
+## Take the best of THREE, the way the game offers them (D234/D239).
+##
+## `--spoils` used to take one at random, and that models a player who accepts whatever falls out.
+## The game does not offer that: an elite lays out three and the player picks. Drawing randomly
+## understated the escalation by the whole value of choosing — which is the D124 family again, an
+## instrument measuring a player the game does not have.
+##
+## "Best" is `power_value()` weighted by `Balance.relic_affinity`, which is the same tilt the offer
+## itself is bucketed by, so the driver prefers what suits the deck it is holding rather than the
+## biggest number on the table.
+func _choose_spoil(pool: Array, deck: Array, held: Array) -> RelicData:
+	var lean := Balance.deck_lean(deck)
+	var best: RelicData = null
+	var best_score := -1.0
+	for _k in 3:
+		var cand: RelicData = pool[randi() % pool.size()]
+		if cand in held:
+			continue
+		var score: float = cand.power_value() * Balance.relic_affinity(cand, lean)
+		if score > best_score:
+			best_score = score
+			best = cand
+	# Every draw of the three was something already held, which a long run can produce. Fall back to
+	# any unheld relic rather than returning null: the caller is inside a loop that has already
+	# decided a spoil is owed.
+	if best == null:
+		for r in pool:
+			if not (r in held):
+				return r
+		return pool[0]
+	return best
+
 ## Does this relic change a RULE rather than a number (D233)? Derived from the modifier fields
 ## themselves, so a field added later joins without anybody remembering this function.
 static func _breaks_a_rule(r: RelicData) -> bool:
@@ -1458,85 +1503,11 @@ func _relics(ids: Array) -> Array:
 			out.append(r)
 	return out
 
-## The relics a player standing here would already be WEARING (D208).
-##
-## D180 fixed how relics are *applied* and left untouched how many the profiles hold. Every
-## boss beaten hands one out — `combat.gd` calls `MetaState.grant_relic(Tier.BOSS)` on the
-## clear, unconditionally — and relics are permanent, explicitly not lost on death. So a
-## player with eight clears wears at least eight relics, and this table held rows of three,
-## five and six clears with **none at all**.
-##
-## The two halves of one progression disagreed inside a single profile: `clears` was already
-## growing the HP bar through `Balance.max_hp_for`, so the report paid the player for their
-## clears in hit points and took the relics those same clears handed them back off again.
-##
-## A FLOOR and not an estimate. Elites drop into escrow too and a repeat clear grants again,
-## so a real player at this depth wears more than this; one per distinct clear is the count
-## that cannot be argued down. Erring low keeps the fix from being a gift.
-func _worn_relics(clears: int, held: Array) -> Array:
-	var out: Array = held.duplicate()
-	var ids := {}
-	for r in out:
-		ids[String(r.id)] = true
-	for id in _relic_ladder():
-		if out.size() >= clears:
-			break
-		if ids.has(id):
-			continue
-		var r := load(Balance.RELIC_DIR + String(id) + ".tres") as RelicData
-		if r != null:
-			out.append(r)
-			ids[id] = true
-	return out
-
-## The ORDER relics arrive in, rolled once against the boss table's own weights.
-##
-## Read out of `MetaState.RELIC_CATALOG` rather than restated here — the catalogue is the
-## only list of what the game can actually hand out, and a hand-kept copy is the D89/D180
-## coverage bug lying in wait for the thirty-first relic. MetaState is an autoload, so a
-## headless `--script` run has no instance of it; the constant is read off the GDScript
-## itself, which is the same list by the same name.
-##
-## Seeded, so two runs of this report measure the same player rather than differing by
-## whatever the loadout roll did (D120's noise floor is 0.4 points; a different relic set is
-## a much larger difference wearing the same clothes). Drawn WITHOUT replacement and taken
-## from the front, so a deeper profile's set contains a shallower one's: relics accumulate,
-## and a ladder that did not nest could hand Endgame a weaker set than Late and break the
-## monotonicity `tests/test_balance.gd` checks for.
-const RELIC_LADDER_SEED := 4180
-static var _ladder: Array = []
-
-static func _relic_ladder() -> Array:
-	if not _ladder.is_empty():
-		return _ladder
-	var ms := load("res://scripts/meta_state.gd") as GDScript
-	var catalog: Dictionary = ms.get_script_constant_map().get("RELIC_CATALOG", {})
-	var pool: Array = catalog.keys()
-	pool.sort()                       # the roll decides the order, not the file system
-	var rng := RandomNumberGenerator.new()
-	rng.seed = RELIC_LADDER_SEED
-	var wtbl: Array = Balance.WEIGHTS[Balance.Tier.BOSS]
-	var guard := 0
-	while not pool.is_empty() and guard < 200:
-		guard += 1
-		var weights: Array = []
-		var total := 0
-		for id in pool:
-			var r := load(String(catalog[id])) as RelicData
-			var w: int = int(wtbl[clampi(r.rarity if r != null else 0, 0, wtbl.size() - 1)])
-			weights.append(w)
-			total += w
-		var roll := rng.randi_range(0, maxi(1, total) - 1)
-		var pick: int = pool.size() - 1
-		for i in pool.size():
-			roll -= int(weights[i])
-			if roll < 0:
-				pick = i
-				break
-		_ladder.append(String(pool[pick]))
-		pool.remove_at(pick)
-	return _ladder
-
+## `_worn_relics` is GONE (D238). It dressed every profile in the relics its `clears` had already
+## paid for, because a boss dropped one per clear and relics were never lost — the arithmetic D208
+## added after eleven rows of fifteen wore fewer than their progression guaranteed. Relics do not
+## persist any more, so the guarantee it encoded no longer exists and a profile wearing them is a
+## player the game cannot produce. `--spoils=` models arrival instead.
 func _deck(loadout: Dictionary, level: int = 1) -> Array[CardData]:
 	var deck: Array[CardData] = []
 	for id in loadout:
@@ -1559,7 +1530,9 @@ func _measure(deck: Array[CardData], dungeon: int, tier: int, hp_mult: float,
 	var trials: int = maxi(40, TRIALS / 3)
 	for t in trials:
 		var eng := CombatEngine.new()
-		eng.setup(deck, max_hp, max_hp, dungeon, tier, "", relics, roster, power)
+		# Untaxed here too (D238), for the same reason: these columns must price the deck the way
+		# a real fight does, and a real fight no longer scales to relics.
+		eng.setup(deck, max_hp, max_hp, dungeon, tier, "", [], roster, power, "", relics)
 		var guard := 0
 		while not eng.over() and guard < 200:
 			guard += 1

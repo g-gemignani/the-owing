@@ -144,10 +144,17 @@ func _on_choice(i: int) -> void:
 		lines.append("Lost %s." % lost if lost != "" else "Nothing could be taken.")
 
 	if ev.relic_grant(i) > 0:
-		var rid := MetaState.grant_relic(Balance.Tier.ELITE)
-		if rid != "":
-			var r := load(MetaState.RELIC_CATALOG[rid]) as RelicData
-			lines.append("Gained relic: %s." % (r.name if r != null else rid))
+		# One from a bucketed offer rather than a bare roll (D234), and it goes into the RUN and not
+		# the collection (D238). An event is a single screen with one outcome per choice, so there
+		# is no room here for a choice of three — the choosing happens at elites, where there is a
+		# panel to put it on.
+		var offer: Array = MetaState.relic_offer(Balance.Tier.ELITE, GameState.run_deck, 1,
+			GameState.run_relics)
+		if not offer.is_empty():
+			var rid := String(offer[0])
+			GameState.earn_relic(rid)
+			var r := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
+			lines.append("Took %s — yours until this run ends." % (r.name if r != null else rid))
 		else:
 			lines.append("Nothing new to give.")
 

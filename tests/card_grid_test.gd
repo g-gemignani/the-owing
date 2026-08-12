@@ -466,12 +466,15 @@ func _check_hover_survives_an_add() -> void:
 ## relics taking too much space. Checked with a large handful owned, because two relics
 ## wrap to one line and the bug does not exist yet.
 func _check_relics_stay_one_line() -> void:
-	var had: Array = MetaState.relics.duplicate()
+	var had: Array = GameState.run_relics.duplicate()
 	for rid in MetaState.RELIC_CATALOG:
-		if MetaState.relics.size() >= 10:
+		# The RUN's relics, not the collection's (D238). The Cards screen reports what the run in
+		# progress is carrying, because that is the part that changes what the rest of the deck is
+		# worth — and nothing is carried in the collection any more.
+		if GameState.run_relics.size() >= 10:
 			break
-		if not MetaState.relics.has(rid):
-			MetaState.relics.append(rid)
+		if not GameState.run_relics.has(rid):
+			GameState.run_relics.append(rid)
 	var inst := await _screen(true)
 	var line: Label = null
 	for c in _controls(inst):
@@ -486,14 +489,14 @@ func _check_relics_stay_one_line() -> void:
 			_fail("the relics line wraps again — it is a header, not a paragraph")
 		if line.get_line_count() > 1:
 			_fail("the relics line is %d lines tall" % line.get_line_count())
-		var first := load(MetaState.RELIC_CATALOG[MetaState.relics[0]]) as RelicData
+		var first := load(MetaState.RELIC_CATALOG[GameState.run_relics[0]]) as RelicData
 		if first != null:
 			if line.text.find(first.description) != -1:
 				_fail("a relic's description is inline on the header again")
 			if line.tooltip_text.find(first.description) == -1:
 				_fail("the relics line does not explain itself on hover: '%s'" % line.tooltip_text)
 	await _drop(inst)
-	MetaState.relics = had
+	GameState.run_relics = had
 
 ## The first card face wholly inside `frame`, so a gesture aimed at it lands.
 func _visible_face(inst: Control, frame: Rect2) -> Button:

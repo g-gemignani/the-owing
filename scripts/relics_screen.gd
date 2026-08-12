@@ -105,7 +105,11 @@ func _ready() -> void:
 		if r == null:
 			continue   # a half-added relic fails loudly in test_content, not quietly here
 		slots += 1
-		var owned: bool = MetaState.has_relic(id)
+		# MET, not owned (D238). Nothing is owned any more — a relic is found on a run and leaves
+		# with it — so this screen is a record of what the character has SEEN. That is the only
+		# part of a relic that survives a run, and it is deliberately the part that carries no
+		# power (D235).
+		var owned: bool = MetaState.seen_relic(id)
 		if owned:
 			found += 1
 		if not groups.has(r.rarity):
@@ -115,8 +119,14 @@ func _ready() -> void:
 	# The count, once — and then what to go and do about it, which is the part the
 	# three old lines never said. A boss is the guaranteed source (`combat.gd` grants
 	# one on a clear); an elite drops one at risk, and a few events hand one over.
-	UI.label(col, "%d of %d found. Every dungeon boss gives one; elites and some events do too." % [
+	UI.label(col, "%d of %d met. Elites offer three to choose from; some events hand one over." % [
 		found, slots])
+	# Said plainly, once, because it is the single biggest change to how this game works and a
+	# player reading a list of relics they cannot buy or keep needs it said here rather than
+	# inferred from a defeat screen.
+	UI.hoverable(UI.label(col,
+		"Relics are lent, not owned: what you find is yours until the run ends, win or lose."),
+		"This list is a record of what you have met. Meeting one is permanent; holding it is not.")
 	# Stated once, for the whole list, instead of writing "undiscovered" beside
 	# twenty-four rows. Dropped when there is nothing left to withhold.
 	if found < slots:

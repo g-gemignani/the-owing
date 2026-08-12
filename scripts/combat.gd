@@ -75,6 +75,9 @@ var fx_layer: Control
 var fx_ramp: Array = []
 var hurt_veil: ColorRect
 var reward_box: VBoxContainer
+## The three relics an elite is offering, if any (D234/D238). Held on the node rather than passed,
+## because the reward panel is built in one place and read in another.
+var relic_offer: Array = []
 var end_btn: Button
 var power_btn: Button
 var menu_btn: Button
@@ -98,7 +101,11 @@ func _ready() -> void:
 	if not GameState.combat_state.is_empty():
 		# resuming a fight the player quit out of: restored exactly, so quitting is
 		# never a way to retry a bad turn (D22)
-		eng.load_state(GameState.combat_state, MetaState.CATALOG, MetaState.relic_data())
+		# The run's found relics, not the character's owned ones (D238). `load_state` takes one
+		# array and the engine treats it as `relics`, which is correct — everything downstream of
+		# `setup` reads that field, and the only thing `p_untaxed` ever changed was what
+		# `power_ratio` was shown.
+		eng.load_state(GameState.combat_state, MetaState.CATALOG, GameState.run_relic_data())
 	else:
 		var dd := GameState.dungeon_data()
 		var roster: Array = Array(dd.enemy_roster) if dd != null and dd.has_roster() else []
@@ -109,8 +116,10 @@ func _ready() -> void:
 		# floor could show a spider and hand over a brute. Models that do not cast their
 		# fights simply omit the key and nothing changes for them.
 		eng.setup(GameState.run_deck, GameState.hp, GameState.max_hp, GameState.dungeon, tier,
-			String(GameState.pending.get("enemy", "")), MetaState.relic_data(), roster,
-			GameState.run_power, dd.boss if dd != null else "")
+			# `[]` priced, and the run's finds in the UNTAXED slot: enemies scale to the deck and
+			# the equipped power, and not to what the floor lent you (D238).
+			String(GameState.pending.get("enemy", "")), [], roster,
+			GameState.run_power, dd.boss if dd != null else "", GameState.run_relic_data())
 		_snapshot()
 	_refresh()
 	# rects only exist after a frame, and the fan is measured against them
@@ -2120,11 +2129,13 @@ func _win() -> void:
 	# the fight and then dying still costs you it.
 	var relic_line := ""
 	if tier == Balance.Tier.ELITE:
-		var won_relic := MetaState.pick_relic(Balance.Tier.ELITE)
-		if won_relic != "":
-			GameState.earn_relic(won_relic)
-			var rd := load(MetaState.RELIC_CATALOG[won_relic]) as RelicData
-			relic_line = "  Took %s (at risk)." % (rd.name if rd != null else won_relic)
+		# THREE to choose from, bucketed toward what this deck already does (D234/D238). The offer
+		# is shown beside the card reward rather than taken here: "the dice took my run" and "I
+		# chose wrong" are different feelings and only the second one gets replayed.
+		relic_offer = MetaState.relic_offer(Balance.Tier.ELITE, GameState.run_deck, 3,
+			GameState.run_relics)
+		if not relic_offer.is_empty():
+			relic_line = "  Something on the floor is worth taking."
 			Audio.play("treasure")
 		elif MetaState.sealed_relics() > 0:
 			# An elite that pays no relic looks the same whether you own all thirty or
@@ -2151,6 +2162,42 @@ func _win() -> void:
 		g, GameState.escrow_gold, healed, relic_line]
 	for c in reward_box.get_children():
 		c.queue_free()
+
+	_offer_rewards()
+
+## Build the reward panel: the relic offer if there is one, then the three cards, then the skip.
+##
+## Extracted from `_win()` so that taking a relic can rebuild it (D234). Nothing about the panel
+## changed in the move; it needed to be callable twice.
+func _offer_rewards() -> void:
+	# The relic offer goes FIRST, above the cards. It is the bigger decision — a relic changes a
+	# rule for the rest of the run and a card changes the deck by one — and the panel should read
+	# in that order (D234).
+	if not relic_offer.is_empty():
+		var rl := Label.new()
+		rl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		rl.text = "The elite was carrying three. Take one — it is yours until this run ends."
+		reward_box.add_child(rl)
+		UI.hoverable(rl, "Relics are found, never owned. They leave with the run, win or lose.")
+		var rrow := HBoxContainer.new()
+		rrow.add_theme_constant_override("separation", UITheme.sep())
+		reward_box.add_child(rrow)
+		for rid in relic_offer:
+			var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
+			if rd == null:
+				continue
+			var b := Button.new()
+			UITheme.style_button(b)
+			b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			b.custom_minimum_size.x = UITheme.px(200)
+			b.text = "%s\n%s" % [rd.name, rd.description]
+			# Said on the button, because a relic the player has never met is the interesting case
+			# and the collection screen is two menus away from this decision (D205b).
+			UI.hoverable(b, ("You have met this one before." if MetaState.seen_relic(rid)
+				else "You have never seen this one."))
+			b.pressed.connect(_on_relic_picked.bind(String(rid)))
+			rrow.add_child(b)
+		UI.spacer(reward_box)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", UITheme.sep())
@@ -2192,6 +2239,20 @@ func _win() -> void:
 	skip.pressed.connect(_on_reward_picked.bind(null))
 	reward_box.add_child(skip)
 	reward_box.visible = true
+
+## One of the three taken. The other two are gone — an offer you can come back to is not a decision.
+##
+## The row is rebuilt rather than only disabled, because the panel still has the card reward under
+## it and a dead row of buttons above live ones reads as a bug.
+func _on_relic_picked(rid: String) -> void:
+	GameState.earn_relic(rid)
+	var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
+	Audio.play("treasure")
+	_log("Took %s. It is yours until this run ends." % (rd.name if rd != null else rid))
+	relic_offer = []
+	for c in reward_box.get_children():
+		c.queue_free()
+	_offer_rewards()
 
 ## Reward offers come from the dungeon's card pool (so exclusives are real), with
 ## rarity weights tilted by the dungeon's difficulty (harder place, better loot).
@@ -2265,10 +2326,10 @@ func _on_reward_picked(card) -> void:
 				GameState.last_haul += " The %s paid %d more." % [
 					Balance.aspect_name(wore), extra]
 		MetaState.mark_cleared(GameState.dungeon_id)
-		var got := MetaState.grant_relic(Balance.Tier.BOSS)
-		if got != "":
-			var r := load(MetaState.RELIC_CATALOG[got]) as RelicData
-			GameState.last_relic = r.name if r else got
+		# The boss used to hand over a permanent relic here. It cannot any more (D238) — a relic is
+		# run-scoped, and this line runs three statements before `clear_run()` throws the run away,
+		# so the drop would have been content that existed for one function call. The boss still
+		# pays gold, cards, a pack, a rope and the clear itself, and those all persist.
 		if randi() % 100 < Balance.BOSS_ROPE_CHANCE:
 			MetaState.add_item("escape_rope")
 			GameState.last_haul += " Found an Escape Rope."

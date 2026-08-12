@@ -226,6 +226,8 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D235** | [Dying stops reaching into the collection, and a lost run pays for its depth](#d235--dying-stops-reaching-into-the-collection-and-a-lost-run-pays-for-its-depth) |
 | **D236** | [The second flake was the same bug, and its message finally said which](#d236--the-second-flake-was-the-same-bug-and-its-message-finally-said-which) |
 | **D237** | [Culling the numeric relics made the number worse, because the profiles hold them](#d237--culling-the-numeric-relics-made-the-number-worse-because-the-profiles-hold-them) |
+| **D238** | [Relics stop persisting, and the pillar never had to be weakened](#d238--relics-stop-persisting-and-the-pillar-never-had-to-be-weakened) |
+| **D239** | [The measurement was modelling a player who does not choose](#d239--the-measurement-was-modelling-a-player-who-does-not-choose) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16019,3 +16021,115 @@ capped. The relic was restored and `Carrion Wind` carries the rule instead.
 **A test that names its own preconditions turns a silent no-op into a failure**, which is the
 counter-example to D124's whole family of bugs and the reason this one cost ten minutes instead of a
 milestone.
+
+---
+
+### D238 — Relics stop persisting, and the pillar never had to be weakened
+
+D226 step 5, and the smallest change in this whole sequence relative to what it does — because D230
+already built the seam.
+
+**`Balance.power_ratio` is untouched.** It still prices everything it is given, exactly as the pillar
+says. What changed is that it is no longer *given* relics: they reach the fight through
+`CombatEngine.setup`'s `p_untaxed` slot, and the priced argument is `[]`. So the sentence D226 wrote
+holds as written — *persistent power lives in the deck and is priced; found power is free and
+temporary* — and the pillar did not need cutting in half after all. It needed the relics moved out
+from under it.
+
+That is worth saying plainly because three entries (D226, D231, AGENTS.md's own pillar) described
+this as amputating the pillar. It was not. **A rule that is stated correctly does not need changing
+when its subject moves.**
+
+#### What moved
+
+* **`GameState.run_relics`** holds what a run has found. Lost when the run ends — won, died, roped
+  out, abandoned. `run_relic_data()` loads it for the engine.
+* **`escrow_relics` is deleted.** Relics were held at risk because they were about to be banked;
+  nothing is banked, so there is nothing to risk. **The D68 exploit it existed for — kill an elite,
+  die on purpose, keep the relic — stops existing rather than being guarded against.**
+* **`MetaState.grant_relic` is deleted.** It added a relic permanently, which is the one thing a
+  relic may no longer do. `pick_relic` and `relic_offer` remain and take the run's holdings as an
+  `exclude` list, because MetaState must not reach into the run (D13's rule, applied the other way).
+* **`unowned_relics(exclude)`** no longer filters by what is owned — nothing is — and filters by
+  what this run already carries instead. The depth gate (D223) is untouched: it governs what may
+  enter the pool, which is a different question from what this run has picked up.
+* **`relic_bonus`** sums over the run. **The relics screen shows what the character has MET**
+  (`relics_seen`, D235), which is the only part of a relic that survives a run and is deliberately
+  the part that carries no power. The Cards screen shows what the run is holding, because that is
+  what changes the value of the rest of the deck.
+* **The boss no longer drops a relic.** The grant sat three statements before `clear_run()`, so a
+  run-scoped relic there would have existed for one function call. The boss still pays gold, cards,
+  a pack, a rope and the clear.
+
+#### A leak the new test caught before the design did
+
+`clear_run()` did not reset `run_relics` — only `reset_run_progress()` did. So a relic found in one
+run stood into the next, and **the next dungeon would have opened holding the last one's rules**,
+which is the precise opposite of found-rather-than-owned. `clear_run` is where every ending meets
+(D178 put the depth log there for the same reason), so that is where it belongs.
+
+It was found by `tests/test_escrow.gd` asserting the sentence — *"relics survived the end of the
+run"* — rather than trusting it. **A design claim written as an assertion is a design claim that gets
+checked once per suite run.**
+
+#### The simulator had to stop modelling a player the game cannot produce
+
+D208 added `_worn_relics`, which dressed every profile in the relics its `clears` had already paid
+for, because a boss dropped one per clear and relics were never lost. That guarantee is gone, so the
+helper is **deleted** and profiles carry nothing but what `--spoils=` lends them. Its test row in
+`test_balance.gd` inverted with it: the suite now demands `SPOILS` and `p_untaxed` in the source, and
+**fails if `_worn_relics` comes back**.
+
+D208's question is the one that survives and it is why this had to change at all: *is this profile a
+player the game can produce?* A profile wearing relics no longer is.
+
+---
+
+### D239 — The measurement was modelling a player who does not choose
+
+With step 5 in, the sweep read `esc` 1.15x at five spoils — better than 1.12x before it, and still
+nowhere near the 1.48x that a rule-breakers-only draw produced in D233. The gap looked like
+composition again. It was not.
+
+**`--spoils` took one relic at random. The game lays out three and the player picks.** Drawing
+randomly models someone who accepts whatever falls out, and understates the escalation by exactly
+the value of choosing. `_choose_spoil` now draws three and keeps the best by `power_value()` weighted
+with `Balance.relic_affinity` — the same tilt the offer itself is bucketed by, so the driver prefers
+what suits the deck it is holding rather than the biggest number on the table.
+
+| 18 cells, 200 trials | no spoils | 5 random | **5 chosen of 3** |
+|---|---|---|---|
+| `esc` | 1.02x | 1.15x | **1.29x** |
+| `esc@3` | 1.02x | 1.18x | **1.32x** |
+| RUN completion | 46% | 56% | 60% |
+| `real` | 51% | 52% | 50% |
+
+**Choosing is worth +0.14x**, which is more than the entire rule-breaker rewrite bought on a random
+draw. The best cells now clear the gate: Barricade at the Foundry **1.53x**, Mid 1.47x, Early at the
+Crypt 1.45x, Starter at the Ossuary 1.45x. One cell of eighteen is at or above 1.5x and five are
+above 1.4x, against a game where **no cell reached 1.18x** when this sequence started.
+
+`esc@3` at 1.32x clears its 1.2x bar comfortably, so the escalation is **early** — the property D231
+demanded and D232 found missing everywhere. `real` held at 50%, so nothing about this collapsed the
+turn's decision.
+
+#### The instrument lesson, for the fourth time
+
+D124: a tool that cannot play the build cannot price it. D180: a check must discover its subjects.
+D208: is this profile a player the game can produce? D233: a gate that cannot move measures nothing.
+And now: **a driver that does not make the decision the game offers is measuring a different game.**
+
+Every one of these was found by asking where a number came from before believing it, and every one
+of them had already produced a report that read as a verdict on the design.
+
+#### Where the plan stands against its own criteria
+
+* `esc` **1.29x** mean, best cell 1.53x — the 1.5x gate is reached at the top and not at the mean.
+* `esc@3` **1.32x** against a 1.2x bar — **passes.**
+* `real` **50%** against "must not fall from 52%" — inside the ±4-point noise band, **passes.**
+* RUN completion 46%→60% with spoils, which is inside D231's 15–85% constraint rather than tuned to
+  a band, and the ladder re-fit is the remaining work.
+
+The mean is short of 1.5x and the honest reading is that the pool still holds nineteen relics that
+are numbers. That is a content job with a measured target now, which is the difference between this
+and where D226 started.
