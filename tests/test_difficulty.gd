@@ -154,6 +154,31 @@ func _test_scaling() -> int:
 ##
 ## So the shape gets pinned, not just the direction: the relative cost of a rung, at a
 ## fixed depth, must be strictly larger for a strong deck than for a starter one.
+## Enemy damage AVERAGED over rolls, turns and tiers, as one float.
+##
+## `enemy_damage` returns `int(round(d))`, so a single call quantises in steps of about 6% while the
+## assertion below asserts a 10% margin — which is why AGENTS.md records this probe as one that
+## *flips on rounding*: 0.095 fails and 0.105 passes and neither fact means anything. It called it
+## and nominated the fix: **raising the resolution of that probe belongs to whoever next needs
+## headroom here.**
+##
+## That arrived with D244. A global damage constant moved every absolute value, the rounding landed
+## differently, and the guard went red at x1.605 against a required x1.62 — a 1% miss, inside its own
+## documented noise, on a change that provably cannot flatten a rung's slope (a constant multiplying
+## all four rungs equally cancels in the ratio this function takes).
+##
+## The tempting fix was to nudge the constant until the guard went green. AGENTS.md forbids exactly
+## that — *never take a value because that guard happened to go green* — and the inverse holds too:
+## **never discard a value because a knife-edge guard happened to go red.** Summing 72 readings
+## instead of taking 1 removes the quantisation rather than working around it.
+func _probe(depth: int, ratio: float) -> float:
+	var total := 0.0
+	for roll in 6:
+		for turn in range(1, 5):
+			for tier in [Balance.Tier.NORMAL, Balance.Tier.ELITE, Balance.Tier.BOSS]:
+				total += float(Balance.enemy_damage(depth, tier, ratio, roll, turn))
+	return total
+
 func _test_lands_on_the_strong() -> int:
 	var fails := 0
 	var top: int = Balance.DIFFICULTIES.size() - 1
@@ -166,12 +191,12 @@ func _test_lands_on_the_strong() -> int:
 	const MIN_LEAN := 1.10
 
 	Balance.difficulty = Balance.DIFFICULTY_LEGACY
-	var starter0 := float(Balance.enemy_damage(DEPTH, Balance.Tier.NORMAL, STARTER_RATIO, 1))
-	var built0 := float(Balance.enemy_damage(DEPTH, Balance.Tier.NORMAL, BUILT_RATIO, 1))
+	var starter0 := _probe(DEPTH, STARTER_RATIO)
+	var built0 := _probe(DEPTH, BUILT_RATIO)
 	for i in range(1, top + 1):
 		Balance.difficulty = i
-		var starter := float(Balance.enemy_damage(DEPTH, Balance.Tier.NORMAL, STARTER_RATIO, 1))
-		var built := float(Balance.enemy_damage(DEPTH, Balance.Tier.NORMAL, BUILT_RATIO, 1))
+		var starter := _probe(DEPTH, STARTER_RATIO)
+		var built := _probe(DEPTH, BUILT_RATIO)
 		var starter_cost := starter / maxf(1.0, starter0)
 		var built_cost := built / maxf(1.0, built0)
 		# A MARGIN, not just an inequality, and the margin is what makes this assertion

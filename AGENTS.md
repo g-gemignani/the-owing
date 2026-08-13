@@ -265,6 +265,14 @@ effects are drawn at runtime by `scripts/fx.gd`.
   1.18x) to **1.29x mean and 1.53x at best**, with `esc@3` at 1.32x — the escalation arrives
   early rather than at the boss (D239).
 
+  **The death rate target is MET (D244): `ENEMY_DAMAGE_BASE_MULT` = 1.6 puts completion at 39%
+  with deaths at fight 2.7 of five, and `real` held at 51%.** It sits in `enemy_damage()` and not
+  in the `DIFFICULTIES` table, because a constant multiplying all four rungs equally cannot flatten
+  a rung's slope — and `test_difficulty`'s probe now sums 72 readings instead of one, which is the
+  fix AGENTS.md nominated for exactly this moment. Escalation reads 1.53x and TURNS-TO-KILL reads
+  1.40x, so two independent yardsticks agree: **1.5x is a fact about the design, not an artifact of
+  the metric.** Per-cell completion now spans 0-99% and needs fitting per cell.
+
   **The target is now 5x escalation and a 60% death rate (D242).** Measured against it (D243):
   the content pass reached **1.62x** mean, 1.94x best, and enemy damage at **x1.8 hits 40%
   completion exactly** with deaths moving earlier (4.1 → 2.7 fights). The two targets are

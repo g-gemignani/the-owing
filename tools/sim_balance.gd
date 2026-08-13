@@ -179,6 +179,9 @@ func _init() -> void:
 	print("           Lost fights measure the enemy, and elites and bosses hold a different number")
 	print("           of enemies, which moves damage-per-turn on its own. @3 is the same ratio at")
 	print("           the third won normal fight: that is where 'early' lives (D231).")
+	print("       tk: how much FASTER the last won normal fight died than the first. Damage per turn")
+	print("           is capped by the enemy's own pool; turns are capped below at 1, so this is the")
+	print("           number that can express 'the dungeon stopped mattering' (D244).")
 	print("       hp: end-of-run HP percentiles, a death counted as 0, so p10=0 means the")
 	print("           bottom decile died. fights: p10-p90 of fights survived.")
 	print("       div: mean Jaccard distance between consecutive runs' final decks.")
@@ -403,9 +406,10 @@ func _fun_line(run: Dictionary) -> String:
 	# an escalation of zero. Five cells read `@3 0.00x` on the first full report — the Maw among
 	# them, where runs die at the third fight — and a zero beside a healthy `esc` reads as a
 	# collapse rather than as an absence. Each side carries its own count for the same reason.
-	return "      fun    esc %s(n%d) @3 %s(n%d) | hp p10/p50/p90 %.0f/%.0f/%.0f%% | fights %.0f-%.0f | div %.2f | real %.0f%% forced %.0f%% solved %.0f%%" % [
+	return "      fun    esc %s(n%d) @3 %s(n%d) tk %s | hp p10/p50/p90 %.0f/%.0f/%.0f%% | fights %.0f-%.0f | div %.2f | real %.0f%% forced %.0f%% solved %.0f%%" % [
 		_esc_or_blank(run["escalation"], int(run["esc_n"])), int(run["esc_n"]),
 		_esc_or_blank(run["esc3"], int(run["esc3_n"])), int(run["esc3_n"]),
+		_esc_or_blank(run["tk"], int(run["tk_n"])),
 		run["hp_p10"] * 100.0, run["hp_p50"] * 100.0, run["hp_p90"] * 100.0,
 		run["fights_p10"], run["fights_p90"],
 		run["divergence"],
@@ -456,6 +460,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 	var hp_left: Array = []       # end-of-run HP as a fraction of max; a death is 0.0
 	var fights_seen: Array = []   # fights survived, which separates dying on the boss from floor 1
 	var esc_ratios: Array = []    # last won fight's damage-per-turn over the first won fight's
+	var tk_ratios: Array = []     # ...and how much FASTER the last one died, which is not the same
 	var esc3_ratios: Array = []   # ...and the THIRD won fight's, which is where "early" lives
 	var deck_sigs: Array = []     # the SET of card ids each run finished with
 	# Split by outcome (D231). The claim this whole plan rests on is that a LOST run must be
@@ -510,6 +515,13 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		var dpt_first := -1.0
 		var dpt_third := -1.0
 		var dpt_last := -1.0
+		# Turns the first and last won normal fight took (D244). The ratio of the two is
+		# TURNS-TO-KILL, and it is the metric `esc` cannot be: damage per turn is bounded ABOVE by
+		# the enemy's own pool, so once a fight dies in one turn the number stops rising. Turns are
+		# bounded BELOW by 1, so a first fight of five turns against a last of one reads 5x — and
+		# "the dungeon stopped mattering" is a claim about how fast a fight ends, not about a rate.
+		var turns_first := -1
+		var turns_last := -1
 		var won_fights := 0
 		# The iso floor is mostly open ground now (D77), so a run is tens of MOVES for
 		# the same handful of fights. At 60 this truncated every iso run mid-floor and
@@ -641,9 +653,11 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						won_fights += 1
 						if dpt_first < 0.0:
 							dpt_first = f_dpt
+							turns_first = f_turns
 						if won_fights == 3:
 							dpt_third = f_dpt
 						dpt_last = f_dpt
+						turns_last = f_turns
 					if eng.lost():
 						alive = false
 						var nd: int = int(cost_n.get(enc_kind, 0)) + 1
@@ -706,6 +720,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		# Only a run that had at least two fights HAS an escalation, and a run that never
 		# landed damage has no ratio at all rather than a ratio of zero. Excluded rather than
 		# defaulted, because a default would drag the mean toward a number nobody measured.
+		# Turns-to-kill needs two won normal fights, the same as `esc`, and is reported as the
+		# SPEED-UP: first over last, so bigger is faster and the direction matches `esc`.
+		if turns_first > 0 and turns_last > 0 and won_fights >= 2:
+			tk_ratios.append(float(turns_first) / float(turns_last))
 		if dpt_first > 0.0 and dpt_last > 0.0 and won_fights >= 2:
 			var e := dpt_last / dpt_first
 			esc_ratios.append(e)
@@ -732,7 +750,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		deck_sigs.append(sig)
 	hp_left.sort()
 	fights_seen.sort()
-	for arr in [esc_ratios, esc3_ratios, esc_won, esc_lost, esc3_won, esc3_lost,
+	for arr in [esc_ratios, esc3_ratios, tk_ratios, esc_won, esc_lost, esc3_won, esc3_lost,
 			fights_won, fights_lost]:
 		(arr as Array).sort()
 	# Divergence over CONSECUTIVE pairs, not all of them: every pair is 80,000 comparisons at
@@ -766,6 +784,8 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		# flat for six fights and then triples on the boss had six ordinary fights.
 		"esc3": _median(esc3_ratios),
 		"esc3_n": esc3_ratios.size(),
+		"tk": _median(tk_ratios),
+		"tk_n": tk_ratios.size(),
 		"esc_won": _median(esc_won),
 		"esc_lost": _median(esc_lost),
 		"esc3_won": _median(esc3_won),

@@ -232,6 +232,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D241** | [The remaining work, in the order the measurements argue for](#d241--the-remaining-work-in-the-order-the-measurements-argue-for) |
 | **D242** | [The target is 5x and a 60% death rate, and additive modifiers cannot reach it](#d242--the-target-is-5x-and-a-60-death-rate-and-additive-modifiers-cannot-reach-it) |
 | **D243** | [Compounding was a no-op, the content pass reached 1.62x, and 5x is not on this axis](#d243--compounding-was-a-no-op-the-content-pass-reached-162x-and-5x-is-not-on-this-axis) |
+| **D244** | [The ladder moves to a 60% death rate, and turns-to-kill does not rescue the 5x](#d244--the-ladder-moves-to-a-60-death-rate-and-turns-to-kill-does-not-rescue-the-5x) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16407,3 +16408,90 @@ Reaching 5x needs one of three things, and they are different projects:
   Dungeon Run is usually a fight ending in one turn where an early one took five — and **turns-to-kill
   is a metric that can actually reach 5x**, because it is bounded below by 1 rather than above by an
   enemy's HP. The feeling is expressible; damage per turn may simply be the wrong yardstick for it.
+
+---
+
+### D244 — The ladder moves to a 60% death rate, and turns-to-kill does not rescue the 5x
+
+Two jobs, asked for together: add turns-to-kill, and retune for the x1.8 enemy damage D243 measured.
+
+#### The retune landed, and through the seam that keeps the guard
+
+`ENEMY_DAMAGE_BASE_MULT` multiplies the final result of `enemy_damage()`. It sits there and **not** in
+the `dmg` column of `DIFFICULTIES`, because `tests/test_difficulty.gd` rejects raising that column —
+*a flat multiplier wearing a curve's clothes* — on the grounds that a RUNG must cost a built deck more
+than a starting one (D209). That guard is about how rungs differ from each other, and a constant
+multiplying all four equally cancels in the ratio it takes.
+
+**It went red anyway, and the reason is the one AGENTS.md wrote down in advance.** The probe took a
+single `enemy_damage` reading, and that returns `int(round(d))` — quantised in ~6% steps while
+asserting a 10% margin, so *"it flips on rounding: 0.095 fails and 0.105 passes"*. A global constant
+moved every absolute value, the rounding landed differently, and the guard reported x1.605 against a
+required x1.62: a 1% miss on a change that provably cannot flatten a slope.
+
+AGENTS.md also nominated the fix — *"raising the resolution of that probe is the honest fix and
+belongs to whoever next needs headroom here"* — so the probe now sums **72 readings** across six
+rolls, four turns and three tiers instead of taking one. The tempting alternative was to nudge the
+constant until the guard went green, which is the antipattern that file names explicitly; **the
+inverse holds too, and is easier to miss: never discard a value because a knife-edge guard happened
+to go red.**
+
+Mutation-checked, because averaging a knife-edge assertion is a good way to make it vacuous. With the
+top rung rewritten to take its difficulty from a flat `dmg` multiplier instead of the ratio term — the
+exact design the guard exists to reject — it still fires: **x1.551 against x1.548, needing x1.71.**
+
+| 18 cells, 200 trials | before | after |
+|---|---|---|
+| RUN completion | 66% | **39%** |
+| deaths by fight (p10) | 4.1 | **2.7** |
+| `esc` | 1.62x | 1.53x |
+| `real` | 49% | 51% |
+
+**39% completion is the 60% death rate**, and the deaths sit at fight 2.7 of about five — early, which
+is D242's third target and the shape the user described before naming a number. `real` did not fall.
+Completion spans 0% to 99% across cells, so D231's "neither 0 nor 100" constraint is now violated at
+both ends and per-cell tuning is the remaining ladder work.
+
+#### The arithmetic error, kept because the tell is reusable
+
+Shipping the sweep's figure directly gave **33%**, not 39%. `--ddmg` **replaces**
+`difficulty_dmg_mult()` rather than stacking with it, so the sweep measured an effective x1.8 against
+Reckoning's own x1.12 — and 1.8 in this constant multiplied the two into x2.02. The correct value is
+1.6, because 1.6 x 1.12 = 1.79.
+
+**A tuning flag that substitutes for a value cannot be read as a delta on it.** The tell was a
+completion figure seven points below a target that had just been measured exactly, which is the same
+shape as D209's warning about a clamped knob: when a number lands somewhere a sweep says it should
+not, the flag and the constant are not measuring the same thing.
+
+#### Turns-to-kill works, and says the same thing `esc` says
+
+`tk` is the first won normal fight's turn count over the last one's — how much faster the run kills by
+the end. The hope (D243) was that it could express what `esc` cannot: damage per turn is bounded
+ABOVE by the enemy's own pool, so a one-turn fight caps the number, while turns are bounded BELOW by
+1 and a five-turn-to-one-turn run reads 5x.
+
+It reads **1.40x**, against `esc` at 1.53x. **The reframe does not hide a 5x.** Both metrics agree the
+game gets about half again as strong, and that agreement is the useful part — two independent
+yardsticks on the same claim now say the same number, so 1.5x is a fact about the design rather than
+an artifact of how it is measured.
+
+**And `tk` has a granularity problem that has to be said.** Fights run two to four turns, so the ratio
+of two small integers takes very few values — the whole sweep produced exactly **1.0, 1.33, 1.5 and
+2.0**. A median over four possible values is coarse, and `tk` cannot reach 5x for a reason that has
+nothing to do with the design: it would need a first fight of five turns and a last of one, and no
+fight in this game runs five turns. **A metric bounded below by 1 is only fine-grained if its numerator
+is large**, and here it is not.
+
+So `tk` is kept as a corroborating reading and is not promoted over `esc`. It earns its place by
+agreeing.
+
+#### What this leaves
+
+The death rate is done. The escalation is not, and neither metric is the obstacle — the design
+genuinely delivers about 1.5x. Of the three routes D243 named, the reframe is now closed and two
+remain: **more relics per run** (a pacing change, the one Dungeon Run actually made) and **far larger
+magnitudes** (which threatens `real`, the only number that has held through all of this).
+
+Per-cell completion is the other open item: 0% to 99% is a wider spread than the constraint allows,
+and the ladder now needs fitting per cell rather than globally.

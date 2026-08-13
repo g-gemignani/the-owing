@@ -3146,7 +3146,40 @@ static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn:
 		scaling_ratio(dungeon, ratio * difficulty_ratio_mult()) - 1.0)
 	d *= minf(ESCALATION_MAX, 1.0 + ESCALATION_PER_TURN * float(maxi(0, turn - 1)))
 	d *= ascension_mult() * difficulty_dmg_mult()
+	d *= ENEMY_DAMAGE_BASE_MULT
 	return int(round(d))
+
+## Where the whole ladder SITS, as against how steeply each rung leans (D244).
+##
+## Relics stopped persisting (D238) and stopped being priced (D230), so the player walks in with a
+## deck and nothing else and then grows during the run. That made every dungeon easier: measured run
+## completion was 66% at `--spoils=5`, against a target of 40% — a 60% death rate, chosen so that
+## finding the broken thing feels like surviving something.
+##
+## A sweep put the figure at **x1.8**: completion 66% → 40%, and deaths moved EARLIER, from a 10th
+## percentile of 4.1 fights to 2.7. That is the shape the whole design is for — die early and cheap,
+## win late and absurd — and it moved without being aimed at (D243).
+##
+## **Here and not in the `dmg` column of `DIFFICULTIES`, and the difference is the point.**
+## `tests/test_difficulty.gd` rejects raising that column in its own words — *a flat multiplier
+## wearing a curve's clothes* — because a RUNG has to cost a built deck more than a starting one, and
+## a flat multiplier by construction costs them the same (D209). That guard is about how rungs differ
+## from each other. This constant multiplies all four equally, so their slopes are untouched and the
+## guard keeps its subject. **A measured number applied through the wrong seam bypasses a guard
+## instead of answering it.**
+##
+## It also does NOT raise `esc`. The same sweep found escalation flat to within noise from x1.0 to
+## x2.2, so this buys a death rate and nothing else; escalation is a content problem and is worked on
+## separately. Two independent targets, two levers, and knowing that cost one sweep.
+## **1.6 and not the 1.8 the sweep named, and the difference is an arithmetic error worth keeping.**
+## The sweep ran with `--ddmg=1.8`, and that flag REPLACES `difficulty_dmg_mult()` rather than
+## stacking with it — the function returns the override outright when one is set. So the sweep
+## measured an effective x1.8 against Reckoning's own x1.12, and shipping 1.8 here multiplied the
+## two into x2.02, which measured 33% completion instead of 40%. 1.6 x 1.12 = 1.79, which is what
+## the sweep actually found. **A tuning flag that SUBSTITUTES for a value cannot be read as a delta
+## on it** — and the tell was a completion figure seven points below a target that had just been
+## measured exactly.
+const ENEMY_DAMAGE_BASE_MULT := 1.6
 
 ## Enemy damage grows this much per turn elapsed (compounding pressure), up to
 ## ESCALATION_MAX. The cap matters: stronger decks face more enemy HP, so their
