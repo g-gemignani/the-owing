@@ -263,8 +263,14 @@ effects are drawn at runtime by `scripts/fx.gd`.
 
   Measured end to end: escalation went from **1.05x** (D229's corrected baseline, no cell above
   1.18x) to **1.29x mean and 1.53x at best**, with `esc@3` at 1.32x — the escalation arrives
-  early rather than at the boss (D239). The pool still holds nineteen relics that are numbers,
-  and that is the remaining content job with a measured target on it.
+  early rather than at the boss (D239).
+
+  **What is left, in order (D241): PLAY IT, then rewrite the nineteen relics that are still
+  numbers, then re-fit the ladder, then guarantee a decision on every floor.** The playtest is
+  first because every figure above came from the simulator, and six entries of instrument bugs
+  (D124, D180, D208, D233, D237, D239) are the argument against scheduling more measurement. The
+  tool cannot tell a rising escalation number from a reward that lands flat, and REVIEW.md's
+  "rewards do not land" is still open.
 
 - **Completion percentage is a constraint, not the goal (D231).** The tool has printed
   `Target: RUN completion ~40-60%` since D54 and every difficulty entry since has been an

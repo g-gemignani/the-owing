@@ -229,6 +229,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D238** | [Relics stop persisting, and the pillar never had to be weakened](#d238--relics-stop-persisting-and-the-pillar-never-had-to-be-weakened) |
 | **D239** | [The measurement was modelling a player who does not choose](#d239--the-measurement-was-modelling-a-player-who-does-not-choose) |
 | **D240** | [The floor becomes the beat, and it costs no tiles at all](#d240--the-floor-becomes-the-beat-and-it-costs-no-tiles-at-all) |
+| **D241** | [The remaining work, in the order the measurements argue for](#d241--the-remaining-work-in-the-order-the-measurements-argue-for) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16177,3 +16178,73 @@ that hold nothing — and D79's whole lesson is that this is the order to find t
 
 **A budget you have measured is a decision somebody else can make.** The version of this entry that
 spent the headroom first would have had to justify it afterwards.
+
+---
+
+### D241 — The remaining work, in the order the measurements argue for
+
+Steps 1 through 5 of D231 are built (D233 through D240). Four tasks remain, and the ordering is not
+the one the plan started with: **playing the game moved to the front.**
+
+#### 1. Play it, before anything else
+
+Every number in D229 to D240 came from `tools/sim_balance.gd`. The tool can say a run completes 60%
+of the time. It cannot say the run was worth having. That gap is the reason the fun block exists at
+all, and it is still a gap — the two tests D229 named as human-only have never been run:
+
+* Can the run be described in one sentence?
+* Was another one started voluntarily?
+
+**It goes first because it is the cheapest thing that can invalidate the rest.** Steps 2 to 4 are a
+content pass, a tuning pass and a level-generation change. Every one of them assumes the loop is
+worth repeating. If it is not, they are work spent on the wrong problem, and REVIEW.md already names
+a rival explanation the metrics cannot see: *rewards do not land*. A card reveal is still a text
+line, and victory is still a stats table. **A rising escalation number and a flat-feeling reward are
+indistinguishable from inside this tool.**
+
+#### 2. Rewrite the remaining numeric relics
+
+Nineteen of thirty-eight still only move a number. D233 measured what that costs: a rule-breakers-only
+draw reached `esc` 1.48x where the whole pool reached 1.17x, and D239's chosen-of-three draw reaches
+1.29x. **The gap between 1.29x and 1.5x is composition and nothing else.**
+
+Method is settled by D237: keep the names, match each rule to the object the name describes, and
+check for identical effects — the pool currently has zero pairs and that property is worth keeping.
+Watch `real`, which held at 50% through every change so far. `cost_reduction` and `free_first_card`
+both make cards affordable, and a turn with nothing left to decide would show up there and nowhere
+else in the suite.
+
+#### 3. Re-fit the ladder — and only after step 2
+
+Completion moved 46% → 60% with spoils (D239). That is the difficulty collapse D230 predicted when
+the same lever was pulled with numbers.
+
+**After step 2, not before.** Rewriting nineteen relics moves difficulty again, so tuning now is
+tuning twice. The lever is `DMG_POWER_K`, because D209 established that a flat multiplier cannot tell
+the middle of the game from its ends: at enemy damage x1.50 the tutorial Crypt fell 99% → 34% while
+every walkover cell sat at 100% and did not move.
+
+The target is D231's constraint and not a band: **neither ~0% nor ~100%**, because both mean the
+dungeon decided the run before it began. Nothing is tuned toward the middle.
+
+#### 4. Guarantee a decision on every floor
+
+The last half of D240. Floors holding neither an elite nor a chest offer nothing, and closing that
+needs the encounter plan to place a site — which costs tiles.
+
+**The budget is already measured**, which is the whole reason this is a decision and not a guess: 0.8
+of ratio headroom at 6.7 moves per encounter against a ceiling of 7.5, against a precedent of 0.1 for
+keys (D167) and a negative cost for chests (D84). It fits.
+
+Last because it helps the minority of floors while the three above help every run.
+
+#### Why this order and not the plan's
+
+D231 put the content and tuning work first and the playtest nowhere, because a plan written from
+inside a measurement habit schedules more measurement. **Six entries of instrument bugs are the
+argument against that**: D233's unmeasurable gate, D237's profiles hiding the culling, D239's driver
+that would not choose, and D124/D180/D208 before them. Every one of them produced a report that read
+as a verdict on the design. None of them was.
+
+The tool is much better than it was and it still cannot see the thing the whole exercise is for. So
+the next reading comes from a person.
