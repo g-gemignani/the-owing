@@ -6,6 +6,6 @@
 script = ExtResource("1")
 id = "forgiven_ledger"
 name = "Forgiven Ledger"
-description = "Every card costs 1 less."
+description = "Every card costs 2 less."
 rarity = 4
-cost_reduction = 1
+cost_reduction = 2

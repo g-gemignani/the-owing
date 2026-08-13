@@ -475,6 +475,25 @@ func _mod(field: String) -> int:
 			n += int(r.get(field))
 	return n
 
+## The product of one PERCENT field over every relic held, as a multiplier (D243).
+##
+## Percentages used to be summed and applied once: three relics at +30% gave +90%, so 1.9x at the
+## very best and 1.29x measured. Reaching 5x additively needs each relic to be worth about +80%, and
+## a run finds about five. Compounded, five relics at +38% give 5x — the same relics in the same
+## slots, applied in a different order.
+##
+## This is the multiplication the escalation lives in, so it is one function and every percent field
+## reads it. Summing survives in `_mod` for the fields where adding is what the rule MEANS —
+## `cost_reduction` is "one less" per relic and two of them are two less, not 1.21 less.
+func _mod_mult(field: String) -> float:
+	var m := 1.0
+	for r in relics:
+		if r is RelicData:
+			var pct := int(r.get(field))
+			if pct != 0:
+				m *= 1.0 + float(pct) / 100.0
+	return m
+
 ## Is any relic held setting this flag?
 func _mod_flag(field: String) -> bool:
 	for r in relics:
@@ -852,9 +871,9 @@ func card_block_bonus(card: CardData) -> int:
 ## worked out rather than the card's printed number.
 func _outgoing(base: int) -> int:
 	var d := player.outgoing_damage(base)
-	var pct := _mod("damage_pct")
-	if pct != 0 and d > 0:
-		d = maxi(1, int(round(float(d) * (1.0 + float(pct) / 100.0))))
+	var m := _mod_mult("damage_pct")
+	if m != 1.0 and d > 0:
+		d = maxi(1, int(round(float(d) * m)))
 	return d
 
 func card_damage(card: CardData) -> int:
@@ -864,9 +883,9 @@ func card_block(card: CardData) -> int:
 	if card.eff_block() <= 0 and card_block_bonus(card) <= 0:
 		return 0
 	var b := player.outgoing_block(card.eff_block() + card_block_bonus(card))
-	var pct := _mod("block_pct")
-	if pct != 0 and b > 0:
-		b = maxi(1, int(round(float(b) * (1.0 + float(pct) / 100.0))))
+	var m := _mod_mult("block_pct")
+	if m != 1.0 and b > 0:
+		b = maxi(1, int(round(float(b) * m)))
 	return b
 
 ## The face text with this fight's numbers in it.

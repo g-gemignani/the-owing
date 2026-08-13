@@ -7,5 +7,5 @@ script = ExtResource("1")
 id = "merchants_seal"
 name = "Merchant's Seal"
 description = "Debuffs you land do not wear off."
-rarity = 1
+rarity = 0
 debuffs_persist = true

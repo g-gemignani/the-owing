@@ -7,5 +7,5 @@ script = ExtResource("1")
 id = "carrion_wind"
 name = "Carrion Wind"
 description = "A debuff aimed at one enemy lands on every one."
-rarity = 1
+rarity = 0
 debuffs_spread = true

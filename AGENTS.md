@@ -97,7 +97,7 @@ Two-tier state makes this work:
 ## Content at a glance
 
 100 cards · 8 build archetypes · 35 enemy archetypes (all painted) · 12 bosses (one named per
-dungeon) · 38 relics (19 of them rule-breakers, D233/D237, no two alike) ·
+dungeon) · 38 relics (22 of them multiply throughput, D233/D237/D243, no two alike) ·
 10 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 46 errands and 16 debts over 44 counters · 3 aspects ·
@@ -264,6 +264,14 @@ effects are drawn at runtime by `scripts/fx.gd`.
   Measured end to end: escalation went from **1.05x** (D229's corrected baseline, no cell above
   1.18x) to **1.29x mean and 1.53x at best**, with `esc@3` at 1.32x — the escalation arrives
   early rather than at the boss (D239).
+
+  **The target is now 5x escalation and a 60% death rate (D242).** Measured against it (D243):
+  the content pass reached **1.62x** mean, 1.94x best, and enemy damage at **x1.8 hits 40%
+  completion exactly** with deaths moving earlier (4.1 → 2.7 fights). The two targets are
+  INDEPENDENT — enemy damage does not move `esc` at all — so a tuning pass cannot buy escalation
+  and a content pass cannot buy a death rate. 5x is not reachable on damage-per-turn with five
+  relics a run: it needs more relics per run, far larger magnitudes, or a better yardstick
+  (turns-to-kill can reach 5x; damage-per-turn is bounded by the enemy's own pool).
 
   **What is left, in order (D241): PLAY IT, then rewrite the nineteen relics that are still
   numbers, then re-fit the ladder, then guarantee a decision on every floor.** The playtest is

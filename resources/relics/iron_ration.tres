@@ -7,5 +7,5 @@ script = ExtResource("1")
 id = "iron_ration"
 name = "Iron Ration"
 description = "Every kill refunds 1 Energy."
-rarity = 2
+rarity = 1
 energy_per_kill = 1

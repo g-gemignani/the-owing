@@ -230,6 +230,8 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D239** | [The measurement was modelling a player who does not choose](#d239--the-measurement-was-modelling-a-player-who-does-not-choose) |
 | **D240** | [The floor becomes the beat, and it costs no tiles at all](#d240--the-floor-becomes-the-beat-and-it-costs-no-tiles-at-all) |
 | **D241** | [The remaining work, in the order the measurements argue for](#d241--the-remaining-work-in-the-order-the-measurements-argue-for) |
+| **D242** | [The target is 5x and a 60% death rate, and additive modifiers cannot reach it](#d242--the-target-is-5x-and-a-60-death-rate-and-additive-modifiers-cannot-reach-it) |
+| **D243** | [Compounding was a no-op, the content pass reached 1.62x, and 5x is not on this axis](#d243--compounding-was-a-no-op-the-content-pass-reached-162x-and-5x-is-not-on-this-axis) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16248,3 +16250,160 @@ as a verdict on the design. None of them was.
 
 The tool is much better than it was and it still cannot see the thing the whole exercise is for. So
 the next reading comes from a person.
+
+---
+
+### D242 — The target is 5x and a 60% death rate, and additive modifiers cannot reach it
+
+Stated directly, against D239's result: *"I cannot say I went stupid if the improvement multiplier is
+just 1.5 and the game is too easy. I believe we should end up at 5x and dying 60% of the times."*
+
+Correct on both counts, and the first one is arithmetic rather than taste.
+
+#### Why 1.29x was the ceiling of what D233 built
+
+`_mod("damage_pct")` **sums** across relics and applies the total once. Three relics at +30% produce
++90%, so 1.9x at best and 1.29x in practice because most draws are not three damage relics. To reach
+5x additively each relic must be worth about +80%, and a run finds about five.
+
+Compounding changes the arithmetic and not the content: **five relics at +38% each, multiplied, give
+5x.** Same number of relics, same slots, different application order. So the first move is to
+multiply rather than add, and the second is to raise magnitudes into a range where compounding has
+something to work on.
+
+#### The new targets
+
+| | old | new |
+|---|---|---|
+| `esc` (how much stronger a run gets) | 1.5x | **5x** |
+| RUN completion | "neither 0% nor 100%" | **~40%** — a 60% death rate |
+| `esc@3` | 1.2x | rises with `esc`, and see below |
+| `real` | must not fall from ~50% | **unchanged, and now the binding constraint** |
+
+D231 demoted completion from a target to a constraint because the goal was "the minutes are good
+whether or not you win". That demotion stands and this does not undo it: 40% is not a band to tune
+toward, it is the death rate that makes finding the broken thing feel like surviving something. The
+constraint that nothing may sit at ~0% or ~100% is unchanged and still binds per cell.
+
+#### The third target, which is a shape and not a number
+
+**Deaths must cluster EARLY.** If wins are 5x and deaths are 60%, most deaths necessarily happen
+before the power lands — you die on the second floor holding 1.5x, or you reach the bottom holding 5x
+and the dungeon stops mattering. That is the design the user described two entries before naming a
+number: *"dying in fight 7 is a wasted evening if it's no fun"*, answered by early-and-cheap deaths
+and late-and-absurd wins.
+
+Deaths clustered LATE would be the failure that both numbers hide: 40% completion and 5x escalation
+are equally satisfied by a game where every run reaches the boss and loses. `fights_p10`/`p90` and
+the won/lost split (D232) already report this, so the shape is measurable with what exists.
+
+#### Two risks, recorded before building rather than after
+
+**`real` becomes the binding constraint.** At 5x, most cards kill most things, and a turn with one
+obvious play is a power fantasy with nothing to play. It has held near 50% through every change in
+this sequence — including `cost_reduction` and `free_first_card`, which were the obvious threats to
+it. At 5x it is the number most likely to break, and it is the one whose failure looks like success
+in every other column.
+
+**Builds will not scale equally.** `damage_pct` compounds cleanly. Block, poison and thorns do not
+multiply the same way, so expect one build at 5x and another at 2x while the ladder is fitted for the
+first. Variance between runs is the product; variance between BUILDS that leaves one unable to win is
+the D175 shape — a change that reads healthy on the mean while walling one region. So this is measured
+per build and not per dungeon.
+
+#### Order
+
+The multiplication change is first because it is small and it decides whether 5x is reachable at all
+without inventing new mechanics. If compounding at current magnitudes lands near 2x, the gap is
+content; if it lands near 4x, the gap is tuning. Either answer is worth having before any relic is
+rewritten, which is D233's lesson about gates applied to a target.
+
+---
+
+### D243 — Compounding was a no-op, the content pass reached 1.62x, and 5x is not on this axis
+
+Three measurements against D242's targets, in the order D242 set.
+
+#### 1. Making the percentages compound changed nothing
+
+`damage_pct` and `block_pct` now multiply across relics instead of summing (`_mod_mult`), which is
+the arithmetic that turns five relics at +38% into 5x. Measured: **`esc` 1.28x against 1.29x
+additive.** Inside the noise band.
+
+The reason is the D124 family again, in its simplest form: **count how often it fires.** Two relics
+carried `damage_pct` and each relic is unique within a run, so two of them almost never met. The
+change is correct and it had nothing to act on. Kept, because the content pass below is what gives it
+subjects.
+
+#### 2. The content pass: 1.28x → 1.62x
+
+Nine pure-number relics rewritten into multipliers and five magnitudes raised, so the pool holds
+**22 of 38 relics that multiply throughput** with several per axis — six `damage_pct` (25/30/35/45/50/70)
+and six `block_pct`. Zero identical-effect pairs preserved.
+
+| 18 cells, 200 trials | before | after |
+|---|---|---|
+| `esc` | 1.28x | **1.62x** |
+| `esc@3` | 1.35x | **1.73x** |
+| `real` | 51% | 49% |
+
+Best cells: Mid at the Foundry **1.94x** (from 1.51x), Deep 1.90x (from 1.30x). `esc@3` above `esc`
+means the escalation lands early and then flattens, which is the right half of D231's shape.
+
+Two tests failed on relics working correctly, and both were fixed by making them **discover** their
+subject rather than name it: the pool check named `iron_heart`, which the rewrite pushed into a
+depth-gated rarity, and the untaxed-slot check named Kite Shield for its flat Block, which is now a
+percentage — and a percentage of the zero Block a combat opens with is zero. **A test that names a
+relic is a test a retune can break for reasons that have nothing to do with it** (D180's rule, applied
+to content instead of coverage).
+
+#### 3. Enemy damage moves the death rate and does NOT move the escalation
+
+The hypothesis was that harder enemies would raise `esc`, because damage per turn is bounded by how
+fast a fight can be killed and slower early fights would widen the ratio. **Measured and wrong.**
+
+| enemy damage | `esc` | completion | `real` | deaths by fight (p10) |
+|---|---|---|---|---|
+| x1.0 | 1.62x | 66% | 49% | 4.1 |
+| x1.4 | 1.61x | 53% | 50% | 3.4 |
+| **x1.8** | 1.58x | **40%** | 51% | **2.7** |
+| x2.2 | 1.60x | 29% | 52% | 2.2 |
+
+`esc` is flat to within noise across the whole sweep. The two targets are **independent**, which is
+worth knowing precisely because it was cheaper to find out than to assume: a tuning pass cannot buy
+escalation, and a content pass cannot buy a death rate.
+
+**x1.8 hits the stated target exactly — 40% completion, so a 60% death rate — and the deaths move
+EARLIER**, from 4.1 fights to 2.7. That is the third target from D242, the one that is a shape rather
+than a number, and it moved the right way without being aimed at. `real` even rose slightly.
+
+#### Why the number is not applied yet
+
+x1.8 is a **global** raise, and the obvious place for it — the `dmg` column of `DIFFICULTIES` — is
+guarded. `tests/test_difficulty.gd` rejects raising it in its own words, *a flat multiplier wearing a
+curve's clothes*, because a rung must cost a built deck more than a starting one and a flat
+multiplier by construction costs them the same (D209). That guard is about what distinguishes one
+RUNG from another, and this change is about where the whole ladder sits — so the number belongs in
+the base enemy-damage formula and not in the rung table.
+
+Recorded rather than forced. **A measured number applied through the wrong seam is how a guard gets
+bypassed instead of answered**, and the seam is a short job for whoever picks this up with the figure
+already in hand.
+
+#### And 5x is not reachable on this axis, which is worth saying plainly
+
+Five relics arrive per run, two or three of which raise damage per turn, and damage per turn has a
+hard ceiling: once a fight dies in one turn, the number is the enemy's whole pool and cannot rise
+further. 1.94x is close to what five picks can do.
+
+Reaching 5x needs one of three things, and they are different projects:
+
+* **Many more relics per run** — ten or fifteen rather than five. That is a pacing change, not a
+  content change, and it is the one Dungeon Run actually made.
+* **Far larger magnitudes** — `damage_pct` at 150 and up. Cheap to try and likely to break `real`,
+  which is the constraint D242 named as most at risk.
+* **A different metric for the same feeling.** Worth considering seriously: *"the dungeon stopped
+  mattering"* is not obviously the same claim as *"damage per turn is 5x"*. What reads as absurd in
+  Dungeon Run is usually a fight ending in one turn where an early one took five — and **turns-to-kill
+  is a metric that can actually reach 5x**, because it is bounded below by 1 rather than above by an
+  enemy's HP. The feeling is expressible; damage per turn may simply be the wrong yardstick for it.

@@ -7,5 +7,5 @@ script = ExtResource("1")
 id = "echo_in_the_stone"
 name = "Echo in the Stone"
 description = "The first attack you play each turn strikes twice."
-rarity = 2
+rarity = 1
 repeat_first_attack = true

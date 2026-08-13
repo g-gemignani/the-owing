@@ -6,6 +6,6 @@
 script = ExtResource("1")
 id = "balanced_grip"
 name = "Balanced Grip"
-description = "Your attacks deal 15% more damage."
-rarity = 0
-damage_pct = 15
+description = "Your attacks deal 30% more damage."
+rarity = 1
+damage_pct = 30

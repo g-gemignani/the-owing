@@ -6,6 +6,6 @@
 script = ExtResource("1")
 id = "cruel_edge"
 name = "Cruel Edge"
-description = "Your attacks deal 30% more damage."
-rarity = 2
-damage_pct = 30
+description = "Your attacks deal 50% more damage."
+rarity = 3
+damage_pct = 50

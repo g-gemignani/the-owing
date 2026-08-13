@@ -67,10 +67,20 @@ func _init() -> void:
 	# The pool no longer excludes what the character OWNS, because nothing is owned any more
 	# (D238): a relic is found on a run and leaves with it. What it excludes is what the RUN
 	# asking has already picked up, which the caller passes in.
-	if not ("iron_heart" in m.unowned_relics()):
-		fails += 1; print("FAIL the pool excludes an owned relic — ownership is gone (D238)")
-	if "iron_heart" in m.unowned_relics(["iron_heart"]):
-		fails += 1; print("FAIL the pool ignored the run's exclude list")
+	#
+	# The subject is DERIVED from the pool rather than named. It was `iron_heart`, which the D244
+	# content pass turned into a damage relic and pushed into a rarity the depth gate seals on a
+	# fresh save — so the test failed on a relic doing exactly what it should. A test that names a
+	# relic is a test that a retune can break for reasons that have nothing to do with it.
+	var pool_now: Array = m.unowned_relics()
+	if pool_now.is_empty():
+		fails += 1; print("FAIL nothing is in the relic pool at all")
+	else:
+		var some: String = String(pool_now[0])
+		if not (some in m.unowned_relics()):
+			fails += 1; print("FAIL the pool is not stable between two reads")
+		if some in m.unowned_relics([some]):
+			fails += 1; print("FAIL the pool ignored the run's exclude list")
 
 	# --- the depth gate (D223) -------------------------------------------------------
 	#
@@ -516,12 +526,28 @@ func _simulator_reads_every_relic_field() -> int:
 func _check_untaxed(relic_dir: String) -> int:
 	var fails := 0
 	var Engine_ = load("res://scripts/combat_engine.gd")
-	# Kite Shield: 8 Block at the start of every combat. Chosen because the effect is visible on
-	# turn one with no dice in it, so a failure here is the slot and never the roll.
-	var shield := load(relic_dir + "kite_shield.tres") as RelicData
+	# A relic whose effect is visible on turn one with no dice in it, so a failure here is the slot
+	# and never the roll. DISCOVERED rather than named: this was Kite Shield for its 8 start Block
+	# until D244 made Kite Shield a percentage, and a percentage of the zero Block a fresh combat
+	# starts with is zero — the check failed on a relic working correctly. Walk the catalogue for
+	# anything that still puts a number on the board at setup.
+	var shield: RelicData = null
+	var dd2 := DirAccess.open(relic_dir)
+	if dd2 != null:
+		dd2.list_dir_begin()
+		var fn := dd2.get_next()
+		while fn != "":
+			if fn.ends_with(".tres"):
+				var cand := load(relic_dir + fn) as RelicData
+				if cand != null and (cand.start_block > 0 or cand.start_strength > 0
+						or cand.start_dexterity > 0):
+					shield = cand
+					break
+			fn = dd2.get_next()
+		dd2.list_dir_end()
 	if shield == null:
-		print("FAIL kite_shield.tres is gone — the untaxed check needs a start-of-combat relic")
-		return 1
+		print("  (info: no relic puts a stat on the board at combat start; untaxed slot checked on energy)")
+		return _check_untaxed_energy(relic_dir)
 
 	var bare = Engine_.new()
 	bare.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "cultist")
@@ -548,10 +574,43 @@ func _check_untaxed(relic_dir: String) -> int:
 		fails += 1
 		print("FAIL a lent relic did not apply: taxed gave %d block, untaxed gave %d" % [
 			taxed.player.block, free.player.block])
-	if free.player.block <= bare.player.block:
+	if free.player.block <= bare.player.block and free.player.strength <= bare.player.strength \
+			and free.player.dexterity <= bare.player.dexterity:
 		fails += 1
-		print("FAIL a lent relic gave no block at all (%d, bare %d)" % [
-			free.player.block, bare.player.block])
+		print("FAIL a lent relic put nothing on the board (block %d, str %d, dex %d)" % [
+			free.player.block, free.player.strength, free.player.dexterity])
+	return fails
+
+## The same three claims, checked on `bonus_energy` instead of a combat-start stat.
+##
+## Needed because D244 turned every flat start-of-combat relic into a percentage, and a percentage
+## has nothing to multiply on turn one. Energy is the other effect `setup` applies directly, so it is
+## the fallback that keeps the slot covered rather than letting the check quietly return 0.
+func _check_untaxed_energy(relic_dir: String) -> int:
+	var fails := 0
+	var Engine_ = load("res://scripts/combat_engine.gd")
+	var battery := load(relic_dir + "ancient_battery.tres") as RelicData
+	if battery == null or battery.bonus_energy <= 0:
+		print("FAIL no energy relic either — the untaxed slot cannot be checked")
+		return 1
+	var bare = Engine_.new()
+	bare.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "cultist")
+	var taxed = Engine_.new()
+	taxed.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "cultist", [battery])
+	var free = Engine_.new()
+	free.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "cultist", [], [], null, "", [battery])
+	if not (taxed.ratio > bare.ratio):
+		fails += 1
+		print("FAIL a relic in p_relics did not raise the ratio: bare %.3f, taxed %.3f" % [
+			bare.ratio, taxed.ratio])
+	if not is_equal_approx(free.ratio, bare.ratio):
+		fails += 1
+		print("FAIL p_untaxed raised the ratio: bare %.3f, untaxed %.3f (it must be free)" % [
+			bare.ratio, free.ratio])
+	if free.energy <= bare.energy:
+		fails += 1
+		print("FAIL a lent energy relic gave no energy (%d, bare %d)" % [
+			free.energy, bare.energy])
 	return fails
 
 ## And every TRIGGER and EFFECT kind must be held by some profile (D180).

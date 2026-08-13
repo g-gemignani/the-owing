@@ -7,5 +7,5 @@ script = ExtResource("1")
 id = "broad_iron"
 name = "Broad Iron"
 description = "Attacks that strike one enemy strike them all."
-rarity = 3
+rarity = 2
 attacks_hit_all = true

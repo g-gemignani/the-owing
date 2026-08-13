@@ -7,5 +7,5 @@ script = ExtResource("1")
 id = "hearth_stone"
 name = "Hearth Stone"
 description = "Every kill refunds 2 Energy."
-rarity = 4
+rarity = 3
 energy_per_kill = 2

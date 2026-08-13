@@ -6,6 +6,6 @@
 script = ExtResource("1")
 id = "leather_wrap"
 name = "Leather Wrap"
-description = "Your Block is 25% stronger."
+description = "Your Block is 30% stronger."
 rarity = 0
-block_pct = 25
+block_pct = 30

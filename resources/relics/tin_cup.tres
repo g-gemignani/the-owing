@@ -7,5 +7,5 @@ script = ExtResource("1")
 id = "tin_cup"
 name = "Tin Cup"
 description = "Cards you burn out return to your pile."
-rarity = 1
+rarity = 0
 exhaust_returns = true
