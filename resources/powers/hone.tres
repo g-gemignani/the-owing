@@ -4,13 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
+id = "hone"
+name = "Hone"
+description = "Deal 2 damage. The next card you play deals 4 more."
 cost = 1
 rarity = 1
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 3
 max_level = 10
-apply_poison = 3
-type = 1
+damage = 2
+empower_next = 4
+type = 0

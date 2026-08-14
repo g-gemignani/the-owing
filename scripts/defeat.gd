@@ -73,8 +73,10 @@ func _ready() -> void:
 	# was: dying no longer takes anything out of the collection at all. A player who does not know
 	# that reads a loss as having undone the whole game.
 	UI.label(col, "Nothing was taken from your collection. You keep your %d gold, your card levels," % MetaState.gold)
-	UI.label(col, "your relics (%d), and every relic you have ever met (%d)." % [
-		MetaState.relics.size(), MetaState.relics_seen.size()])
+	# One number, not two (D247). This said "your relics (0), and every relic you have ever met
+	# (7)" — the first half counted an array D238 emptied for good, so the screen whose whole job
+	# is to say what a loss did NOT take was opening that reassurance with a zero.
+	UI.label(col, "and every relic you have ever met (%d)." % MetaState.relics_seen.size())
 	UI.spacer(col)
 	UI.exit_button(col, "Back to the world", func():
 		GameState.last_defeat = {}

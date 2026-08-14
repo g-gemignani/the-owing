@@ -31,9 +31,12 @@ func _refresh() -> void:
 			UI.button(box, "  Delete", func(): _delete(i), 36.0)
 			UI.button(box, "  Start new game here (overwrites)", func(): _confirm_new(i), 36.0)
 		else:
-			# A first save is "1 clear, 1 relic, 1 card type" far more often than it is
+			# A first save is "1 clear, 1 relic met, 1 card type" far more often than it is
 			# anything else, and this is the first line of the game (D125).
-			UI.label(box, "Slot %d — %s, %d gold, %s, %s (%s)%s" % [
+			#
+			# "met", because the number is `relics_seen` since D247 and a bare "1 relic" on a
+			# menu would promise a possession the save does not have.
+			UI.label(box, "Slot %d — %s, %d gold, %s met, %s (%s)%s" % [
 				i + 1, Wording.count(int(s.get("clears", 0)), "clear"), s.get("gold", 0),
 				Wording.count(int(s.get("relics", 0)), "relic"),
 				Wording.count(int(s.get("types", 0)), "card type"),

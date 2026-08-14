@@ -1450,6 +1450,11 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		# combat screen). Opening one straightens it and lifts it clear of its
 		# neighbours, the way you pull a card out of a real hand to read it — without
 		# that, an enlarged card in a fan is still half-covered by the next one.
+		# Put back a nudge from the last opening BEFORE the fan speaks, so the two
+		# cannot argue about where the card sits at rest.
+		if holder.has_meta("rest_pos"):
+			holder.position = holder.get_meta("rest_pos")
+			holder.remove_meta("rest_pos")
 		var fan: Dictionary = holder.get_meta("fan", {})
 		if not fan.is_empty():
 			var home: Vector2 = fan.get("pos", holder.position)
@@ -1459,6 +1464,8 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 			else:
 				holder.rotation = float(fan.get("rot", 0.0))
 				holder.position = home
+		if open:
+			_keep_in_clip(holder)
 
 	# `on_press.is_valid()` gates BOTH branches, and on the touch side that is a fix
 	# rather than tidiness (D220b). The two-tap dance below only makes sense when there is
@@ -1510,6 +1517,55 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 		b.accept_event()
 		inspect_card(b, card, live, note))
 	return b
+
+## Slide an opened card back inside whatever is clipping it, and remember where it
+## came from so closing it puts it back.
+##
+## Reported on the collection's grid view: hovering a card in the TOP ROW hides the top
+## of it. The grid lives in a `scroll()`, a ScrollContainer clips its content, and the
+## enlargement grows UP — the pivot is the bottom edge (see `card_button`), so all 45%
+## of the growth goes above the tile and the scroll cuts 67 of the card's 215px off. The
+## left column loses 23px the same way, sideways.
+##
+## A nudge and not a taller top margin, because the clipped row is not always the first
+## one: scroll a few rows down and whichever row is at the scroll's top edge is the one
+## that grows into the cut. A margin fixes the screenshot and leaves the bug.
+##
+## Safe where nothing clips — a hand in combat finds no clipping ancestor and this does
+## nothing — and safe for the cursor: the card can move down by at most the 45% it grew,
+## which is less than the distance from the pointer to its bottom edge, so the pointer
+## it was opened by is still on it and the hover does not flicker off.
+static func _keep_in_clip(holder: Control) -> void:
+	var clip: Control = null
+	var p := holder.get_parent()
+	while p != null:
+		var c := p as Control
+		if c != null and c.clip_contents:
+			clip = c
+			break
+		p = p.get_parent()
+	if clip == null:
+		return
+	# The card's SCALED corners, which `get_global_rect` does not give: it reports the
+	# unscaled size, and the whole problem here is the scale.
+	var xf := holder.get_global_transform()
+	var tl: Vector2 = xf * Vector2.ZERO
+	var br: Vector2 = xf * holder.size
+	var view := clip.get_global_rect()
+	# One number per axis: push in off the near edge, minus whatever that costs at the
+	# far one. A card wider than its own scroll therefore stops rather than oscillates.
+	var push := Vector2(
+		maxf(0.0, view.position.x - tl.x) - maxf(0.0, br.x - view.end.x),
+		maxf(0.0, view.position.y - tl.y) - maxf(0.0, br.y - view.end.y))
+	if push.is_zero_approx():
+		return
+	holder.set_meta("rest_pos", holder.position)
+	# `position` is in the parent's space and `push` is in the screen's, and the two are
+	# not the same space on a screen that scales.
+	var parent := holder.get_parent() as CanvasItem
+	if parent != null:
+		push = parent.get_global_transform().affine_inverse().basis_xform(push)
+	holder.position += push
 
 ## Hold ONE card up at a size you can actually read, over whatever screen you are
 ## on. The single answer to "what does this card do, exactly" — in a fight, in the

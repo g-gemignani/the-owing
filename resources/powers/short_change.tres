@@ -4,13 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
-cost = 1
-rarity = 1
+id = "short_change"
+name = "Short Change"
+description = "Gain 1 Block. The next card you play costs 1 less."
+cost = 2
+rarity = 4
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 2
 max_level = 10
-apply_poison = 3
+block = 1
+discount_next = 1
 type = 1

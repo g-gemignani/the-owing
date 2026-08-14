@@ -4,13 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
+id = "even_out"
+name = "Even Out"
+description = "Gain 1 Block, then deal damage equal to it."
 cost = 1
-rarity = 1
+rarity = 3
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 7
 max_level = 10
-apply_poison = 3
-type = 1
+block = 1
+damage_from_block = true
+type = 0

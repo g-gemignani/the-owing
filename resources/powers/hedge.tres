@@ -4,13 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
+id = "hedge"
+name = "Hedge"
+description = "Gain 3 Block and 2 Thorns."
 cost = 1
 rarity = 1
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 5
 max_level = 10
-apply_poison = 3
+block = 3
+gain_thorns = 2
 type = 1

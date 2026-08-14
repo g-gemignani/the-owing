@@ -273,7 +273,21 @@ static func gold_to_reach(rarity: int, level: int) -> int:
 	return total
 
 # --- deck bounds ---
-const MIN_DECK_SIZE := 8
+## How many cards a starting kit hands over (see `MetaState.STARTER_KITS`). The number
+## lives here rather than in `MetaState` because `MIN_DECK_SIZE` is derived from it and
+## `MetaState` reads its bounds back from this file — deriving the other way round is a
+## cycle. `tests/test_onboarding.gd` asserts every kit totals exactly this, so the two
+## cannot drift.
+const STARTER_KIT_SIZE := 12
+## Smallest legal run deck. DERIVED from the opening collection: the deck you are handed
+## is the smallest deck the game will accept, so no deck is ever weaker than the one the
+## game taught you with, and the collection floor (`MIN_KEEP`) can never strand you with
+## less than a full deck.
+##
+## The cost is deliberate and paid on run 1 only: with the collection at exactly the
+## floor there is one legal deck and nothing to fuse. Both open as soon as the first
+## reward lands, because rewards grow the collection mid-run (D1).
+const MIN_DECK_SIZE := STARTER_KIT_SIZE
 const MAX_DECK_SIZE := 20
 ## How many loadouts may be saved at once (D212). Not a storage bound — the save file
 ## would not notice a hundred of them, and the picker they live in is one fixed-width
@@ -526,8 +540,18 @@ static func card_energy_cost(card) -> float:
 
 # --- powers (once-per-turn abilities) ---
 const POWER_DIR := "res://resources/powers/"
+## Thirty powers (D246). Ten until the power became a per-run OFFER of three (D245) — and an offer
+## of three from ten shows the same faces every run, which is the arithmetic that made the count the
+## content half of that change.
+##
+## Ordered as authored rather than alphabetically: the first ten are the original set, so a diff
+## against a pre-D246 save file reads as an append and not a reshuffle.
 const POWERS := ["bulwark", "foresight", "scythe", "blight", "expose", "bramble",
-	"kindle", "overwhelm", "siphon", "push_on"]
+	"kindle", "overwhelm", "siphon", "push_on",
+	"grave_salt", "knit", "full_hands", "nothing_left", "running_total",
+	"what_you_owe", "rot_reader", "turn_it_back", "hone", "short_change",
+	"ash_count", "sweep_wide", "twice_over", "sure_footing", "hedge",
+	"empty_the_purse", "look_twice", "hold_fast", "even_out", "settle_up"]
 
 
 # --- resource caches ---------------------------------------------------------
@@ -1512,9 +1536,18 @@ static func pocket_guardable(prize: String) -> bool:
 ## when empty" flag, which is state to save and get wrong). It changes when you clear the
 ## place, so the second visit is a different contract. And there is nothing to persist, so
 ## `debt_offers` and `offer_debts()` are deleted rather than migrated.
+##
+## **A place you have never beaten offers nothing (D248).** A debt is a wager on a number — take N
+## damage out of it, put N of them down, cover N tiles of it — and that number is only a bet
+## if you know what the place does. On a first visit it is a bet on a stranger, and the one
+## thing the player can weigh is the fee, which makes it a coin toss with a price tag rather
+## than the decision D205 built it to be. It is also the same rule the aspect already follows
+## (D187): the first run through a door is the plain one, and what the place starts asking of
+## you afterwards is the reward for having beaten it. So the offer opens on the first clear,
+## and `times_cleared` steps it from 1 rather than 0.
 static func debt_for(dungeon_id: String, times_cleared: int) -> String:
 	var rows := DEBT_LIST
-	if rows.is_empty():
+	if rows.is_empty() or times_cleared <= 0:
 		return ""
 	# Hashed off the id so two dungeons at the same clear count do not offer the same thing,
 	# and stepped by the clear count so one dungeon does not offer the same thing for ever.

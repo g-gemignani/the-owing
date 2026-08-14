@@ -4,13 +4,13 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
-cost = 1
-rarity = 1
+id = "look_twice"
+name = "Look Twice"
+description = "Draw 2."
+cost = 2
+rarity = 4
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 4
 max_level = 10
-apply_poison = 3
+draw = 2
 type = 1

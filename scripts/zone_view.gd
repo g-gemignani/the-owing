@@ -76,8 +76,10 @@ func _refresh() -> void:
 	if zone == null:
 		return
 	if purse != null:
-		purse.text = "Gold %d    Relics %d    Cleared %d/%d" % [
-			MetaState.gold, MetaState.relics.size(),
+		# "Met", off `relics_seen` (D247). A purse line reading "Relics 0" beside a real gold
+		# figure reads as a bug in the save, which is the worst thing a status bar can do.
+		purse.text = "Gold %d    Relics met %d    Cleared %d/%d" % [
+			MetaState.gold, MetaState.relics_seen.size(),
 			MetaState.clear_count(), Balance.DUNGEONS.size()]
 	for c in list.get_children():
 		c.queue_free()
@@ -185,8 +187,11 @@ func _back_door(box: VBoxContainer, d: DungeonData) -> void:
 ## more thing to weigh about THIS place before pressing it — rather than a contract taken a
 ## screen earlier about a dungeon that screen could not show.
 ##
-## Four states, and each says the thing a player actually needs at that moment:
+## Five states, and each says the thing a player actually needs at that moment:
 ##
+##   never beaten   — (D248) this place has nothing to offer yet, and the line says so and says what
+##                    opens it. Same reason the sealed rows print the remainder (D178): a door
+##                    that is simply absent reads as a door that does not exist.
 ##   owed here      — you are already carrying this one. Say so, and do not offer it again.
 ##   owed elsewhere — you are carrying somebody else's. Say WHERE, because the reason this
 ##                    door is not offering is standing in another region and is otherwise
@@ -195,7 +200,19 @@ func _back_door(box: VBoxContainer, d: DungeonData) -> void:
 ##                    greyed out is a rule the player has to reverse-engineer (D178's lesson
 ##                    about the sealed rows: an alternative you cannot see does not exist).
 ##   on offer       — the ask, the fee, and what comes back, in that order.
+##
+## The never-beaten line comes FIRST, before the one-at-a-time line, because it is the more
+## permanent fact about this row: telling a player they already owe somebody else implies this
+## door would otherwise be open, and on a place they have never cleared that is not true.
 func _debt_offer(box: VBoxContainer, d: DungeonData) -> void:
+	# Asked of `debt_on`, not of `has_cleared`, so the rule lives in one place. `Balance.debt_for`
+	# is the thing that decides a place has no offer yet, and a second copy of "unless cleared"
+	# here is D34 — two places holding one rule, drifting apart the first time it moves.
+	var kind := MetaState.debt_on(d.id)
+	if kind == "":
+		var shut := UI.label(box, "    It has nothing to ask of you yet. Clear it once and it will let you go in owing.")
+		shut.add_theme_color_override("font_color", Color(0.70, 0.70, 0.78))
+		return
 	var held: Dictionary = MetaState.debt_taken
 	if not held.is_empty():
 		if String(held.get("dungeon", "")) == d.id:
@@ -207,9 +224,6 @@ func _debt_offer(box: VBoxContainer, d: DungeonData) -> void:
 			var away := UI.label(box, "    You already owe %s. One at a time." % (
 				other.name if other != null else String(held.get("dungeon", ""))))
 			away.add_theme_color_override("font_color", Color(0.70, 0.70, 0.78))
-		return
-	var kind := MetaState.debt_on(d.id)
-	if kind == "":
 		return
 	var fee: int = Balance.debt_stake(kind, d.id)
 	var pays: int = Balance.debt_gold(kind, d.id)

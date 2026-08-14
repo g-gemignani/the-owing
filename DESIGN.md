@@ -234,6 +234,11 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D243** | [Compounding was a no-op, the content pass reached 1.62x, and 5x is not on this axis](#d243--compounding-was-a-no-op-the-content-pass-reached-162x-and-5x-is-not-on-this-axis) |
 | **D244** | [The ladder moves to a 60% death rate, and turns-to-kill does not rescue the 5x](#d244--the-ladder-moves-to-a-60-death-rate-and-turns-to-kill-does-not-rescue-the-5x) |
 | **D245** | [The power is dealt at the start of a run, and that buys variance rather than escalation](#d245--the-power-is-dealt-at-the-start-of-a-run-and-that-buys-variance-rather-than-escalation) |
+| **D246** | [An opened card is whole, and the fix is a nudge rather than a margin](#d246--an-opened-card-is-whole-and-the-fix-is-a-nudge-rather-than-a-margin) |
+| **D246** | [Thirty powers, and a derived guard that had gone blind](#d246--thirty-powers-and-a-derived-guard-that-had-gone-blind) |
+| **D247** | [Five screens counted an array D238 emptied, and every one of them said 0](#d247--five-screens-counted-an-array-d238-emptied-and-every-one-of-them-said-0) |
+| **D248** | [Going in owing opens on the first clear, because a wager on a stranger is a coin toss](#d248--going-in-owing-opens-on-the-first-clear-because-a-wager-on-a-stranger-is-a-coin-toss) |
+| **D249** | [The smallest legal deck is the deck you are handed](#d249--the-smallest-legal-deck-is-the-deck-you-are-handed) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -756,7 +761,7 @@ the narrowed sense above.*
 
 - **D3 — Death semantics.** Death wipes the run and applies a penalty scaled by the dungeon tier died in: lose a **fraction of gold** (`clamp(0.25 + 0.1·(tier−1), 0.25, 0.8)`) and **`tier` random card copies** from the collection. Safety floors: collection never drops below `MIN_KEEP` (5) copies, and the last attack card is never stripped. Gold is earned per combat win (tier/dungeon-scaled: elite ×2, boss ×4). This makes runs risky without being unrecoverable.
 
-- **D4 — Deck construction.** Per-dungeon decks. At each dungeon entry a deck-builder screen assembles a run deck from owned cards (up to `count` copies of each, at their fused level), with named loadouts saved persistently in `MetaState.decks` and reused across dungeons. Minimum deck size `MIN_DECK_SIZE` (8). Rewards still permanently grow the collection mid-run; each dungeon you re-pick from the collection. Boss clear and death both return to the builder.
+- **D4 — Deck construction.** Per-dungeon decks. At each dungeon entry a deck-builder screen assembles a run deck from owned cards (up to `count` copies of each, at their fused level), with named loadouts saved persistently in `MetaState.decks` and reused across dungeons. Minimum deck size `MIN_DECK_SIZE`, derived from the opening collection (D249). Rewards still permanently grow the collection mid-run; each dungeon you re-pick from the collection. Boss clear and death both return to the builder.
 
 - **D5 — Power curve & scaling.** Enemies scale against **deck power per energy** (`Balance.power_ratio`), not deck size or raw card totals, because energy is the binding constraint on player throughput. Consequences, all deliberate: a bigger deck of the same cards is more *consistent* but not stronger; an expensive card only helps if it beats the cost-efficiency curve; fusing raises the ratio and enemies keep pace. `HP_POWER_K` keeps fight *length* roughly constant as decks improve, and `DMG_POWER_K` cannot lag too far behind it or progressed decks become invulnerable. **The two values are not restated here** — they have moved four times since this was written (most recently in D109's level-curve rework, which shifted the whole difficulty axis) and a number copied into prose is a number that goes stale silently. Read them from `scripts/balance.gd`, where each carries the measurement that set it; `HP_POWER_K_HIGH` was added later still, because power above the floor needed a second slope or more power made the game *easier* at the top. All tuning lives in `balance.gd`; rules live in `scripts/combat_engine.gd`; both are exercised by the simulator so the game and the tuning model cannot drift.
 
@@ -16572,3 +16577,306 @@ derived by `tools/rerarify.gd` (D225) — so twenty more is a data job with a gu
 One tension that only playing will settle: gold levels a specific power, and a rolled offer may not
 include the one you paid for. That is either good tension or an annoyance, and no measurement here can
 tell the difference.
+
+---
+
+### D246 — An opened card is whole, and the fix is a nudge rather than a margin
+
+Reported: hovering a card in the **first row** of the collection's grid view hides the top of the card.
+
+#### What was measured
+
+A probe built the screen, moved a real pointer onto the top-left card, and read the card's scaled
+corners:
+
+| | before | after |
+|---|---|---|
+| cut off the top | **66.6px** | 0px |
+| cut off the left | **23.4px** | 0px |
+
+The card is 104x148 and grows 1.45x on hover, so it is 151x215 while it is read. That is 67px of growth
+and the card only has the 148px the grid gave it.
+
+#### Why it happened
+
+Two decisions met. `UI.card_button` puts the scale pivot on the card's **bottom edge**, because a hand
+sits along the bottom of the screen and a card that grew from its centre would push its own text off
+the frame. The grid sits in a `UI.scroll`, and a `ScrollContainer` **clips** its content. So all of the
+growth goes up, and the scroll cuts off the part that goes past its top edge. The left column loses
+23px sideways for the same reason.
+
+#### The fix, and the two shapes that were rejected
+
+`UI._keep_in_clip` finds the nearest clipping ancestor, compares the card's **scaled** corners against
+it, and slides the card back inside. The rest position is kept in a `rest_pos` meta and put back when
+the card closes.
+
+* **A top margin on the grid was rejected.** The clipped row is not always the first row. Scroll two
+  rows down and whichever row is at the top edge grows into the cut. A margin corrects the screenshot
+  and leaves the bug.
+* **Moving the pivot to the top for the first row was rejected** for the same reason, plus it makes one
+  row read differently from every other row.
+
+The nudge is safe for the pointer. A card can move down by at most the 45% it grew, which is less than
+the distance from the pointer to the bottom edge of the card. The pointer that opened the card is still
+on it, so the hover does not flicker off. It is safe where nothing clips: a hand in combat finds no
+clipping ancestor and the function returns.
+
+`get_global_rect` cannot see this bug. It reports the card's **unscaled** size, so it says the card is
+inside the scroll while the player looks at a card with no top. The guard in `tests/card_grid_test.gd`
+therefore measures the corners of the global transform. With the fix removed it reports both numbers in
+the table above.
+
+### D247 — Five screens counted an array D238 emptied, and every one of them said 0
+
+Reported: *"the relics count now always defaults to 0 instead of showing how many you have used /
+discovered"*.
+
+Not a regression in the count. **`MetaState.relics` is the collection of relics the character OWNS,
+and D238 stopped anything from ever writing to it.** A relic is found on a run and leaves with the run,
+so on any save started after that change the array is empty for good — and `.size()` on an empty array
+is a valid expression returning a plausible number, which is why five call sites went on printing it
+and every one of them looked like working code.
+
+| where | printed | reads now |
+|---|---|---|
+| overworld nav button | `Relics (0/30)` | `relics_seen` |
+| victory screen | `Relics found: 0 / 30` | `relics_seen`, and the word is now **met** |
+| region purse | `Relics 0` | `relics_seen` |
+| defeat screen | `your relics (0), and every relic you have ever met (7)` | one number, the second one |
+| load menu, per slot | `1 clear, 0 relics, 8 card types` | `relics_seen`, worded *relics met* |
+| boss haul line | `Secured 4 cards, 120 gold, 0 relic(s) and 1 pack(s).` | the phrase is gone |
+
+`relics_seen` (D235) is the right number and was already correct everywhere it was used — the relics
+screen, the chest and elite offers' *"you have met this one before"*. **The fix is not new state; it is
+five screens being pointed at the state the sixth was already reading.**
+
+#### The wording had to move with the number
+
+"Relics 3" and "3 relics" describe a possession, and there is no longer one. Every line that survives
+now says **met**, which is what `relics_seen` actually records: *this character has seen this relic*,
+permanent, granted no power (deliberately — that is what let D235 pay it out on a death without
+reopening any of D226's arguments). The defeat screen's sentence collapsed from two counts to one,
+which also fixes the worse half of that bug: the screen whose entire job is to say what a loss did NOT
+take was opening its reassurance with a zero.
+
+Victory's ascension offer was making the same empty promise in prose — *"you keep your collection,
+relics and ropes"* — and now promises what ascension actually keeps.
+
+#### Two dead things found behind the counts
+
+* **`sealed_relics()` filtered on `has_relic`.** A no-op after D238 and the wrong question before it:
+  sealed asks what the save is too shallow to be OFFERED, and holding one has never changed that.
+  Depth is the only filter now, asserted as a partition — sealed plus rollable equals the catalogue.
+* **`commit_escrow`/`forfeit_escrow` returned `"relics": 0`,** kept alive by a comment saying the haul
+  line needed the key. The haul line was the thing printing "0 relic(s)". Both are gone. A zero kept
+  for a reader is a zero the next reader will print.
+* **`tools/playthrough.gd` still called `m.grant_relic(...)`,** deleted in D238. A dev tool nobody had
+  run since, one call away from a crash.
+
+#### Why a test, and why this one
+
+D238's own entry says a design claim written as an assertion gets checked once per suite run — and then
+this claim was left unasserted for eight decisions. **No behavioural test can catch it.** The screens
+render, the number is an integer, the layout is right; the bug is only visible to somebody who knows
+what the integer is supposed to mean.
+
+So `tests/test_relic.gd` greps `scripts/` and fails on the literal `MetaState.relics.size()`. Verified
+against HEAD before the fix: it fires on all four screen files. The ban is on COUNTING the array —
+`relics` stays in the save file and is still migrated, because a pre-D238 save's owned relics are
+folded into the log on load and must not be dropped.
+
+That migration is also why `slot_summary` unions the two keys instead of reading `relics_seen` alone:
+it is a raw file read on the load menu, `_load_meta` has not run, so an old save on disk still has its
+relics only in the old key.
+### D248 — Going in owing opens on the first clear, because a wager on a stranger is a coin toss
+
+Reported: the owing door should only be on a dungeon that has been cleared.
+
+#### What a debt asks for
+
+Every row in `Balance.DEBT_LIST` is a **number about a place** — take 340 damage out of it, put 11 of
+them down, cover 96 tiles of it, land 47 damage inside a single turn. `debt_threshold` sizes that
+number off the dungeon's static facts (floors, fights, HP, damage), so the button can quote it before
+the deck is chosen (D205).
+
+On a place you have never been, none of those numbers mean anything. The player cannot tell whether 11
+kills is most of the run or the first floor of it, whether the roster blocks or bleeds, or whether the
+tiles are laid out to be covered. The only fact they can weigh is the fee. So the offer was a coin toss
+with a price tag, and D205 built it to be the opposite of that: a thing you decide about **this** place,
+on the row that already names its difficulty, its aspect and its boss.
+
+#### The rule
+
+`Balance.debt_for` returns `""` when `times_cleared <= 0`. One line, in the one function the offer is
+derived from — the same shape as `aspect_for` (D187), and for the same reason: the first run through a
+door is the plain one, and what the place starts asking of you afterwards is the reward for having
+beaten it. Going in owing now sits beside the aspect as a thing a **second** visit has and a first
+visit does not.
+
+It costs nothing downstream. `debt_on` returns `""`, `can_take_debt` already reads `""` as no, and the
+deck builder's OWING banner already checks for it. The stepping runs from a clear count of 1 rather
+than 0, so no row became unreachable — `test_meta.gd` sweeps clear counts 1 to 24 across all twelve
+dungeons and still finds every row in the catalogue.
+
+#### The screen says why, rather than showing nothing
+
+`zone_view._debt_offer` had four states and now has five. The new one prints *"It has nothing to ask of
+you yet. Clear it once and it will let you go in owing."*
+
+Dropping the row silently was the obvious build and it is wrong for D178's reason: an alternative you
+cannot see does not exist. A player who has read about owing on one row and finds no mention of it on
+another learns that the screen is inconsistent, not that the door is shut. The line is also placed
+**above** the one-at-a-time line, because "you already owe somebody else" implies this door would
+otherwise be open, and on a place never cleared that is a lie.
+
+The screen asks `debt_on`, never `has_cleared`. A second copy of "unless cleared" on the UI side is D34
+— two places holding one rule — and it would drift the first time the rule moves.
+
+#### What it does to the early game
+
+A first-time player now meets a dungeon row with a difficulty, an aspect and a boss on it, and no
+contract. The owing door arrives with the aspect on the visit after their first clear, which is the
+same beat the game already uses to say *this place knows you now*.
+
+---
+
+### D249 — The smallest legal deck is the deck you are handed
+
+`MIN_DECK_SIZE` was 8 and the starting kit was 12. The gap was deliberate — it gave run 1 four
+cards of slack to build with, and `tests/test_onboarding.gd` asserted the slack existed. The two
+numbers were nonetheless independent, and nothing tied 8 to anything: it was the smallest deck
+somebody once thought playable.
+
+The floor is now derived. `Balance.STARTER_KIT_SIZE` (12) is the number every kit hands over, and
+`MIN_DECK_SIZE` is that number. `MAX_DECK_SIZE` is unchanged at 20.
+
+What the derivation buys:
+
+- **No deck is weaker than the one the game taught you with.** The old floor let a player field 8
+  cards after being handed 12 — a legal deck strictly worse than the tutorial deck, reachable by
+  accident and never a good idea.
+- **`MIN_KEEP` stops being able to strand you with a partial deck.** It is derived from
+  `MIN_DECK_SIZE` (see "Invariant: no unrecoverable states"), so the collection floor is now a
+  *full* deck rather than 8 cards and four holes.
+- **The starter kit stops being two numbers.** A kit is either exactly `STARTER_KIT_SIZE` or the
+  constants have drifted, which is what the onboarding test now asserts — equality, not slack.
+
+**The price, paid on run 1 only.** With the collection sitting exactly on the floor there is one
+legal deck and nothing to fuse: fusion spends copies, and there are none to spare. Both open as
+soon as the first reward lands, because rewards grow the collection mid-run (D1) — three earned
+cards is the whole cost, well inside the first dungeon. Run 1 is now played with everything you
+own, and the choice the starting screen offers is the archetype rather than the deck list. That is
+the same trade the screen was already making; it now makes it honestly.
+
+Four places had encoded 8 by hand and were repaired rather than renumbered:
+
+- `MetaState._apply` repaired an empty collection to a literal 4 hack + 4 cover — the legal minimum
+  when it was written, and an unplayable save the moment the floor moved. It now rebuilds the
+  save's own starting kit, so the repair is exactly one legal deck whatever the number is.
+- `tests/test_shaping.gd` asserted the smallest deck cycles in under two turns. It now cycles in
+  2.4 (12 cards at hand size 5, up from 1.6), and the bound moved to 2.5 — a fight is long enough.
+- `tests/test_onboarding.gd` asserted the kit was *bigger* than the floor. It now asserts equality,
+  and its "one dungeon's takings must unlock fusion" check adds earned cards as well as gold,
+  because at the floor gold alone cannot buy a fuse.
+- `tools/playthrough.gd` reported the starter deck being exactly the minimum as a finding. It is
+  now the design; the tool reports the *drift* instead.
+
+**One latent bug fell out of it.** The deck panel's header is a Label, so it sized its minimum to
+the whole unwrapped string, and `Deck  9 / 20   need 3 more` measures 223px — pushing the bay to
+239 in the table view, where the row beside it has 180 (`PANEL_W_TABLE`) and pays the overflow in
+clipped card names. Raising the floor made a 9-card deck illegal and the hint fire, which is the
+only reason a test caught it; a player at 9 cards would have hit it under the old floor too. The
+header wraps now, so it can never set the panel's width again.
+
+---
+
+---
+
+### D246 — Thirty powers, and a derived guard that had gone blind
+
+The content half of D245. Ten powers meant an offer of three showed the same faces every run; thirty
+means a tenth of the pool. Twenty authored, so the set is **30**.
+
+#### Varied in kind, not in magnitude
+
+The relic pass learned this the hard way (D230, D233): a pool of the same effect at different numbers
+cannot escalate and cannot surprise. So the twenty are twenty different mechanics, and most of them
+use the conditional fields D66 and D204 built for cards — **Running Total** pays per card played this
+turn, **What You Owe** per debuff on the target, **Ash Count** per card burnt out, **Nothing Left**
+rewards an empty hand, **Full Hands** the opposite, **Even Out** deals your Block, **Empty the Purse**
+spends everything. `PowerData extends CardData`, so all of it works through the same `_resolve()` path
+as a card, with nothing new in the engine.
+
+**Every power carries at least one field that grows with level**, because `tests/test_power.gd` fails
+`level_capped() < 2` and the requirement is right — gold levels powers, and a power gold cannot
+improve is a shop entry that sells nothing. The first draft gave ten of them nothing but a conditional
+multiplier, and conditionals have no `eff_*` getter, so ten arrived un-levellable and the suite said
+so in ten separate lines. Each now has a small base number for the level track to walk.
+
+#### Six were too strong, and the fix was measured rather than guessed
+
+`test_power.gd` fails any power that raises a starter deck's ratio past **1.6x** — no single power may
+dwarf the deck it supplements. Six did: Hold Fast at **3.49x**, Short Change 2.14x, Empty the Purse
+1.91x, Turn It Back 1.85x, Look Twice 1.68x, Even Out 1.61x.
+
+`_repro/power_ratio.gd` printed the whole column instead, which put the failure line at about *"worth
+9.3 at cost 1"* and made the two levers legible: magnitude, and cost — `power_ratio_bonus` subtracts
+`eff_cost * deck_per_energy` as displaced throughput. Hold Fast lost `retain_block` outright: at 31.3
+it priced four times the strongest shipped power, and it is a relic effect (Setting Mortar has it)
+rather than something to fire every turn.
+
+**Then Hold Fast failed the OTHER direction** — at cost 2 its remaining value no longer exceeded what
+the cost displaced, so `power_ratio_bonus` returned 0 and the suite called it *free strength*. A power
+can be too weak for its price and thereby unpriced, which is a narrower window than it looks.
+
+#### The real find: `_rule_changer` had stopped recognising its subjects
+
+`rerarify`'s legendary guard passes over a card that is "only numbers" and promotes the next
+rule-changer, because **a legendary has to change something, not just be big.** It asked
+`_rule_changer`, which was a hand-written list of eight fields — `retain_block, aoe, energy_gain,
+gain_strength, gain_dexterity, gain_thorns, heal, apply_poison` — and knew nothing of the conditional
+mechanics added since.
+
+So a power whose whole identity is `discount_next` read as *only numbers*, was skipped for the top
+band, and the result was:
+
+```
+LEGENDARY n= 2   power  6.6 .. 9.0
+EPIC      n= 4   power  9.0 .. 10.7
+```
+
+**A top band weaker than the band beneath it, and nothing failed** — because `test_rarity.gd` walked
+`CATALOG` and nothing else. Relics and powers have worn a derived rarity since D224 with no check on
+it at all.
+
+This is **D180 in a third costume**: *a check kept by a list of what somebody remembered is a check
+that guards nowhere new.* D89 was the art licence list, D180 was the relic-field list, this is the
+rule-changer list.
+
+#### Three fixes, and the third one is the one that lasts
+
+1. **`changes_a_rule()` is derived**, from the property list, with a short list of exceptions
+   (`damage`, `block`, `draw`) instead of a long list of mechanics. **A field added later is a
+   rule-changer by default**, which is the safe direction: a new mechanic is far more likely to be a
+   rule than a number, and guessing wrong only costs the top band a card it could have skipped.
+2. **It has ONE owner.** Fixing the tool's copy immediately made it disagree with the suite's copy
+   about Drilled — `grows = 3` is "permanently +3 this combat", which the tool then called a rule and
+   the suite still called a number. That is the D34 shape arriving on schedule, so the definition
+   moved to `CardData`, beside the fields it reads, and both callers ask it.
+3. **`test_rarity.gd` now checks all three catalogues**, iterating a dictionary of them so a fourth
+   kind of rarity-bearing content joins by existing.
+
+That third check needed one concession, and it is a rule rather than a fudge. The top boundary is
+**allowed** to overlap, because promoting a rule-changer over a plain number is the whole point — the
+cards do it today at 22.1 against 23.0. What must not happen is a GROSS inversion, which is what the
+bug looked like: 6.6 against 10.7, or 62% of it. `TOP_BAND_FLOOR` = 0.85 separates the two with room
+on both sides, and every band below the top must not overlap at all.
+
+Bands now ascend everywhere: powers read LEGENDARY 10.0–10.7 over EPIC 8.7–9.0, and a second
+`rerarify` run changes nothing.
+
+#### Confirmed reachable
+
+Over 200 offers on a fully-cleared save, **all 30 powers appear and all 30 come up first**, so the
+depth gate paces the pool without stranding anything — the same property D223 asserts for relics.

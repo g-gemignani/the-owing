@@ -4,13 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
+id = "what_you_owe"
+name = "What You Owe"
+description = "Deal 2 damage, and 3 more for every debuff on the target."
 cost = 1
-rarity = 1
+rarity = 2
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 7
 max_level = 10
-apply_poison = 3
-type = 1
+damage = 2
+damage_per_debuff = 3
+type = 0

@@ -23,16 +23,20 @@ A **deckbuilding roguelike with a persistent RPG meta layer**, built in Godot 4.
 
 The loop:
 
-1. **Overworld** — pick a zone, then a dungeon. Each door offers its own debt, on the row that
-   already names its difficulty, its boss and what it is wearing this time: pay gold at the
-   door and it wants something specific of the run — the place cleared, or the bottom reached,
-   or four hundred damage taken out of it, or three fights won without losing a point of health.
-   Settle it and the stake comes back with gold and a pack whose tier is the size of what was
-   asked; fail and the stake is gone (D191, D205). A region opens as a region, so there are
+1. **Overworld** — pick a zone, then a dungeon. Each door you have already cleared offers its own
+   debt, on the row that already names its difficulty, its boss and what it is wearing this time:
+   pay gold at the door and it wants something specific of the run — the place cleared, or the
+   bottom reached, or four hundred damage taken out of it, or three fights won without losing a
+   point of health. Settle it and the stake comes back with gold and a pack whose tier is the size
+   of what was asked; fail and the stake is gone (D191, D205). A first visit is offered nothing,
+   because every debt is a wager on a number the place has not shown you yet (D248). A region opens as a region, so there are
    usually three doors rather than one, and a gate takes depth in places that beat you as
    well as clears (D178). Difficulty is a *choice*, shown up front, with the boss named
    before you commit.
-2. **Deck builder** — assemble a run deck from your owned cards and equip one Power. Up to
+2. **Deck builder** — assemble a run deck from your owned cards and equip one Power. Between
+   `MIN_DECK_SIZE` and `MAX_DECK_SIZE` (20) cards, and the floor is *derived* from the opening
+   collection rather than picked (D249): the deck you are handed is the smallest one the game
+   accepts, so no deck is ever weaker than the one it taught you with. Up to
    six loadouts can be saved, and they are *kept* rather than piled up: a saved deck can be
    renamed and deleted from the same bar it loads from (D212). The collection is readable
    two ways off one toggle (D213): a **table** of rows, which is the surface that can put a
@@ -82,11 +86,23 @@ The loop:
    clears past the twelfth dungeon (D223), so finishing the set is something you do
    after the game rather than halfway through it. **Rarity is a claim about strength,
    and it is derived rather than authored** (D224): every card's and every relic's band
-   is written from `power_value()` by `tools/rerarify.gd` — cards, relics and the ten
+   is written from `power_value()` by `tools/rerarify.gd` — cards, relics and the thirty
    Powers alike (D225) — the bands may not overlap, and the rarity suite fails a
    catalogue where a common outranks an uncommon. It is not a colour: it sets the level
    cap, the growth rate, the drop weight, the shop price, how many clears a relic waits
    for, and what a Power costs to buy and to level.
+
+   **And the suite only ever checked the CARDS, for two hundred entries (D246).** Relics and
+   powers wore a derived rarity with nothing asserting it, and it went wrong silently: the
+   legendary guard asks whether a card *changes a rule*, that question was a hand-written list of
+   eight fields, and it knew nothing of the conditional mechanics D66/D204 added — so a power
+   whose whole identity is `discount_next` read as "only numbers" and was skipped for the top
+   band. **LEGENDARY came out weaker than EPIC and nothing failed.** `changes_a_rule()` is now
+   derived from the property list, lives on `CardData` as the ONE owner (the tool and the suite
+   each held a copy, and they disagreed about `grows` the moment one was fixed), and the suite
+   checks all three catalogues. **A field added later is a rule-changer by default** — the safe
+   direction, since a new mechanic is more likely a rule than a number. D180's rule in a third
+   costume, after D89's art list and D180's own relic-field list.
 
 Two-tier state makes this work:
 
@@ -98,7 +114,7 @@ Two-tier state makes this work:
 
 100 cards · 8 build archetypes · 35 enemy archetypes (all painted) · 12 bosses (one named per
 dungeon) · 38 relics (22 of them multiply throughput, D233/D237/D243, no two alike) ·
-10 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
+30 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 46 errands and 16 debts over 44 counters · 3 aspects ·
 24 sound effects · 5 score tracks · 46 test suites. All content is `.tres` data
@@ -261,6 +277,13 @@ effects are drawn at runtime by `scripts/fx.gd`.
   binds the deck, the equipped power and every run removal — and binds them exactly as hard as
   it did. What it no longer reaches is a relic, because a relic is no longer something you own.
 
+  **So every relic COUNT the player sees is `relics_seen` — what the character has met — and
+  never `MetaState.relics`, which nothing has written to since (D247).** That array is empty on
+  any save started after the change and `.size()` on it is a plausible-looking zero, so five
+  screens printed "Relics 0" for eight decisions and all of them read as working code.
+  `tests/test_relic.gd` greps `scripts/` for `MetaState.relics.size()` and fails on it, because
+  no behavioural test can see a wrong integer that renders correctly.
+
   Measured end to end: escalation went from **1.05x** (D229's corrected baseline, no cell above
   1.18x) to **1.29x mean and 1.53x at best**, with `esc@3` at 1.32x — the escalation arrives
   early rather than at the boss (D239).
@@ -321,8 +344,12 @@ effects are drawn at runtime by `scripts/fx.gd`.
   start of a run now — three offered, one taken (D245)** — so each run has a different centre
   instead of the best owned power every time. It buys variance and cannot buy escalation: a power
   held from the first fight raises the first and the last equally, which is the third time that
-  fact has decided something here (D233, D237, D245). Ten powers exist and thirty is the content
-  half of it; with ten, an offer of three shows the same faces constantly. Reactive enemies
+  fact has decided something here (D233, D237, D245). **Thirty powers now (D246)** — twenty authored, varied in
+  kind rather than magnitude, most of them using the conditional fields D66/D204 built for cards.
+  All thirty are reachable: 200 offers on a cleared save show every one, and every one comes up
+  first. Six were too strong for `test_power`'s 1.6x ceiling and were retuned against a measured
+  column, not guessed; Hold Fast then failed the OTHER way, too weak for its cost and therefore
+  unpriced, which is a narrower window than it looks. Reactive enemies
   and named boss signatures make each fight a puzzle rather than a solved routine
   (D38, D41). Block cannot be a complete answer at depth — piercing damage keeps
   defensive play honest (D45).
@@ -701,6 +728,13 @@ effects are drawn at runtime by `scripts/fx.gd`.
   before you commit (D187), because a change you cannot plan around is one you can only be
   surprised by, and this game names its bosses in advance for exactly that reason.
 
+- **A wager needs a number the player can read, so it waits for the first clear.** Every debt
+  quotes a figure sized off the place — take 340 damage out of it, put 11 of them down — and on
+  a dungeon you have never entered that figure means nothing, leaving the fee as the only thing
+  to weigh (D248). So `Balance.debt_for` returns `""` at a clear count of zero, and the offer
+  arrives with the aspect on the visit after your first clear. The screen prints the reason
+  rather than dropping the row, because an alternative you cannot see does not exist (D178).
+
 - **A secret must be a DEAD END, and an errand must ask for MORE.** Both rules exist for one
   reason: a skip is a difficulty change no budget assertion can see (D88). A shortcut secret
   would let a player reach the stairs past content; an errand paying for "leave the chests
@@ -884,6 +918,14 @@ These are failure modes that have actually bitten this project. Treat each as a 
   screen" is **the identifying part is on screen**: picture, name, cost, headline number,
   all in the top half by construction. Anything moved into the bottom corners is a thing
   the player in a fight cannot see.
+- **An enlarged card must fit the thing that CLIPS it, not the screen (D246).** The same
+  bottom-edge pivot that keeps a card in hand on screen sends all 45% of the hover growth
+  upward — so in the collection's grid, which lives in a `ScrollContainer`, the top row lost
+  67px off its top and the left column 23px off its side. `UI._keep_in_clip` slides an opened
+  card back inside its nearest clipping ancestor and puts it back when it closes. A top margin
+  was the wrong fix: scroll two rows down and whichever row is at the edge grows into the cut.
+  Note what cannot see this bug — `get_global_rect` reports the UNSCALED size, so a check that
+  uses it passes while the player looks at a card with no top.
 - **A guard that outlives its design is worse than no guard.** Two of `CardTextTest`'s
   assertions were the old card stated as rules — *no rules text while resting*, *every card
   inside the frame* — and both were exactly backwards after D104. Re-aim them at the new

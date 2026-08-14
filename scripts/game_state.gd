@@ -168,10 +168,11 @@ func spend_gold(n: int) -> bool:
 ## Boss cleared: everything earned this run becomes permanent.
 func commit_escrow() -> Dictionary:
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
-	# `relics` is reported as 0 rather than dropped from the dictionary: `victory.gd` and the haul
-	# line both read the key, and a missing key would read as a crash rather than as "none".
+	# No `relics` key (D247). It was kept at 0 for the haul line, which then printed "0 relic(s)"
+	# after every clear; with that phrase gone nothing reads the key, and a zero nobody needs is
+	# a zero that will be printed again by the next screen to reach for it.
 	var result := {"cards": escrow_cards.size(), "gold": escrow_gold,
-		"relics": 0, "packs": escrow_packs.size()}
+		"packs": escrow_packs.size()}
 	if meta != null:
 		for id in escrow_cards:
 			meta.add_card(id)
@@ -222,7 +223,7 @@ func forfeit_escrow(depth_frac: float = 0.0) -> Dictionary:
 	escrow_packs = []
 	return {
 		"cards": had_cards - keep_cards, "gold": had_gold - keep_gold,
-		"relics": 0, "packs": had_packs - keep_packs,
+		"packs": had_packs - keep_packs,
 		"kept_cards": keep_cards, "kept_gold": keep_gold, "kept_packs": keep_packs,
 		"salvage": salvage,
 	}

@@ -849,8 +849,11 @@ func _refresh_powers() -> void:
 		UITheme.style_button(pb)
 		var on: bool = String(pid) == chosen_power
 		var owned: bool = MetaState.powers.has(String(pid))
-		pb.text = "%s%s Lv%d%s" % ["> " if on else "", pd.name, pd.level,
-			"" if owned else "  (new)"]
+		# No "(new)" suffix on the FACE. It widened this button enough to push the deck panel past its
+		# width budget, which `CardGridTest` measures at 180px for the row — a label that costs a
+		# layout assertion belongs in the tooltip, which is where the sentence about levelling
+		# already is.
+		pb.text = "%s%s Lv%d" % ["> " if on else "", pd.name, pd.level]
 		pb.disabled = on
 		UI.hoverable(pb, "%s\n%s\nCost %s, once per turn.%s" % [
 			pd.name, pd.effect_text(), "free" if pd.eff_cost() == 0 else "%dE" % pd.eff_cost(),

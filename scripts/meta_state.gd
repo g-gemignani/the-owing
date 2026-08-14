@@ -59,10 +59,22 @@ static func slot_summary(s: int) -> Dictionary:
 	var copies := 0
 	for id in d.get("collection", {}):
 		copies += int(d["collection"][id].get("count", 0))
+	# Relics MET, not held (D247). This read `relics`, which D238 stopped writing to, so every
+	# slot on the load menu described itself as "0 relics" no matter how far it had got.
+	#
+	# It unions the two keys instead of reading `relics_seen` alone because this is a RAW file
+	# read — `_migrate` and `_load_meta`, which fold an old save's owned relics into the log,
+	# have not run and must not run here. A pre-D238 save on disk therefore still has its relics
+	# only in `relics`, and the union is the same merge those two do, done read-only.
+	var met := {}
+	for rid in d.get("relics_seen", []):
+		met[String(rid)] = true
+	for rid in d.get("relics", []):
+		met[String(rid)] = true
 	return {
 		"exists": true, "corrupt": false,
 		"gold": int(d.get("gold", 0)),
-		"relics": (d.get("relics", []) as Array).size(),
+		"relics": met.size(),
 		"clears": (d.get("cleared_dungeons", []) as Array).size(),
 		"types": (d.get("collection", {}) as Dictionary).size(),
 		"copies": copies,
@@ -704,6 +716,11 @@ func gate_credit() -> int:
 ## are gone — a stored list of offers had to be re-rolled on some trigger and not on others,
 ## and "only when it is empty" was a flag whose whole job was to stop the hub being a slot
 ## machine (D22). A pure function cannot be a slot machine.
+##
+## "" on a place you have never cleared, and that is now the common case rather than an edge:
+## going in owing is something a dungeon starts offering once you have beaten it, so a first
+## visit has no offer to show. `can_take_debt` already reads "" as no, so nothing downstream
+## needed a second gate.
 func debt_on(dungeon_id: String) -> String:
 	return Balance.debt_for(dungeon_id, times_cleared(dungeon_id))
 
@@ -861,13 +878,17 @@ func relic_locked(id: String, clears: int = -1) -> bool:
 ## How many relics exist that this save is not deep enough to be offered yet.
 ##
 ## Exists so a reward that CANNOT pay a relic can say which of the two reasons it is:
-## "you own them all" and "the rest are sealed" look identical from the player's seat —
+## "this run has them all" and "the rest are sealed" look identical from the player's seat —
 ## an elite that drops nothing — and only one of them means keep going.
+##
+## Depth is the only filter (D247). It used to also skip what the character owned, which was a
+## no-op after D238 emptied `relics` and a wrong question before it: sealed asks what the save is
+## too shallow to be OFFERED, and holding one has never changed that.
 func sealed_relics() -> int:
 	var reach := total_clears()
 	var n := 0
 	for id in RELIC_CATALOG:
-		if not has_relic(id) and relic_locked(id, reach):
+		if relic_locked(id, reach):
 			n += 1
 	return n
 
@@ -1413,7 +1434,15 @@ func _apply(parsed: Dictionary) -> void:
 		var e = parsed["collection"][id]
 		collection[id] = {"count": int(e["count"]), "level": int(e["level"])}
 	if collection.is_empty():
-		collection = {"hack": {"count": 4, "level": 1}, "cover": {"count": 4, "level": 1}}
+		# Repair to the save's own starting kit rather than a hand-written pair of cards.
+		# The old literal was 4 hack + 4 cover — the legal minimum at the time — and it
+		# silently became an unplayable save when `MIN_DECK_SIZE` moved. Reading the kit
+		# keeps the repair exactly one legal deck, whatever that number is.
+		var kid := String(parsed.get("starter_kit", "blade"))
+		if not STARTER_KITS.has(kid):
+			kid = "blade"
+		for id in STARTER_KITS[kid]["cards"]:
+			collection[id] = {"count": int(STARTER_KITS[kid]["cards"][id]), "level": 1}
 
 	decks = {}
 	for dn in parsed.get("decks", {}):

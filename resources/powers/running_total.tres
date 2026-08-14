@@ -4,13 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
+id = "running_total"
+name = "Running Total"
+description = "Deal 1 damage, and 2 more for every card played this turn."
 cost = 1
-rarity = 1
+rarity = 0
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 5
 max_level = 10
-apply_poison = 3
-type = 1
+damage = 1
+per_card_played = 2
+type = 0

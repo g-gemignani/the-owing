@@ -30,10 +30,15 @@ func _init() -> void:
 	for id in m.collection: sel[id] = m.collection[id]["count"]
 	print("starter deck size %d (min %d, max %d) valid=%s" % [
 		m.loadout_size(sel), Balance.MIN_DECK_SIZE, Balance.MAX_DECK_SIZE, m.deck_valid(sel)])
-	if m.loadout_size(sel) == Balance.MIN_DECK_SIZE:
-		notes.append("starter deck is exactly the legal minimum: the deck builder offers no real choice on run 1")
+	# The starter deck being exactly the minimum is the design, not a finding: the floor is
+	# derived from the kit. What would be a finding is the floor drifting off the kit, which
+	# leaves either an illegal opening deck or a run-1 deck the player did not fully commit.
+	if m.loadout_size(sel) != Balance.MIN_DECK_SIZE:
+		notes.append("starter deck (%d) is not the legal minimum (%d): MIN_DECK_SIZE has drifted off STARTER_KIT_SIZE" % [
+			m.loadout_size(sel), Balance.MIN_DECK_SIZE])
 	if m.fusable_levels("hack") == 0:
-		notes.append("cannot fuse anything on a fresh save (needs %d copies) — fusion is invisible until several runs in" % (Balance.MIN_KEEP + 2))
+		print("  (fusion is closed on a fresh save, as intended: the collection sits on the %d-card floor and fusion spends copies — %d earned cards open it)" % [
+			Balance.MIN_KEEP, Balance.FUSE_BASE_COPIES])
 
 	# play through dungeons in unlock order, greedily
 	var clears := 0
@@ -59,13 +64,15 @@ func _init() -> void:
 		var r := last if wins > 0 else _run(m, d)
 		if wins > 0:
 			m.mark_cleared(d.id)
-			m.grant_relic(Balance.Tier.BOSS)
+			# No `grant_relic` (D238 deleted the method, D247 the call): the boss stopped
+			# dropping a relic, so this was a call to something that no longer exists and
+			# would have crashed the tool the next time anyone ran it.
 			clears += 1
 			for c in r["gained"]: m.add_card(c)
 			m.add_gold(int(r["gold"]))
 	print()
-	print("after playing everything reachable: %d clears, %d card types, %d relics, %d gold" % [
-		m.clear_count(), m.collection.size(), m.relics.size(), m.gold])
+	print("after playing everything reachable: %d clears, %d card types, %d relics met, %d gold" % [
+		m.clear_count(), m.collection.size(), m.relics_seen.size(), m.gold])
 
 	# build progress — the stated goal
 	print()

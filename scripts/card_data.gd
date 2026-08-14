@@ -331,6 +331,44 @@ func effect_text(live_damage: int = -1, live_block: int = -1) -> String:
 	return ". ".join(parts) + "."
 
 ## Value of one point of Block relative to one point of damage.
+## Fields that are ONLY a quantity. Every other effect field on this class changes a RULE.
+##
+## Stated as the short list of exceptions rather than the long list of mechanics, and the direction is
+## the point: a field added later is a rule-changer BY DEFAULT. A new mechanic is far more likely to
+## be a rule than a number, and guessing wrong only costs the top rarity band a card it could have
+## skipped.
+const PLAIN_NUMBERS := ["damage", "block", "draw"]
+
+## Bookkeeping and identity, which are not effects at all.
+const NOT_EFFECTS := ["id", "name", "description", "cost", "type", "rarity", "level",
+	"unlock_after_clears", "max_level", "growth"]
+
+## Does this card change a RULE, rather than only move a number? (D246)
+##
+## **One owner, because there were two and they disagreed.** `tools/rerarify.gd` used this to decide
+## which card may take the top rarity band, and `tests/test_rarity.gd` used its own copy to assert
+## that every legendary changes something. Both were the same hand-written list of eight fields, and
+## both knew nothing of the conditional mechanics D66 and D204 added — so a power whose whole identity
+## is `discount_next` read as "only numbers", got passed over for the top band, and produced a
+## LEGENDARY band weaker than the EPIC band under it with nothing failing.
+##
+## Fixing one copy then made them disagree about `grows`, which is the D34 shape arriving on schedule:
+## the tool called Drilled a rule-changer and the suite called it numbers. So the definition lives
+## here, beside the fields it reads, and is DERIVED from the property list rather than listed.
+func changes_a_rule() -> bool:
+	for prop in get_property_list():
+		var pname: String = String(prop["name"])
+		if not (int(prop["usage"]) & PROPERTY_USAGE_SCRIPT_VARIABLE):
+			continue
+		if pname in NOT_EFFECTS or pname in PLAIN_NUMBERS:
+			continue
+		var v: Variant = get(pname)
+		if v is bool and bool(v):
+			return true
+		if (v is int or v is float) and float(v) != 0.0:
+			return true
+	return false
+
 const BLOCK_VALUE := 0.65
 
 ## What hitting every enemy is worth. Average living enemies is only ~1.3: groups

@@ -88,7 +88,12 @@ func _init() -> void:
 	print("  (info: %d dungeons open at start, %d shapes %s, gating %d builds)" % [
 		open, shapes.size(), str(shapes.keys()), gated_builds.size()])
 
-	# --- every starter kit must be playable AND leave deckbuilding slack ---
+	# --- every starter kit must be playable, and must BE the legal minimum ---
+	#
+	# `MIN_DECK_SIZE` is derived from `Balance.STARTER_KIT_SIZE`, so a kit that gives a
+	# different number is not "slack", it is the two constants drifting apart: a smaller
+	# kit cannot field a legal deck at all, a larger one means the floor stopped tracking
+	# the opening collection. Equality is the assertion.
 	if MetaState_kits(m).size() < 3:
 		fails += 1; print("FAIL fewer than 3 starter kits")
 	for kid in MetaState_kits(m):
@@ -99,10 +104,10 @@ func _init() -> void:
 		var total: int = k.total_copies()
 		if not k.deck_valid(sel):
 			fails += 1; print("FAIL kit %s cannot field a legal deck" % kid)
-		if total <= Balance.MIN_DECK_SIZE:
+		if total != Balance.STARTER_KIT_SIZE:
 			fails += 1
-			print("FAIL kit %s gives %d cards, the legal minimum is %d — no deckbuilding choice" % [
-				kid, total, Balance.MIN_DECK_SIZE])
+			print("FAIL kit %s gives %d cards, STARTER_KIT_SIZE says %d" % [
+				kid, total, Balance.STARTER_KIT_SIZE])
 		# Fusion costs gold as well as copies, so a fresh 0-gold save must NOT be
 		# able to fuse — power now comes after a run, not before one.
 		for id in k.collection:
@@ -110,18 +115,28 @@ func _init() -> void:
 				fails += 1
 				print("FAIL kit %s can fuse %s on a 0-gold save: power before play" % [kid, id])
 				break
-		# but one dungeon's takings must unlock it, or the mechanic is unreachable
+		# but one dungeon's takings must unlock it, or the mechanic is unreachable.
+		# Takings are gold AND cards: at the floor the collection cannot spare a copy,
+		# so gold alone no longer opens fusion — earned cards are what lift it clear.
 		var purse := Balance.gold_reward(1, Balance.Tier.BOSS, 0)
 		k.add_gold(purse)
+		var earned := Balance.FUSE_BASE_COPIES
+		var most := ""
+		for id in k.collection:
+			if most == "" or int(k.collection[id]["count"]) > int(k.collection[most]["count"]):
+				most = id
+		for _i in earned:
+			k.add_card(most)
 		var fusable := 0
 		for id in k.collection:
 			if k.can_fuse(id):
 				fusable += 1
 		if fusable < 1:
 			fails += 1
-			print("FAIL kit %s still cannot fuse after a first boss (%dg)" % [kid, purse])
+			print("FAIL kit %s still cannot fuse after a first boss (%dg, %d cards)" % [
+				kid, purse, earned])
 		# and each kit must actually differ
-		print("  (info: kit %-8s %2d copies, %d fusable)" % [kid, total, fusable])
+		print("  (info: kit %-8s %2d copies, %d fusable after one dungeon)" % [kid, total, fusable])
 	var sigs := {}
 	for kid in MetaState_kits(m):
 		var k2 = Meta.new(); k2.new_save(kid)

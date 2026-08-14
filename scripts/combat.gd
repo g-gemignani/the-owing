@@ -2306,13 +2306,17 @@ func _on_reward_picked(card) -> void:
 	GameState.clear_node(GameState.pending)
 	GameState.flush_save()   # a resolved encounter is worth writing at once
 	if tier == Balance.Tier.BOSS:
-		# dungeon cleared -> mark it, grant a relic, then back to dungeon select (D6)
+		# dungeon cleared -> mark it, then back to dungeon select (D6). No relic: the boss stopped
+		# dropping one at D238, because a run-scoped relic granted three statements before
+		# `clear_run()` would have existed for one function call.
 		# the boss is the commit point: banked earnings become permanent here
 		# the boss's own pack, earned a moment before everything commits
 		GameState.earn_pack(Balance.PACK_BOSS)
 		var banked := GameState.commit_escrow()
-		GameState.last_haul = "Secured %d cards, %d gold, %d relic(s) and %d pack(s)." % [
-			banked["cards"], banked["gold"], banked["relics"], banked["packs"]]
+		# Relics are not in this sentence any more (D247). Nothing banks them, so the line always
+		# read "0 relic(s)" — a clear announcing itself with a zero in the middle of the haul.
+		GameState.last_haul = "Secured %d cards, %d gold and %d pack(s)." % [
+			banked["cards"], banked["gold"], banked["packs"]]
 		# An aspect that adds difficulty adds reward, or it is a tax on replaying — which is
 		# the opposite of what it is for (D187). Paid before the clear is banked, because
 		# `mark_cleared` is what rotates the dungeon onto its NEXT aspect.

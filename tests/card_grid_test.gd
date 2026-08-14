@@ -40,6 +40,7 @@ func _ready() -> void:
 	await _check_preview_adds_and_removes()
 	await _check_badge_shows_when_it_cannot_be_paid()
 	await _check_hover_survives_an_add()
+	await _check_hover_stays_inside_the_scroll()
 	await _check_relics_stay_one_line()
 	await _check_toggle_rebuilds()
 	await _check_ledger_is_read_only()
@@ -47,7 +48,7 @@ func _ready() -> void:
 	MetaState.writes_disabled = true
 	_purge()
 	if _fails == 0:
-		print("CARD GRID TEST: PASS (grid builds, both add gestures work, the bay removes, the badge prices and is always visible, the hover survives an add, the relics stay one line, the toggle rebuilds, a run is read-only)")
+		print("CARD GRID TEST: PASS (grid builds, both add gestures work, the bay removes, the badge prices and is always visible, the hover survives an add and stays in the scroll, the relics stay one line, the toggle rebuilds, a run is read-only)")
 	else:
 		print("CARD GRID TEST: FAIL (%d)" % _fails)
 	get_tree().quit()
@@ -456,6 +457,74 @@ func _check_hover_survives_an_add() -> void:
 		await get_tree().process_frame
 		if (back.get_parent() as Control).scale.x > 1.0:
 			_fail("the card stayed enlarged after the cursor jumped to another one")
+	vp.queue_free()
+	await get_tree().process_frame
+
+## An opened card is WHOLE, even in the top row (D226).
+##
+## Reported as "hovering a card in the first row hides the top of it". The grid sits in
+## a ScrollContainer, which clips, and a card grows upward from its bottom edge — so the
+## top row put 67 of its 215px outside the scroll and the scroll cut them off. The left
+## column lost 23px sideways for the same reason.
+##
+## Measured on the SCALED corners, because that is the whole bug: `get_global_rect`
+## reports the card's unscaled size and says everything is fine while the player is
+## looking at a card with no top.
+func _check_hover_stays_inside_the_scroll() -> void:
+	var vp := SubViewport.new()
+	vp.size = Vector2i(1280, 720)
+	vp.handle_input_locally = true
+	get_tree().root.add_child(vp)
+	SettingsState.card_view = true
+	var inst := (load("res://scenes/Collection.tscn") as PackedScene).instantiate() as Control
+	vp.add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	var faces := _faces(inst)
+	if faces.is_empty():
+		_fail("no card faces in the grid to hover")
+		vp.queue_free()
+		await get_tree().process_frame
+		return
+	# The FIRST face in tree order is the top-left tile, which is the one the report is
+	# about: it is against both clipped edges at once.
+	var face := faces[0]
+	var holder := face.get_parent() as Control
+	var scroll: ScrollContainer = null
+	var p := holder.get_parent()
+	while p != null and scroll == null:
+		scroll = p as ScrollContainer
+		p = p.get_parent()
+	if scroll == null:
+		_fail("the grid is no longer inside a scroll — this check is testing nothing")
+		vp.queue_free()
+		await get_tree().process_frame
+		return
+
+	var rest := holder.position
+	_motion(vp, face.get_global_rect().get_center())
+	await get_tree().process_frame
+	if holder.scale.x <= 1.0:
+		_fail("hovering the top-left card does not enlarge it — this check cannot see its bug")
+	else:
+		var xf := holder.get_global_transform()
+		var shown := Rect2(xf * Vector2.ZERO, (xf * holder.size) - (xf * Vector2.ZERO))
+		var view := scroll.get_global_rect()
+		if shown.position.y < view.position.y - 0.5:
+			_fail("the opened top-row card loses %.0fpx off its top to the scroll" % (
+				view.position.y - shown.position.y))
+		if shown.position.x < view.position.x - 0.5:
+			_fail("the opened left-column card loses %.0fpx off its side to the scroll" % (
+				view.position.x - shown.position.x))
+	# ...and it goes back. A nudge that is never undone walks the card down the screen,
+	# one hover at a time, and leaves a gap in the grid where it used to be.
+	var away := Vector2(vp.size) - Vector2.ONE
+	_motion(vp, away)
+	await get_tree().process_frame
+	if holder.position.distance_to(rest) > 0.5:
+		_fail("the card did not return to its place after the hover (%s, want %s)" % [
+			holder.position, rest])
 	vp.queue_free()
 	await get_tree().process_frame
 

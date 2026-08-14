@@ -577,6 +577,14 @@ static func fill_deck(bay: PanelContainer, ctx: Ctx) -> void:
 		size += int(ctx.counts[id]) if ctx.ledger else mini(int(ctx.counts[id]), MetaState.owned(String(id)))
 	var head := Label.new()
 	head.add_theme_font_size_override("font_size", UITheme.font() + 2)
+	# Wrapped, so the header can never set the panel's width. A Label sizes its minimum to
+	# the whole unwrapped string, and "Deck  9 / 20   need 3 more" measures 223px — which
+	# silently pushed the bay to 239px in the table view, where the row beside it has 180
+	# (PANEL_W_TABLE) and pays for the overflow in clipped names. The hint is the only part
+	# long enough to do it, and it shows exactly when the player is mid-build, so clipping
+	# it would hide the one line saying what is wrong. Wrapping keeps the words and hands
+	# the minimum back to the widest one.
+	head.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	if ctx.ledger:
 		head.text = "Deck in play — %d" % size
 		head.add_theme_color_override("font_color", Color(0.86, 0.84, 0.90))

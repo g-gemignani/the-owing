@@ -257,6 +257,48 @@ func _init() -> void:
 		fails += 1
 		print("FAIL %d relics are still sealed at full depth" % m3.sealed_relics())
 
+	# --- sealed and rollable partition the catalogue, and nothing else filters either (D247) ---
+	#
+	# `sealed_relics` used to skip what the character owned as well as what the depth gate held
+	# back, which was a no-op once D238 emptied `relics` and the wrong question before it. Stated
+	# as a sum so the two counts cannot drift: every relic is either offerable now or waiting on
+	# depth, and no third state is allowed to appear.
+	var m3b = Meta.new()
+	m3b.path_prefix = SANDBOX
+	m3b.slot = 5
+	m3b.new_save()
+	if m3b.sealed_relics() + m3b.unowned_relics().size() != m3b.RELIC_CATALOG.size():
+		fails += 1
+		print("FAIL sealed (%d) + rollable (%d) is not the whole catalogue (%d)" % [
+			m3b.sealed_relics(), m3b.unowned_relics().size(), m3b.RELIC_CATALOG.size()])
+
+	# --- no screen counts the collection's relics (D247) ---
+	#
+	# The bug this guards was invisible for eight decisions: D238 made relics run-scoped and left
+	# `MetaState.relics` behind as an empty array that still answers `.size()`, so five screens
+	# went on printing "Relics (0/30)", "Relics found: 0 / 30", "Relics 0" and "0 relic(s)" and
+	# every one of them looked like working code. Grepped rather than played, because the failure
+	# is a plausible number on a screen and no assertion about behaviour can see it.
+	#
+	# The permanent count is `relics_seen` (D235) — what the character has MET, the only part of a
+	# relic that survives a run. `relics` itself stays in the file for migration, so the ban is on
+	# COUNTING it, not on the name.
+	var d3 := DirAccess.open("res://scripts/")
+	if d3 == null:
+		fails += 1; print("FAIL scripts/ is unreadable")
+	else:
+		for fn in d3.get_files():
+			if not fn.ends_with(".gd"):
+				continue
+			var fh := FileAccess.open("res://scripts/" + fn, FileAccess.READ)
+			if fh == null:
+				continue
+			var src := fh.get_as_text()
+			fh.close()
+			if src.find("MetaState.relics.size()") != -1:
+				fails += 1
+				print("FAIL scripts/%s counts MetaState.relics, which is empty since D238 — use relics_seen" % fn)
+
 	# --- engine applies relic effects ---
 	var kite := load(m.RELIC_CATALOG["kite_shield"]) as RelicData
 	var whet := load(m.RELIC_CATALOG["whetstone"]) as RelicData

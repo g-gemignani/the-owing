@@ -1,9 +1,11 @@
 ## Starting kit choice. Shown once, when a new game begins.
 ##
 ## Its real job is to make the first decision the same decision the game is about:
-## which archetype are you heading toward. It also hands over 12 cards instead of
-## the bare legal minimum, so the deck builder has something to choose between and
-## fusion is available on run 1.
+## which archetype are you heading toward. The kit hands over exactly
+## `Balance.STARTER_KIT_SIZE` cards, and `MIN_DECK_SIZE` is derived from that number —
+## so the opening deck IS the smallest legal deck. Run 1 is played with everything you
+## own; the deck builder and fusion both open once rewards grow the collection past the
+## floor. The choice made here is the archetype, not the deck list.
 extends Control
 
 var slot := 0

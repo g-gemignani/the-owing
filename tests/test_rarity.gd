@@ -17,6 +17,12 @@ extends SceneTree
 const DIR := "res://resources/cards/"
 const NAMES := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
 
+## How far under the strongest epic the weakest legendary may sit. The top band promotes a
+## rule-changer over a plain number on purpose, so a small overlap is the design; a large one is a
+## `_rule_changer` that has gone blind. Cards sit at 0.96 of it today and the D246 power bug sat at
+## 0.62, so 0.85 separates the two with room on both sides.
+const TOP_BAND_FLOOR := 0.85
+
 func _init() -> void:
 	var fails := 0
 	var m = load("res://scripts/meta_state.gd").new()
@@ -192,14 +198,73 @@ func _init() -> void:
 	for id in ids:
 		var c := load(m.CATALOG[id]) as CardData
 		if c.rarity == CardData.Rarity.LEGENDARY:
-			var special := c.retain_block or c.aoe or c.energy_gain > 0 \
-				or c.gain_strength > 0 or c.gain_dexterity > 0 or c.gain_thorns > 0 \
-				or c.heal > 0 or c.apply_poison > 0
-			if not special:
+			# `CardData.changes_a_rule()` and not a copy of its list (D246). This suite held the
+			# second copy, and when `rerarify`'s was fixed the two disagreed about Drilled — the tool
+			# called `grows` a rule and this called it a number.
+			if not c.changes_a_rule():
 				fails += 1; print("FAIL legendary %s is only numbers" % id)
 
+	# --- the bands must ascend in EVERY catalogue, not only the cards (D246) ---
+	#
+	# This suite walked `CATALOG` and nothing else for two hundred entries, so relics and powers wore
+	# a derived rarity with no check on it. That went wrong exactly once and silently: `rerarify`'s
+	# legendary guard asked `_rule_changer`, which was a hand-written list of eight fields that knew
+	# nothing of the conditional mechanics D66 and D204 added — so a power whose whole identity is
+	# `discount_next` read as "only numbers" and was passed over for the top band. **LEGENDARY came
+	# out 6.6..9.0 while EPIC came out 9.0..10.7: a top band weaker than the band beneath it, and
+	# nothing failed.**
+	#
+	# Asserted over the CATALOGUES rather than per type, so a fourth kind of rarity-bearing content
+	# joins by existing. D180's rule, and this is its third costume.
+	var catalogues := {"cards": [], "relics": [], "powers": []}
+	for cid in m.CATALOG:
+		var cc := load(m.CATALOG[cid]) as CardData
+		if cc != null:
+			catalogues["cards"].append(cc)
+	for rid in m.RELIC_CATALOG:
+		var rr := load(String(m.RELIC_CATALOG[rid])) as RelicData
+		if rr != null:
+			catalogues["relics"].append(rr)
+	for pid in Balance.POWERS:
+		var pp := Balance.power(String(pid))
+		if pp != null:
+			catalogues["powers"].append(pp)
+	for kind in catalogues:
+		# The WEAKEST member of each band must still beat the STRONGEST of the band below it. That is
+		# the non-overlap rule, and it is what a mean over a band cannot see: two bands can have
+		# ascending averages while individual members are filed upside down.
+		var floors := {}
+		var ceils := {}
+		for item in catalogues[kind]:
+			var r: int = int(item.rarity)
+			var v: float = item.power_value()
+			floors[r] = minf(float(floors.get(r, v)), v)
+			ceils[r] = maxf(float(ceils.get(r, v)), v)
+		var top: int = CardData.Rarity.size() - 1
+		for r in range(1, CardData.Rarity.size()):
+			if not (floors.has(r) and ceils.has(r - 1)):
+				continue
+			# The TOP boundary is allowed to overlap, and only the top one. `rerarify`'s legendary
+			# guard deliberately passes over a card that is only numbers and promotes the next
+			# rule-changer, so the weakest legendary can sit slightly under the strongest epic — and
+			# the cards do exactly that today, 22.1 against 23.0. Forbidding it outright would forbid
+			# the rule this project wants: **a legendary has to CHANGE something, not just be big.**
+			#
+			# What must not happen is a GROSS inversion, which is how the bug this check was written
+			# for looked: powers came out with a 6.6 legendary over a 10.7 epic, 62% of it. A margin
+			# separates the two cases — a promotion of a few percent is the rule working, a promotion
+			# of a third is a `_rule_changer` that has stopped recognising its subjects.
+			var margin: float = TOP_BAND_FLOOR if r == top else 1.0
+			if float(floors[r]) < float(ceils[r - 1]) * margin:
+				fails += 1
+				print("FAIL %s: the weakest %s (%.1f) is below the strongest %s (%.1f)%s — the bands are filed upside down" % [
+					kind, CardData.rarity_badge(r), float(floors[r]),
+					CardData.rarity_badge(r - 1), float(ceils[r - 1]),
+					" by more than the top band's allowance" if r == top else ""])
+
 	if fails == 0:
-		print("RARITY TEST: PASS (%d cards; power and growth ascend with rarity, and the bands do not overlap)" % ids.size())
+		print("RARITY TEST: PASS (%d cards, %d relics, %d powers; power ascends with rarity in all three and the bands do not overlap)" % [
+			ids.size(), m.RELIC_CATALOG.size(), Balance.POWERS.size()])
 	else:
 		print("RARITY TEST: FAIL (%d)" % fails)
 	quit()

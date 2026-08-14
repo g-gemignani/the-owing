@@ -81,8 +81,12 @@ func _ready() -> void:
 	UI.button(nav, "Cards (%d/%d)" % [
 		MetaState.collection.size(), MetaState.CATALOG.size()],
 		func(): UI.goto(self, "res://scenes/Collection.tscn"), 38.0)
+	# MET, not owned (D247). Nothing has been owned since D238 — a relic is found on a run and
+	# leaves with it — so `relics` is an empty legacy array and this button read "Relics (0/30)"
+	# on every save that had ever played. `relics_seen` is the log the screen behind the button
+	# already shows, so the count on the door and the count inside it are now one number.
 	UI.button(nav, "Relics (%d/%d)" % [
-		MetaState.relics.size(), MetaState.RELIC_CATALOG.size()],
+		MetaState.relics_seen.size(), MetaState.RELIC_CATALOG.size()],
 		func(): UI.goto(self, "res://scenes/Relics.tscn"), 38.0)
 	var sealed: int = MetaState.packs.size()
 	UI.button(nav, "Packs (%d)" % sealed if sealed > 0 else "Packs",

@@ -16,13 +16,17 @@ func _ready() -> void:
 			builds_done += 1
 	UI.label(col, "Dungeons cleared: %d / %d" % [MetaState.clear_count(), Balance.DUNGEONS.size()])
 	UI.label(col, "Builds completed: %d / %d" % [builds_done, Balance.BUILDS.size()])
-	UI.label(col, "Relics found: %d / %d" % [MetaState.relics.size(), MetaState.RELIC_CATALOG.size()])
+	# "Met", not "found", and off `relics_seen` (D247). A run's relics leave with the run since
+	# D238, so an end-of-game tally of what is HELD is a tally of nothing — this line read
+	# "Relics found: 0 / 30" under a screen congratulating the player on clearing every door.
+	UI.label(col, "Relics met: %d / %d" % [MetaState.relics_seen.size(), MetaState.RELIC_CATALOG.size()])
 	UI.label(col, "Card types owned: %d / %d" % [MetaState.collection.size(), MetaState.CATALOG.size()])
 	UI.label(col, "Ascension: %d" % MetaState.ascension)
 	UI.spacer(col)
 
-	# Ascension keeps the collection and relics but re-locks the world, so the
-	# hundred cards have somewhere to go after the last door.
+	# Ascension keeps the collection but re-locks the world, so the hundred cards have
+	# somewhere to go after the last door. It does NOT keep relics, because nothing does
+	# (D238) — the sentence below used to promise them and that promise was empty.
 	#
 	# The offer sits in its own scrim, and it is the width of the buttons it belongs
 	# to. It used to run the full 1280 straight across the lit doorway — the brightest
@@ -44,7 +48,7 @@ func _ready() -> void:
 	bay.custom_minimum_size.x = UITheme.px(UI.BUTTON_WIDTH)
 	bay.add_theme_stylebox_override("panel", _offer_scrim())
 	col.add_child(bay)
-	UI.label(bay, "Descend again? Ascension %d makes every enemy stronger and the loot richer. You keep your collection, relics and ropes; the dungeons re-lock." % (MetaState.ascension + 1))
+	UI.label(bay, "Descend again? Ascension %d makes every enemy stronger and the loot richer. You keep your collection, your ropes and every relic you have met; the dungeons re-lock." % (MetaState.ascension + 1))
 	UI.button(col, "Begin Ascension %d" % (MetaState.ascension + 1), func(): _ascend())
 	UI.exit_button(col, "Stay here", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
 

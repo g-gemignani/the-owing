@@ -20,10 +20,16 @@ const NAMES := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
 ## From the top down: legendary, epic, rare, uncommon, and commons take the rest.
 const CARD_BANDS := [6, 12, 22, 28]
 const RELIC_BANDS := [3, 5, 7, 8]
-## Ten powers, so the pyramid is small and steep: one legendary, one epic, two rare,
-## three uncommon, and the rest common. The catalogue had no legendary at all, which is
-## the shape of a set nobody re-filed after it grew.
-const POWER_BANDS := [1, 2, 2, 2]
+## Scaled with the set when it went from ten to thirty (D246). At ten the pyramid was
+## [1, 2, 2, 2] — one legendary, two epic, two rare, two uncommon, three common — and left
+## unchanged at thirty it would have filed twenty-three of them common, which is not a pyramid,
+## it is a pile with a hat on. [2, 4, 6, 8] keeps the shape: two legendary, four epic, six rare,
+## eight uncommon, ten common.
+##
+## The band SIZES are what this file owns and the power ORDER is what `power_value()` owns, so
+## growing the set re-files the old ten as well — the same absolute-count behaviour that moved 22 of
+## 37 relics in D233. That is the derived system working, not drift.
+const POWER_BANDS := [2, 4, 6, 8]
 
 func _init() -> void:
 	var write := "--write" in OS.get_cmdline_user_args()
@@ -50,7 +56,7 @@ func _init() -> void:
 				p /= maxf(1.0, Balance.card_energy_cost(c))
 			cards.append({"id": String(id), "path": String(m.CATALOG[id]), "name": c.name,
 				"power": p, "total": c.power_value(), "cost": Balance.card_energy_cost(c),
-				"was": int(c.rarity), "special": _rule_changer(c)})
+				"was": int(c.rarity), "special": c.changes_a_rule()})
 	_apply("CARDS", cards, CARD_BANDS, write, true)
 
 	var relics: Array = []
@@ -73,7 +79,7 @@ func _init() -> void:
 		if p != null:
 			powers.append({"id": String(pid), "path": Balance.POWER_DIR + pid + ".tres",
 				"name": p.name, "power": p.power_value(), "was": int(p.rarity),
-				"special": _rule_changer(p)})
+				"special": p.changes_a_rule()})
 	_apply("POWERS", powers, POWER_BANDS, write, true)
 	quit()
 
@@ -81,9 +87,9 @@ func _init() -> void:
 ## number. Honoured here rather than discovered as a failure afterwards — a card that
 ## is only numbers is passed over for the top band and the next one down takes its
 ## place.
-func _rule_changer(c: CardData) -> bool:
-	return c.retain_block or c.aoe or c.energy_gain > 0 or c.gain_strength > 0 \
-		or c.gain_dexterity > 0 or c.gain_thorns > 0 or c.heal > 0 or c.apply_poison > 0
+## `_rule_changer` now lives on `CardData` as `changes_a_rule()` (D246). It was a hand-written list
+## of eight fields here AND a second copy of the same list in `tests/test_rarity.gd`, and the two
+## disagreed the moment one was fixed. One owner, beside the fields it reads.
 
 func _apply(what: String, rows: Array, bands: Array, write: bool, guard_legendary: bool) -> void:
 	# Descending by power, ties broken by id so two runs of this tool agree.

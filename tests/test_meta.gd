@@ -287,6 +287,18 @@ func _init() -> void:
 	Meta.writes_disabled = false
 	var md = Meta.new()
 	md.new_save()
+	# A place you have never beaten offers NOTHING. Going in owing is a wager on numbers a
+	# first visit cannot know, so the offer opens on the first clear. Asserted here, on the
+	# save while it is still untouched, because every check below needs it cleared and there
+	# is no way back to this state once the loop under it has run.
+	md.gold = 99999
+	for did_new in Balance.DUNGEONS:
+		if md.debt_on(did_new) != "":
+			fails += 1
+			print("FAIL %s offers a debt before it has ever been cleared" % did_new)
+		if md.can_take_debt(did_new):
+			fails += 1
+			print("FAIL a debt could be taken at %s, which has never been cleared" % did_new)
 	for did5 in Balance.DUNGEONS:
 		md.mark_cleared(did5)      # open everything, so every place can make an offer
 	var debt_ids: Array = Balance.debt_ids()
@@ -363,16 +375,17 @@ func _init() -> void:
 	for did8 in Balance.DUNGEONS:
 		var first: String = md.debt_on(did8)
 		if first == "":
-			fails += 1; print("FAIL %s offers no debt at all" % did8)
+			fails += 1; print("FAIL %s offers no debt at all once cleared" % did8)
 		if md.debt_on(did8) != first:
 			fails += 1; print("FAIL %s's offer changed just for being looked at" % did8)
 		if not (first in debt_ids):
 			fails += 1; print("FAIL %s offers '%s', which is not in the catalogue" % [did8, first])
 	# ...and every row must be reachable from SOME place at SOME clear count, or it is a row
-	# nobody will ever be offered. Swept over the same function the screen calls.
+	# nobody will ever be offered. Swept over the same function the screen calls, from one
+	# clear up: zero is the closed state and has no row to reach.
 	var offered := {}
 	for did9 in Balance.DUNGEONS:
-		for tc in 24:
+		for tc in range(1, 25):
 			offered[Balance.debt_for(did9, tc)] = true
 	if offered.size() < debt_ids.size():
 		var never: Array = []

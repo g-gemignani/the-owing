@@ -4,13 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
+id = "full_hands"
+name = "Full Hands"
+description = "Gain 2 Block, and 2 more for every card in your hand."
 cost = 1
-rarity = 1
+rarity = 2
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 4
 max_level = 10
-apply_poison = 3
+block = 2
+block_per_card_in_hand = 2
 type = 1

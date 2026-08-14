@@ -4,13 +4,14 @@
 
 [resource]
 script = ExtResource("1")
-id = "blight"
-name = "Blight"
-description = "Apply 3 Poison."
+id = "hold_fast"
+name = "Hold Fast"
+description = "Gain 4 Block and 1 Dexterity."
 cost = 1
-rarity = 1
+rarity = 2
 level = 1
-unlock_after_clears = 1
+unlock_after_clears = 10
 max_level = 10
-apply_poison = 3
+block = 4
+gain_dexterity = 1
 type = 1
