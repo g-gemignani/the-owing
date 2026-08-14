@@ -15,6 +15,9 @@ static var SPOILS := 0
 ## Restrict the spoil pool to rule-breakers. See `--spoils-rules`.
 static var SPOILS_RULES := false
 
+## Deal the run's power from three rather than using the profile's. See `--roll-power`.
+static var ROLL_POWER := false
+
 ## Print each cell twice and the gap between them. See `--noise`.
 static var NOISE := false
 
@@ -112,6 +115,13 @@ static func _read_args() -> void:
 		# mode — no version of the game draws from this pool.
 		elif arg == "--spoils-rules":
 			SPOILS_RULES = true
+		# Roll the run's power from three candidates instead of using the profile's fixed one (D245).
+		# The game deals three at the deck builder and the player picks; a profile carrying one power
+		# for every trial models the player the game had BEFORE that, and could not see the change at
+		# all. Off by default, because every cell's header names its power and a rolled power makes
+		# that line a lie.
+		elif arg == "--roll-power":
+			ROLL_POWER = true
 		elif arg.begins_with("--difficulty="):
 			Balance.difficulty = clampi(int(arg.substr(13)), 0, Balance.DIFFICULTIES.size() - 1)
 		# Raw multiplier overrides, for SWEEPING candidate rungs before any of them are
@@ -503,6 +513,23 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		var reward_level := 1
 		for c1 in deck:
 			reward_level = maxi(reward_level, c1.level)
+		# The run's power, dealt from three when `--roll-power` is set (D245). Per TRIAL and not per
+		# cell, because the offer is per run and a cell-level roll would measure one lucky power
+		# eighty times rather than the spread the offer produces.
+		var trial_power: PowerData = power
+		if ROLL_POWER and not Balance.POWERS.is_empty():
+			var best: PowerData = null
+			for _c in 3:
+				var cand := Balance.power(String(Balance.POWERS[randi() % Balance.POWERS.size()]))
+				if cand == null:
+					continue
+				# The driver picks the strongest on offer, the same way `_choose_spoil` does. A driver
+				# that picked at random would model a player who does not choose, which is the fault
+				# D239 found and fixed one flag over.
+				if best == null or cand.power_value() > best.power_value():
+					best = cand
+			if best != null:
+				trial_power = best
 		var alive := true
 		var fights := 0
 		var guard := 0
@@ -615,7 +642,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					untaxed.append_array(spoils)
 					eng.setup(run_deck, hp, max_hp, difficulty, tier,
 						String(node.get("enemy", "")), [], roster,
-						power, dd.boss if dd != null else "", untaxed)
+						trial_power, dd.boss if dd != null else "", untaxed)
 					_tick("fight_setup", t_su)
 					var t_fi := Time.get_ticks_usec()
 					var g2 := 0

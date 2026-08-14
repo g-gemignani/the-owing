@@ -317,7 +317,12 @@ effects are drawn at runtime by `scripts/fx.gd`.
   And check that per cell — a mean cannot see the shape.
 
 - **Every turn should have a floor and a ceiling.** Powers (once per turn) put a floor
-  under a bad draw without raising the ceiling on a good one (D37). Reactive enemies
+  under a bad draw without raising the ceiling on a good one (D37). **The power is DEALT at the
+  start of a run now — three offered, one taken (D245)** — so each run has a different centre
+  instead of the best owned power every time. It buys variance and cannot buy escalation: a power
+  held from the first fight raises the first and the last equally, which is the third time that
+  fact has decided something here (D233, D237, D245). Ten powers exist and thirty is the content
+  half of it; with ten, an offer of three shows the same faces constantly. Reactive enemies
   and named boss signatures make each fight a puzzle rather than a solved routine
   (D38, D41). Block cannot be a complete answer at depth — piercing damage keeps
   defensive play honest (D45).

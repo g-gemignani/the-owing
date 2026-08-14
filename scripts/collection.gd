@@ -69,6 +69,12 @@ const W_DECK_PICK := 260.0
 
 var mode: int = Mode.MANAGE
 var selection: Dictionary = {}   # id -> copies chosen for the deck
+
+## The three powers this visit is offering, and which one is taken (D245). Rolled once and held, so
+## a filter toggle cannot re-deal the hand — a re-rollable offer of three is a choice of all of them.
+var run_power_offer: Array = []
+var chosen_power: String = ""
+
 ## Which saved deck `selection` was last loaded from, "" if none. It is what rename
 ## and delete ACT ON (D212): both need a target, and the alternative — a control on
 ## every chip in the Load bar — puts a destructive button one misclick from the load
@@ -809,30 +815,48 @@ func _write_info(shown: Array) -> void:
 	if start_btn != null:
 		start_btn.disabled = not MetaState.deck_valid(selection)
 
-## Every owned power, the equipped one marked. Sits with the deck because it IS part
-## of the loadout: one ability, chosen per run, firable once every turn.
+## THREE powers this run is offering, one of them chosen (D245).
+##
+## It listed every owned power with the equipped one marked, which meant every run had the same
+## centre: the best power the save owned, every time. The run now deals three and the player picks,
+## so each run has a different lens — that is run DIVERGENCE and not escalation, because a power held
+## from the first fight raises the first fight and the last one equally.
+##
+## The offer is rolled ONCE per visit to this screen and kept in `run_power_offer`, not re-rolled on
+## every `_refresh()`. Re-rolling would let a player reject the deal by toggling a filter, which turns
+## a choice of three into a choice of all of them with extra clicks.
 func _refresh_powers() -> void:
 	for c in power_box.get_children():
 		c.queue_free()
-	if MetaState.powers.is_empty():
+	if run_power_offer.is_empty():
+		run_power_offer = MetaState.power_offer(3)
+		if not run_power_offer.is_empty() and chosen_power == "":
+			chosen_power = String(run_power_offer[0])
+	if run_power_offer.is_empty():
 		var none := Label.new()
-		none.text = "none owned"
+		none.text = "no power is open to you yet"
 		power_box.add_child(none)
-	for pid in MetaState.powers:
-		var pd := Balance.power(pid)
+		return
+	for pid in run_power_offer:
+		var pd := Balance.power(String(pid))
 		if pd == null:
 			continue
 		pd = pd.duplicate()
-		pd.level = int(MetaState.powers[pid])
+		# The level the save has PAID for. A power in the offer that was never bought comes at 1:
+		# the offer opens the pool and gold is still what makes one better.
+		pd.level = int(MetaState.powers.get(String(pid), 1))
 		var pb := Button.new()
 		UITheme.style_button(pb)
-		var on: bool = pid == MetaState.equipped_power
-		pb.text = "%s%s Lv%d" % ["> " if on else "", pd.name, pd.level]
+		var on: bool = String(pid) == chosen_power
+		var owned: bool = MetaState.powers.has(String(pid))
+		pb.text = "%s%s Lv%d%s" % ["> " if on else "", pd.name, pd.level,
+			"" if owned else "  (new)"]
 		pb.disabled = on
-		UI.hoverable(pb, "%s\n%s\nCost %s, once per turn." % [
-			pd.name, pd.effect_text(), "free" if pd.eff_cost() == 0 else "%dE" % pd.eff_cost()])
+		UI.hoverable(pb, "%s\n%s\nCost %s, once per turn.%s" % [
+			pd.name, pd.effect_text(), "free" if pd.eff_cost() == 0 else "%dE" % pd.eff_cost(),
+			"" if owned else "\nYou have never carried this one. It comes at level 1 — gold levels it for next time."])
 		pb.pressed.connect(func():
-			MetaState.equip_power(pid)
+			chosen_power = String(pid)
 			_refresh())
 		power_box.add_child(pb)
 
@@ -1206,6 +1230,6 @@ func _on_start() -> void:
 			msg_label.text = "cannot take that debt now — go back and check the terms"
 			return
 	Audio.play("enter")
-	GameState.enter_dungeon(MetaState.build_deck(selection))
+	GameState.enter_dungeon(MetaState.build_deck(selection), chosen_power)
 	GameState.autosave()   # the run exists from here on and can be resumed
 	get_tree().change_scene_to_file(GameState.run_scene())

@@ -562,10 +562,24 @@ func select_dungeon(id: String) -> void:
 	dungeon = d.difficulty if d != null else 1
 
 ## Start the selected dungeon with a chosen deck (D4: per-dungeon deck).
-func enter_dungeon(deck: Array[CardData]) -> void:
+## `power_id` is the one chosen from the run-start offer (D245). Empty falls back to whatever the
+## save has equipped, which keeps every existing caller — the tools and seven test suites — working
+## unchanged, and is also the honest behaviour for a resumed run that predates the offer.
+func enter_dungeon(deck: Array[CardData], power_id: String = "") -> void:
 	run_deck = deck
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
-	run_power = meta.power_data() if meta != null else null
+	run_power = null
+	if meta != null:
+		if power_id != "":
+			var p := Balance.power(power_id)
+			if p != null:
+				run_power = p.duplicate()
+				# The LEVEL the save has paid for, if it owns the power at all. A power offered but
+				# never bought arrives at level 1 — the offer opens the pool, and gold is still what
+				# makes one better (D245).
+				run_power.level = int(meta.powers.get(power_id, 1))
+		if run_power == null:
+			run_power = meta.power_data()
 	generate_map()
 
 ## Advance to the next dungeon after a boss (HP/heal handled by caller).

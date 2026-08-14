@@ -491,6 +491,37 @@ func power_available(id: String) -> bool:
 	var p := Balance.power(id)
 	return p != null and clear_count() >= p.unlock_after_clears
 
+## Three powers to choose from at the start of a run (D245).
+##
+## A power used to be EQUIPPED in the deck builder, which meant every run had the same centre: the
+## best power the save owned, every time. Rolling it makes each run different — which is `div`, the
+## run-divergence number, and not `esc`. **A power held from the first fight raises the first fight
+## and the last one equally, so it cannot move the escalation ratio.** That fact has now bitten three
+## times in this sequence (D233, D237, and here), so it is stated where the feature is built.
+##
+## THREE and not one, for the reason the relic offer is three (D234): a single rolled power is the
+## dice deciding a run before turn one, which is what D242 rejected. The player still chooses the
+## deck, so the layers read as — the deck is your thesis, the power is the run's lens, the relics are
+## the escalation.
+##
+## Drawn from what the save has UNLOCKED rather than what it owns, weighted by nothing: a power's
+## rarity already gates it through `unlock_after_clears`, and weighting on top of that would hide the
+## deepest powers behind two gates.
+func power_offer(n: int = 3) -> Array:
+	var pool: Array = []
+	for id in Balance.POWERS:
+		if power_available(id) and owns_power(id):
+			pool.append(id)
+	# Fall back to everything unlocked when the save owns too few to fill an offer. A new character
+	# owns one power, and an offer of one is not a choice — better to show what the campaign has
+	# opened than to show a single button and call it a decision.
+	if pool.size() < n:
+		for id in Balance.POWERS:
+			if power_available(id) and not (id in pool):
+				pool.append(id)
+	pool.shuffle()
+	return pool.slice(0, mini(n, pool.size()))
+
 func power_price(id: String) -> int:
 	var p := Balance.power(id)
 	return Balance.power_price(p.rarity) if p != null else 0

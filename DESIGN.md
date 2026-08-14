@@ -233,6 +233,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D242** | [The target is 5x and a 60% death rate, and additive modifiers cannot reach it](#d242--the-target-is-5x-and-a-60-death-rate-and-additive-modifiers-cannot-reach-it) |
 | **D243** | [Compounding was a no-op, the content pass reached 1.62x, and 5x is not on this axis](#d243--compounding-was-a-no-op-the-content-pass-reached-162x-and-5x-is-not-on-this-axis) |
 | **D244** | [The ladder moves to a 60% death rate, and turns-to-kill does not rescue the 5x](#d244--the-ladder-moves-to-a-60-death-rate-and-turns-to-kill-does-not-rescue-the-5x) |
+| **D245** | [The power is dealt at the start of a run, and that buys variance rather than escalation](#d245--the-power-is-dealt-at-the-start-of-a-run-and-that-buys-variance-rather-than-escalation) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16495,3 +16496,79 @@ magnitudes** (which threatens `real`, the only number that has held through all 
 
 Per-cell completion is the other open item: 0% to 99% is a wider spread than the constraint allows,
 and the ladder now needs fitting per cell rather than globally.
+
+---
+
+### D245 — The power is dealt at the start of a run, and that buys variance rather than escalation
+
+Proposed: *"what if we were to discover the power also at the beginning of the run? We could have ~30
+powers and unblock them as we go and improve their power with money."*
+
+Built, with one change and two findings.
+
+#### What it fixes
+
+A power was EQUIPPED in the deck builder, so every run had the same centre — the best power the save
+owned, every time. The run now deals **three** and the player picks. Each run has a different lens.
+
+**Three and not one**, which is the change to the proposal. A single rolled power is the dice deciding
+a run before turn one, and that is what D242 rejected for relics. With three, the layers read cleanly:
+
+* the **deck** is your thesis, and you choose all of it
+* the **power** is the run's lens, and you choose one of three
+* the **relics** are the escalation, and you find them
+
+That is a better shape than Duels had, which made the player bring everything.
+
+The offer is rolled once per visit to the deck builder and held in `run_power_offer`, not re-rolled by
+`_refresh()`. **A re-rollable offer of three is a choice of all of them with extra clicks.**
+
+#### It cannot move the escalation, and that was known before it was built
+
+A power held from the first fight raises the first fight and the last one by the same factor, so `esc`
+— a ratio across one run — cannot see it. **This is the third time this exact fact has decided
+something in this sequence**: it made D233's gate unmeasurable, it made D237's culling read as a
+regression, and here it sets what the feature is for. Stated at the feature rather than rediscovered:
+this buys variance, and variance is not escalation.
+
+#### The simulator could not see it either, and `div` still cannot
+
+`_measure_run` used one power per profile for every trial, which models the player the game had
+*before* this change. `--roll-power` now deals three per trial and takes the strongest, the same way
+`_choose_spoil` models the relic offer (D239).
+
+| 18 cells, 200 trials | fixed power | rolled of three |
+|---|---|---|
+| `div` | 0.34 | **0.31** |
+| `esc` | 1.53x | 1.58x |
+| RUN completion | 39% | 36% |
+| `real` | 51% | 51% |
+
+**`div` went the wrong way, and it is the wrong instrument.** It measures the Jaccard distance between
+consecutive runs' final DECKS, and a power never enters the deck — so it cannot register power variety
+at all. The small fall tracks the shorter runs in the same column: fewer fights, fewer reward cards,
+more similar decks. Measuring what this feature actually does needs a spread over the powers a cell
+used, which does not exist yet. **Reporting `div` as evidence either way would have been a number
+about decks presented as a fact about powers.**
+
+#### The finding that makes it safe to ship
+
+Completion fell three points on a change that hands the driver a *stronger* power than the profile's
+Bulwark. That looks wrong and is not: **powers are still priced into `power_ratio`**, so a better power
+scales the enemies to match. The pillar is doing exactly its job, and the consequence is worth stating
+plainly — **"the run gave me a better power" does not mean "the run got easier"**, which is what makes
+an offer of three safe without a tuning pass behind it.
+
+It also means levelling a power with gold stays safe: that is persistent power, `power_ratio_bonus`
+prices it, and nothing about the offer changes that.
+
+#### What is left of the proposal
+
+**Thirty powers is the content half, and it is the half that makes three-of-thirty worth having.**
+There are ten. With ten, an offer of three shows the same faces constantly; with thirty it shows a
+tenth of the pool. `PowerData extends CardData`, so a power is authored like a card, and rarity is
+derived by `tools/rerarify.gd` (D225) — so twenty more is a data job with a guard already on it.
+
+One tension that only playing will settle: gold levels a specific power, and a rolled offer may not
+include the one you paid for. That is either good tension or an annoyance, and no measurement here can
+tell the difference.
