@@ -20,7 +20,7 @@ const NAMES := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
 ## From the top down: legendary, epic, rare, uncommon, and commons take the rest.
 const CARD_BANDS := [6, 12, 22, 28]
 const RELIC_BANDS := [3, 5, 7, 8]
-## Scaled with the set when it went from ten to thirty (D246). At ten the pyramid was
+## Scaled with the set when it went from ten to thirty (D250). At ten the pyramid was
 ## [1, 2, 2, 2] — one legendary, two epic, two rare, two uncommon, three common — and left
 ## unchanged at thirty it would have filed twenty-three of them common, which is not a pyramid,
 ## it is a pile with a hat on. [2, 4, 6, 8] keeps the shape: two legendary, four epic, six rare,
@@ -87,7 +87,7 @@ func _init() -> void:
 ## number. Honoured here rather than discovered as a failure afterwards — a card that
 ## is only numbers is passed over for the top band and the next one down takes its
 ## place.
-## `_rule_changer` now lives on `CardData` as `changes_a_rule()` (D246). It was a hand-written list
+## `_rule_changer` now lives on `CardData` as `changes_a_rule()` (D250). It was a hand-written list
 ## of eight fields here AND a second copy of the same list in `tests/test_rarity.gd`, and the two
 ## disagreed the moment one was fixed. One owner, beside the fields it reads.
 

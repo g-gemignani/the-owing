@@ -343,7 +343,7 @@ const PLAIN_NUMBERS := ["damage", "block", "draw"]
 const NOT_EFFECTS := ["id", "name", "description", "cost", "type", "rarity", "level",
 	"unlock_after_clears", "max_level", "growth"]
 
-## Does this card change a RULE, rather than only move a number? (D246)
+## Does this card change a RULE, rather than only move a number? (D250)
 ##
 ## **One owner, because there were two and they disagreed.** `tools/rerarify.gd` used this to decide
 ## which card may take the top rarity band, and `tests/test_rarity.gd` used its own copy to assert

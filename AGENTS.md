@@ -92,7 +92,7 @@ The loop:
    cap, the growth rate, the drop weight, the shop price, how many clears a relic waits
    for, and what a Power costs to buy and to level.
 
-   **And the suite only ever checked the CARDS, for two hundred entries (D246).** Relics and
+   **And the suite only ever checked the CARDS, for two hundred entries (D250).** Relics and
    powers wore a derived rarity with nothing asserting it, and it went wrong silently: the
    legendary guard asks whether a card *changes a rule*, that question was a hand-written list of
    eight fields, and it knew nothing of the conditional mechanics D66/D204 added — so a power
@@ -344,7 +344,7 @@ effects are drawn at runtime by `scripts/fx.gd`.
   start of a run now — three offered, one taken (D245)** — so each run has a different centre
   instead of the best owned power every time. It buys variance and cannot buy escalation: a power
   held from the first fight raises the first and the last equally, which is the third time that
-  fact has decided something here (D233, D237, D245). **Thirty powers now (D246)** — twenty authored, varied in
+  fact has decided something here (D233, D237, D245). **Thirty powers now (D250)** — twenty authored, varied in
   kind rather than magnitude, most of them using the conditional fields D66/D204 built for cards.
   All thirty are reachable: 200 offers on a cleared save show every one, and every one comes up
   first. Six were too strong for `test_power`'s 1.6x ceiling and were retuned against a measured

@@ -540,12 +540,12 @@ static func card_energy_cost(card) -> float:
 
 # --- powers (once-per-turn abilities) ---
 const POWER_DIR := "res://resources/powers/"
-## Thirty powers (D246). Ten until the power became a per-run OFFER of three (D245) — and an offer
+## Thirty powers (D250). Ten until the power became a per-run OFFER of three (D245) — and an offer
 ## of three from ten shows the same faces every run, which is the arithmetic that made the count the
 ## content half of that change.
 ##
 ## Ordered as authored rather than alphabetically: the first ten are the original set, so a diff
-## against a pre-D246 save file reads as an append and not a reshuffle.
+## against a pre-D250 save file reads as an append and not a reshuffle.
 const POWERS := ["bulwark", "foresight", "scythe", "blight", "expose", "bramble",
 	"kindle", "overwhelm", "siphon", "push_on",
 	"grave_salt", "knit", "full_hands", "nothing_left", "running_total",

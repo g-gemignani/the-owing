@@ -19,7 +19,7 @@ const NAMES := ["COMMON", "UNCOMMON", "RARE", "EPIC", "LEGENDARY"]
 
 ## How far under the strongest epic the weakest legendary may sit. The top band promotes a
 ## rule-changer over a plain number on purpose, so a small overlap is the design; a large one is a
-## `_rule_changer` that has gone blind. Cards sit at 0.96 of it today and the D246 power bug sat at
+## `_rule_changer` that has gone blind. Cards sit at 0.96 of it today and the D250 power bug sat at
 ## 0.62, so 0.85 separates the two with room on both sides.
 const TOP_BAND_FLOOR := 0.85
 
@@ -198,13 +198,13 @@ func _init() -> void:
 	for id in ids:
 		var c := load(m.CATALOG[id]) as CardData
 		if c.rarity == CardData.Rarity.LEGENDARY:
-			# `CardData.changes_a_rule()` and not a copy of its list (D246). This suite held the
+			# `CardData.changes_a_rule()` and not a copy of its list (D250). This suite held the
 			# second copy, and when `rerarify`'s was fixed the two disagreed about Drilled — the tool
 			# called `grows` a rule and this called it a number.
 			if not c.changes_a_rule():
 				fails += 1; print("FAIL legendary %s is only numbers" % id)
 
-	# --- the bands must ascend in EVERY catalogue, not only the cards (D246) ---
+	# --- the bands must ascend in EVERY catalogue, not only the cards (D250) ---
 	#
 	# This suite walked `CATALOG` and nothing else for two hundred entries, so relics and powers wore
 	# a derived rarity with no check on it. That went wrong exactly once and silently: `rerarify`'s

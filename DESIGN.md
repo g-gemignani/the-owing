@@ -235,10 +235,10 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D244** | [The ladder moves to a 60% death rate, and turns-to-kill does not rescue the 5x](#d244--the-ladder-moves-to-a-60-death-rate-and-turns-to-kill-does-not-rescue-the-5x) |
 | **D245** | [The power is dealt at the start of a run, and that buys variance rather than escalation](#d245--the-power-is-dealt-at-the-start-of-a-run-and-that-buys-variance-rather-than-escalation) |
 | **D246** | [An opened card is whole, and the fix is a nudge rather than a margin](#d246--an-opened-card-is-whole-and-the-fix-is-a-nudge-rather-than-a-margin) |
-| **D246** | [Thirty powers, and a derived guard that had gone blind](#d246--thirty-powers-and-a-derived-guard-that-had-gone-blind) |
 | **D247** | [Five screens counted an array D238 emptied, and every one of them said 0](#d247--five-screens-counted-an-array-d238-emptied-and-every-one-of-them-said-0) |
 | **D248** | [Going in owing opens on the first clear, because a wager on a stranger is a coin toss](#d248--going-in-owing-opens-on-the-first-clear-because-a-wager-on-a-stranger-is-a-coin-toss) |
 | **D249** | [The smallest legal deck is the deck you are handed](#d249--the-smallest-legal-deck-is-the-deck-you-are-handed) |
+| **D250** | [Thirty powers, and a derived guard that had gone blind](#d250--thirty-powers-and-a-derived-guard-that-had-gone-blind) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16793,7 +16793,7 @@ header wraps now, so it can never set the panel's width again.
 
 ---
 
-### D246 — Thirty powers, and a derived guard that had gone blind
+### D250 — Thirty powers, and a derived guard that had gone blind
 
 The content half of D245. Ten powers meant an offer of three showed the same faces every run; thirty
 means a tenth of the pool. Twenty authored, so the set is **30**.
