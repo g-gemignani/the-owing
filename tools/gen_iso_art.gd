@@ -38,8 +38,17 @@
 ##
 ## The seam is measured on every run and printed, against the interior as the control.
 ##
-## Run: godot --headless --script tools/gen_iso_art.gd
-## Then: godot --headless --import
+## ## The generated material is a floor, not the floor
+##
+## D267 replaced six of these with paintings, so a plain run now OVERWRITES painted
+## art with the computed fallback. That is still what the command is for, and it is
+## also a trap, because this is the file that prints each terrain's sampled ramp and
+## the ramp is what a painting prompt is written from. So reading a ramp has its own
+## flag, and it writes nothing.
+##
+## Run:      godot --headless --script tools/gen_iso_art.gd
+## Then:     godot --headless --import
+## Read only: godot --headless --script tools/gen_iso_art.gd -- --dry
 extends SceneTree
 
 const OUT := "res://assets/art/iso/"
@@ -280,10 +289,17 @@ static func _stats(img: Image) -> Array:
 
 # --- driver --------------------------------------------------------------------
 
+## True when `--dry` is on the command line: print the ramps, measure what is already
+## installed, and write nothing.
+var _dry := false
+
 func _init() -> void:
-	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
+	_dry = "--dry" in OS.get_cmdline_user_args()
+	if not _dry:
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
 	var wrote := 0
-	print("=== iso materials, palettes sampled from the painted backdrops ===")
+	print("=== iso materials, palettes sampled from the painted backdrops ===%s" % [
+		"  [dry run: measures what is installed, writes nothing]" if _dry else ""])
 	for terrain in Balance.ISO_TERRAINS:
 		var t := String(terrain)
 		var ramp := ArtPalette.ramp(ArtPalette.dungeons_with_terrain(t))
@@ -315,8 +331,11 @@ func _init() -> void:
 			wrote += _save(floor_img, "floor")
 			wrote += _save(wall_img, "rock")
 
-	print("\n%d files written to %s" % [wrote, OUT])
-	print("Run `godot --headless --import` to write the .import sidecars.")
+	if _dry:
+		print("\nDry run. %s is untouched." % [OUT])
+	else:
+		print("\n%d files written to %s" % [wrote, OUT])
+		print("Run `godot --headless --import` to write the .import sidecars.")
 	quit(0)
 
 func _ramp_text(ramp: Array) -> String:
@@ -327,11 +346,29 @@ func _ramp_text(ramp: Array) -> String:
 
 func _save(img: Image, name: String) -> int:
 	var path := OUT + name + ".png"
+	if _dry:
+		_report(name, _installed(path), " (installed)")
+		return 0
 	var err := img.save_png(ProjectSettings.globalize_path(path))
 	if err != OK:
 		print("   FAILED to write %s (%d)" % [name, err])
 		return 0
-	var st := _stats(img)
-	print("   %-12s seam %.2fx interior   luma %.2f +/- %.2f" % [
-		name + ".png", _seam(img), st[0], st[1]])
+	_report(name, img, "")
 	return 1
+
+## The file that is on disk now, at the measurement size. Null when nothing is there.
+func _installed(path: String) -> Image:
+	var img := Image.load_from_file(ProjectSettings.globalize_path(path))
+	if img == null:
+		return null
+	if img.get_width() != SIZE or img.get_height() != SIZE:
+		img.resize(SIZE, SIZE, Image.INTERPOLATE_BILINEAR)
+	return img
+
+func _report(name: String, img: Image, tag: String) -> void:
+	if img == null:
+		print("   %-12s not installed" % [name + ".png"])
+		return
+	var st := _stats(img)
+	print("   %-12s seam %.2fx interior   luma %.2f +/- %.2f%s" % [
+		name + ".png", _seam(img), st[0], st[1], tag])
