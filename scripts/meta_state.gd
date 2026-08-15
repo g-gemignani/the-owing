@@ -499,9 +499,13 @@ func owns_power(id: String) -> bool:
 	return powers.has(id)
 
 ## Gated on clears so powers arrive across the campaign rather than all at once.
+##
+## The gate comes from the power's RARITY (D255), not from a number on its file. Rarity is itself
+## derived from `power_value()`, so the depth a power waits at now follows its measured strength —
+## the same chain the price already ran on, and the same one relics have used since D223.
 func power_available(id: String) -> bool:
 	var p := Balance.power(id)
-	return p != null and clear_count() >= p.unlock_after_clears
+	return p != null and Balance.power_unlocked(p.rarity, clear_count())
 
 ## Three powers to choose from at the start of a run (D245).
 ##

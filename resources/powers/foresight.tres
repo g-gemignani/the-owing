@@ -10,7 +10,6 @@ description = "Draw 1 card. Free."
 cost = 0
 rarity = 1
 level = 1
-unlock_after_clears = 0
 max_level = 10
 draw = 1
 type = 1

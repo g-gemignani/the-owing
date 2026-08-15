@@ -100,6 +100,50 @@ func _init() -> void:
 			fails += 1
 			print("FAIL the deck builder rolls its own power offer — re-opening it would re-deal (D252)")
 
+	# --- the clears gate is DERIVED from rarity, and rises with it (D255) ---
+	#
+	# It was a hand-set field on each of the thirty files while `rarity` is written from
+	# `power_value()` by `rerarify` — so the two drifted and nothing said so: Short Change came out
+	# LEGENDARY, the second-strongest power in the set, behind a gate of 2 clears, while Hold Fast
+	# waited 10 as a middling RARE. **The gate said one thing about a power's strength and the price
+	# said another, off the same catalogue.**
+	#
+	# Asserted on the TABLE rather than per power, because that is where the fact now lives. A test
+	# that walked the thirty files would be asserting the derivation had happened rather than that it
+	# is right.
+	for r2 in range(1, CardData.Rarity.size()):
+		if Balance.POWER_UNLOCK[r2] < Balance.POWER_UNLOCK[r2 - 1]:
+			fails += 1
+			print("FAIL %s opens before %s (%d clears vs %d) — a rarer power must not arrive sooner" % [
+				CardData.rarity_badge(r2), CardData.rarity_badge(r2 - 1),
+				int(Balance.POWER_UNLOCK[r2]), int(Balance.POWER_UNLOCK[r2 - 1])])
+	# COMMON at zero, or a new character reaches the Power Pick screen with nothing on it: the offer
+	# falls back to everything UNLOCKED when the save owns too few to fill three (D245).
+	if Balance.POWER_UNLOCK[CardData.Rarity.COMMON] != 0:
+		fails += 1
+		print("FAIL commons are gated — a zero-clear save would be offered no power at all")
+	var fresh = Meta_.new()
+	fresh.path_prefix = SANDBOX
+	fresh.slot = 7
+	fresh.new_save()
+	if fresh.power_offer(3).size() < 3:
+		fails += 1
+		print("FAIL a fresh save is offered %d powers, not three" % fresh.power_offer(3).size())
+	# ...and every power is reachable eventually, which is what a gate must never break (D223's rule
+	# for relics, and the reason the deepest gate is checked against the campaign's own length).
+	if int(Balance.POWER_UNLOCK[CardData.Rarity.LEGENDARY]) > Balance.DUNGEONS.size():
+		fails += 1
+		print("FAIL the deepest power gate (%d) is past a full clear of the game (%d dungeons)" % [
+			int(Balance.POWER_UNLOCK[CardData.Rarity.LEGENDARY]), Balance.DUNGEONS.size()])
+	# The field is gone, and a hand-set one would silently win over the table if it came back.
+	var pdsrc := FileAccess.open("res://scripts/power_data.gd", FileAccess.READ)
+	if pdsrc != null:
+		var pdtxt := pdsrc.get_as_text()
+		pdsrc.close()
+		if pdtxt.find("@export var unlock_after_clears") != -1:
+			fails += 1
+			print("FAIL PowerData declares unlock_after_clears again — the gate is derived from rarity (D255)")
+
 	# --- the Power Pick falls back to the procedural glyph (D254) ---
 	#
 	# The screen shipped with three empty circles. Two guards were tried before this one and both

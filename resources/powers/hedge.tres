@@ -10,7 +10,6 @@ description = "Gain 3 Block and 2 Thorns."
 cost = 1
 rarity = 1
 level = 1
-unlock_after_clears = 5
 max_level = 10
 block = 3
 gain_thorns = 2

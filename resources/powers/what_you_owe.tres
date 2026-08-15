@@ -10,7 +10,6 @@ description = "Deal 2 damage, and 3 more for every debuff on the target."
 cost = 1
 rarity = 2
 level = 1
-unlock_after_clears = 7
 max_level = 10
 damage = 2
 damage_per_debuff = 3

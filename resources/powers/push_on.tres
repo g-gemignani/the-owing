@@ -10,7 +10,6 @@ description = "Gain 1 Energy. Costs 5 HP."
 cost = 0
 rarity = 3
 level = 1
-unlock_after_clears = 5
 max_level = 10
 energy_gain = 1
 hp_cost = 5

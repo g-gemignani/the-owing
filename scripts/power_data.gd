@@ -21,8 +21,14 @@
 class_name PowerData
 extends CardData
 
-## Dungeon clears needed before this power can be bought at all.
-@export var unlock_after_clears: int = 0
+## NOTE: `unlock_after_clears` is GONE (D255). It was a hand-set number on each of the thirty files,
+## and `rarity` is written from `power_value()` afterwards by `tools/rerarify.gd` — so the two were
+## never reconciled and disagreed about the same power: Short Change came out LEGENDARY, the
+## second-strongest of the set, behind a gate of 2 clears, while Hold Fast waited 10 clears as a
+## middling RARE.
+##
+## The gate is `Balance.POWER_UNLOCK[rarity]` now, which is the shape relics have used since D223 and
+## the shape `power_price` already used. A field nobody can author is a field that cannot drift.
 
 ## Powers level like cards, but with gold only — there are no duplicate copies of
 ## a power to spend. See Balance.power_upgrade_cost.

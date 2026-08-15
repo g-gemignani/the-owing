@@ -10,7 +10,6 @@ description = "Deal 2 damage, and 8 more if your hand is empty."
 cost = 1
 rarity = 1
 level = 1
-unlock_after_clears = 6
 max_level = 10
 damage = 2
 bonus_if_hand_empty = 8

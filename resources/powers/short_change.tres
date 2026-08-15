@@ -10,7 +10,6 @@ description = "Gain 1 Block. The next card you play costs 1 less."
 cost = 2
 rarity = 4
 level = 1
-unlock_after_clears = 2
 max_level = 10
 block = 1
 discount_next = 1

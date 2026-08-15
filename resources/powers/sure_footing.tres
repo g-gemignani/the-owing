@@ -10,7 +10,6 @@ description = "Gain 1 Dexterity."
 cost = 1
 rarity = 0
 level = 1
-unlock_after_clears = 2
 max_level = 10
 gain_dexterity = 1
 type = 1

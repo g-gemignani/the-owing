@@ -109,7 +109,13 @@ func _refresh() -> void:
 				UITheme.style_button(gate)
 				# Two powers unlock at exactly one clear, so this button read
 				# "needs 1 clears" for the whole life of the screen (D125).
-				gate.text = "needs %s" % Wording.count(p.unlock_after_clears, "clear")
+				#
+				# The number is what is STILL TO GO rather than the gate itself (D255), which is
+				# what a player wants from a locked row and is what the relics screen already
+				# prints. It is derived from rarity now, so a retune of `power_value` moves this
+				# line without anybody editing it.
+				gate.text = "needs %s" % Wording.count(
+					Balance.power_clears_to_go(p.rarity, MetaState.clear_count()), "more clear")
 				gate.disabled = true
 				row.add_child(gate)
 			else:

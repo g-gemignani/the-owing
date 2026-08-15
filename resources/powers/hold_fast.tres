@@ -10,7 +10,6 @@ description = "Gain 4 Block and 1 Dexterity."
 cost = 1
 rarity = 2
 level = 1
-unlock_after_clears = 10
 max_level = 10
 block = 4
 gain_dexterity = 1

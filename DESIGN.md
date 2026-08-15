@@ -243,6 +243,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D252** | [The offer belonged to the screen, so it could be re-dealt by walking out](#d252--the-offer-belonged-to-the-screen-so-it-could-be-re-dealt-by-walking-out) |
 | **D253** | [The power choice gets its own screen, and the art list reopens](#d253--the-power-choice-gets-its-own-screen-and-the-art-list-reopens) |
 | **D254** | [The screen shipped with empty circles, and it took a photograph to find out](#d254--the-screen-shipped-with-empty-circles-and-it-took-a-photograph-to-find-out) |
+| **D255** | [The clears gate is derived from rarity, because the two disagreed about the same power](#d255--the-clears-gate-is-derived-from-rarity-because-the-two-disagreed-about-the-same-power) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -17184,3 +17185,69 @@ DISPLAY=:0 LIBGL_ALWAYS_SOFTWARE=1 godot --rendering-driver opengl3 res://tools/
 
 Thirty-four screens, about a minute, into `~/.local/share/Deckcrawl/shots/`. There is no reason for a
 layout change to go unphotographed again.
+
+---
+
+### D255 — The clears gate is derived from rarity, because the two disagreed about the same power
+
+Found by printing the thirty powers as a table and reading it. **Short Change came out LEGENDARY —
+the second-strongest power in the set at 10.7 — behind a gate of 2 clears. Hold Fast waited 10 clears
+as a middling RARE worth 6.6.** The gate said one thing about a power's strength and the price said
+the opposite, off the same catalogue.
+
+Neither number was wrong on its own. `unlock_after_clears` was a hand-set field on each of the thirty
+`.tres` files, written when the power was authored; `rarity` is derived from `power_value()` by
+`tools/rerarify.gd` and rewritten every time the set grows. **One was authored and one was derived,
+so they could only agree by accident, and after D250 tripled the set they did not.**
+
+#### The fix is the shape the rest of the file already uses
+
+`Balance.POWER_UNLOCK := [0, 1, 3, 6, 10]`, indexed by rarity, with `power_unlocked()` and
+`power_clears_to_go()` beside it — the same shape `RELIC_UNLOCK` has had since D223, and the same
+derivation `power_price` (`card_price(rarity) * 2`) has always used. `PowerData.unlock_after_clears`
+is **deleted**, from the class and from all thirty files. A field nobody can author is a field that
+cannot drift.
+
+**Shallower than the relic gate [0, 3, 7, 11, 16] on purpose**, and the difference is what the two
+things are for. A relic is found, and its gate paces a set completed after the game. A power is the
+run's lens and one is carried on every single run — so a pool opening as slowly as the relics would
+leave the first ten runs choosing between the same three commons.
+
+The powers screen also stopped printing the gate and started printing what is **still to go**, which
+is what a player wants from a locked row and what the relics screen already did.
+
+#### The table is monotonic now
+
+| clears | rarity | count | price |
+|---:|---|---:|---:|
+| 0 | Common | 9 | 72 |
+| 1 | Uncommon | 8 | 114 |
+| 3 | Rare | 7 | 186 |
+| 6 | Epic | 4 | 322 |
+| 10 | Legendary | 2 | 720 |
+
+#### Four things the guard asserts, all mutation-checked
+
+Nothing caught the original drift, so `tests/test_power.gd` now asserts the table rather than the
+files — a test walking the thirty `.tres` would only be checking that the derivation had run, not
+that it is right.
+
+* **The gates ascend with rarity.** Swapping Epic and Legendary fires it.
+* **COMMON is 0.** `power_offer` falls back to everything *unlocked* when the save owns too few to
+  fill three (D245), so gating commons hands a new character an empty screen on the way into their
+  first dungeon. Gating them fires two clauses at once — the rule and the consequence.
+* **A fresh save is offered three.** The consequence, checked directly rather than reasoned about.
+* **The deepest gate is inside the campaign.** 40 clears against 12 dungeons fires it. Every power
+  must stay reachable, which is D223's rule for relics.
+* **The field has not come back.** A hand-set `unlock_after_clears` would silently win over the table.
+
+#### The general shape, for the next one
+
+**A number that is authored and a number that is derived from the same subject will disagree, and
+the derived one is right.** Rarity in this project already sets the level cap, the growth rate, the
+drop weight, the shop price and how long a relic waits (D224/D225). The clears gate was the last
+thing about a power that a person still typed, and it was the one thing about a power that was wrong.
+
+It was also invisible until the catalogue was printed as a table and read top to bottom — which cost
+one throwaway script, and is the same move that found D124's policy holes and D208's profile
+arithmetic.

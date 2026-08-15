@@ -610,6 +610,39 @@ static func all_powers() -> Array:
 static func power_price(rarity: int) -> int:
 	return card_price(rarity) * 2
 
+## Dungeon clears before a power of each RARITY can be offered at all (D255).
+##
+## **Derived from rarity, like the price above it and like `RELIC_UNLOCK` (D223) — not authored.**
+## `PowerData.unlock_after_clears` was a hand-set number on each of the thirty files, and rarity is
+## written from `power_value()` afterwards by `tools/rerarify.gd`, so the two were never reconciled:
+## Short Change came out LEGENDARY, the second-strongest power in the set, behind a gate of 2 clears,
+## while Hold Fast sat at 10 clears as a middling RARE. **The gate said one thing about a power's
+## strength and the price said another, off the same catalogue.**
+##
+## Shallower than `RELIC_UNLOCK` [0, 3, 7, 11, 16] on purpose, and the difference is what the two
+## things are. A relic is FOUND, and the gate paces a set you complete after the game (D223). A power
+## is the run's own lens and one is carried every single run, so a pool that opens as slowly as the
+## relics would leave the first ten runs choosing between the same three commons.
+##
+## COMMON must stay 0. `MetaState.power_offer` falls back to everything unlocked when the save owns
+## too few to fill an offer, so a zero-clear save with nothing open would be handed an empty screen
+## on the way into its first dungeon.
+const POWER_UNLOCK := [0, 1, 3, 6, 10]
+
+## Whether a power of this rarity is in the pool yet. Out of range is UNLOCKED, for the reason
+## `relic_unlocked` gives: a rarity with no row is content that outran its tuning, and the failure
+## that should follow is a power arriving early rather than one that can never arrive at all.
+static func power_unlocked(rarity: int, clears: int) -> bool:
+	if rarity < 0 or rarity >= POWER_UNLOCK.size():
+		return true
+	return clears >= int(POWER_UNLOCK[rarity])
+
+## Clears still to go before this rarity opens, or 0 if it is already open.
+static func power_clears_to_go(rarity: int, clears: int) -> int:
+	if rarity < 0 or rarity >= POWER_UNLOCK.size():
+		return 0
+	return maxi(0, int(POWER_UNLOCK[rarity]) - clears)
+
 ## Gold to take a power from `level` to `level + 1`. Reuses the fusion gold curve
 ## so the two upgrade tracks compete on equal terms rather than one being the
 ## obvious dump for spare gold.

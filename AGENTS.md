@@ -90,7 +90,12 @@ The loop:
    Powers alike (D225) — the bands may not overlap, and the rarity suite fails a
    catalogue where a common outranks an uncommon. It is not a colour: it sets the level
    cap, the growth rate, the drop weight, the shop price, how many clears a relic waits
-   for, and what a Power costs to buy and to level.
+   for, what a Power costs to buy and to level, **and since D255 how many clears a Power
+   waits for too** — `Balance.POWER_UNLOCK`, indexed by rarity, replacing a hand-set field on
+   each of the thirty files. Those two disagreed about the same power: Short Change was
+   LEGENDARY behind a gate of 2 clears while Hold Fast waited 10 as a middling RARE. **A number
+   that is authored and a number that is derived from the same subject will disagree, and the
+   derived one is right.**
 
    **And the suite only ever checked the CARDS, for two hundred entries (D250).** Relics and
    powers wore a derived rarity with nothing asserting it, and it went wrong silently: the

@@ -10,7 +10,6 @@ description = "Apply 2 Weak."
 cost = 1
 rarity = 0
 level = 1
-unlock_after_clears = 1
 max_level = 10
 apply_weak = 2
 type = 1

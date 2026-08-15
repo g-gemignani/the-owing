@@ -10,7 +10,6 @@ description = "Gain 2 Block, and 2 more for every card in your hand."
 cost = 1
 rarity = 2
 level = 1
-unlock_after_clears = 4
 max_level = 10
 block = 2
 block_per_card_in_hand = 2

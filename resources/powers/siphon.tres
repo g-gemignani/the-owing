@@ -10,7 +10,6 @@ description = "Deal 3 damage. Heal for it."
 cost = 1
 rarity = 0
 level = 1
-unlock_after_clears = 3
 max_level = 10
 damage = 3
 lifesteal = true

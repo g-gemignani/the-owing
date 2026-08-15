@@ -10,7 +10,6 @@ description = "Gain 1 Block, then deal damage equal to it."
 cost = 1
 rarity = 3
 level = 1
-unlock_after_clears = 7
 max_level = 10
 block = 1
 damage_from_block = true

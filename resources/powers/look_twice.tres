@@ -10,7 +10,6 @@ description = "Draw 2."
 cost = 2
 rarity = 4
 level = 1
-unlock_after_clears = 4
 max_level = 10
 draw = 2
 type = 1
