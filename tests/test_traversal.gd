@@ -30,7 +30,11 @@ func budget(did: String = "") -> int:
 		return Balance.ENCOUNTER_COMBATS + Balance.ENCOUNTER_ELITES \
 			+ Balance.ENCOUNTER_RESTS + Balance.ENCOUNTER_SHOPS \
 			+ Balance.ENCOUNTER_EVENTS + Balance.ENCOUNTER_TREASURES + 1
-	var m := dd.encounter_mix()
+	# Scaled to the dungeon's own depth (D275): the FLOOR is the unit and depth adds floors, so a
+	# deep dungeon really does cost more than a shallow one. Reading the unscaled mix here made this
+	# guard compare a 20-encounter Maw against the 12 its .tres authors.
+	var m := Balance.scale_mix_to_floors(dd.encounter_mix(),
+		Balance.iso_floors_for(dd.difficulty))
 	var n := 1   # the boss
 	for k in m:
 		n += int(m[k])

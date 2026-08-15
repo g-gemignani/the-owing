@@ -3454,10 +3454,22 @@ func chest_at(x: int, y: int) -> String:
 	return String(chest_of.get(y * w + x, ""))
 
 ## Which decoration lies on this tile, as one of `Balance.ISO_PROP_SHAPES`, or "" for a bare
-## one (D176). The shape and not the whole entry: the view has one drawing per shape and
-## needs nothing else, and returning a Dictionary per tile per frame would allocate 144
-## times a redraw for a string.
+## one (D176). One FIELD and not the whole entry, which is why `prop_name` below is a second
+## accessor rather than this one returning a Dictionary: a Dictionary per tile per frame
+## allocates 144 times a redraw where a String does not.
 func prop_shape(x: int, y: int) -> String:
+	return _prop_field(x, y, "shape")
+
+## The prop's NAME, for the view to look up a painting by (D282).
+##
+## Sixteen props share seven shapes, so `prop_shape` alone cannot tell stacked bone from
+## spoil from fungal clusters — the table has always said they are different things and the
+## screen has always drawn one heap for all three. The name is what a painting is keyed on,
+## through `PixelArt.iso_prop_id`. The shape stays as the fallback drawing.
+func prop_name(x: int, y: int) -> String:
+	return _prop_field(x, y, "name")
+
+func _prop_field(x: int, y: int, key: String) -> String:
 	if x < 0 or y < 0 or x >= w or y >= h:
 		return ""
 	var p := int(props[y * w + x]) - 1
@@ -3466,7 +3478,7 @@ func prop_shape(x: int, y: int) -> String:
 	var kinds: Array = Balance.iso_props(terrain)
 	if p >= kinds.size():
 		return ""
-	return String((kinds[p] as Dictionary).get("shape", ""))
+	return String((kinds[p] as Dictionary).get(key, ""))
 
 ## How lit this tile is, 0 (only whatever the floor has) to 1 (a source is standing on it).
 func light(x: int, y: int) -> float:

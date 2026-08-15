@@ -167,6 +167,29 @@ const ART_DIR := "res://assets/art/iso/"
 const FOE_DIR := "foe/"
 ## Suffix for the mirrored copy of a sprite in `art` and `stand`. Not a file on disk.
 const FLIP := "_flip"
+## Prefix for a dressing painting in `art`, keyed by the prop's name (D282). A prefix rather
+## than a bare name, because `art` is one flat namespace shared with the figures and a prop
+## called `rest` would otherwise take the campfire's key.
+const PROP := "prop:"
+## How much of a tile a painted ground prop covers, and how much of a wall face a painted
+## wall prop covers. All three are fractions of the tile's WIDTH. Under 1.0 for every one of
+## them: a prop is a thing lying ON the floor, and one drawn edge to edge is a second floor
+## rather than an object on the first.
+##
+## **Sized against the HERO, because that is the only thing on this screen with a known
+## height.** She measures 126px of subject on an unscaled window, so a fraction here times
+## 116 is directly readable as a fraction of a person: 0.16 is a ring 19px across, which is
+## a hand-span on a person's frame, and 0.34 is a curtain of roots 39px long.
+##
+## One number was two things and the ring paid for it. `PROP_WALL` was 0.52, then 0.30, and
+## both were chosen to suit the drapes — at 0.30 an iron ring was 34px across against a
+## 126px hero, a door-ring a quarter of a person tall, and it read as a hole punched through
+## the wall. The shape field already says which kind of thing hangs there, so it picks the
+## number: a `ring` is a fixture and a `growth` is a drape, and they have no business being
+## the same size.
+const PROP_TILE := 0.72
+const PROP_WALL_RING := 0.16
+const PROP_WALL_DRAPE := 0.34
 ## On-screen height of each sprite, as a multiple of the tile's height. A sprite is
 ## anchored by its FEET — horizontally by its own stand point, measured from the art
 ## (`IsoFooting.offset`), which is why only a height is needed here.
@@ -181,10 +204,26 @@ const FLIP := "_flip"
 ## small together without any one of them looking wrong beside its neighbour. The floor is
 ## 116x58 unscaled, so a 1.7 chest occupied ~99px of a 720px window: correct by the table
 ## and too small to read as a thing you walk up to.
+## **These are CANVAS heights, not subject heights, and the difference is the trap.** Every
+## file is 128x192 and bottom-anchored, so a subject wider than that aspect hits the width
+## limit and leaves its headroom empty — the crossed axes of `elite.png` fill 55% of their
+## canvas top to bottom where the hero fills 98%. A number in this table therefore says how
+## tall the FILE is drawn, and what the player sees is that times the file's own fill.
+##
+## Measured on the installed art, as a multiple of the hero's 126px of subject:
+## combat 1.00, elite 0.62, boss 0.93, shop 0.81, event 0.98, treasure 0.56, wander 0.78,
+## rest 0.45. The three fight markers still escalate — by AREA, which is what a wide marker
+## is read by: 5670, 7176, 11934 px. Read the fill before changing a number here, or a
+## constant that looks like a 10% nudge lands as a 40% one.
 const SPRITE_H := {
 	"combat": 2.20, "elite": 2.45, "boss": 2.45,
-	"shop": 2.15, "rest": 2.15, "event": 2.15, "treasure": 2.05,
-	"wander": 1.95,
+	# A campfire is not a person. `rest` was 2.15, one notch under the hero's own 2.20, and
+	# it drew a fire 0.83x her height — she could have warmed her hands on the top of it.
+	# 1.15 is a knee-high fire, which is what a thing you sit down beside looks like.
+	"shop": 2.15, "rest": 1.15, "event": 2.15, "treasure": 2.05,
+	# A wanderer is a spider and the hero note below says she is taller than one. At 1.95 it
+	# measured 0.89x her, which is not taller in any way a player would notice.
+	"wander": 1.70,
 	# The hero is a person, and the armoured brutes she meets are not: shorter than a
 	# combat and taller than a spider is the whole reading, and it has to survive the
 	# fact that she is drawn last and so never occluded.
@@ -429,6 +468,17 @@ func _load_art() -> void:
 				var ttex := load(tpath) as Texture2D
 				if ttex != null:
 					art["%s_%s" % [pair, t]] = ttex
+	# The dressing, keyed by the prop's NAME rather than its shape (D282). Sixteen named
+	# props share seven drawn shapes, so a painting per name is what lets the Crypt's
+	# stacked bone stop being the Warrens' spoil. Absent files are simply not in `art`, and
+	# `_draw_prop` keeps the computed shape — the same "switch on the moment the file
+	# exists" rule the UI chrome was wired with (D105/D107).
+	for t in Balance.ISO_TERRAINS:
+		for entry in Balance.iso_props(t):
+			var pname := String((entry as Dictionary).get("name", ""))
+			var ptex := PixelArt.iso_prop_art(pname)
+			if ptex != null:
+				art[PROP + pname] = ptex
 
 ## The sprite for ONE archetype, by id and facing — the creature itself rather than the
 ## family it belongs to. Returns the role key, or "" when that archetype has no painting
@@ -870,7 +920,8 @@ func _draw_floor() -> void:
 			# ...and whatever is lying on it. Ground clutter only, drawn UNDER everything
 			# that stands on the tile, because it is part of the floor and not a thing on it.
 			if seen:
-				_draw_prop(tv.prop_shape(x, y), centre, t, _lit(tv, x, y, tint), x, y)
+				_draw_prop(tv.prop_shape(x, y), centre, t, _lit(tv, x, y, tint), x, y,
+					tv.prop_name(x, y))
 			# Only the tiles you can step into are outlined (D87). Every tile used to
 			# carry a hairline, and on a floor of seamless stone that hairline WAS the
 			# grid — the one thing left saying "this ground is made of cells" once the
@@ -1148,7 +1199,7 @@ func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
 		var shape := tv.prop_shape(x, y)
 		if shape != "":
 			_draw_wall_prop(shape, centre + Vector2(t.x * 0.25, -t.y * 0.25)
-				+ lift * 0.5, t, Color(TINT_WALL_R) * wash)
+				+ lift * 0.5, t, Color(TINT_WALL_R) * wash, tv.prop_name(x, y))
 		# ...and a mark, if this is a wall with something behind it and the player is close
 		# enough to make it out (D182).
 		var cell_here: int = y * tv.grid().x + x
@@ -1386,13 +1437,25 @@ func _lit_by(base: Color, v: float, hue: float) -> Color:
 ## `x`/`y` seed the variation, the way `_draw_ground` seeds its UVs — the same shape has to
 ## look slightly different on two tiles or a store of six crates reads as wallpaper.
 func _draw_prop(shape: String, centre: Vector2, t: Vector2, tint: Color,
-		x: int, y: int) -> void:
+		x: int, y: int, prop_name: String = "") -> void:
 	if shape == "":
 		return
 	var dark := Color(tint.r * PROP_DARK, tint.g * PROP_DARK, tint.b * PROP_DARK, 1.0)
 	var jit := fposmod(float(x) * 0.61 + float(y) * 0.29, 1.0) - 0.5
 	var jit2 := fposmod(float(y) * 0.53 + float(x) * 0.37, 1.0) - 0.5
 	var off := Vector2(t.x * 0.16 * jit, t.y * 0.16 * jit2)
+	# A painting, where one has been drawn for this NAME (D282). Lit by the tile's own tint
+	# exactly as the computed shape is, so a painted prop and a drawn one on the next tile
+	# are in the same light — the whole point of the multiply above.
+	var tex: Texture2D = art.get(PROP + prop_name)
+	if tex != null:
+		var sz := Vector2(t.x * PROP_TILE, t.x * PROP_TILE
+			* float(tex.get_height()) / maxf(1.0, float(tex.get_width())))
+		# Anchored by the BOTTOM, like everything else that sits on a tile, so a taller
+		# painting grows upward off the floor rather than sinking into it.
+		floor_view.draw_texture_rect(tex,
+			Rect2(centre + off - Vector2(sz.x * 0.5, sz.y - t.y * 0.22), sz), false, tint)
+		return
 	match shape:
 		"cracks":
 			# Two or three hairlines along the tile's long axis. The one shape that says
@@ -1474,9 +1537,21 @@ func _draw_prop(shape: String, centre: Vector2, t: Vector2, tint: Color,
 ## for the ground and reused on a wall comes out lying down on it. Only the shapes that make
 ## sense hanging are drawn; the rest simply do not appear on rock, which is why the props
 ## table says which of the two each entry is.
-func _draw_wall_prop(shape: String, at: Vector2, t: Vector2, face: Color) -> void:
+func _draw_wall_prop(shape: String, at: Vector2, t: Vector2, face: Color,
+		prop_name: String = "") -> void:
 	var pale := Color(face.r * PROP_PALE, face.g * PROP_PALE, face.b * PROP_PALE, 0.95)
 	var dark := Color(face.r * PROP_DARK, face.g * PROP_DARK, face.b * PROP_DARK, 0.85)
+	# A painting, where one exists for this name (D282). Centred on the face rather than
+	# footed: a ring hangs on a wall, it does not stand on it.
+	var tex: Texture2D = art.get(PROP + prop_name)
+	if tex != null:
+		# A fixture is not a drape. `ring` is bolted to the wall and is the size of a hand;
+		# everything else that hangs is matter falling down the face and is three times that.
+		var wdt: float = t.x * (PROP_WALL_RING if shape == "ring" else PROP_WALL_DRAPE)
+		var hgt: float = wdt * float(tex.get_height()) / maxf(1.0, float(tex.get_width()))
+		floor_view.draw_texture_rect(tex,
+			Rect2(at - Vector2(wdt * 0.5, hgt * 0.5), Vector2(wdt, hgt)), false, face)
+		return
 	match shape:
 		"ring":
 			floor_view.draw_arc(at, t.y * 0.16, 0.0, TAU, 16, pale, UITheme.px(2.2))
