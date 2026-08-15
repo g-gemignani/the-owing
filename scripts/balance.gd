@@ -3625,6 +3625,14 @@ const SHOP_CARD_OFFERS := 3
 ## driver has to lay out the same number of cards the screen does, or it is choosing from a
 ## different offer than the player sees.
 const REWARD_CARD_OFFERS := 3
+## How many powers the door deals at the start of a run, of which the player takes one (D245).
+##
+## A SEPARATE constant from the card one above even though both are 3 today (D277). They answer
+## different questions — one is how wide a fight's reward is, the other how wide a run's opening
+## choice is — and tuning either to 2 or 4 must not silently move the other. The powers screen
+## reads this to say when the offer is topping itself up from unowned powers, and it was written
+## against `REWARD_CARD_OFFERS` first, which was right by accident and wrong by meaning.
+const POWER_OFFERS := 3
 ## Healing sold as a fraction of max HP.
 const SHOP_HEAL_FRAC := 0.35
 

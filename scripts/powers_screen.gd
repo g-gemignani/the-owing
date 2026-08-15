@@ -100,7 +100,7 @@ func _refresh() -> void:
 	# offer needs, because an offer of one is not a choice. That makes an unowned power dealable
 	# RIGHT NOW, which contradicts every other row on the screen — so it is said out loud, and
 	# only while it is true.
-	var need: int = Balance.REWARD_CARD_OFFERS
+	var need: int = Balance.POWER_OFFERS
 	if in_deal < need:
 		rule_label.text = ("You own %s that can be dealt, and the door needs %d. "
 			+ "Until then it tops the deal up from everything unlocked below.") % [
@@ -238,16 +238,22 @@ func _row(pid: String, owned: bool, open: bool) -> void:
 			up.pressed.connect(_on_upgrade.bind(pid))
 			row.add_child(up)
 
-		var eq := Button.new()
-		UITheme.style_button(eq)
-		var on: bool = pid == MetaState.equipped_power
-		eq.text = "Equipped" if on else "Equip"
-		eq.disabled = on
-		eq.pressed.connect(func():
-			MetaState.equip_power(pid)
-			Audio.play("ui_confirm")
-			_refresh())
-		row.add_child(eq)
+		# The Equip button stood here and is GONE (D277). It called `MetaState.equip_power`, which
+		# no longer decides anything a player can see: the run's power comes from the three the
+		# door deals (D245/D253). A button reading "Equipped" beside one row, on a screen whose
+		# question is which power you take in, answered that question wrongly and louder than
+		# anything else on the screen. `equip_power` and `equipped_power` stay in `MetaState` —
+		# `set_run_power("")` falls through to them and the tools and suites rely on it — but the
+		# fallback is not a decision, so it does not get a control.
+
+func _row_tip(p: PowerData, owned: bool, open: bool) -> String:
+	if not open:
+		return ("Sealed. Clear more dungeons and this whole rarity opens at once — the gate is "
+			+ "the rarity's, not this power's (D255).")
+	if owned:
+		return "In the deal. The door can offer you this one, and it leans toward the deck you built."
+	return ("Not bought. Buy it and it joins the deal for good. Until you own three, the door "
+		+ "tops the deal up from everything unlocked, so it can still turn up.")
 
 func _on_buy(pid: String) -> void:
 	if MetaState.buy_power(pid):
