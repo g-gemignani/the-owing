@@ -15,7 +15,7 @@ regenerated, so a set that has been re-rolled leaves the table on its own. The
 |---|---|---|---|---|
 | `enemies/`  ← **the bible** | 35 | 0.30 | 31.4% | 1.7% |
 | `iso/foe/` | 70 | 0.34 | 27.3% | 3.4% |
-| `powers/` | 30 | 0.49 | 13.1% | 8.3% |
+| `powers/` | 30 | 0.35 | 25.2% | 2.8% |
 | `relics/` | 38 | 0.58 | 4.9% | 19.9% |
 
 The bible measures **0.30 mean luminance and 31.4% ink**. A set that is far
@@ -25,7 +25,7 @@ from both is not a matter of taste — it is a set drawn to a different brief.
 
 Flat vector clip art: one thin uniform stroke, flat fill, saturated primaries.
 They sit on the Powers screen and on the run header, so the player meets them
-every turn. Measured **0.49 / 13.1% ink / 8.3% blown** against the bible's
+every turn. Measured **0.35 / 25.2% ink / 2.8% blown** against the bible's
 **0.30 / 31.4% / 1.7%**.
 
 **Ask for a painted OBJECT, not a symbol** — the thing the power IS, drawn the

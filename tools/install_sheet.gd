@@ -169,6 +169,7 @@ func _init() -> void:
 	var only: Array[String] = []
 	var inset := 0
 	var crop := Rect2i()
+	var luma := 0.0
 	for a in args:
 		var s := String(a)
 		if s.begins_with("--only="):
@@ -179,6 +180,21 @@ func _init() -> void:
 			# the image, because what makes it true is that the PROMPT promised the colour
 			# appears nowhere in the subject.
 			Cut.assume_keyed = true
+		elif s.begins_with("--luma="):
+			# The VALUE of a set, corrected after the fact instead of re-prompted.
+			#
+			# A brief cannot hit a number. "Dark, nothing near white" produced 30 sigils at
+			# 0.15 mean luminance against a 0.30 bible, and the identical wording produced
+			# landmark caps at 0.10-0.16 an hour earlier — both times the art was right and
+			# the value was wrong, and both times the only way to see it was to install and
+			# measure (D288, D296). `install_iso_material.gd` has had this knob since D267
+			# for exactly this reason; a sheet had no equivalent, so a value defect cost a
+			# whole generation to correct.
+			#
+			# A GAIN, not a curve, for the reason that file gives: a gamma would also hit
+			# the number and would change the ratio between the object and its own ink,
+			# which is the thing the painting is being kept for.
+			luma = clampf(float(s.trim_prefix("--luma=")), 0.0, 1.0)
 		elif s.begins_with("--crop="):
 			# The sheet is a SCREEN CAPTURE and the picture is not the whole frame.
 			# A browser capture of a 16:9 sheet on a 2:1 viewport carries a band of
@@ -202,7 +218,7 @@ func _init() -> void:
 		elif not s.begins_with("--"):
 			positional.append(s)
 	if positional.size() < 2 or not SETS.has(positional[0]):
-		print("usage: -- <%s> <sheet.png> [--only=a,b] [--cols=N] [--rows=N] [--cells=i,j,k...] [--crop=x,y,w,h] [--inset=N] [--key] [--dry]" % "|".join(SETS.keys()))
+		print("usage: -- <%s> <sheet.png> [--only=a,b] [--cols=N] [--rows=N] [--cells=i,j,k...] [--crop=x,y,w,h] [--luma=N] [--inset=N] [--key] [--dry]" % "|".join(SETS.keys()))
 		quit(2)
 		return
 
@@ -305,12 +321,20 @@ func _init() -> void:
 			print("FAIL  r%dc%d -> %-24s %s" % [cy, cx, rel.get_file(), note])
 			failed += 1
 			continue
+		# The VALUE, corrected to the number the caller asked for. After the cut, because
+		# it is the SUBJECT's mean that matters and the field is transparent by now — a
+		# gain computed over the whole cell would be a gain computed mostly over the key.
+		var gain := 1.0
+		if luma > 0.0:
+			gain = _normalise(cell, luma)
 		# A subject touching its own cell edge ran out of the grid the sheet was drawn
 		# on, so what landed in the file is a crop, not an icon.
 		var box: Rect2i = Cut.last_bbox
 		var edge := box.position.x <= 0 or box.position.y <= 0 \
 			or box.end.x >= cw - ins * 2 or box.end.y >= ch - ins * 2
 		var flag := ""
+		if gain != 1.0:
+			flag += "  [luma x%.2f]" % gain
 		if Cut.despilled > 0 or Cut.bled > 0 or Cut.key_cleared > 0:
 			flag = "  (key %d, despilled %d, bled %d)" % [Cut.key_cleared, Cut.despilled, Cut.bled]
 		if edge:
@@ -437,3 +461,37 @@ func _ids(set_name: String) -> Array:
 	# asking for the art in D111. An installer for files nothing loads is a way to
 	# spend an afternoon painting a screen that does not exist.
 	return out
+
+
+## Scale every channel of the OPAQUE pixels by one factor, so their mean luminance lands
+## on `target`. Returns the factor, which the caller prints: a gain far from 1.0 is the
+## number that says the brief and the target disagree, and it is worth seeing per cell
+## rather than per sheet.
+##
+## Opaque only, and that is the whole difference from `install_iso_material.normalise`.
+## A material is full-bleed so every pixel counts; an icon is mostly transparent, and a
+## mean taken over the canvas is a mean taken over the hole in the middle.
+func _normalise(img: Image, target: float) -> float:
+	var sum := 0.0
+	var n := 0
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			sum += c.get_luminance()
+			n += 1
+	if n == 0:
+		return 1.0
+	var mean: float = sum / float(n)
+	if mean <= 0.0001:
+		return 1.0
+	var k: float = target / mean
+	for y in img.get_height():
+		for x in img.get_width():
+			var c := img.get_pixel(x, y)
+			if c.a <= 0.0:
+				continue
+			img.set_pixel(x, y, Color(minf(1.0, c.r * k), minf(1.0, c.g * k),
+				minf(1.0, c.b * k), c.a))
+	return k
