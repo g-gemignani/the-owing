@@ -520,10 +520,22 @@ func power_available(id: String) -> bool:
 ## deck, so the layers read as — the deck is your thesis, the power is the run's lens, the relics are
 ## the escalation.
 ##
-## Drawn from what the save has UNLOCKED rather than what it owns, weighted by nothing: a power's
-## rarity already gates it through `unlock_after_clears`, and weighting on top of that would hide the
-## deepest powers behind two gates.
-func power_offer(n: int = 3) -> Array:
+## Drawn from what the save has UNLOCKED rather than what it owns, and NOT weighted by rarity: a
+## power's rarity already gates it through `Balance.POWER_UNLOCK`, and weighting on top of that would
+## hide the deepest powers behind two gates.
+##
+## It IS weighted by the deck (D256). Flat, the offer answered a question nobody asked — three powers
+## drawn with no reference to the twenty cards the player had just committed to, so a pure-Block deck
+## was as likely to be handed an attack lens as a defensive one, and two of the three faces were
+## usually about a game the deck was not playing. Weighting is the same machinery `relic_offer` has
+## used since D234, pointed at `Balance.power_affinity`, and it is a nudge and not a filter for the
+## reason written there: picks push you further into what you already are; the game does not refuse
+## to show you anything else.
+##
+## `deck` empty means no tilt — `deck_lean` of nothing is all zeros, so every affinity comes back at
+## 1.0 and the draw is the flat one this used to be. That is what the tools and the tests get, and it
+## is the honest answer when there is no deck to fit.
+func power_offer(n: int = 3, deck: Array = []) -> Array:
 	var pool: Array = []
 	for id in Balance.POWERS:
 		if power_available(id) and owns_power(id):
@@ -535,8 +547,30 @@ func power_offer(n: int = 3) -> Array:
 		for id in Balance.POWERS:
 			if power_available(id) and not (id in pool):
 				pool.append(id)
-	pool.shuffle()
-	return pool.slice(0, mini(n, pool.size()))
+	var lean := Balance.deck_lean(deck)
+	var weights: Array = []
+	for id in pool:
+		weights.append(Balance.power_affinity(Balance.power(String(id)), lean))
+	# Drawn WITHOUT replacement, the same way and for the same reason `relic_offer` is: a duplicate
+	# in a choice of three is a choice of two wearing three buttons.
+	var out: Array = []
+	for _k in mini(n, pool.size()):
+		var total := 0.0
+		for w in weights:
+			total += float(w)
+		if total <= 0.0:
+			break
+		var roll := randf() * total
+		var pick := pool.size() - 1
+		for i in pool.size():
+			roll -= float(weights[i])
+			if roll < 0.0:
+				pick = i
+				break
+		out.append(pool[pick])
+		pool.remove_at(pick)
+		weights.remove_at(pick)
+	return out
 
 func power_price(id: String) -> int:
 	var p := Balance.power(id)

@@ -244,11 +244,15 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D253** | [The power choice gets its own screen, and the art list reopens](#d253--the-power-choice-gets-its-own-screen-and-the-art-list-reopens) |
 | **D254** | [The screen shipped with empty circles, and it took a photograph to find out](#d254--the-screen-shipped-with-empty-circles-and-it-took-a-photograph-to-find-out) |
 | **D255** | [The clears gate is derived from rarity, because the two disagreed about the same power](#d255--the-clears-gate-is-derived-from-rarity-because-the-two-disagreed-about-the-same-power) |
+| **D256** | [The power offer reads the deck, which moved where it is rolled](#d256--the-power-offer-reads-the-deck-which-moved-where-it-is-rolled) |
+| **D257** | [The last flat relics became conditional rules, and it closed the composition gap without moving `esc`](#d257--the-last-flat-relics-became-conditional-rules-and-it-closed-the-composition-gap-without-moving-esc) |
+| **D258** | [The front door moves into the woods, and the colour work carried over intact](#d258--the-front-door-moves-into-the-woods-and-the-colour-work-carried-over-intact) |
+| **D259** | [The last 28 icons, and four ways a generator lies about what it drew](#d259--the-last-28-icons-and-four-ways-a-generator-lies-about-what-it-drew) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
 
-**Cited but never written up:** D48 D93 D100 D110. Each is referenced by number
+**Cited but never written up:** D48 D93 D100 D110 D234. Each is referenced by number
 somewhere in this file and has no entry of its own. D110 is the documented
 case — D112 records it being left alone while a concurrent session held it.
 
@@ -17251,3 +17255,521 @@ thing about a power that a person still typed, and it was the one thing about a 
 It was also invisible until the catalogue was printed as a table and read top to bottom — which cost
 one throwaway script, and is the same move that found D124's policy holes and D208's profile
 arithmetic.
+
+---
+
+### D256 — The power offer reads the deck, which moved where it is rolled
+
+The offer was drawn flat. `MetaState.power_offer` collected every power the save had unlocked and
+owned, called `pool.shuffle()`, and took three — with no reference to the twenty cards the player had
+just committed to. So a pure-Block deck was as likely to be handed an attack lens as a defensive one,
+and on a typical deal two of the three faces were about a game the deck was not playing.
+
+The relic offer has not worked that way since D234. It weights by `Balance.deck_lean(deck)` through
+`relic_affinity`, at `AFFINITY_TILT = 1.5` — a nudge, not a filter, for the reason written there:
+picks push you further into what you already are; the game does not refuse to show you anything else.
+
+#### Affinity for a power is DERIVED, where a relic's has to be listed
+
+`relic_affinity` names eleven fields, because a relic is a bag of modifiers with no damage and no
+Block of its own. **A power has both.** `PowerData extends CardData` for the reason its own header
+gives, so a power's axis is the thing `deck_lean` already measures on any card, and
+`Balance.power_affinity` is four lines over `deck_lean([p])`.
+
+That is not a shortcut — it is the SAME derivation the deck answers with, pointed at one card. A
+power added later is weighed correctly with nothing to remember, which is D255's rule again:
+**anything derived beats anything authored.**
+
+Measured over the catalogue: **13 of the 30 powers lean attack, 7 lean defence, 10 are neutral** —
+pure draw, energy or status, no damage and no Block. Neutrals keep their base weight by design; those
+are the ones that make a build do something new, and squeezing them out would be the opposite of the
+point.
+
+#### The roll had to move, and the seam is `enter_dungeon`
+
+`select_dungeon` rolled it (D252). **That is a screen before the deck exists** — pick dungeon, roll,
+deck builder, `enter_dungeon(deck)`, Power Pick. Nothing to weight against.
+
+It moved to `enter_dungeon`, one line after `run_deck = deck`. D252's property survives intact and
+for a checkable reason: the Start button that calls it exists only in `Mode.OUTFIT`, and
+`Collection._mode_now()` returns `Mode.LEDGER` for the whole of a live run — so `enter_dungeon` is
+called once per run from the UI, and walking out and back in cannot re-deal. `select_dungeon` now
+CLEARS the offer instead, so a dungeon picked, backed out of and swapped does not carry the last
+one's three.
+
+#### What it cost: the deck builder's preview, and that was the right trade
+
+The deck builder listed the three with the chosen one marked, and they were pressable — a second
+place to make the pick. **It cannot show them any more, because the offer is a function of the deck
+and the deck is what that screen is for.** Three unconditioned faces followed by three different ones
+at the threshold is worse than showing none: it reads as a re-roll nobody asked for.
+
+Little is lost. D253 moved the pick onto its own screen, so that box had become a second place to
+press a decision that already had a first one. It now says `three dealt on the way down`, with the
+count of what the save's clears have opened in the tooltip.
+
+**A bare `Label` and not `UI.label`** — which autowraps. `CardGridTest` failed on the first version
+with *"no card face inside the frame to hover"*: a wrapped line in that narrow box grows it enough to
+push the card grid off the bottom of the frame. The comment three functions up warned about exactly
+this width budget for a button face, and the label walked into it.
+
+#### The tilt is measured on the DRAW, not on the function
+
+D254 shipped two guards that passed with their subject deleted. A check that `power_affinity` returns
+a sensible number is that shape — it can be perfect while `power_offer` never calls it. So
+`tests/test_power.gd` builds two opposed decks out of real cards (**discovered** by `deck_lean`, never
+named — D180), deals 400 offers to each, and counts.
+
+| | attack powers dealt |
+|---|---|
+| to the attack deck | **806, 775, 800, 766, 771** |
+| to the block deck | 418, 404, 408, 402, 390 |
+| with the weighting cut out | 105 vs 132 |
+
+**~1.9x, stable across five runs.** The guard is a 1.3x margin and not a bare `>`: that sits clear of
+the noise at one end and well under the effect at the other, so a tilt quietly weakened to a fifth of
+its size still fails. Mutation-checked by replacing the weight with `1.0`, which fires it.
+
+A second clause holds it to a nudge: the block deck must still be offered SOME attack power. A hard
+filter would turn a choice of three into a choice of one.
+
+#### The test had the bug it was written to catch
+
+The first version classified powers against `open_ids` — which belongs to the fresh save built
+earlier in the suite and holds four commons — while dealing from a save with every gate open. Most of
+what was dealt went uncounted, and the tilt read at **182 vs 90 on a pool of four** instead of 806 vs
+418 on a pool of twenty. It passed, which is the problem: **a guard measuring a fifth of its subject
+looks exactly like a guard.** Caught by printing the pool sizes beside the counts rather than only the
+verdict — the same move that found D255's two worthless guards.
+
+#### And the re-roll exploit does not exist, which was worth checking rather than assuming
+
+Revealing the offer only after Start raises an obvious question: can a player start, peek at the
+three, quit, and deal again? **No, and by three independent facts.**
+
+* The pause menu has no free abandon (its own header says so). The exits are the boss, death, or an
+  Escape Rope — which is found and never sold.
+* Quit-to-title KEEPS the run, and `power_offer` is in `run_to_dict`. Continue restores the same
+  three. Nothing re-rolls.
+* Every `clear_run()` caller is an ENDING — victory, death, the rope — or a save being loaded or
+  replaced. There is no path from a live run back to the overworld.
+
+What dropping the preview really costs is the opposite of an exploit, and it is worth naming: the
+door stake is spent in `Collection._on_start` (D211) and the floor is generated **before** the three
+are seen, and `PowerPick` deliberately has no way out. So the wager is now placed one screen before
+its terms are known. D211 moved that stake precisely so it would not be spent *"a screen away from
+the run it is a wager on"*; the offer has now become the thing on the far side of that line.
+
+#### Committing before the three are known is KEPT, deliberately
+
+**Do not "fix" this.** The obvious repair is to show `PowerPick` ahead of `take_debt` in `_on_start`,
+so the stake follows the terms. It was offered and rejected, and the reason is what the offer is for.
+
+The three are a term you accept by pressing Start, the same way the dungeon's difficulty and the
+debt's interest are. **A run you can inspect before you commit to it is a run with no opening
+decision in it** — the player would read the three, and the deck and the wager would both be chosen
+to fit them. That is the offer choosing the run instead of the run offering a choice, which is the
+shape D242 rejected when it refused to roll a single power.
+
+It also puts the reveal where the tension is. The stake is spent, the floor is generated, and the last
+screen before the crawl asks one question with three answers and no way back. D253 built that screen
+to be exactly that, and knowing the answer a screen earlier is what would flatten it.
+
+This sits beside D211 rather than against it. D211 is about the stake not being spent on a screen
+that knows nothing about the run — the deck builder now knows the deck, which is the thing the whole
+wager is. What it does not know is the deal it will be dealt, and that is not a defect.
+
+---
+
+### D257 — The last flat relics became conditional rules, and it closed the composition gap without moving `esc`
+
+D241's item 2, and the honest report is that it did what it was for and not what it was hoped to do.
+
+#### The instrument was wrong before anything was measured
+
+`tools/sim_balance.gd` held `_breaks_a_rule`, the predicate behind `--spoils-rules` and behind
+D243's *"22 of 38 relics multiply throughput"*. It named seven modifier fields by hand, under a
+comment saying:
+
+> Derived from the modifier fields themselves, so a field added later joins without anybody
+> remembering this function.
+
+**It was not derived, and D243 added four fields that did not join** — `debuffs_persist`,
+`debuffs_spread`, `energy_per_kill`, `exhaust_returns`. So every `--spoils-rules` run since D243 had
+measured a "rule-breakers only" pool with six rule-breakers missing from it, and the pool count in
+AGENTS.md was reading off the same list.
+
+**A comment that says a thing is derived is not a derivation.** This is D34's shape and D124's at
+once, and the tell was in the file: the function contradicted its own header, and nothing read both.
+`breaks_a_rule()` now lives on `RelicData`, beside the fields, and the tool asks the relic.
+
+It still cannot be fully derived — `modifier_power()` deliberately excludes `cost_reduction` and
+`free_first_card`, which `power_value()` prices as throughput — so two fields are still named. The
+distance between them and the fields they name is one screen instead of one repository.
+
+#### What was actually flat
+
+With the predicate fixed: **24 rule-breakers, 14 flat.** But "flat" was doing two jobs. Six of the
+fourteen were energy or draw, which change no rule and multiply everything the deck does — the exact
+reason `power_value()` prices them apart from the stat fields. Those are not the problem, and
+converting them would have cost the draw supply `tests/card_text_test.gd` builds its capped-hand
+scenario out of, which is what forced D237 to revert Scholar's Lens.
+
+So the subject was **eight relics**: three flat AoE triggers, two Strength triggers, two heals and a
+Block trigger.
+
+#### Conditional, because unconditional had run out of room
+
+D233's seven modifiers and D243's four are all UNCONDITIONAL — hold the relic, get the percent, every
+turn of every fight. The pool already held six flat `damage_pct` and six flat `block_pct`, and **a
+seventh flat percent is the sixth one with a different number on it**: `breaks_a_rule()` counts it and
+a player cannot tell them apart.
+
+The eight new fields fire on a condition or compound instead:
+
+| relic | field | rule |
+|---|---|---|
+| Duelist's Glove | `lone_damage_pct` | +60% while one enemy stands |
+| Reliquary Heart | `wounded_damage_pct` | +70% below half HP |
+| Chipped Whetstone | `opener_damage_pct` | +90% on the fight's first turn |
+| Eternal Furnace | `kill_damage_pct` | +30% per enemy killed, compounding |
+| Crown of Thorns | `retaliate_pct` | the attacker takes 60% back |
+| Healing Idol | `lifesteal_pct` | attacks heal 20% of what they deal |
+| Weighted Soles | `block_per_card` | 2 Block for every card played |
+| Surgeon's Thread | `block_heals_pct` | 30% of the Block you end the turn behind heals you |
+
+Four ride one new engine seam — `_conditional_damage_mult()` inside `_outgoing`, which is the one
+function the face and the hit both read. That is not tidiness: `damage_pct` shipped applied in
+`card_damage` alone and the card advertised 8 while dealing 6 (D233), so **a condition evaluated in
+one path and not the other is that bug wearing a new field name.** The other four sit beside the card
+mechanic each mirrors — `lifesteal_pct` next to `card.lifesteal`, `retaliate_pct` next to Thorns.
+
+`retaliate_pct` is the only relic in the pool that gets STRONGER as enemies scale, which is why it is
+priced off what it deals rather than off its percent.
+
+#### The measurement, and it is not the hoped-for one
+
+18 cells, 200 trials, `--spoils=8`, the same four dungeons before and after:
+
+| | before | after |
+|---|---|---|
+| `esc` | 1.65x | **1.65x** |
+| `esc@3` | 1.72x | **1.81x** |
+| `tk` | 1.46x | 1.53x |
+| `real` | 54% | 54% |
+| completion | 39% mean, 0–98% | 40% mean, 0–100% |
+| cells able to report `esc` | 8 | **11** |
+
+**`esc` did not move.** `esc@3` rose 5%, which is the early half of D231's shape and the half that
+matters more, and three more cells now produce runs deep enough to report an escalation at all. But
+the headline number is flat, and D241 item 2 was written expecting it to close a gap.
+
+#### And the gap it was written to close is now closed, which is the finding
+
+| | D233 | now |
+|---|---|---|
+| whole pool | 1.17x | 1.65x |
+| rule-breakers only | 1.48x | **1.68x** |
+| gap | **0.31x** | **0.03x** |
+
+**Composition is exhausted as a lever.** D233 measured a pool where drawing only rule-breakers was
+26% better than drawing from everything; drawing only rule-breakers is now 2% better, because almost
+everything IS one. The whole pool has caught up with its own best subset.
+
+That retires D241 item 2 and it also retires the explanation. *"The gap between 1.29x and 1.5x is
+composition and nothing else"* was true when it was written and is not true any more — there is no
+composition gap left to spend. The two routes D243 named are what remain, and they are both pacing
+or magnitude rather than content: **more relics per run** (10–15 rather than ~5, which is the change
+Dungeon Run actually made), or **far larger magnitudes**, which threatens `real` — the one number
+that has now held at ~50% through six consecutive changes.
+
+#### Two guards were rewritten because they guarded an implementation
+
+`tests/test_relic.gd` failed three ways, and all three were the test naming its subject:
+
+* **"only 4 relics do anything conditional"** — a floor of five TRIGGERED relics, standing in for
+  "no relic may be a bare stat line" (D40). Converting eight triggered relics into rule modifiers
+  answers that complaint better and the guard read it as a regression. **A guard on one particular
+  answer fails when a better answer arrives.** It now asks the question of every relic directly, and
+  additionally requires rule-breakers to stay a majority.
+* **Eternal Furnace and Reliquary Heart** were named by the two engine trigger checks, and the
+  conversion left `ON_HP_BELOW_PCT` with no catalogue subject at all. Both now BUILD a `RelicData`
+  in four lines. A test of a mechanism should not be breakable by a content decision.
+
+#### The new checks, and the three bugs they had first
+
+Eight fields shipped with wiring coverage and no behaviour coverage —
+`_simulator_reads_every_relic_field` walks `get_property_list()` and passed on the field names
+appearing in the engine at all. So `_check_conditional_modifiers` measures each as a DIFFERENCE
+against the same fight without the relic, asserts each fires when it says and NOT otherwise, and for
+the four damage conditions asserts the face equals the hit.
+
+It was wrong three times before it was right, and each was the test and not the code:
+
+* `setup()` already calls `start_turn()` (`combat_engine.gd:219`), so the extra one put every
+  arrangement on turn 2 and made `opener_damage_pct` look broken.
+* The default encounter can be a single enemy, and three of the eight arrangements cannot be built
+  on one. It now forces a swarm archetype, discovered from the catalogue.
+* The `block_per_card` baseline read `hand[0]` from two engines and compared two different RANDOM
+  cards, reporting their difference as the relic's doing.
+
+All nine wirings are mutation-checked: cutting `_conditional_damage_mult` out of `_outgoing` fires
+four failures, and disabling each of the eight conditions individually fires its own.
+
+---
+
+### D258 — The front door moves into the woods, and the colour work carried over intact
+
+Asked for: *"an image in the woods that uses the drawing style of the dungeon backgrounds"*.
+
+That is a **subject** change, and the file it lands on is the one three entries of **colour**
+work were spent on — D114 (off-style), D126 (the foreground), D134 (41.5% green), D257 (the
+re-roll that finally painted rather than graded). The whole risk here was spending that.
+
+So nothing about the palette was rewritten. The corrected clauses from D134 and D257 were
+carried into the new subject **word for word**, with only the nouns they attach to changed:
+*firs* became *bare tree trunks*, *the rock, the cliffs, the distant mountains* became *the
+trunks, the flagstones, the low mist*. The subject moved from a ridge looking across a valley
+to a place standing inside the forest.
+
+#### It came back clean on the first roll, which is what D134 promised
+
+Measured with D257's method so the rows are comparable — every second pixel, green is
+`regrade.gd`'s 70-160 degree band above s=0.18, sat-in-light and colour reach over pixels at
+luminance >= 0.25. The method reproduces `bg_crypt` at 0.540 and `bg_ossuary` at 0.330 exactly,
+which is what makes it worth quoting:
+
+|  | green | sat-in-light | colour reach | mean lum | >0.90 |
+|---|---|---|---|---|---|
+| D257 attempt 1 | 0.3% | 0.407 | 94.9% | 0.270 | 1.839% |
+| D257 attempt 2 (was on disk) | 0.3% | 0.403 | 99.9% | 0.229 | 0.002% |
+| **D258, this file** | **0.0%** | **0.480** | **100.0%** | **0.183** | 0.094% |
+| `bg_crypt.png` — the bible | 0.0% | 0.540 | 99.9% | 0.168 | 0.202% |
+
+**Better than both previous attempts on green and on colour reach, and closer to the bible on
+saturation than anything the title screen has measured.** `tools/regrade.gd` reports *"0.0% of
+the frame is in the 70-160 band, already inside the palette - nothing to do"*, so this is a
+painting and not a patch — the second time running, and the first time on the first attempt.
+
+D134 wrote that the brief was the durable fix and that a re-roll should come back inside the
+palette on its own. Three entries later that is now demonstrated twice, from a cold start,
+against a subject the brief had never been tested on.
+
+#### A forest interior is a better backdrop for a menu than a vista was
+
+The one number that improved for a reason having nothing to do with palette:
+
+    worst-pixel contrast, white menu text, left 40% under the 0.82 scrim
+    D257 attempt 1   6.1:1
+    D257 attempt 2   7.6:1
+    D258             9.4:1        (floor: 4.5:1, from tests/MenuArtTest.tscn)
+
+A moonlit valley puts its brightest region — sky — exactly where the text column sits. A
+forest interior puts trunks and shadow there. **The subject the player asked for happens to be
+the one that suits a screen with a menu welded to its left edge**, which is worth recording
+because it was luck, not design.
+
+#### One prompt rule was found by re-reading, not by failing
+
+The old brief ended *"keep the left third quiet - a text column sits over it"*. The browser
+skill's own rule says never to state WHY a rule exists, because every noun in a justification
+is a thing the generator can draw; the reference case is a prompt that said "keep the feet
+darker, because these sit on a brightly lit stone floor" and got six subjects standing on a lit
+stone floor. **A keep-clear region must be described by position and emptiness alone.** The
+clause was dropped for this roll and the left third came back empty. It cannot be proved that
+the old wording ever cost anything, but it was a live hazard sitting in the brief, and it is
+gone.
+
+#### Route
+
+Gemini in the browser, one image, `bg_crypt.png` attached as the style reference per
+ART_PROMPTS.md rule 2. Two notes for the next person:
+
+* **The JS send click reported success and did not send.** `b.click()` on the
+  `aria-label="Send message"` button returned "sent" with the text still sitting in the
+  composer; a real mouse click on the arrow sent it. Verify by the URL gaining a conversation
+  id, not by the tool's return value.
+* **`Stop response` stayed present for the whole session** — the download had to be taken with
+  the finished picture on screen rather than on the documented `stop === false` signal.
+
+No watermark on this one: the four corner windows peak at 0.32, 0.33, 0.26 and 0.55, and a
+generator stamp reads near 1.0. `strip_sparkle.gd` was not needed and was not run.
+
+---
+
+### D259 — The last 28 icons, and four ways a generator lies about what it drew
+
+D241's item 4. The art list is closed: **414 of 414**, every relic and every power carrying its
+own icon. Nine generations through the Gemini web app, against a free-tier ceiling of about
+twenty-five a day.
+
+#### The reference sheet has to be built on a CHROMA KEY, and the first one was not
+
+The obvious reference is a contact sheet of installed assets on the background they are shown
+against, so the first one was eight icons on the game's near-black field. Two of them were dark blue
+shields whose interiors sit within a few percent of that field.
+
+**The generator learned that a field-coloured interior is part of the artwork.** Two prompts later
+the sigils were coming back as rings with dark centres, which a matte cuts out and installs as a
+ring with a hole in it. Nothing in the reference looked wrong; the tell was in the installer's own
+output, where those cells keyed at **25-30k bled pixels against 10-15k** for the batch before.
+
+Rebuilt on **pure magenta**, with the closest any subject pixel comes to the key measured at 0.490 —
+far outside `cutout_lib`'s `KEY_TOL` of 0.30. The ambiguity cannot arise, because nothing in an
+ink-outlined fantasy palette is magenta.
+
+**And then a prompt threw that away for one subject.** Carrion Wind was asked for in *dusty violet*,
+which is adjacent to the key, and installed with **7.9% of its opaque pixels still key-ish** — a
+visible pink fringe at the 22px a relic is drawn at, where every other relic on the sheet came back
+under 1.5%. A despill cannot separate "subject that happens to be pink" from "key that bled", and it
+should not try. **Never name an accent adjacent to the key.**
+
+#### The rim is where the key survives, and the measurement was looking past it
+
+The first despill pass took Carrion Wind from 7.9% to 0.9% and the icon **still had a magenta
+outline**. Both facts were true: the spill counter only looked at pixels above alpha 0.35, and the
+surviving key is in the FEATHERED RIM, which sits below any sane opacity threshold by construction.
+
+**A measurement that samples only the confident pixels reports a clean file with a pink outline
+around it.** The fix is alpha 0.004 and up, and pulling red and blue all the way down to green
+rather than part way: for a subject that contains no magenta, the correct amount to leave is none.
+Applied to all eight new relics and the four keyed powers, 793 to 5671 pixels each.
+
+#### The requested grid shape is a suggestion
+
+Measured across four requests in one session: "5x4, 20 cells" returned **6x3 = 18** with two subjects
+never drawn and one cell a duplicate; the same request again returned **7x4 = 28** with all 20
+present plus eight near-duplicate variants; "2x2, exactly 4" returned **4x2 = 8**; and "2 rows of 4"
+returned 8 objects composited over two rows of the previous answer.
+
+So `--cells=` arithmetic cannot be the only thing between the sheet and the install. Two shapes
+worked instead:
+
+* **Ask for more than you need and pick the best cell per subject.** Duplicates are free; a missing
+  subject costs another generation.
+* **Split by connected component** when the grid is irregular, which the magenta key makes exact.
+  The relic sheet came back with the 8 new objects surrounded by two rows of re-rendered old sigils;
+  a flood fill found 11 blobs and 7 of them were the subjects, named after checking a contact sheet.
+
+`tools/install_sheet.gd` gained a **`relics`** family. It was the one icon tier with no sheet path,
+so eight relics meant eight separate requests — eight chances to answer the preamble instead of the
+subject, and no two of them drawn against each other.
+
+#### The installer's canonical order is not the order you typed
+
+`--only=ash_count,sweep_wide,short_change` prints its plan as **turn_it_back, short_change,
+ash_count, sweep_wide** — `--only` filters the catalogue order, it does not impose one. `--cells=`
+indexes against THAT order, so a cell map written in the order of the flag lands every icon one or
+two places out. Caught in the dry run, which is what the tool's own warning is for: *a set installed
+one cell out is 21 correct icons on 21 wrong meanings*.
+
+#### A shipped icon was half missing and nothing had reported it
+
+`bulwark` — one of the ten original power icons, untouched by this batch — had its **right half
+opaque black**. On the dark panel it reads as half a shield. Every automated check passed it: the
+matte kept it, the opacity fraction is in band, the bounding box fills the canvas. It was found by
+eye, in the 48px strip, which is the one view where the tier's brief can actually be judged.
+
+The general defect: **ordinary form shading, taken far enough, is indistinguishable from a hole.**
+A sweep of all 68 icons for `dark%` and left-right luminance skew flags it — `bulwark` at 32%+ skew
+against a set that otherwise sits under 15% — while `dark%` alone is a false alarm on any deep-red
+subject (Bramble at 52% and Siphon at 57% both read correctly). **The skew is the signal; the
+darkness is not.**
+
+#### On the tooling, since the skill file was wrong
+
+`~/.claude/skills/gemini-browser` said the style reference could only be attached by hand, because
+`querySelectorAll('input[type=file]')` returns 0 on a loaded page. **It returns 1 once the composer's
+`+` menu is open** — the menu creates the input, and you do not have to click "Upload files", which
+is the item that opens the blocking native picker. Its `accept` attribute lists 1006 characters of
+document and code extensions and no image type at all; that is a picker filter, not validation, and
+a 402 KB PNG went through it. Corrected there, along with the chroma-key rule, the dark-half check,
+the grid-shape measurements, and a third cause of the `len=1` symptom: **the capture overlay is
+`z-index: 2147483647` and swallows the next click into the composer**, which looks exactly like the
+stale-composer bug and exactly like the quota wall.
+
+---
+
+### D260 — The agreed palette was never the game's palette, and dropping it was the fix
+
+*"Forget the palette that we have agreed in the past. I want something different that still
+adheres to the game style."* The forest of D258 measured clean against every rule and was
+rejected on sight, which is the useful part: **the rules it passed were the wrong rules.**
+
+#### What the style bible actually was
+
+`PALETTE: cool desaturated violet-grey stone base` with `NO GREEN ANYWHERE` has been on every
+request since D100, and it was never a description of this game. It is a description of
+**`bg_crypt.png`**, which rule 2 of ART_PROMPTS.md attaches to every single generation. One
+file, promoted to a law, because it was the only file in the room.
+
+The twelve dungeon backdrops say otherwise, and always did:
+
+| room | hue |
+|---|---|
+| `bg_ember_road`, `bg_slag_pits`, `bg_foundry` | hot amber and orange |
+| `bg_rot_gardens`, `bg_fungal_deep` | **acid green**, the banned hue, at 94.9% of the frame |
+| `bg_sunken_vault`, `bg_drowned_market` | cold teal |
+| `bg_crypt`, `bg_the_maw` | violet and magenta |
+| `bg_warrens` | warm brown |
+| `bg_zone_beyond`, `bg_abyssal_stair` | magenta and cosmic teal |
+
+**A rule that four of the game's own rooms break is not the game's style.** What unifies the
+set is the INK and the LIGHTING — a 2-3px dark outline on every form, one dominant saturated
+source, everything else falling into deep shadow. Hue was never doing the work.
+
+So the reference changed rather than the wording. The attachment is now a six-panel contact
+sheet, one exemplar per hue world, with the prompt saying *"match the sheet for INK WEIGHT and
+LIGHTING LOGIC only; its panels deliberately differ in palette"*. Rebuild it with:
+
+    godot --headless --script tools/contact_sheet.gd -- <out> <dir> --cell=440 --cols=3
+    # bg_ember_road, bg_rot_gardens, bg_sunken_vault, bg_crypt, bg_warrens, bg_zone_beyond
+
+#### Four directions, then four compositions
+
+Generated one candidate per hue world — ember, rot, drowned teal, magenta void — and every one
+of them cleared the 4.5:1 menu-column floor, so the choice was aesthetic and was made by the
+person whose game it is. Drowned won; three more compositions were rolled in that palette.
+
+|  | menu contrast | left-third mean | >0.90 |
+|---|---|---|---|
+| forest (D258, superseded) | 9.4:1 | 15.7% | 0.094% |
+| drowned, pillared hall | 9.7:1 | 8.8% | 0.000% |
+| drowned, light shaft | 11.5:1 | 7.8% | **1.415%** |
+| **drowned, waterline (installed)** | **12.0:1** | **5.3%** | **0.000%** |
+
+The shaft variant was the most striking and is the one that lost: a shaft through a broken dome
+is a blown highlight, 1.4% of the frame over 0.90 against the bible's 0.202%. **The brief has
+said "nothing pure white" since D100 and it is the one clause worth keeping**, because it is
+about the drawing and not about the hue.
+
+Installed: 12.0:1 against a 4.5:1 floor, and a left third at 5.3% — the darkest text column the
+title screen has ever had, roughly a third of the forest's.
+
+#### The dropped rule left a live hazard in the tools
+
+`tools/regrade.gd` remaps hue 70-160 to violet. D134 built it, and its own header says it is
+safe to leave for whoever re-rolls the title next. **That stopped being true the moment a teal
+painting was installed.** The new title reads 7.8% of the frame inside that band, above the 3%
+floor at which the tool acts, so running it would have rotated the picture's own light to
+violet and reported success.
+
+The band splits cleanly, so the guard is one comparison:
+
+    the drowned title   7.8% in band, 90% of it at 130-160  -> REFUSES
+    bg_rot_gardens     97.2% in band,  5% of it at 130-160  -> still willing
+    bg_crypt            0.0% in band                        -> nothing to do
+
+130-160 is the cold shoulder of teal and is *subject matter* in a teal painting; 70-130 is
+foliage. The tool now refuses when two thirds or more of the band sits on the teal side, and
+says how to override it. **A tool built for one palette becomes a hazard the moment the palette
+is no longer a rule** — and it fails silently, because a regrade always produces a plausible
+picture.
+
+#### Left alone deliberately
+
+ART_PROMPTS.md rule 2 still says to attach `bg_crypt.png` to every request. It is the root
+cause of all of this and it is NOT changed here: it governs 28 files across relics, powers and
+cutouts, a batch another session is working through right now, and swapping the reference under
+that work would be a change nobody asked for. **The finding is recorded; the scene tier uses the
+range sheet; the item tiers are somebody's next decision.**

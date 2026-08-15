@@ -34,7 +34,7 @@ screens' worth of assets speak five unrelated dialects — four, as first counte
 | language | assets | verdict |
 |---|---|---|
 | **Painted, inked illustration** | all 12 dungeon backdrops | **This is the game.** Keep. |
-| **Flat vector illustration** | `main_menu.jpg` | *Was counted as inked here and it is not (D114) — no outline anywhere, a ninth the outline density of the rooms it shipped beside. Re-rolled since, twice: D126 for the foreground and D134 for a frame that measured 41.5% green against a style bible at 0.0%. The file is `main_menu.png` now; the installer writes PNG and deletes the superseded .jpg.* |
+| **Flat vector illustration** | `main_menu.jpg` | *Was counted as inked here and it is not (D114) — no outline anywhere, a ninth the outline density of the rooms it shipped beside. Re-rolled four times since: D126 for the foreground, D134 for a frame that measured 41.5% green, D258 for the subject, and D260, which threw the violet rule out altogether. The file is `main_menu.png` now, a drowned crypt in cold teal; the installer writes PNG and deletes the superseded .jpg. **This row is the diagnosis as written, not the current state** — the dialect count that made it five is down to four.* |
 | **Kenney 16×16 pixel art** | 41 enemy sprites, 5 zone tiles, 1 card sheet | Off-style, and semantically arbitrary — *the 41 enemy sprites are gone (D89); the zone tiles and the card sheet remain* |
 | **Hand-authored 16×16 mono glyphs** | 13 in `PixelArt.GLYPHS` | Off-style, too small to read as art |
 | **A stretched illustration pretending to be a frame** | `ui_button.png`, `ui_panel.png` | Actively damaging — see below |
@@ -89,6 +89,15 @@ Cinzel sets the headings and the card names — see `assets/art/fonts/PROVENANCE
 - **`bg_crypt.png` and `bg_warrens.png` are good, and they agree with each other**
   — same one-point symmetrical composition, same arch-and-brazier vocabulary, same
   cool-stone-plus-saturated-light lighting model. They are the style bible.
+
+  **They agree on the DRAWING, not on the hue, and that distinction cost four
+  re-rolls of the title screen to find (D260).** `bg_crypt` is violet and `bg_warrens`
+  is warm brown; the rot rooms are acid green and the foundry rooms are orange. What
+  every room shares is the 2-3px ink outline, one dominant saturated source, and
+  everything else in deep shadow. Attaching `bg_crypt.png` alone to a request teaches
+  its palette as if it were law — which is how "NO GREEN ANYWHERE" ended up in a brief
+  for a game with two green dungeons. For SCENE work, attach a six-panel range sheet
+  instead (the command is in D260) and ask for the ink and the lighting by name.
 - The **contrast discipline** in `UI.illustration()` and `PixelArt.battle_backdrop()`
   (D39): scrims held flat across the text bands, measured worst-pixel contrast, a
   test that fails under 4.5:1. New art inherits this, it does not get to opt out.

@@ -8,9 +8,9 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**28 files can be generated.** The rest of the list cannot, and the sections below
-say which and why — the expensive mistake is not a bad painting, it is a good
-painting of a thing that had to be computed.
+**Nothing is outstanding.** Every file the game looks for is present, so there is
+nothing here to ask a generator for. The sections below are kept for the next
+thing added to a catalogue, which will appear in them the moment it is.
 
 ## The three rules that do the work
 
@@ -27,7 +27,7 @@ painting of a thing that had to be computed.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 28 times.
+   improve it between images. Its job is to be identical 0 times.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -109,51 +109,11 @@ Nothing to generate here — all 4 present.
 
 ## Tier 6a — relic icons
 
-One OBJECT, three-quarter view, centred, on a flat even field for the matte. Lit from upper-left. No hand holding it, no pedestal, no ground, no shadow, no background scenery. It is drawn at 22px in a row of thirty — MEASURED off the built screen, not the 48 this brief used to claim, which was written before anything was on it and before the row pitch was known (D121). At 22px the whole job is silhouette and one memorable colour: two or three big shapes, one clear outline, no small detail and no fine text-like ornament, because none of it survives. A beautifully rendered trinket that reads as a brown smudge has failed. Paint what the relic IS, not what it does.
-
-**8 to generate, 30 already present.** Style block above, then one of these as the last line:
-
-| save as | size | subject |
-|---|---|---|
-| `relics/barrow_wall.png` | 128x128 | Barrow-Wall — Your Block is 45% stronger. |
-| `relics/broad_iron.png` | 128x128 | Broad Iron — Attacks that strike one enemy strike them all. |
-| `relics/carrion_wind.png` | 128x128 | Carrion Wind — A debuff aimed at one enemy lands on every one. |
-| `relics/cruel_edge.png` | 128x128 | Cruel Edge — Your attacks deal 50% more damage. |
-| `relics/echo_in_the_stone.png` | 128x128 | Echo in the Stone — The first attack you play each turn strikes twice. |
-| `relics/first_breath.png` | 128x128 | First Breath — The first card you play each turn costs nothing. |
-| `relics/forgiven_ledger.png` | 128x128 | Forgiven Ledger — Every card costs 2 less. |
-| `relics/setting_mortar.png` | 128x128 | Setting Mortar — Block no longer leaves you at the start of your turn. |
+Nothing to generate here — all 38 present.
 
 ## Tier 6b — power icons
 
-A SIGIL, not an object: a carved or inlaid emblem, roughly circular, centred in its cell, on a flat even field for the matte. Unlike the relics these are abstract — the power is an ability, not a thing you picked up — and unlike the Tier 1d symbols they are full-colour and never tinted. They are pressed in the same corner of the same screen all game AND compared side by side on the Power Pick screen (D253), so being distinguishable from each other at a glance is the requirement, which is why they are drawn together.
-
-**Generate these as ONE image, not 20.** A 5x4 grid, cells in the order of the table below, left to right then top to bottom, flat even background, nothing touching a cell edge. This is NEW — 20 of this tier's 30 files: the rest are already installed and are the reference, so match the set on disk for weight, fill and how much of its cell the shape uses. Install: `godot --headless --script tools/install_sheet.gd -- powers <sheet.png> --only=grave_salt,knit,full_hands,nothing_left,running_total,what_you_owe,rot_reader,turn_it_back,hone,short_change,ash_count,sweep_wide,twice_over,sure_footing,hedge,empty_the_purse,look_twice,hold_fast,even_out,settle_up`
-
-**20 to generate, 10 already present.** Style block above, then one of these as the last line:
-
-| save as | size | subject |
-|---|---|---|
-| `powers/grave_salt.png` | 128x128 | Grave-Salt — Apply 2 Weak. |
-| `powers/knit.png` | 128x128 | Knit — Heal 5. |
-| `powers/full_hands.png` | 128x128 | Full Hands — Gain 2 Block, and 2 more for every card in your hand. |
-| `powers/nothing_left.png` | 128x128 | Nothing Left — Deal 2 damage, and 8 more if your hand is empty. |
-| `powers/running_total.png` | 128x128 | Running Total — Deal 1 damage, and 2 more for every card played this turn. |
-| `powers/what_you_owe.png` | 128x128 | What You Owe — Deal 2 damage, and 3 more for every debuff on the target. |
-| `powers/rot_reader.png` | 128x128 | Rot Reader — Deal 2 damage, and 2 more for every Poison on the target. |
-| `powers/turn_it_back.png` | 128x128 | Turn It Back — Gain 2 Block, and 1 more for every Thorn you hold. |
-| `powers/hone.png` | 128x128 | Hone — Deal 2 damage. The next card you play deals 4 more. |
-| `powers/short_change.png` | 128x128 | Short Change — Gain 1 Block. The next card you play costs 1 less. |
-| `powers/ash_count.png` | 128x128 | Ash Count — Deal 1 damage, and 2 more for every card burnt out this fight. |
-| `powers/sweep_wide.png` | 128x128 | Sweep Wide — Deal 3 damage to every enemy. |
-| `powers/twice_over.png` | 128x128 | Twice Over — Deal 3 damage twice. |
-| `powers/sure_footing.png` | 128x128 | Sure Footing — Gain 1 Dexterity. |
-| `powers/hedge.png` | 128x128 | Hedge — Gain 3 Block and 2 Thorns. |
-| `powers/empty_the_purse.png` | 128x128 | Empty the Purse — Spend all your Energy. Deal 1 damage, and 2 more for each spent. |
-| `powers/look_twice.png` | 128x128 | Look Twice — Draw 2. |
-| `powers/hold_fast.png` | 128x128 | Hold Fast — Gain 4 Block and 1 Dexterity. |
-| `powers/even_out.png` | 128x128 | Even Out — Gain 1 Block, then deal damage equal to it. |
-| `powers/settle_up.png` | 128x128 | Settle Up — Deal 5 damage, and 4 more if the target is debuffed. |
+Nothing to generate here — all 30 present.
 
 ## Tier 7 — identity and shell
 

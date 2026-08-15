@@ -388,8 +388,40 @@ func _init() -> void:
 						r.id, Balance.power_ratio(starter, [r]), bare])
 		rf = dd.get_next()
 	dd.list_dir_end()
-	if triggered < 5:
-		fails += 1; print("FAIL only %d relics do anything conditional" % triggered)
+	# **No relic may be a bare stat line.** That was the original complaint (D40): nine flat fields,
+	# every one of them "+15 max HP", so a relic changed your numbers and never how you played.
+	#
+	# The count of TRIGGERED relics used to carry this, at a floor of five. It no longer can. D257
+	# converted eight triggered relics into rule modifiers, which is the same complaint answered a
+	# better way — and the old guard read that as a regression, because it was counting one
+	# particular ANSWER rather than the property. **A guard on the implementation fails when the
+	# implementation improves.** So it now asks the question directly, of every relic.
+	var bare_stats: Array = []
+	var rule_count := 0
+	for id2 in MetaState.RELIC_CATALOG:
+		var r2 := load(String(MetaState.RELIC_CATALOG[id2])) as RelicData
+		if r2 == null:
+			continue
+		if r2.breaks_a_rule():
+			rule_count += 1
+			continue
+		# Energy and draw are not rules, but they multiply everything the deck does — which is the
+		# reason `power_value` prices them apart from the flat fields. A relic doing one of those,
+		# or firing on a trigger, is not a stat line either.
+		if r2.bonus_energy > 0 or r2.extra_draw > 0 or r2.trigger_count() > 0:
+			continue
+		bare_stats.append(r2.id)
+	if not bare_stats.is_empty():
+		fails += 1
+		print("FAIL %d relics only move a number: %s" % [bare_stats.size(), ", ".join(bare_stats)])
+	# ...and rule-breakers must stay the bulk of the pool, which is what the escalation rides on
+	# (D233/D243/D257). Measured at 32 of 38; the floor is a majority.
+	if rule_count * 2 <= MetaState.RELIC_CATALOG.size():
+		fails += 1
+		print("FAIL only %d of %d relics break a rule — a pool of numbers cannot escalate" % [
+			rule_count, MetaState.RELIC_CATALOG.size()])
+	if triggered < 1:
+		fails += 1; print("FAIL no relic fires on a trigger — the trigger machinery has no subject")
 
 	# --- they actually fire, at the moment they claim ---
 	var Engine_ = load("res://scripts/combat_engine.gd")
@@ -424,39 +456,58 @@ func _init() -> void:
 		fails += 1; print("FAIL Bone Charm did not draw on a kill (hand %d -> %d)" % [
 			hand_before, e1.hand.size()])
 
-	# ON_TURN_START: Eternal Furnace hits everything every 3rd turn, and only then
+	# The next two are about the ENGINE's trigger machinery, so they BUILD their relic instead of
+	# loading one. They used to name Eternal Furnace and Reliquary Heart, and D257 converted both to
+	# rule modifiers — which left the checks red for a reason that had nothing to do with the
+	# machinery they guard, and left `ON_HP_BELOW_PCT` with no catalogue subject at all.
+	#
+	# A test of a mechanism should not be able to be broken by a content decision. `RelicData` is a
+	# plain Resource, so the subject costs four lines and outlives every retune.
+
+	# ON_TURN_START: fires on the 3rd turn and NOT on the 1st.
+	var furnace := RelicData.new()
+	furnace.id = "t_furnace"
+	furnace.trigger = PackedInt32Array([RelicData.Trigger.ON_TURN_START])
+	furnace.trigger_threshold = PackedInt32Array([3])
+	furnace.effect = PackedInt32Array([RelicData.Effect.DAMAGE_ALL])
+	furnace.effect_value = PackedInt32Array([6])
 	var e2 = Engine_.new()
-	e2.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "",
-		[load(relic_dir + "eternal_furnace.tres")])
+	e2.setup(_starter_deck(), 80, 80, 1, Balance.Tier.NORMAL, "", [furnace])
 	e2.start_turn()                       # turn 1: must NOT fire
-	if e2.last_relic_text.find("to all") != -1:
-		fails += 1; print("FAIL Eternal Furnace fired on turn 1")
+	if e2.last_relic_text.strip_edges() != "":
+		fails += 1; print("FAIL an every-3rd-turn relic fired on turn 1: '%s'" % e2.last_relic_text)
 	e2.turn = 2
 	e2.start_turn()                       # turn 3
-	if e2.last_relic_text.find("to all") == -1:
-		fails += 1; print("FAIL Eternal Furnace did not fire on turn 3: '%s'" % e2.last_relic_text)
+	if e2.last_relic_text.strip_edges() == "":
+		fails += 1; print("FAIL an every-3rd-turn relic did not fire on turn 3")
 
-	# ON_HP_BELOW_PCT: Reliquary Heart fires once, not every turn thereafter
+	# ON_HP_BELOW_PCT: fires once, not every turn thereafter.
+	var heart := RelicData.new()
+	heart.id = "t_heart"
+	heart.trigger = PackedInt32Array([RelicData.Trigger.ON_HP_BELOW_PCT])
+	heart.trigger_threshold = PackedInt32Array([50])
+	heart.effect = PackedInt32Array([RelicData.Effect.GAIN_STRENGTH])
+	heart.effect_value = PackedInt32Array([3])
 	var e3 = Engine_.new()
-	e3.setup(_starter_deck(), 100, 100, 1, Balance.Tier.NORMAL, "",
-		[load(relic_dir + "reliquary_heart.tres")])
+	e3.setup(_starter_deck(), 100, 100, 1, Balance.Tier.NORMAL, "", [heart])
 	e3.start_turn()
 	e3.player.hp = 10                     # well under 50%
 	e3.intents[0] = {"action": EnemyData.Action.ATTACK, "value": 1}
 	e3._resolve_enemy(0)
 	var after_first: int = e3.player.strength
 	if after_first <= 0:
-		fails += 1; print("FAIL Reliquary Heart did not fire below half HP")
+		fails += 1; print("FAIL a below-half-HP relic did not fire below half HP")
 	e3._resolve_enemy(0)
 	if e3.player.strength != after_first:
 		fails += 1; print("FAIL a once-per-fight relic fired twice")
 	# and the spent state survives a save
 	var st = e3.save_state()
 	var e4 = Engine_.new()
-	e4.load_state(st, Meta_.CATALOG, [load(relic_dir + "reliquary_heart.tres")])
+	e4.load_state(st, Meta_.CATALOG, [heart])
 	if str(e4.relic_fired) != str(e3.relic_fired):
 		fails += 1; print("FAIL spent relic triggers not persisted")
 
+	fails += _check_conditional_modifiers()
 	fails += _check_untaxed(relic_dir)
 	fails += _simulator_reads_every_relic_field()
 	fails += _simulator_plays_every_trigger_and_effect()
@@ -515,6 +566,224 @@ func _starter_deck() -> Array[CardData]:
 ## here, because a hand-kept list of fields is guarded nowhere new — the mistake D89
 ## documents for the art check, and the reason that one now walks `assets/`. Add a
 ## field to the resource and forget the simulator, and this fails on the next run.
+## The id of an enemy that always spawns more than one of itself.
+##
+## Discovered from the catalogue, never named: a test that names an enemy is a test a retune breaks
+## for reasons that have nothing to do with it (D180, D243). "" if none exists, which the caller
+## reports rather than passes.
+func _swarm_archetype() -> String:
+	var d := DirAccess.open(Balance.ENEMY_DIR)
+	if d == null:
+		return ""
+	d.list_dir_begin()
+	var f := d.get_next()
+	var found := ""
+	while f != "":
+		if f.ends_with(".tres"):
+			var a := load(Balance.ENEMY_DIR + f) as EnemyData
+			if a != null and a.count_min >= 2:
+				found = a.id
+				break
+		f = d.get_next()
+	d.list_dir_end()
+	return found
+
+## A relic carrying exactly one field, for the checks below. Built rather than loaded, so a retune
+## of the catalogue cannot change what these are measuring.
+func _one_field(field: String, value) -> RelicData:
+	var r := RelicData.new()
+	r.id = "t_" + field
+	r.set(field, value)
+	return r
+
+## The eight conditional modifiers (D257): each fires when it says, and NOT otherwise.
+##
+## Every one is measured as a DIFFERENCE against the same fight without the relic, so none of these
+## depends on a card's damage, an enemy's HP or a difficulty constant staying where it is today.
+##
+## The four damage conditions additionally assert that the FACE matches the HIT. That is not
+## belt-and-braces: `damage_pct` shipped applied in `card_damage` alone, so the card advertised 8 and
+## dealt 6, and every test written for D50 passed because they all read the face (D233). A condition
+## evaluated in one path and not the other is the same bug wearing a different field name.
+func _check_conditional_modifiers() -> int:
+	var fails := 0
+	var Engine_ = load("res://scripts/combat_engine.gd")
+
+	# --- the four conditional damage percents ---
+	#
+	# `hack` at a fixed damage, so the comparison is about the relic and nothing else.
+	var setups := [
+		# field, value, description, arrange(engine), should_fire
+		["lone_damage_pct", 60, "one enemy left", "lone", true],
+		["lone_damage_pct", 60, "two enemies left", "crowd", false],
+		["wounded_damage_pct", 70, "below half HP", "hurt", true],
+		["wounded_damage_pct", 70, "above half HP", "healthy", false],
+		["opener_damage_pct", 90, "turn 1", "opener", true],
+		["opener_damage_pct", 90, "turn 2", "later", false],
+		["kill_damage_pct", 30, "after a kill", "killed", true],
+		["kill_damage_pct", 30, "before any kill", "opener", false],
+	]
+	for s in setups:
+		var field: String = String(s[0])
+		var when: String = String(s[2])
+		var arrange: String = String(s[3])
+		var should: bool = bool(s[4])
+		var plain_dmg := _staged_damage(Engine_, arrange, null)
+		var with_dmg := _staged_damage(Engine_, arrange, _one_field(field, s[1]))
+		if plain_dmg["face"] <= 0:
+			fails += 1
+			print("FAIL the staged fight for '%s' dealt no damage — this check cannot see its subject" % when)
+			continue
+		var fired: bool = with_dmg["face"] > plain_dmg["face"]
+		if fired != should:
+			fails += 1
+			print("FAIL %s %s at '%s' (%d vs %d without it)" % [
+				field, "did not fire" if should else "fired", when,
+				with_dmg["face"], plain_dmg["face"]])
+		# The face and the hit, on the same swing.
+		if with_dmg["face"] != with_dmg["hit"]:
+			fails += 1
+			print("FAIL %s: the card face says %d and the hit lands %d at '%s' — D50 from the other side" % [
+				field, with_dmg["face"], with_dmg["hit"], when])
+
+	# --- retaliate_pct: the attacker takes a share of what it dealt ---
+	for r_pct in [0, 60]:
+		var er = Engine_.new()
+		er.setup(_starter_deck(), 100, 100, 1, Balance.Tier.NORMAL, "",
+			[] if r_pct == 0 else [_one_field("retaliate_pct", r_pct)])
+		er.start_turn()
+		er.player.block = 0
+		var foe: Combatant = er.enemies[0]
+		var foe_hp_before: int = foe.hp
+		er.intents[0] = {"action": EnemyData.Action.ATTACK, "value": 20}
+		er._resolve_enemy(0)
+		var taken: int = foe_hp_before - foe.hp
+		if r_pct == 0 and taken != 0:
+			fails += 1; print("FAIL an enemy lost %d HP attacking a player with no retaliation" % taken)
+		if r_pct == 60 and taken <= 0:
+			fails += 1; print("FAIL retaliate_pct did not hurt the attacker")
+
+	# --- lifesteal_pct: an attack heals a share of what it dealt ---
+	for l_pct in [0, 50]:
+		var el = Engine_.new()
+		el.setup(_starter_deck(), 100, 100, 1, Balance.Tier.NORMAL, "",
+			[] if l_pct == 0 else [_one_field("lifesteal_pct", l_pct)])
+		el.start_turn()
+		el.player.hp = 40
+		var killer2 := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
+		killer2.damage = 12
+		el.hand.append(killer2)
+		el.energy = 9
+		el.play_card(killer2)
+		var healed: int = el.player.hp - 40
+		if l_pct == 0 and healed != 0:
+			fails += 1; print("FAIL an attack healed %d with no lifesteal relic held" % healed)
+		if l_pct == 50 and healed <= 0:
+			fails += 1; print("FAIL lifesteal_pct healed nothing on a landed attack")
+
+	# --- block_per_card: every card played, attack or not ---
+	#
+	# The card is APPENDED and is a pure attack, so it grants no Block of its own and both runs play
+	# the identical card. Reading `hand[0]` instead compared two random draws and reported the
+	# difference between two different cards as the relic's doing.
+	var block_gained := {}
+	for b in [0, 3]:
+		var eb = Engine_.new()
+		eb.setup(_starter_deck(), 100, 100, 1, Balance.Tier.NORMAL, "",
+			[] if b == 0 else [_one_field("block_per_card", b)])
+		eb.player.block = 0
+		eb.energy = 9
+		var plain_attack := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
+		plain_attack.block = 0
+		eb.hand.append(plain_attack)
+		eb.play_card(plain_attack)
+		block_gained[b] = eb.player.block
+	if int(block_gained[0]) != 0:
+		fails += 1
+		print("FAIL a plain attack granted %d Block with no relic held" % int(block_gained[0]))
+	if int(block_gained[3]) <= 0:
+		fails += 1
+		print("FAIL block_per_card gave nothing on a played card")
+
+	# --- block_heals_pct: the wall you finish the turn behind mends you ---
+	for h in [0, 50]:
+		var eh = Engine_.new()
+		eh.setup(_starter_deck(), 100, 100, 1, Balance.Tier.NORMAL, "",
+			[] if h == 0 else [_one_field("block_heals_pct", h)])
+		eh.start_turn()
+		eh.player.hp = 40
+		eh.player.block = 20
+		# Nothing may reach the player, or the heal and the hit are measured together.
+		for i in eh.enemies.size():
+			eh.intents[i] = {"action": EnemyData.Action.DEFEND, "value": 1}
+		eh.end_turn()
+		var mended: int = eh.player.hp - 40
+		if h == 0 and mended != 0:
+			fails += 1; print("FAIL the player healed %d at end of turn with no relic held" % mended)
+		if h == 50 and mended <= 0:
+			fails += 1; print("FAIL block_heals_pct mended nothing behind 20 Block")
+	return fails
+
+## Stage a fight in the named state and return what one `hack` says it will do and what it does.
+##
+## The arrangements are the CONDITIONS the D257 relics read, each set up the way a fight actually
+## reaches it rather than by poking the field the relic tests.
+func _staged_damage(Engine_, arrange: String, relic) -> Dictionary:
+	var e = Engine_.new()
+	# A SWARM archetype, so `lone`, `crowd` and `killed` have more than one enemy to arrange. The
+	# default roll can hand back a single foe, and three of the eight arrangements cannot be built
+	# on one. Discovered from the catalogue rather than named, so a retune of who swarms cannot
+	# quietly reduce this to a single-enemy fight that silently passes.
+	e.setup(_starter_deck(), 100, 100, 1, Balance.Tier.NORMAL, _swarm_archetype(),
+		[] if relic == null else [relic])
+	# NO `start_turn()` here. `setup` already calls it (combat_engine.gd:219), so the fight opens on
+	# turn 1 — calling it again put every arrangement on turn 2 and made `opener_damage_pct` look
+	# broken when it was the test standing in the wrong turn.
+	e.energy = 9
+	match arrange:
+		"lone":
+			# Every enemy but the first already dead.
+			for i in range(1, e.enemies.size()):
+				e.enemies[i].hp = 0
+		"crowd":
+			# Needs two alive, and a one-enemy encounter cannot show the difference.
+			if e.enemies.size() < 2:
+				return {"face": 0, "hit": 0}
+		"hurt":
+			e.player.hp = 10
+		"healthy":
+			e.player.hp = e.player.max_hp
+		"opener":
+			pass                    # setup left us on turn 1
+		"later":
+			e.start_turn()          # turn 2
+			e.energy = 9
+		"killed":
+			# A real kill, so `kills_this_combat` is moved by the engine and not by the test.
+			if e.enemies.size() < 2:
+				return {"face": 0, "hit": 0}
+			var finisher := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
+			finisher.damage = 999
+			finisher.aoe = false
+			e.enemies[0].hp = 1
+			e.hand.append(finisher)
+			e.play_card(finisher)
+			e.retarget()
+	var probe := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
+	probe.damage = 10
+	probe.aoe = false
+	e.hand.append(probe)
+	var target: Combatant = e.current_target()
+	if target == null:
+		return {"face": 0, "hit": 0}
+	# Enough HP that the hit is never clipped by the corpse.
+	target.hp = 9999
+	target.block = 0
+	var face: int = e.card_damage(probe)
+	var before: int = target.hp
+	e.play_card(probe)
+	return {"face": face, "hit": before - target.hp}
+
 func _simulator_reads_every_relic_field() -> int:
 	var fails := 0
 	# CODE ONLY, comments stripped — and this is not fastidiousness, it is the whole

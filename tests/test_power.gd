@@ -71,6 +71,107 @@ func _init() -> void:
 		if not (String(pid3) in open_ids):
 			fails += 1; print("FAIL offered %s, which this save's depth has not opened" % pid3)
 
+	# --- the offer is weighted by the DECK it will be carried with (D256) ---
+	#
+	# Flat, three powers were drawn with no reference to the twenty cards the player had just
+	# committed to, so a pure-Block deck was as likely to be handed an attack lens as a defensive one.
+	# The tilt is `relic_offer`'s (D234), pointed at `Balance.power_affinity`.
+	#
+	# Measured on the DRAW and not on the affinity function, deliberately. D254 shipped two guards
+	# that passed with their subject deleted, and a check that `power_affinity` returns a sensible
+	# number is exactly that shape: it can be perfect while `power_offer` never calls it. So the two
+	# decks are dealt real offers and the offers are counted.
+	#
+	# The two decks and the two poles are DISCOVERED, never named. A test that names a card is a test
+	# a retune breaks for reasons that have nothing to do with it (D180, D243).
+	var m5 = Meta_.new()
+	m5.path_prefix = SANDBOX
+	m5.slot = 8
+	m5.new_save()
+	# Every power open, so the pool holds both poles. A fresh save has cleared nothing and sees only
+	# commons, and a pool with no defensive power in it cannot show a tilt either way.
+	m5.cleared_dungeons = Balance.DUNGEONS.duplicate()
+
+	var pure_atk: CardData = null
+	var pure_def: CardData = null
+	for f in (DirAccess.get_files_at(CARD_DIR) if DirAccess.dir_exists_absolute(CARD_DIR) else []):
+		if not String(f).ends_with(".tres"):
+			continue
+		var c := load(CARD_DIR + String(f)) as CardData
+		if c == null:
+			continue
+		var cl := Balance.deck_lean([c])
+		if float(cl["attack"]) > 0.8 and pure_atk == null:
+			pure_atk = c
+		if float(cl["defence"]) > 0.8 and pure_def == null:
+			pure_def = c
+	if pure_atk == null or pure_def == null:
+		fails += 1
+		print("FAIL the catalogue no longer holds a card that is >80%% attack and one >80%% defence — this check has stopped being able to build two opposed decks")
+	else:
+		var atk_deck: Array = []
+		var def_deck: Array = []
+		for _i in 12:
+			atk_deck.append(pure_atk)
+			def_deck.append(pure_def)
+		# Which of the powers lean which way, by the same function the draw uses — and read off
+		# `m5`, whose gates are open, NOT off `open_ids`, which belongs to the fresh save above and
+		# holds four commons. Classifying against the wrong save leaves most of what is dealt
+		# uncounted, so the tilt shows up at a fraction of its size and the guard nearly misses it.
+		var atk_powers := {}
+		var def_powers := {}
+		for pid5 in Balance.POWERS:
+			if not m5.power_available(String(pid5)):
+				continue
+			var pw := Balance.power(String(pid5))
+			var pl := Balance.deck_lean([pw])
+			var a := float(pl["attack"])
+			var d := float(pl["defence"])
+			if a + d <= 0.0:
+				continue        # neutral — draw, energy, status. Keeps its base weight by design.
+			if a > d:
+				atk_powers[String(pid5)] = true
+			else:
+				def_powers[String(pid5)] = true
+		if atk_powers.is_empty() or def_powers.is_empty():
+			fails += 1
+			print("FAIL the power set holds %d attack-leaning and %d defence-leaning powers — a tilt cannot be measured against a pool with one pole" % [
+				atk_powers.size(), def_powers.size()])
+		else:
+			# Counted over many deals rather than one. The tilt is AFFINITY_TILT = 1.5, which makes a
+			# matched power about twice as likely as a mismatched one — a nudge, so one offer of three
+			# proves nothing and is not asked to.
+			const DEALS := 400
+			var atk_seen := 0     # attack-leaning powers dealt to the attack deck
+			var def_seen := 0     # attack-leaning powers dealt to the block deck
+			for _d in DEALS:
+				for oid in m5.power_offer(3, atk_deck):
+					if atk_powers.has(String(oid)):
+						atk_seen += 1
+				for oid2 in m5.power_offer(3, def_deck):
+					if atk_powers.has(String(oid2)):
+						def_seen += 1
+			# A MARGIN and not a bare `>`. Measured at 1.9x over five runs (806/418, 775/404, 800/408,
+			# 766/402, 771/390) against 105/132 with the weighting cut out, so 1.3 sits clear of the
+			# noise at one end and well under the effect at the other — and a tilt quietly weakened to
+			# a fifth of its size still fails here, which a bare `>` would let through.
+			if float(atk_seen) < float(def_seen) * 1.3:
+				fails += 1
+				print("FAIL over %d deals the attack deck was offered %d attack powers and the block deck %d — the offer is not reading the deck" % [
+					DEALS, atk_seen, def_seen])
+			# ...and it stays a NUDGE. A hard filter would hand a block deck nothing but Block and
+			# turn a choice of three into a choice of one, which is the failure `relic_affinity`'s
+			# own comment names. Both poles must still be reachable from both decks.
+			if def_seen == 0:
+				fails += 1
+				print("FAIL the block deck was offered no attack power in %d deals — the tilt has become a filter" % DEALS)
+		# The flat draw survives, because every tool and six suites call `power_offer(3)` with no
+		# deck and must keep getting an unweighted one.
+		var flat: Array = m5.power_offer(3)
+		if flat.size() != 3:
+			fails += 1
+			print("FAIL a deckless offer returned %d powers — the no-deck path is what the tools use" % flat.size())
+
 	# WIRING: rolled by the run, displayed by the screen, never the other way round — and carried
 	# through the save, so a resumed run remembers what it was dealt. All four are read off the
 	# source, because none is reachable from a bare instance: `select_dungeon` needs the autoload
@@ -79,12 +180,24 @@ func _init() -> void:
 	if gsrc != null:
 		var gtxt := gsrc.get_as_text()
 		gsrc.close()
+		# Rolled by `enter_dungeon` and NOT by `select_dungeon` (D256): the offer is weighted by the
+		# deck, and `select_dungeon` runs a screen before the deck exists. Both halves are asserted,
+		# because rolling in the earlier place would still pass a test that only looked at the later
+		# one — and a run must not be dealt two offers.
+		var ent := gtxt.find("func enter_dungeon")
+		var entn := gtxt.find("\nfunc ", ent + 10)
+		if gtxt.substr(ent, maxi(0, entn - ent)).find("power_offer = meta.power_offer") == -1:
+			fails += 1
+			print("FAIL enter_dungeon does not roll the power offer — it is the only seam that has the deck (D256)")
 		var sel := gtxt.find("func select_dungeon")
 		var nxt := gtxt.find("\nfunc ", sel + 10)
 		var body := gtxt.substr(sel, maxi(0, nxt - sel))
-		if body.find("power_offer") == -1:
+		if body.find("meta.power_offer") != -1:
 			fails += 1
-			print("FAIL select_dungeon does not roll the power offer — one offer per dungeon (D252)")
+			print("FAIL select_dungeon rolls the power offer — that is before the deck is chosen (D256)")
+		if body.find("power_offer = []") == -1:
+			fails += 1
+			print("FAIL select_dungeon does not clear the power offer — swapping dungeons would carry the last one's three")
 		for half in [["run_to_dict", "written into"], ["run_from_dict", "read back out of"]]:
 			var at := gtxt.find("func %s" % String(half[0]))
 			var to := gtxt.find("\nfunc ", at + 10)

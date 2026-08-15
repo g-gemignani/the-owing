@@ -579,12 +579,12 @@ func select_dungeon(id: String) -> void:
 	dungeon_id = id
 	var d := Balance.dungeon(id)
 	dungeon = d.difficulty if d != null else 1
-	# Rolled HERE, at the moment a dungeon is picked, so it is one offer per dungeon and re-entering
-	# the deck builder shows the same three. Re-picking the dungeon deals a new hand, which is
-	# correct: that is choosing a different run, not rejecting this one's terms.
-	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
-	power_offer = meta.power_offer(3) if meta != null else []
-	chosen_power = String(power_offer[0]) if not power_offer.is_empty() else ""
+	# Cleared, not rolled. The offer moved to `enter_dungeon` (D256) because it is weighted by the
+	# deck and the deck is not chosen yet — picking a dungeon is the step BEFORE the deck builder.
+	# Clearing matters: a dungeon picked, backed out of and swapped must not carry the last one's
+	# three, and this is the only place that can know.
+	power_offer = []
+	chosen_power = ""
 
 ## Start the selected dungeon with a chosen deck (D4: per-dungeon deck).
 ## `power_id` is the one chosen from the run-start offer (D245). Empty leaves `run_power` unset, which
@@ -593,6 +593,18 @@ func select_dungeon(id: String) -> void:
 ## one call, and they are not wrong to.
 func enter_dungeon(deck: Array[CardData], power_id: String = "") -> void:
 	run_deck = deck
+	# The offer is rolled HERE and nowhere else (D256). It used to be rolled by `select_dungeon`, and
+	# before that by the deck-builder SCREEN — which is reachable from the overworld, the pause menu
+	# and the crawl, so walking out and back in dealt three new powers (D252).
+	#
+	# This keeps that property and buys the deck weighting with it: `enter_dungeon` is called once per
+	# run from the UI, because the Start button that calls it exists only in `Mode.OUTFIT` and
+	# `_mode_now()` returns `Mode.LEDGER` for the whole of a live run. It is also the first moment the
+	# deck exists — one line above — which is the entire reason the roll is at this seam and not the
+	# earlier one.
+	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+	power_offer = meta.power_offer(3, run_deck) if meta != null else []
+	chosen_power = String(power_offer[0]) if not power_offer.is_empty() else ""
 	# Always ends holding SOMETHING. `set_run_power("")` falls through to whatever the save has
 	# equipped, which is what every tool and test caller relied on before the pick moved onto its own
 	# screen — and it is also what makes quitting on that screen survivable: a run resumed from there

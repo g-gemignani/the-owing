@@ -825,6 +825,29 @@ static func relic_affinity(r, lean: Dictionary) -> float:
 ## mismatched one, which is a nudge and not a filter.
 const AFFINITY_TILT := 1.5
 
+## The same question for a POWER, and read by `MetaState.power_offer` (D256).
+##
+## `relic_affinity` has to name eleven fields because a relic is a bag of modifiers with no damage
+## and no Block of its own. A power has both: `PowerData extends CardData` for the reason its header
+## gives, so the power's own axis is what `deck_lean` already measures on any card. Asking
+## `deck_lean([p])` is therefore not a shortcut — it is the SAME derivation the deck answers with,
+## pointed at one card, so a power added later is weighed correctly with nothing to remember.
+##
+## Same tilt and the same neutral rule as relics: a power that is pure draw, energy or status has no
+## axis and keeps its base weight, because those are the ones that make a build do something new.
+static func power_affinity(p, lean: Dictionary) -> float:
+	if p == null:
+		return 1.0
+	var own := deck_lean([p])
+	var atk := float(own["attack"])
+	var def := float(own["defence"])
+	var directed := atk + def
+	if directed <= 0.0:
+		return 1.0
+	var share_atk := atk / directed
+	return 1.0 + AFFINITY_TILT * (share_atk * float(lean["attack"])
+		+ (1.0 - share_atk) * float(lean["defence"]))
+
 static func relic_power(relics: Array) -> float:
 	var p := 0.0
 	for r in relics:

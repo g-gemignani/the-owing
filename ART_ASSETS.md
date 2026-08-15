@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**414 files wanted · 386 already present · 28 to provide.**
+**414 files wanted · 414 already present · 0 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -345,29 +345,29 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 6a — relic icons
 
-*38 files, 8 still to provide.* Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.
+*38 files, 0 still to provide.* Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.
 
 | ? | file | size | what it is |
 |---|---|---|---|
 | x | `relics/ancient_battery.png` | 128x128 | Ancient Battery — +1 Energy each turn. |
 | x | `relics/balanced_grip.png` | 128x128 | Balanced Grip — Your attacks deal 30% more damage. |
-|   | `relics/barrow_wall.png` | 128x128 | Barrow-Wall — Your Block is 45% stronger. |
+| x | `relics/barrow_wall.png` | 128x128 | Barrow-Wall — Your Block is 45% stronger. |
 | x | `relics/bone_charm.png` | 128x128 | Bone Charm — Whenever an enemy dies, draw 1. |
-|   | `relics/broad_iron.png` | 128x128 | Broad Iron — Attacks that strike one enemy strike them all. |
+| x | `relics/broad_iron.png` | 128x128 | Broad Iron — Attacks that strike one enemy strike them all. |
 | x | `relics/bulwark_plate.png` | 128x128 | Bulwark Plate — Your Block is 65% stronger. |
-| x | `relics/chipped_whetstone.png` | 128x128 | Chipped Whetstone — Every 2nd turn, gain 1 Strength. |
-|   | `relics/carrion_wind.png` | 128x128 | Carrion Wind — A debuff aimed at one enemy lands on every one. |
+| x | `relics/chipped_whetstone.png` | 128x128 | Chipped Whetstone — On the first turn of a fight, your attacks deal 90% more damage. |
+| x | `relics/carrion_wind.png` | 128x128 | Carrion Wind — A debuff aimed at one enemy lands on every one. |
 | x | `relics/coin_purse.png` | 128x128 | Coin Purse — Every card costs 1 less. |
-| x | `relics/crown_of_thorns.png` | 128x128 | Crown of Thorns — Whenever an enemy dies, deal 4 to all enemies. |
-|   | `relics/cruel_edge.png` | 128x128 | Cruel Edge — Your attacks deal 50% more damage. |
-| x | `relics/duelists_glove.png` | 128x128 | Duelist's Glove — Every 3rd card you play in a turn, deal 5 to all. |
-|   | `relics/echo_in_the_stone.png` | 128x128 | Echo in the Stone — The first attack you play each turn strikes twice. |
-| x | `relics/eternal_furnace.png` | 128x128 | Eternal Furnace — Every 3rd turn, deal 6 to all enemies. |
+| x | `relics/crown_of_thorns.png` | 128x128 | Crown of Thorns — An enemy that hits you takes 60% of the damage back. |
+| x | `relics/cruel_edge.png` | 128x128 | Cruel Edge — Your attacks deal 50% more damage. |
+| x | `relics/duelists_glove.png` | 128x128 | Duelist's Glove — Your attacks deal 60% more damage while one enemy still stands. |
+| x | `relics/echo_in_the_stone.png` | 128x128 | Echo in the Stone — The first attack you play each turn strikes twice. |
+| x | `relics/eternal_furnace.png` | 128x128 | Eternal Furnace — Each enemy you kill makes your attacks 30% stronger for the rest of the fight. |
 | x | `relics/field_kit.png` | 128x128 | Field Kit — Play 2 cards in a turn to draw 1. |
-|   | `relics/first_breath.png` | 128x128 | First Breath — The first card you play each turn costs nothing. |
-|   | `relics/forgiven_ledger.png` | 128x128 | Forgiven Ledger — Every card costs 2 less. |
+| x | `relics/first_breath.png` | 128x128 | First Breath — The first card you play each turn costs nothing. |
+| x | `relics/forgiven_ledger.png` | 128x128 | Forgiven Ledger — Every card costs 2 less. |
 | x | `relics/giants_marrow.png` | 128x128 | Giant's Marrow — Your attacks deal 70% more damage. |
-| x | `relics/healing_idol.png` | 128x128 | Healing Idol — Heal 6 HP after each victory. |
+| x | `relics/healing_idol.png` | 128x128 | Healing Idol — Your attacks heal you for 20% of the damage they deal. |
 | x | `relics/hearth_stone.png` | 128x128 | Hearth Stone — Every kill refunds 2 Energy. |
 | x | `relics/iron_heart.png` | 128x128 | Iron Heart — Your attacks deal 45% more damage. |
 | x | `relics/iron_ration.png` | 128x128 | Iron Ration — Every kill refunds 1 Energy. |
@@ -377,20 +377,20 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `relics/lucky_penny.png` | 128x128 | Lucky Penny — Every 4th turn, gain 1 Energy. |
 | x | `relics/merchants_seal.png` | 128x128 | Merchant's Seal — Debuffs you land do not wear off. |
 | x | `relics/padded_vest.png` | 128x128 | Padded Vest — Your Block is 55% stronger. |
-| x | `relics/reliquary_heart.png` | 128x128 | Reliquary Heart — Below 50% HP, gain 3 Strength. Once per combat. |
+| x | `relics/reliquary_heart.png` | 128x128 | Reliquary Heart — Below half your HP, your attacks deal 70% more damage. |
 | x | `relics/scholars_lens.png` | 128x128 | Scholar's Lens — Every 3rd turn, draw 2. |
-|   | `relics/setting_mortar.png` | 128x128 | Setting Mortar — Block no longer leaves you at the start of your turn. |
-| x | `relics/surgeons_thread.png` | 128x128 | Surgeon's Thread — Below 40% HP, heal 12. Once per combat. |
+| x | `relics/setting_mortar.png` | 128x128 | Setting Mortar — Block no longer leaves you at the start of your turn. |
+| x | `relics/surgeons_thread.png` | 128x128 | Surgeon's Thread — Block you still hold at the end of your turn heals you for 30% of it. |
 | x | `relics/tin_cup.png` | 128x128 | Tin Cup — Cards you burn out return to your pile. |
 | x | `relics/tower_shield.png` | 128x128 | Tower Shield — Your Block is 20% stronger, and it no longer leaves you at the start of your turn. |
 | x | `relics/warlords_banner.png` | 128x128 | Warlord's Banner — Every kill refunds 3 Energy. |
-| x | `relics/weighted_soles.png` | 128x128 | Weighted Soles — Unspent Block converts to 4 Block next turn. |
+| x | `relics/weighted_soles.png` | 128x128 | Weighted Soles — Every card you play gives you 2 Block. |
 | x | `relics/whetstone.png` | 128x128 | Whetstone — Your attacks deal 35% more damage. |
 | x | `relics/worn_boots.png` | 128x128 | Worn Boots — Your attacks deal 25% more damage. |
 
 ## Tier 6b — power icons
 
-*30 files, 20 still to provide.* A power is fired once per turn, every turn, so its icon is seen constantly. Several currently share one monochrome glyph.
+*30 files, 0 still to provide.* A power is fired once per turn, every turn, so its icon is seen constantly. Several currently share one monochrome glyph.
 
 | ? | file | size | what it is |
 |---|---|---|---|
@@ -404,26 +404,26 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `powers/overwhelm.png` | 128x128 | Overwhelm — Deal 7 damage. |
 | x | `powers/siphon.png` | 128x128 | Siphon — Deal 3 damage. Heal for it. |
 | x | `powers/push_on.png` | 128x128 | Push On — Gain 1 Energy. Costs 5 HP. |
-|   | `powers/grave_salt.png` | 128x128 | Grave-Salt — Apply 2 Weak. |
-|   | `powers/knit.png` | 128x128 | Knit — Heal 5. |
-|   | `powers/full_hands.png` | 128x128 | Full Hands — Gain 2 Block, and 2 more for every card in your hand. |
-|   | `powers/nothing_left.png` | 128x128 | Nothing Left — Deal 2 damage, and 8 more if your hand is empty. |
-|   | `powers/running_total.png` | 128x128 | Running Total — Deal 1 damage, and 2 more for every card played this turn. |
-|   | `powers/what_you_owe.png` | 128x128 | What You Owe — Deal 2 damage, and 3 more for every debuff on the target. |
-|   | `powers/rot_reader.png` | 128x128 | Rot Reader — Deal 2 damage, and 2 more for every Poison on the target. |
-|   | `powers/turn_it_back.png` | 128x128 | Turn It Back — Gain 2 Block, and 1 more for every Thorn you hold. |
-|   | `powers/hone.png` | 128x128 | Hone — Deal 2 damage. The next card you play deals 4 more. |
-|   | `powers/short_change.png` | 128x128 | Short Change — Gain 1 Block. The next card you play costs 1 less. |
-|   | `powers/ash_count.png` | 128x128 | Ash Count — Deal 1 damage, and 2 more for every card burnt out this fight. |
-|   | `powers/sweep_wide.png` | 128x128 | Sweep Wide — Deal 3 damage to every enemy. |
-|   | `powers/twice_over.png` | 128x128 | Twice Over — Deal 3 damage twice. |
-|   | `powers/sure_footing.png` | 128x128 | Sure Footing — Gain 1 Dexterity. |
-|   | `powers/hedge.png` | 128x128 | Hedge — Gain 3 Block and 2 Thorns. |
-|   | `powers/empty_the_purse.png` | 128x128 | Empty the Purse — Spend all your Energy. Deal 1 damage, and 2 more for each spent. |
-|   | `powers/look_twice.png` | 128x128 | Look Twice — Draw 2. |
-|   | `powers/hold_fast.png` | 128x128 | Hold Fast — Gain 4 Block and 1 Dexterity. |
-|   | `powers/even_out.png` | 128x128 | Even Out — Gain 1 Block, then deal damage equal to it. |
-|   | `powers/settle_up.png` | 128x128 | Settle Up — Deal 5 damage, and 4 more if the target is debuffed. |
+| x | `powers/grave_salt.png` | 128x128 | Grave-Salt — Apply 2 Weak. |
+| x | `powers/knit.png` | 128x128 | Knit — Heal 5. |
+| x | `powers/full_hands.png` | 128x128 | Full Hands — Gain 2 Block, and 2 more for every card in your hand. |
+| x | `powers/nothing_left.png` | 128x128 | Nothing Left — Deal 2 damage, and 8 more if your hand is empty. |
+| x | `powers/running_total.png` | 128x128 | Running Total — Deal 1 damage, and 2 more for every card played this turn. |
+| x | `powers/what_you_owe.png` | 128x128 | What You Owe — Deal 2 damage, and 3 more for every debuff on the target. |
+| x | `powers/rot_reader.png` | 128x128 | Rot Reader — Deal 2 damage, and 2 more for every Poison on the target. |
+| x | `powers/turn_it_back.png` | 128x128 | Turn It Back — Gain 2 Block, and 1 more for every Thorn you hold. |
+| x | `powers/hone.png` | 128x128 | Hone — Deal 2 damage. The next card you play deals 4 more. |
+| x | `powers/short_change.png` | 128x128 | Short Change — Gain 1 Block. The next card you play costs 1 less. |
+| x | `powers/ash_count.png` | 128x128 | Ash Count — Deal 1 damage, and 2 more for every card burnt out this fight. |
+| x | `powers/sweep_wide.png` | 128x128 | Sweep Wide — Deal 3 damage to every enemy. |
+| x | `powers/twice_over.png` | 128x128 | Twice Over — Deal 3 damage twice. |
+| x | `powers/sure_footing.png` | 128x128 | Sure Footing — Gain 1 Dexterity. |
+| x | `powers/hedge.png` | 128x128 | Hedge — Gain 3 Block and 2 Thorns. |
+| x | `powers/empty_the_purse.png` | 128x128 | Empty the Purse — Spend all your Energy. Deal 1 damage, and 2 more for each spent. |
+| x | `powers/look_twice.png` | 128x128 | Look Twice — Draw 2. |
+| x | `powers/hold_fast.png` | 128x128 | Hold Fast — Gain 4 Block and 1 Dexterity. |
+| x | `powers/even_out.png` | 128x128 | Even Out — Gain 1 Block, then deal damage equal to it. |
+| x | `powers/settle_up.png` | 128x128 | Settle Up — Deal 5 damage, and 4 more if the target is debuffed. |
 
 ## Tier 7 — identity and shell
 

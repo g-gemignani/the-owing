@@ -6,13 +6,6 @@
 script = ExtResource("1")
 id = "healing_idol"
 name = "Healing Idol"
-description = "Heal 6 HP after each victory."
+description = "Your attacks heal you for 20% of the damage they deal."
 rarity = 0
-bonus_max_hp = 0
-start_block = 0
-start_strength = 0
-start_dexterity = 0
-bonus_energy = 0
-extra_draw = 0
-heal_after_combat = 6
-gold_percent = 0
+lifesteal_pct = 20

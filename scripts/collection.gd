@@ -817,14 +817,19 @@ func _write_info(shown: Array) -> void:
 ## so each run has a different lens — that is run DIVERGENCE and not escalation, because a power held
 ## from the first fight raises the first fight and the last one equally.
 ##
-## The offer belongs to the RUN and is rolled by `GameState.select_dungeon` (D252). This screen only
-## displays it. It was rolled here at first, and this screen is reachable from the overworld, the
-## pause menu AND the crawl — so backing out and coming back dealt three new powers, and a choice of
-## three you can re-draw is a choice of all of them with extra steps.
+## The offer belongs to the RUN and is rolled by `GameState.enter_dungeon` (D252, moved by D256).
 ##
-## Mid-run it shows what the run is CARRYING instead. The offer is spent by then, and showing three
-## live buttons on a screen whose Start button is not the way back into the dungeon is an invitation
-## to press something that does nothing.
+## **This screen no longer shows the three, because it cannot.** The offer is weighted by the deck,
+## and the deck is what this screen is FOR — so the three do not exist until Start is pressed, and
+## anything drawn here would be drawn against a deck the player is still editing. Showing three
+## unconditioned faces and then dealing three different ones at the threshold is worse than showing
+## none: it reads as a re-roll the player did not ask for.
+##
+## Nothing is lost with it. The pick moved onto its own screen at D253, so this box had become a
+## second place to press a decision that already had a first one.
+##
+## Mid-run it shows what the run is CARRYING. The offer is spent by then, and that is the one thing
+## about a power this screen can still say truthfully.
 func _refresh_powers() -> void:
 	for c in power_box.get_children():
 		c.queue_free()
@@ -837,36 +842,18 @@ func _refresh_powers() -> void:
 				held.name, held.effect_text(),
 				"free" if held.eff_cost() == 0 else "%dE" % held.eff_cost()])
 		return
-	if GameState.power_offer.is_empty():
-		var none := Label.new()
-		none.text = "no power is open to you yet"
-		power_box.add_child(none)
-		return
-	for pid in GameState.power_offer:
-		var pd := Balance.power(String(pid))
-		if pd == null:
-			continue
-		pd = pd.duplicate()
-		# The level the save has PAID for. A power in the offer that was never bought comes at 1:
-		# the offer opens the pool and gold is still what makes one better.
-		pd.level = int(MetaState.powers.get(String(pid), 1))
-		var pb := Button.new()
-		UITheme.style_button(pb)
-		var on: bool = String(pid) == GameState.chosen_power
-		var owned: bool = MetaState.powers.has(String(pid))
-		# No "(new)" suffix on the FACE. It widened this button enough to push the deck panel past its
-		# width budget, which `CardGridTest` measures at 180px for the row — a label that costs a
-		# layout assertion belongs in the tooltip, which is where the sentence about levelling
-		# already is.
-		pb.text = "%s%s Lv%d" % ["> " if on else "", pd.name, pd.level]
-		pb.disabled = on
-		UI.hoverable(pb, "%s\n%s\nCost %s, once per turn.%s" % [
-			pd.name, pd.effect_text(), "free" if pd.eff_cost() == 0 else "%dE" % pd.eff_cost(),
-			"" if owned else "\nYou have never carried this one. It comes at level 1 — gold levels it for next time."])
-		pb.pressed.connect(func():
-			GameState.chosen_power = String(pid)
-			_refresh())
-		power_box.add_child(pb)
+	var open := 0
+	for pid in Balance.POWERS:
+		if MetaState.power_available(String(pid)):
+			open += 1
+	# A bare `Label` and NOT `UI.label`, which autowraps. This box is narrow, and a wrapped line here
+	# grows it enough to push the card grid off the bottom of the frame — which `CardGridTest`
+	# catches by finding no face it can reach to hover.
+	var line := Label.new()
+	line.text = "three dealt on the way down" if open > 0 else "no power is open to you yet"
+	power_box.add_child(line)
+	if open > 0:
+		UI.hoverable(line, "You choose one power at the threshold, from three of the %d your clears have opened.\nThe three are dealt to suit the deck you take, so build the deck first." % open)
 
 ## The Load bar: the saved decks, the loaded one showing on the picker's face, and
 ## how many of the slots are spoken for.

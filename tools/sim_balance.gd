@@ -1536,11 +1536,14 @@ func _choose_spoil(pool: Array, deck: Array, held: Array) -> RelicData:
 		return pool[0]
 	return best
 
-## Does this relic change a RULE rather than a number (D233)? Derived from the modifier fields
-## themselves, so a field added later joins without anybody remembering this function.
+## Does this relic change a RULE rather than a number (D233)?
+##
+## Asks the relic. This function used to hold its own list of seven fields under a comment claiming
+## the list was derived; D243 added four more fields and the list did not notice, so every
+## `--spoils-rules` run since has measured a pool with six rule-breakers missing. See
+## `RelicData.breaks_a_rule`, which now owns the question and sits beside the fields.
 static func _breaks_a_rule(r: RelicData) -> bool:
-	return r.cost_reduction > 0 or r.free_first_card or r.damage_pct > 0 or r.block_pct > 0 \
-		or r.attacks_hit_all or r.repeat_first_attack or r.block_carries
+	return r.breaks_a_rule()
 
 func _relics(ids: Array) -> Array:
 	var out: Array = []

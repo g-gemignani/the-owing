@@ -80,6 +80,12 @@ const SETS := {
 	"symbols": [64, true],
 	"intents": [96, false],
 	"powers": [128, false],
+	# Relics were the one icon family with no sheet path, so eight of them meant eight
+	# separate requests — eight chances for the generator to answer the preamble instead
+	# of the subject, and no two of them drawn against each other. Same canvas and the
+	# same contract as `powers`; the only difference is what the brief asks for inside
+	# the cell, and the brief is not this file's business.
+	"relics": [128, false],
 	# Taller than they are wide, because these are standing figures anchored by their
 	# feet — a square canvas would centre a person in it and `iso_run.gd` positions
 	# sprites by their bottom edge, so the standing point would float.
@@ -305,6 +311,14 @@ func _ids(set_name: String) -> Array:
 			for pid in Balance.POWERS:
 				var p := Balance.power(pid)
 				out.append(["powers/%s.png" % pid, p.name if p != null else pid])
+		# Walked in `RELIC_CATALOG` order, which is the order `art_manifest.gd` prints into
+		# ART_ASSETS.md and ART_PROMPTS.md. One list, so the order asked for on the sheet and
+		# the order installed off it cannot disagree — the property the header calls the whole
+		# cost of a positional install.
+		"relics":
+			for rid in MetaState.RELIC_CATALOG:
+				var r := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
+				out.append(["relics/%s.png" % rid, r.name if r != null else String(rid)])
 		# Two columns, one row per figure: LEFT faces the camera (`_s`), RIGHT is the
 		# same figure from behind (`_n`). Emitted as a pair because the reader is
 		# row-major like every other sheet here, so the caller passes `--cols=2`.

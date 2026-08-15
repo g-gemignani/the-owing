@@ -689,8 +689,10 @@ func _buff_is_stated(inst: Node, word: String, n: int) -> bool:
 ## cheap because the fallback is the same procedural glyph `powers_screen.gd` uses, so this holds for
 ## all thirty powers and not only the ten that are painted.
 func _the_power_pick_shows_its_sigils() -> void:
+	# No `select_dungeon` after this. It used to be needed because the offer was rolled there; since
+	# D256 it is rolled by `enter_dungeon` — which `_start_a_run` calls — and `select_dungeon` CLEARS
+	# the offer, so calling it here would hand this screen nothing to draw.
 	_start_a_run("crypt")
-	GameState.select_dungeon("crypt")
 	var inst = (load("res://scenes/PowerPick.tscn") as PackedScene).instantiate()
 	add_child(inst)
 	await get_tree().process_frame

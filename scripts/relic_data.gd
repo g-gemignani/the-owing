@@ -63,6 +63,53 @@ extends Resource
 ## Exhausted cards go to the discard pile instead of out of the fight. Read by `_resolve`.
 @export var exhaust_returns: bool = false
 
+## The second batch (D257), converting the last relics that moved only a number.
+##
+## D233's seven and D243's four are all UNCONDITIONAL: hold the relic, get the percent, every turn
+## of every fight. That is why the pool ran out of room — a seventh flat `damage_pct` is the sixth
+## one with a different number on it, and `breaks_a_rule()` counts it while a player cannot tell
+## them apart.
+##
+## These are conditional or compounding instead, which is what buys escalation the flat ones cannot:
+## measured, the whole pool reached `esc` 1.71x against 1.87x for rule-breakers alone, so
+## composition had about 9% left in it. A percent that fires only when you are winning, or that
+## grows with the kills in a fight, is worth more in fight six than in fight one — and `esc` is
+## exactly that ratio.
+@export_group("Rule modifiers — conditional")
+## Percent added to attacks while exactly one enemy is still standing. Read by `_outgoing`.
+@export var lone_damage_pct: int = 0
+## Percent added to attacks while you are below half your maximum HP. Read by `_outgoing`.
+@export var wounded_damage_pct: int = 0
+## Percent added to attacks on the FIRST turn of a fight. Read by `_outgoing`.
+@export var opener_damage_pct: int = 0
+## Percent added to attacks for each enemy already killed in this fight. Compounds. Read by
+## `_outgoing`.
+@export var kill_damage_pct: int = 0
+## Percent of the damage an attacker deals you that it takes back. Read by `_resolve_enemy`.
+@export var retaliate_pct: int = 0
+## Percent of an attack's damage healed back to you. Read by `_resolve`.
+@export var lifesteal_pct: int = 0
+## Block gained for every card played. Read by `_resolve`.
+@export var block_per_card: int = 0
+## Percent of the Block you still hold at end of turn that heals you. Read by `end_turn`.
+@export var block_heals_pct: int = 0
+
+## Does this relic change a RULE rather than a number (D233)?
+##
+## HERE, beside the fields it reads, and not in `tools/sim_balance.gd` where it lived. That copy
+## claimed in its own comment to be *"derived from the modifier fields themselves, so a field added
+## later joins without anybody remembering this function"* — and it named seven fields by hand. D243
+## added four more (`debuffs_persist`, `debuffs_spread`, `energy_per_kill`, `exhaust_returns`) and
+## none of them joined, so `--spoils-rules` measured a "rule-breakers only" pool with six
+## rule-breakers missing from it. **A comment that says a thing is derived is not a derivation**
+## (D124's family, and D34's).
+##
+## It cannot be fully derived — `modifier_power()` deliberately excludes `cost_reduction` and
+## `free_first_card`, which are priced as throughput in `power_value()`. So two fields are still
+## named. The distance between them and the fields they name is now one screen instead of one repo.
+func breaks_a_rule() -> bool:
+	return modifier_power() > 0.0 or cost_reduction > 0 or free_first_card
+
 ## When a triggered effect fires. Relics used to be nine flat stat fields — every
 ## one of them "+15 max HP" — so a relic changed your numbers but never how you
 ## played. A trigger is what turns "+2 Strength" into "kill something and draw".
@@ -210,6 +257,41 @@ func modifier_power() -> float:
 	# worth about the cards it saves, at CardData's 5.0 a card, for two or three a fight.
 	if exhaust_returns:
 		v += 2.5 * 5.0
+
+	# --- the conditional batch (D257) -------------------------------------------------------
+	#
+	# Every one is `damage_pct`'s derived rate of 0.6 a point, SCALED BY HOW OFTEN IT FIRES. That
+	# is the D243 lesson priced in from the start: compounding the percentages there changed
+	# nothing because only two relics carried the field and each relic is unique per run, so the
+	# arithmetic was right and had no subjects. **Count how often it fires before you price it.**
+	#
+	# The fractions are ESTIMATES against a fight of `Balance.TARGET_NORMAL_TURNS`, and they are
+	# the honest kind: a wrong one files the relic in the wrong rarity band, which the rarity suite
+	# reports, rather than shipping a mispriced relic quietly (D224/D225).
+
+	# One enemy left is the back half of a multi-enemy fight and the whole of a single-enemy one.
+	v += float(lone_damage_pct) * 0.6 * 0.45
+	# Below half HP is where a run spends its late fights and almost none of its early ones — which
+	# is also why this one is worth more than the fraction suggests, and why the fraction and not
+	# the rate carries the discount.
+	v += float(wounded_damage_pct) * 0.6 * 0.30
+	# One turn of about five.
+	v += float(opener_damage_pct) * 0.6 * 0.20
+	# Compounds, so the average over a fight is roughly half the final stack, and the stack is the
+	# 1.3 kills `_expected_fires` already uses for ON_KILL.
+	v += float(kill_damage_pct) * 0.6 * 0.65
+	# Priced off what it DEALS, not off the percent. An enemy landing about 8 a turn over five turns
+	# is 40 damage passing through, and CardData prices one point of damage at 1.0 — so a point of
+	# this percent is 0.4 of a point of card damage.
+	v += float(retaliate_pct) * 0.4
+	# A fight's worth of the player's damage is roughly an encounter's enemy HP, ~40, and healing is
+	# CardData's 0.8 a point: 0.4 of a point per percent.
+	v += float(lifesteal_pct) * 0.32
+	# Three cards a turn for a fight, at CardData.BLOCK_VALUE.
+	v += float(block_per_card) * 3.0 * float(Balance.TARGET_NORMAL_TURNS) * CardData.BLOCK_VALUE
+	# Block still standing at end of turn is the block that was not spent — the same quantity
+	# `block_carries` is priced on, so the same 6 a turn, healed at 0.8 a point.
+	v += float(block_heals_pct) / 100.0 * 6.0 * float(Balance.TARGET_NORMAL_TURNS) * 0.8
 	return v
 
 ## Total worth of the relic, for display and for relic pricing.

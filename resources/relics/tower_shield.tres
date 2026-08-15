@@ -7,6 +7,6 @@ script = ExtResource("1")
 id = "tower_shield"
 name = "Tower Shield"
 description = "Your Block is 20% stronger, and it no longer leaves you at the start of your turn."
-rarity = 1
+rarity = 0
 block_pct = 20
 block_carries = true

@@ -164,6 +164,39 @@ const REDO := {
 	# where the nouns are fixed it in one attempt. `tools/regrade.gd` now reports "already
 	# inside the palette — nothing to do" on the installed file, which is the check that
 	# says this is a painting rather than another patch.
+	#
+	# `main_menu.png` is here a THIRD time, and this one is not a defect: the subject moved
+	# from a ridge overlooking a valley to a place INSIDE the forest, asked for as "the
+	# drawing style of the dungeon backgrounds" (D258). Kept because the file is the thing
+	# three entries of colour work were spent on, and a subject change spends none of it —
+	# the two corrections above are carried word for word into the new subject line below,
+	# and the numbers came back on the FIRST roll with no grade:
+	#
+	#   green 0.0%, sat-in-light 0.480, colour reach 100.0%, mean luminance 0.183, and
+	#   0.094% of pixels over 0.90 — against the bible's 0.0/0.540/99.9%/0.168/0.202%
+	#
+	# Better than either attempt above on green and on colour reach, and the menu column
+	# measures 9.4:1 against 6.1 and 7.6 — a forest interior is darker on the left than a
+	# moonlit valley was, so the text sits on a quieter field.
+	#
+	# One wording change, and it is a rule rather than a preference: the old brief said
+	# "keep the left third quiet - A TEXT COLUMN SITS OVER IT". Never state the reason for
+	# a keep-clear region, because every noun in a justification is a thing the generator
+	# can draw. Describe the region by position and emptiness alone.
+	#
+	# ...and then the forest was rejected on sight and the PALETTE RULE went with it (D260).
+	# The subject above is a drowned crypt at the waterline, in cold teal, and the violet
+	# clauses three entries had refined are GONE rather than reworded. They were never the
+	# game's palette: they were `bg_crypt.png`'s, promoted to a rule because it was the one
+	# file attached to every request. The twelve dungeon backdrops span orange, acid green,
+	# teal, magenta and brown, so "NO GREEN ANYWHERE" was a rule the game's own art breaks
+	# in four rooms. What actually unifies the set is INK and LIGHTING, not hue, and the
+	# reference is now a six-panel sheet that shows one drawing style across six palettes.
+	#
+	# The numbers that picked this plate out of four compositions in the same palette:
+	# menu-column contrast 12.0:1 against 9.4 for the forest, left-third mean 5.3% against
+	# 15.7%, and no pixel over 0.90 at all. A rejected variant lit by a shaft through a
+	# broken dome measured 1.4% over 0.90 — a blown highlight, seven times the bible.
 }
 
 ## A defect that belongs to a whole DIRECTORY rather than to one file.
@@ -373,7 +406,7 @@ const SHELL := [
 	## it, and not the picture itself. That is why it stayed off the re-roll list while
 	## being the most-seen image in the game (D114).
 	["main_menu.png", "1280x720", "The title screen backdrop. `main_menu.gd` resolves it through `PixelArt.title_art_path()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. It was `.jpg` until D114 renamed it on the re-roll; this row is one of the references that had to move with it, and it did not until D122 noticed the tier still reporting one file missing.", Kind.SCENE,
-		"A lone hooded traveller seen from behind on a ridge at night, looking up at a black fortress spire far off across a valley of firs. NO GREEN ANYWHERE IN THE FRAME: the firs are black and violet-grey silhouettes at night, not foliage, and the traveller's cloak is the same cold stone colour as the rock — a forest and a cloak are the two things a painter reaches for green for, and this palette does not have it. THE PICTURE IS STILL IN COLOUR AND THE COLOUR IS VIOLET: the rock, the cliffs, the distant mountains and the cloak are all a deep blue-violet stone, plainly violet against a violet-blue night sky, never neutral grey and never black-and-white. One cold cyan flame in a stone bowl beside them is the only light source and the only saturated colour in the image. Weight the traveller and the flame RIGHT OF CENTRE and keep the left third quiet — a text column sits over it. Moonless, or a moon kept small and dulled: nothing in the frame reads as pure white."],
+		"The camera sits low, almost at the waterline, inside a drowned crypt. The bottom half of the frame is black still water holding a long mirrored reflection. On the RIGHT a great broken doorway leans half sunk, and cold blue-green light comes through it from a room beyond. A lone hooded figure wades away from the camera toward that light, right of centre, water to the knee. The LEFT of the frame is open dark water and shadow with nothing in it. THE WHOLE FRAME IS COLD TEAL: blue-green light, wet slate, drowned stone, black water. No orange, no magenta, no leaf green anywhere. The light through the doorway is the only light source."],
 	["ui/logo.png", "1600x480", "The wordmark. The title screen sets a plain Label reading 'THE OWING' into this plate's empty middle. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
 		"An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind."],
 	["ui/boot_splash.png", "1280x720", "Boot splash. None configured.", Kind.SCENE,

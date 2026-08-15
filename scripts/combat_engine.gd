@@ -112,6 +112,12 @@ var previous_card: CardData = null
 ## Cards that have left this combat for good — exhausted by their own rule or burned
 ## out of a hand. The ammunition `per_exhausted` collects.
 var exhausted_this_combat: int = 0
+## Enemies killed so far in this fight. What `kill_damage_pct` compounds on (D257).
+##
+## Counted rather than derived from `enemies`, because a fight restored mid-combat from a save can
+## open with a corpse already in the array — deriving it would hand the relic its stack back for
+## kills the player made before quitting, which is a small save-scum and a wrong number either way.
+var kills_this_combat: int = 0
 ## Energy the X-cost card currently being played will spend, stashed before the pool
 ## moves so the face and the resolution read one number. -1 when nothing is mid-play.
 var x_energy: int = -1
@@ -730,8 +736,19 @@ func play_card(card: CardData) -> String:
 	if card.hits > 1:
 		_t(Balance.TALLY_MULTI)
 	_pk(Balance.TALLY_PEAK_HAND, cards_played_this_turn)
+	# `block_per_card` (D257). In `play_card` and NOT in `_resolve`, because a power resolves through
+	# `_resolve` too — it is a card the player always holds — and "every card you play" must not mean
+	# the power as well. It is also before the resolution rather than after, so the Block is standing
+	# when the card that granted it is a Block-scaled attack reading `player.block`.
+	var per_card := _mod("block_per_card")
+	var per_card_msg := ""
+	if per_card > 0:
+		var pcb := player.outgoing_block(per_card)
+		player.gain_block(pcb)
+		_t(Balance.TALLY_BLOCK, pcb)
+		per_card_msg = "Block +%d. " % pcb
 	resolving_play = true
-	var msg := _resolve(card)
+	var msg := per_card_msg + _resolve(card)
 	# D204: ...and then the last thing again. Outside `_resolve` on purpose. The echo is
 	# a second RESOLUTION, not an item in this card's effect list, and keeping it here is
 	# what makes the three rules it needs true for free: it pays no energy, it moves no
@@ -871,10 +888,44 @@ func card_block_bonus(card: CardData) -> int:
 ## worked out rather than the card's printed number.
 func _outgoing(base: int) -> int:
 	var d := player.outgoing_damage(base)
-	var m := _mod_mult("damage_pct")
+	var m := _mod_mult("damage_pct") * _conditional_damage_mult()
 	if m != 1.0 and d > 0:
 		d = maxi(1, int(round(float(d) * m)))
 	return d
+
+## The product of the conditional damage percents whose condition holds right now (D257).
+##
+## One function and not four branches at four call sites, for the reason `_outgoing` itself exists:
+## the face and the hit read the same base through two paths, and a condition evaluated in only one
+## of them is D50's lie in a new costume — the shape `damage_pct` shipped with and D233 had to fix.
+##
+## Evaluated per SWING, which is deliberate. A card that kills the second-to-last enemy on its first
+## hit should swing harder on its second, and the face shows one swing with `x{hits}` beside it, so
+## the two agree about what they are describing.
+func _conditional_damage_mult() -> float:
+	var m := 1.0
+	var lone := _mod("lone_damage_pct")
+	if lone > 0 and _living_enemies() == 1:
+		m *= 1.0 + float(lone) / 100.0
+	var wounded := _mod("wounded_damage_pct")
+	if wounded > 0 and player.max_hp > 0 and player.hp * 2 < player.max_hp:
+		m *= 1.0 + float(wounded) / 100.0
+	var opener := _mod("opener_damage_pct")
+	if opener > 0 and turn <= 1:
+		m *= 1.0 + float(opener) / 100.0
+	# The compounding one. `kills_this_combat` is a running count and not `enemies.size()` minus the
+	# living, because a fight can start with a corpse in it after a resumed save.
+	var per_kill := _mod("kill_damage_pct")
+	if per_kill > 0 and kills_this_combat > 0:
+		m *= 1.0 + float(per_kill) * float(kills_this_combat) / 100.0
+	return m
+
+func _living_enemies() -> int:
+	var n := 0
+	for e in enemies:
+		if not e.is_dead():
+			n += 1
+	return n
 
 func card_damage(card: CardData) -> int:
 	return _outgoing(card_base_damage(card))
@@ -948,6 +999,16 @@ func _resolve(card: CardData) -> String:
 			player.hp = mini(player.max_hp, player.hp + total)
 			_t(Balance.TALLY_HEAL, player.hp - before_heal)
 			msg += "Drained %d. " % total
+		# The relic's version (D257), beside the card's for the reason `energy_per_kill` sits beside
+		# `energy_on_kill`: one mechanism, two authors. A percent of damage LANDED, so it rides every
+		# `damage_pct` relic already held rather than being a flat heal bolted on beside them.
+		var steal_pct := _mod("lifesteal_pct")
+		if steal_pct > 0 and total > 0:
+			var stolen := maxi(1, int(round(float(total) * float(steal_pct) / 100.0)))
+			var pre_steal := player.hp
+			player.hp = mini(player.max_hp, player.hp + stolen)
+			_t(Balance.TALLY_HEAL, player.hp - pre_steal)
+			msg += "Drained %d. " % (player.hp - pre_steal)
 		if not targets.is_empty():
 			# Reads the TARGET LIST rather than `card.aoe`, because `attacks_hit_all` makes a
 			# single-target card hit everything and the sentence has to say what happened.
@@ -960,6 +1021,7 @@ func _resolve(card: CardData) -> String:
 				if not e.get_meta("counted_dead", false):
 					e.set_meta("counted_dead", true)
 					killed = true
+					kills_this_combat += 1
 					_t(Balance.TALLY_KILLS)
 				msg += "%s dies! " % e.name
 				var onkill := _fire_relics(RelicData.Trigger.ON_KILL)
@@ -1092,6 +1154,18 @@ func end_turn() -> String:
 	cards_played_last_turn = cards_played_this_turn
 
 	var parts: Array[String] = []
+	# `block_heals_pct` (D257). HERE — after the snapshot, before the enemies act — because the Block
+	# it pays on is the wall you finished your turn behind, not what survives being hit. Reading it
+	# after `_resolve_enemy` would pay nothing on exactly the turns the wall did its job, which is
+	# the opposite of what the relic says.
+	var heal_pct := _mod("block_heals_pct")
+	if heal_pct > 0 and player.block > 0:
+		var mended := maxi(1, int(round(float(player.block) * float(heal_pct) / 100.0)))
+		var pre_mend := player.hp
+		player.hp = mini(player.max_hp, player.hp + mended)
+		if player.hp > pre_mend:
+			_t(Balance.TALLY_HEAL, player.hp - pre_mend)
+			parts.append("Your guard mends %d." % (player.hp - pre_mend))
 	for i in enemies.size():
 		if enemies[i].is_dead():
 			continue
@@ -1164,12 +1238,22 @@ func _resolve_enemy(i: int) -> String:
 			var hurt := _fire_relics(RelicData.Trigger.ON_HP_BELOW_PCT)
 			if hurt != "":
 				out += " " + hurt
+			# `retaliate_pct` (D257), beside the Thorns status for the reason every relic rule sits
+			# beside the card mechanic it mirrors. Taken off `landed` — what actually reached you —
+			# so Block is a real answer to it and a turn spent walling is not also a turn dealing
+			# damage. This is the one relic in the pool that gets STRONGER as enemies scale, which
+			# is why it is here and not another flat percent.
+			var retal := _mod("retaliate_pct")
+			if retal > 0 and landed > 0:
+				var back := maxi(1, int(round(float(landed) * float(retal) / 100.0)))
+				e.take_damage(back)
+				out += " It takes %d back." % back
 			if player.thorns > 0:
 				e.take_damage(player.thorns)
 				out += " Thorns bite back for %d." % player.thorns
-				if e.is_dead():
-					out += " %s dies!" % e.name
-					retarget()
+			if (retal > 0 or player.thorns > 0) and e.is_dead():
+				out += " %s dies!" % e.name
+				retarget()
 			return out
 		EnemyData.Action.DEBUFF_VULN:
 			player.vulnerable += v
