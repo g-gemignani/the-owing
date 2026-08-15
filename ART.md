@@ -611,6 +611,10 @@ What is left is not on this list, because it is not art. The open items are in
 [REVIEW.md](REVIEW.md)'s P1/P2 — the collection as a grid of card faces rather than
 rows, the isometric floor filling the screen, and an input map.
 
+**Every file being present is not the same as every file agreeing.** That is what this
+list could never measure, and it is what §8 is for: art that exists, is installed, and is
+in the wrong dialect.
+
 ---
 
 ## 6. The captures, screen by screen
@@ -664,3 +668,116 @@ the harness purges every one of them on exit, so overlapping the two made
 
 Capture before and after every art pass. "The combat screen is busy" is an opinion
 until two PNGs sit side by side.
+
+---
+
+## 8. The re-roll list: art that is present and in the wrong dialect
+
+Every file the game asks for is installed (§5, and `ART_ASSETS.md` counts it). This
+section is the other question, the one a manifest cannot ask: **does it agree?** D267
+answered it for the isometric floor and found six dialects in one game; what follows is
+what is left, in the order of visible damage per image generated.
+
+**Read the numbers, not the adjectives.** Two measurements decide whether a set belongs
+to this game, and both come off `tools/` scripts rather than off an opinion:
+
+* **Mean luminance over opaque pixels.** The game is dark. The style bible sits at 0.30.
+* **Ink fraction** — the share of opaque pixels under 0.18 luma. The bible is a third.
+
+| set | files | mean luma | ink | over 0.80 |
+|---|---|---|---|---|
+| `enemies/` — **the bible** | 35 | **0.30** | **33.2%** | 1.8% |
+| `iso/foe/` — agrees with it | 70 | 0.33 | 28.9% | 3.4% |
+| `powers/` | 30 | 0.49 | 13.1% | 8.3% |
+| `relics/` | 38 | **0.58** | **4.9%** | **19.9%** |
+
+---
+
+### 8a — The 30 power sigils  ·  the worst set in the game
+
+Flat vector clip art: one thin uniform stroke, flat fill, saturated primaries. `scythe.png`
+is a line and a pale wash. They are the only set in the game that is not painted at all,
+and they sit on the Powers screen and on the run header where the player meets them every
+turn.
+
+The numbers say the same thing the eye does: **13.1% ink against the bible's 33.2%**, and
+8.3% of every sigil brighter than 0.80 against 1.8%.
+
+Ask for painted objects rather than symbols — the thing the power IS, drawn the way a
+relic is drawn — and hold them to mean 0.30 with a 2-3px ink outline. Thirty images, and
+they can go four or six to a sheet.
+
+### 8b — The four wall materials  ·  the ink cannot survive the projection
+
+**This is arithmetic, and it is the reason the walls look soft while the floor looks
+painted.** With `TILE_W` 116, `TILE_H` 58 and `WALL_LIFT` 0.9:
+
+| surface | screen size | texels shown | texels per pixel |
+|---|---|---|---|
+| floor diamond edge | 64.8px | 256 / `GROUND_UV_TILES` = 85 | **1.32** |
+| wall face, along the run | 64.8px | 256 / `WALL_UV_TILES` = 128 | **1.97** |
+| wall face, top to bottom | 52.2px | **256** | **4.90** |
+
+So a 2.5px ink line drawn in a material lands at 1.9px on the floor and at **0.51px** on
+the vertical of a wall face. It is not there. That is why every masonry joint reads as a
+soft groove rather than as a drawn line, and no amount of re-rolling the same brief will
+fix it.
+
+**The fix is in the authoring, not in the code, and it is one instruction.** The wall face
+is squashed 2.49x more vertically than horizontally, so the material must be drawn
+**pre-stretched by the same amount**: courses drawn about two and a half times taller than
+they are wide, so they arrive square on the wall. Ask for **two or three courses filling
+the whole square**, not six, and ask for the ink at double weight.
+
+A second, smaller disagreement rides along: the block's **top** face takes the ground UV
+(1.32 texels/px) while its **sides** take the wall UV (1.97), so the same stone is drawn
+1.5x larger on the top of a wall than on its face. Either give the top its own material —
+a cap of flagstones is not a course of masonry, and drawing it as one is arguably the more
+correct answer — or bring the two numbers together.
+
+Re-roll all four with that brief: `rock_stone`, `rock_moss`, and the two that were never
+painted at all —
+
+### 8c — `rock_earth` and `rock_sand`  ·  never painted
+
+Still the generated noise, because the daily image cap closed before they were reached.
+The Warrens is where it shows: a painted floor under flat walls, and it is the one screen
+in the four terrains that still looks unfinished. Install with `--luma=0.42`, which is
+what `TINT_WALL_TOP` / `_R` / `_L` were tuned against.
+
+### 8d — The 38 relic icons  ·  right brush, wrong value
+
+The technique is correct — painted, inked, soft — and the VALUE is wrong by a wide
+measured margin. **Mean 0.58 against the bible's 0.30**, a fifth of every icon brighter
+than 0.80 against 1.8%, and **4.9% ink against 33.2%**. `keen_lens.png` measures 0.81:
+it is a white disc on a dark panel.
+
+They are also all lit from the upper left with a bright rim, which fights the one
+saturated source per scene rule the rooms are built on.
+
+This does not need thirty-eight new paintings. It needs the same objects re-asked at the
+game's value: **dark, one accent, ink at 2-3px, nothing over 0.80**, and checked against a
+black ground rather than against the generator's field — which is where a pale object hides
+(the trap D267's skill notes call the missing half).
+
+### 8e — Two single files
+
+* **`iso/shop.png`, the market stall.** Cream and white stripes; the brightest object
+  anywhere on the isometric floor, and it is a shop rather than a light source. Re-roll it
+  dark with one warm accent.
+* **`iso/wander_*` scale.** The rat fills a fraction of its 128x192 canvas where the other
+  wanderers fill it, so it renders small for a reason that is in the file rather than in
+  `SPRITE_H`. Measure the bounding box against the canvas before re-asking; D267's skill
+  notes have the wording that moved a sprawling subject from 53% to 98%.
+
+### What is NOT on this list
+
+* **The 12 dungeon backdrops, 23 scene shots, the title screen, the 35 enemy plates, the
+  70 creature fronts and the ~100 card faces.** These are the game. They measure 0.30 and
+  33% ink, and everything above is asked to match them.
+* **The four painted floor materials** (D267). Done.
+* **The UI kit.** Computed rather than painted (D83), and that is a decision rather than a
+  gap.
+* **`assets/pixel/`.** The Kenney tiles and card sheet are fallbacks nothing reaches any
+  more; D267 closed the last live path. Deleting them is a separate call, and the licence
+  files must go with them if it is ever made.

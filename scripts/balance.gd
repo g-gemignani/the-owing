@@ -3420,7 +3420,7 @@ static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn:
 ## the sweep actually found. **A tuning flag that SUBSTITUTES for a value cannot be read as a delta
 ## on it** — and the tell was a completion figure seven points below a target that had just been
 ## measured exactly.
-const ENEMY_DAMAGE_BASE_MULT := 1.30
+const ENEMY_DAMAGE_BASE_MULT := 1.05
 
 ## Enemy damage grows this much per turn elapsed (compounding pressure), up to
 ## ESCALATION_MAX. The cap matters: stronger decks face more enemy HP, so their

@@ -256,6 +256,8 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D265** | [Fights got a shape, and the reason the 5x never assembles is the price list](#d265--fights-got-a-shape-and-the-reason-the-5x-never-assembles-is-the-price-list) |
 | **D266** | [A metric that measures the player, and it says the 5x was there all along](#d266--a-metric-that-measures-the-player-and-it-says-the-5x-was-there-all-along) |
 | **D267** | [The floor was drawn at a fifth of its size, so nothing painted on it could survive](#d267--the-floor-was-drawn-at-a-fifth-of-its-size-so-nothing-painted-on-it-could-survive) |
+| **D268** | [The manifest asks whether a file is there, and nothing asked whether it agrees](#d268--the-manifest-asks-whether-a-file-is-there-and-nothing-asked-whether-it-agrees) |
+| **D269** | [The README is written for a player, and the pictures are a claim that has to be re-checked](#d269--the-readme-is-written-for-a-player-and-the-pictures-are-a-claim-that-has-to-be-re-checked) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -18393,3 +18395,129 @@ and no greyed model rows. And **a hex palette pushes the generator to the light 
 earth ramp `#452f2e`..`#e3b2b0` is dusty rose, and asking for it by number produced two
 successive floors that read as skin. Naming the dark end and forbidding the light one by word —
 "never pink, never salmon, never rose" — is what fixed it.
+
+### D268 — The manifest asks whether a file is there, and nothing asked whether it agrees
+
+Asked: *"the detail of the walls in the iso dungeons should at some point be rerolled right?
+Come up with a list of art that still needs to be regenerated and write it down."*
+
+Yes, and the reason is arithmetic rather than taste. The list is **ART.md §8**; this entry is
+why it exists and what the numbers in it are.
+
+#### The gap the counting could not see
+
+`ART_ASSETS.md` reports every file the game looks for as present, and it has for several
+content passes. That is the only question it has ever asked. D267 found six visual dialects in
+a game whose asset list was complete, which is the same lesson D202 wrote about the iso
+figures: **"present" was the only question the manifest ever asked, and every one of those
+files is present.**
+
+So the re-roll list is graded on two measurements instead, both taken over opaque pixels and
+both cheap enough to re-run on any set:
+
+| set | files | mean luma | ink under 0.18 | over 0.80 |
+|---|---|---|---|---|
+| `enemies/` — the bible | 35 | **0.30** | **33.2%** | 1.8% |
+| `iso/foe/` | 70 | 0.33 | 28.9% | 3.4% |
+| `powers/` | 30 | 0.49 | 13.1% | 8.3% |
+| `relics/` | 38 | **0.58** | **4.9%** | **19.9%** |
+
+The relics are the finding. They have always looked *fine* opened one at a time, and they are
+**nearly twice as bright as the art they sit beside, with a seventh of the ink**, and a fifth
+of every icon is brighter than 0.80 where the plates are at 1.8%. `keen_lens.png` measures
+0.81 — a white disc on a dark panel. Nothing in the pipeline could have caught that, because
+the matte passed, the bounding box filled, and the file is present.
+
+#### Why the walls specifically, and why re-rolling the same brief would not have worked
+
+The walls read soft where the floor reads painted, and it is not the painting. With `TILE_W`
+116, `TILE_H` 58 and `WALL_LIFT` 0.9:
+
+| surface | screen extent | texels shown | texels per pixel |
+|---|---|---|---|
+| floor diamond edge | 64.8px | 256 / `GROUND_UV_TILES` = 85 | 1.32 |
+| wall face, along the run | 64.8px | 256 / `WALL_UV_TILES` = 128 | 1.97 |
+| **wall face, top to bottom** | 52.2px | **256** | **4.90** |
+
+A 2.5px ink line lands at 1.9px on the floor and at **0.51px** on the vertical of a wall face.
+It is gone. Every masonry joint in the shipped `rock_stone` is a soft groove for that reason,
+and a better painting asked for in the same words would arrive equally soft.
+
+**D267's own comment is what got this wrong.** It says the vertical axis stays 0..1 because
+"a block IS one course high" — and then the material that was installed has six courses in it,
+so six courses are crushed into 52px. The rule was right and the art did not obey it.
+
+Two ways out, and the list takes the second:
+
+* Derive the vertical UV span from the constants so the two axes match — `52.2 x 1.97 / 256` =
+  0.40. Correct, and it means the bottom 60% of every wall material is never drawn.
+* **Pre-stretch the painting by the squash it is about to receive**: draw the courses 2.49x
+  taller than wide so they arrive square. No code, one sentence in the brief, and the whole
+  material is used.
+
+A smaller disagreement rides along and is on the list rather than fixed here: a block's top
+face takes the ground UV and its sides take the wall UV, so the same stone is drawn 1.5x
+larger on top of a wall than on its face. The better answer is probably that a wall CAP is not
+a course of masonry and should be its own material.
+
+#### What the list is ordered by
+
+Visible damage per image generated, not by count. The 30 power sigils go first — they are the
+only set in the game that is not painted at all, they are on a screen the player opens every
+run, and 30 images is one day of the free tier. The four wall materials go second because two
+of them are a re-roll and two were never painted, and all four share one brief. The 38 relics
+go last of the big sets: they are the largest number of files and the smallest thing on screen
+at 22px, and the fix is a value correction rather than new subjects.
+
+**Nothing on the list is missing art.** Every item is installed, working, and in the wrong
+dialect — which is a different kind of debt, and the first time this project has written one
+down as such.
+
+---
+
+### D269 — The README is written for a player, and the pictures are a claim that has to be re-checked
+
+Asked for: *"Update the readme and the images in it. Also rewrite it for a general player in
+simple English."*
+
+#### The pictures were eleven days stale and nothing said so
+
+`docs/screenshots/` was last built on 2 August. Since then the title art was replaced twice, the
+relics screen changed, twenty powers were authored, and D267 gave the isometric crawl the
+dungeon's own backdrop instead of a tiling pattern. **Every one of those is visible in a shot the
+README was still showing.**
+
+Both steps of the pipeline were re-run, which is what `tools/readme_shots.gd` says to do and what
+nobody had done:
+
+    godot --rendering-driver opengl3 res://tools/Screenshots.tscn   # under Xvfb, 35 captures
+    godot --headless --script tools/readme_shots.gd                 # 7 of them, WebP, 0.9 MB
+
+**The pictures in a README are a claim about what the game looks like now.** A claim nobody
+re-checks goes stale silently, and this one did — the same reasoning that makes `ART_ASSETS.md`
+generated rather than hand-kept. Re-run both steps after anything visual lands.
+
+#### Simple English, and the one place it does not belong
+
+The rewrite ran under the `simple-english` skill in pragmatic mode. Measured on the result: **123
+sentences, none over 25 words, longest 22.** No contractions, no semicolons, and none of
+`should`, `would`, `may`, `might` or `could` — the modal ladder collapses those onto `can`,
+`will` and `must`, which is worth having in a document that tells a player what a program will do.
+
+Three sentences were split rather than reworded, because a word-for-word fix does not shorten a
+34-word sentence. The inline lists went with them: *"three things before you enter: how hard it
+is, the name of the thing at the bottom, and what that thing does"* became a sentence and then a
+sentence, and the ledger's job list became three imperatives, which is what those clauses were.
+
+**The skill's own Limits section says not to apply it to marketing copy, and the top of a README
+is a pitch.** Applied anyway, because the ask was explicit and because the pitch was the part
+carrying the longest sentences — the 34-word opening is now four sentences of eight to eleven
+words. What was kept is the voice in the captions and the one line of tension at the end of the
+loop, which is persuasion the rules would otherwise have deleted.
+
+#### Facts re-counted rather than carried over
+
+The content table was checked against the catalogues rather than trusted: 100 cards, 38 relics,
+30 powers, 35 enemies, 12 bosses, 12 dungeons, 20 events, 45 errands, 16 debts, 46 suites. One
+caption was wrong and is fixed — *"One power carried per run"* has not been true since D245 made
+it an offer of three.

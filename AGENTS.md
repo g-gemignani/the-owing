@@ -1630,8 +1630,11 @@ DESIGN.md    the full reasoning, decision by decision. Chapters 1-8 are the
              range is not written down anywhere: read it off the index (D196)
 ART.md       the art brief: the diagnosis, the style, the reasoning. Carries no
              file counts at all, on purpose — the tiers here are the ORDERING
-             and ART_ASSETS.md owns every number (D34)
-ART_ASSETS.md  GENERATED — every art file wanted, and whether it exists yet
+             and ART_ASSETS.md owns every number (D34). §8 is the RE-ROLL list:
+             art that is installed and in the wrong dialect, which is the one
+             question a manifest cannot ask (D268)
+ART_ASSETS.md  GENERATED — every art file wanted, and whether it exists yet.
+             Present is not the same as agreeing: read it with ART.md §8
 ART_PROMPTS.md GENERATED — the style block, the per-tier recipe, and which files
              must NOT be generated (D90)
              Both come from tools/art_manifest.gd via `tools/art_docs.sh`, which
