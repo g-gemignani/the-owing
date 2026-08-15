@@ -36,7 +36,7 @@ it on re-rolls, and pick the rest up after the reset.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 0 times.
+   improve it between images. Its job is to be identical every time.
 4. **The block makes an image agree with the REFERENCE, not with the image it
    will be shown on top of.** For almost everything that is the same thing,
    because they are seen one at a time. `ui/logo.png` is the exception — a plate

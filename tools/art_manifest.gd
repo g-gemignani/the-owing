@@ -1256,7 +1256,14 @@ func _emit_prompts() -> void:
 	print("   stronger constraint on palette and line weight than any adjective. `main_menu.jpg`")
 	print("   is what a request without it looks like.")
 	print("3. **Paste the style block below unchanged, then one subject line.** Do not")
-	print("   improve it between images. Its job is to be identical %d times." % todo)
+	# The count is dropped at zero rather than printed. With every file present this read
+	# "its job is to be identical 0 times", which is the D101 fault one line further down
+	# the page: the header above already stopped saying "0 files can be generated" for the
+	# same reason, and rule 3 kept the number it was told to agree with (D114).
+	if todo == 0:
+		print("   improve it between images. Its job is to be identical every time.")
+	else:
+		print("   improve it between images. Its job is to be identical %d times." % todo)
 	print("4. **The block makes an image agree with the REFERENCE, not with the image it")
 	print("   will be shown on top of.** For almost everything that is the same thing,")
 	print("   because they are seen one at a time. `ui/logo.png` is the exception — a plate")
