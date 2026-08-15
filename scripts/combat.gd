@@ -119,7 +119,11 @@ func _ready() -> void:
 			# `[]` priced, and the run's finds in the UNTAXED slot: enemies scale to the deck and
 			# the equipped power, and not to what the floor lent you (D238).
 			String(GameState.pending.get("enemy", "")), [], roster,
-			GameState.run_power, dd.boss if dd != null else "", GameState.run_relic_data())
+			GameState.run_power, dd.boss if dd != null else "", GameState.run_relic_data(),
+			# How deep this run is, which is what the dungeon now ramps against (D267). A fight
+			# outside a run — there is no such thing today, but `traversal` can be null on a
+			# rebuilt save — passes -1 and gets the un-ramped dungeon.
+			GameState.traversal.progress() if GameState.traversal != null else -1.0)
 		_snapshot()
 	_refresh()
 	# rects only exist after a frame, and the fan is measured against them

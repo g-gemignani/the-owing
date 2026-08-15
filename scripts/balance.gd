@@ -3299,7 +3299,40 @@ const TARGET_NORMAL_TURNS := 4.0
 ## Share of the energy budget a player can commit to damage while still defending.
 const OFFENSE_SHARE := 0.5
 
-static func enemy_max_hp(dungeon: int, tier: int, ratio: float) -> int:
+## **How much harder the dungeon gets as a run goes down it (D267).**
+##
+## Nothing did this before. `GameState.dungeon` is set once by `select_dungeon` and never moves, and
+## relics have been untaxed since D230, so `ratio` barely moves either — enemy strength was a
+## function of the PLACE and of the deck brought to it, and of nothing about how deep the run was.
+##
+## The run was therefore flat while the player grew across it. D266 measured that growth at about
+## **4x for a run that reaches the boss**, so the first fight was the hardest moment in the game —
+## the player holds nothing and the cultist is at full strength — and the last fight was a walk.
+## That is backwards, and it is where the deaths were: fight 2.7 of 6.
+##
+## Both bands START BELOW 1.0. The point is not to add difficulty; it is to MOVE it. The opening
+## gets easier so the median run reaches the escalation that already exists, and the end gets harder
+## so there is something to spend it on. A ramp that only climbed would make the game harder and
+## leave the deaths exactly where they are.
+##
+## HP ramps further than damage. A tougher enemy makes a fight longer, which the player can answer
+## with a better deck; more damage makes it shorter and less answerable, and D209's depth inversion
+## is what happens when that is pushed.
+const RUN_RAMP_HP := Vector2(0.75, 1.70)
+const RUN_RAMP_DMG := Vector2(0.80, 1.30)
+
+## `progress` is 0.0 at the mouth and 1.0 at the boss — `Traversal.progress()`.
+##
+## NEGATIVE means "no ramp", and that is the default so every existing caller is unchanged. The
+## budget estimators and six test suites ask these functions what a fight costs ON AVERAGE, which is
+## a question about the dungeon and not about a moment in one run. A default of 0.0 would have
+## quietly answered all of them with the opening's 0.75.
+static func run_ramp(progress: float, band: Vector2) -> float:
+	if progress < 0.0:
+		return 1.0
+	return lerpf(band.x, band.y, clampf(progress, 0.0, 1.0))
+
+static func enemy_max_hp(dungeon: int, tier: int, ratio: float, progress: float = -1.0) -> int:
 	# damage a baseline deck lands per turn while also blocking
 	var dps := MAX_ENERGY * BASELINE_CARD_POWER * OFFENSE_SHARE
 	# The tier's own turn budget (D265). The depth term rides the same ratio, so a boss at depth
@@ -3310,6 +3343,7 @@ static func enemy_max_hp(dungeon: int, tier: int, ratio: float) -> int:
 	base *= 1.0 + tier_hp_power_k(tier) * (sr - 1.0) \
 		+ HP_POWER_K_HIGH * maxf(0.0, sr - HIGH_POWER_FLOOR)
 	base *= ascension_mult() * difficulty_hp_mult()
+	base *= run_ramp(progress, RUN_RAMP_HP)
 	return int(round(base))
 
 ## How hard each tier answers the player's OWN power (D265).
@@ -3341,7 +3375,8 @@ static func tier_hp_power_k(tier: int) -> float:
 ## turn more dangerous than the last, so the player must actually race: block only
 ## what they must, and commit the rest to ending the fight. It is also what makes
 ## persistent block (Barricade) valuable rather than merely convenient.
-static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn: int = 1) -> int:
+static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn: int = 1,
+		progress: float = -1.0) -> int:
 	var d := 7.5 + roll + 0.6 * dungeon
 	d += float(TIER_DMG_BONUS[tier])
 	# The chosen rung multiplies the ratio INSIDE scaling_ratio, so the dungeon's own
@@ -3352,6 +3387,7 @@ static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn:
 	d *= minf(ESCALATION_MAX, 1.0 + ESCALATION_PER_TURN * float(maxi(0, turn - 1)))
 	d *= ascension_mult() * difficulty_dmg_mult()
 	d *= ENEMY_DAMAGE_BASE_MULT
+	d *= run_ramp(progress, RUN_RAMP_DMG)
 	return int(round(d))
 
 ## Where the whole ladder SITS, as against how steeply each rung leans (D244).
@@ -3384,7 +3420,7 @@ static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn:
 ## the sweep actually found. **A tuning flag that SUBSTITUTES for a value cannot be read as a delta
 ## on it** — and the tell was a completion figure seven points below a target that had just been
 ## measured exactly.
-const ENEMY_DAMAGE_BASE_MULT := 1.6
+const ENEMY_DAMAGE_BASE_MULT := 1.30
 
 ## Enemy damage grows this much per turn elapsed (compounding pressure), up to
 ## ESCALATION_MAX. The cap matters: stronger decks face more enemy HP, so their

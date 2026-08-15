@@ -666,9 +666,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					# what an authored profile still declares, `spoils` is what the floor lent.
 					var untaxed: Array = relics.duplicate()
 					untaxed.append_array(spoils)
+					# The run's own depth, so the sim ramps exactly as the game does (D267).
 					eng.setup(run_deck, hp, max_hp, difficulty, tier,
 						String(node.get("enemy", "")), [], roster,
-						trial_power, dd.boss if dd != null else "", untaxed)
+						trial_power, dd.boss if dd != null else "", untaxed, tv.progress())
 					_tick("fight_setup", t_su)
 					var t_fi := Time.get_ticks_usec()
 					var g2 := 0
