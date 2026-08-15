@@ -19,4 +19,4 @@ rule_threshold = PackedInt32Array(3)
 rule_action = PackedInt32Array(7)
 rule_value = PackedInt32Array(0)
 rule_once = PackedInt32Array(0)
-sig_hand_cap = 4
+sig_hand_cap = 5

@@ -454,6 +454,15 @@ moves.
   step is a cliff is not a knob**, and that is the arithmetic to do before authoring a signature,
   not the fiction — the card tax had the best fiction on the board.
 
+  **And the fourth cliff was found by closing a coverage gap, not by the sweep.** Those readings
+  covered eight of the twelve dungeons the profiles visit, so four signatures had never been in a
+  measured cell — D124's fault committed while quoting D124. One of them was a `sig_hand_cap` of
+  **4** against a `HAND_SIZE` of **5**: −12.9 points of boss win rate and −61 on the Draw build.
+  **At or above the opening draw a hand cap takes only cards the player was holding and dials
+  smoothly; one below it eats the base draw and becomes the draw tax already deleted.** The caps
+  are 7 / 6 / 5 by depth now (mean boss −2.1 over 27 cells) and `test_signature` fails one under
+  `HAND_SIZE`.
+
   **And the instrument said all of it was free, because the `B` column had never fought a boss.**
   `sim_balance.gd`'s `_measure` passed `""` for `p_boss`, so a column headed "Dungeon Boss" rolled
   a TRASH archetype at boss budget for the whole life of the tool. Found only by sweeping three

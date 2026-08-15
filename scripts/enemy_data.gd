@@ -109,6 +109,14 @@ enum Trigger {
 ## three of itself, and three copies each taking an Energy is not a signature, it is a softlock.
 ## Hand size ceiling while this fight lasts. Bites the draw builds hardest, which are the
 ## strongest in the game (D280's table: Draw at 11.53x against Barricade at 1.30x).
+##
+## **Never below `Balance.HAND_SIZE`, and that is a rule rather than a preference.** At or above
+## the opening draw a cap only takes cards the player was HOLDING, which is a ceiling on hoarding
+## and dials smoothly: 6 measured about -10 points of boss win rate and 7 rather less. One below
+## it starts eating the base draw itself, and the curve breaks — 4 cost the Draw build **61
+## points** at the Sunken Vault and averaged -12.9 across its cells. That is not a harder ceiling,
+## it is `sig_draw_tax` wearing a ceiling's clothes, and `sig_draw_tax` was deleted for being a
+## cliff. `tests/test_signature.gd` fails a cap under `HAND_SIZE`.
 @export var sig_hand_cap: int = 0
 ## Most cards that may be played in one turn.
 @export var sig_cards_per_turn: int = 0

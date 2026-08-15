@@ -58,6 +58,19 @@ func _init() -> void:
 		elif not carried.is_empty():
 			fails += 1; print("FAIL %s is not a boss and carries %s" % [eid, carried])
 
+	# --- a hand cap may not go under the opening draw ---
+	#
+	# Above it, the cap takes only cards the player was holding and the knob dials. Below it, it
+	# eats the base draw every turn and becomes the draw tax this group deleted for being a cliff:
+	# measured, a cap of 4 against `HAND_SIZE` 5 cost the Draw build 61 points at the Sunken Vault
+	# where a cap of 6 cost about 10. The boundary is the mechanism, so the boundary is asserted.
+	for eid in bosses:
+		var eb := Balance.enemy(eid)
+		if eb != null and eb.sig_hand_cap > 0 and eb.sig_hand_cap < Balance.HAND_SIZE:
+			fails += 1
+			print("FAIL %s caps the hand at %d, under HAND_SIZE %d — that is a draw tax, not a ceiling" % [
+				eid, eb.sig_hand_cap, Balance.HAND_SIZE])
+
 	# --- every field is actually AUTHORED on somebody ---
 	#
 	# A field nobody uses is a rule the engine pays for and the player never meets. The reverse

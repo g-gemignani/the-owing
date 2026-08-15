@@ -20514,6 +20514,31 @@ And the signature is gated on the TIER, not on the archetype carrying one, becau
 lets an archetype spawn three of itself — three copies each taking an Energy is not a signature,
 it is a softlock.
 
+#### The coverage gap, and the cliff hiding in it
+
+The measurements above ran over eight dungeons. The profiles visit twelve, and the four left out —
+the Ossuary, the Sunken Vault, the Abyssal Stair, the Fungal Deep — carry four of the twelve
+signatures. **So a third of what shipped had never been in a measured cell**, which is D124's
+fault committed by the person quoting D124.
+
+Closed, and it found one: `deep_warden`'s `sig_hand_cap` was **4** against a `HAND_SIZE` of **5**.
+Measured over the four dungeons, mean boss win rate **−12.9 points** and the Draw build losing
+**61** at the Sunken Vault, against about −10 for the cap of 5 at the Foundry.
+
+The boundary is the mechanism, and it is exact. **At or above the opening draw a hand cap takes
+only cards the player was HOLDING** — a ceiling on hoarding, and it dials smoothly. **One below it
+starts eating the base draw itself**, so it stops being a ceiling and becomes `sig_draw_tax`, which
+this entry deleted three sections ago for being a cliff. The same rule wearing a different field
+name, and the shape of the numbers is identical.
+
+The three caps are 7 / 6 / 5 now, by depth, all at or above `HAND_SIZE`. Re-measured over 27
+cells: **mean boss −2.1 points**, worst cell −31 on the Draw build at the Sunken Vault — which is
+the strongest build in the game meeting the rule written for it, the same targeting the Drowned
+Market already showed at −17.
+
+`tests/test_signature.gd` fails a cap under `HAND_SIZE`. **A boundary that turns a dial into a
+cliff is worth an assertion**, because nothing about the number 4 looks wrong beside a 5 and a 6.
+
 ---
 
 ### D296 — The landmarks had a table of names all along, one screen below the one D282 read
