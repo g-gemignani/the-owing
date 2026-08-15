@@ -655,6 +655,21 @@ static func iso_prop_art(prop_name: String) -> Texture2D:
 		return load(p) as Texture2D
 	return null
 
+## The painting for one landmark cap, keyed by the id in `Balance.ISO_LANDMARKS`, or null
+## while nobody has drawn it.
+##
+## No name-to-filename step here, unlike the props above. D282 left the landmarks off the
+## shopping list because briefing them "means inventing the filenames first" — and that was
+## wrong: `ISO_LANDMARKS` is four ids and `ISO_LANDMARK_NAME` describes each one, so the
+## table this needed already existed one screen further down the same file (D296).
+static func iso_landmark_art(kind: String) -> Texture2D:
+	if kind == "":
+		return null
+	var p := ISO_PROP_DIR + "landmark_" + kind + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
 ## Two different lines, and conflating them put the enemies at the wrong depth.
 ##
 ## `HORIZON_LINE` is where the BACK WALL meets the floor — a property of the

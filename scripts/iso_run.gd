@@ -171,6 +171,15 @@ const FLIP := "_flip"
 ## than a bare name, because `art` is one flat namespace shared with the figures and a prop
 ## called `rest` would otherwise take the campfire's key.
 const PROP := "prop:"
+## The same, for the four landmark caps (D296). Its own prefix rather than `prop:` because
+## a landmark is not dressing: it stands on a block twice the height of the wall around it
+## and it is the one thing on the floor a player navigates by.
+const LANDMARK := "landmark:"
+## How much of a tile a painted landmark cap covers, and how tall it stands off the block
+## top, both as fractions of the tile's WIDTH. It is bigger than a wall prop because it is
+## meant to be read from the far side of a dark room, and it is anchored by its BOTTOM
+## because it stands on the cap rather than hanging on it.
+const LANDMARK_W := 0.92
 ## How much of a tile a painted ground prop covers, and how much of a wall face a painted
 ## wall prop covers. All three are fractions of the tile's WIDTH. Under 1.0 for every one of
 ## them: a prop is a thing lying ON the floor, and one drawn edge to edge is a second floor
@@ -479,6 +488,12 @@ func _load_art() -> void:
 			var ptex := PixelArt.iso_prop_art(pname)
 			if ptex != null:
 				art[PROP + pname] = ptex
+	# The four landmark caps, on the same terms (D296). Four ids and four paintings, and a
+	# missing one keeps the computed mark.
+	for kind in Balance.ISO_LANDMARKS:
+		var ltex := PixelArt.iso_landmark_art(String(kind))
+		if ltex != null:
+			art[LANDMARK + String(kind)] = ltex
 
 ## The sprite for ONE archetype, by id and facing — the creature itself rather than the
 ## family it belongs to. Returns the role key, or "" when that archetype has no painting
@@ -1729,6 +1744,31 @@ func _draw_landmark(centre: Vector2, t: Vector2, x: int, y: int, tv: TraversalIs
 	_draw_wall(centre, t, x, y, Color(1, 1, 1, alpha), tv, tall)
 	var cap := centre + Vector2(0, -t.y * WALL_LIFT * tall)
 	var wash := _lit(tv, x, y, Color(1, 1, 1))
+	# A painting, where one has been drawn for this kind (D296). Multiplied by the block's
+	# own light exactly as the computed mark is, which is D177's rule and the reason this is
+	# a modulate rather than a plain blit: a landmark drawn in its own palette reads as a UI
+	# marker stuck on the floor, and the whole point is that it is MASS in the same stone.
+	var ltex: Texture2D = art.get(LANDMARK + kind)
+	if ltex != null:
+		var lw: float = t.x * LANDMARK_W
+		var lh: float = lw * float(ltex.get_height()) / maxf(1.0, float(ltex.get_width()))
+		# Seated a little below the cap's middle, so the object sits ON the top face rather
+		# than balancing on its back corner — the same 0.16 the figures stand by.
+		var seat := cap + Vector2(0, t.y * 0.16)
+		floor_view.draw_texture_rect(ltex,
+			Rect2(seat - Vector2(lw * 0.5, lh), Vector2(lw, lh)), false,
+			Color(wash.r, wash.g, wash.b, alpha))
+		# The shaft's beam is LIGHT, not an object, so it stays computed and is drawn over
+		# the painting. Nothing painted can emit, and this is the one landmark whose whole
+		# reading is that it emits — it is visible from further away than anything else on
+		# the floor because of this polygon, not because of its silhouette.
+		if kind == "shaft":
+			var lit_beam := PackedVector2Array([
+				cap + Vector2(-t.x * 0.20, 0), cap + Vector2(t.x * 0.20, 0),
+				cap + Vector2(t.x * 0.09, -t.y * 1.5),
+				cap + Vector2(-t.x * 0.09, -t.y * 1.5)])
+			floor_view.draw_colored_polygon(lit_beam, Color(0.80, 0.88, 1.0, 0.13 * alpha))
+		return
 	match kind:
 		"shaft":
 			# Daylight a long way up. Three nested diamonds brightening upward on the cap,

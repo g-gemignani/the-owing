@@ -280,6 +280,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D293** | [Six non-combat backdrops were a flatter art tier, and one number separates them](#d293--six-non-combat-backdrops-were-a-flatter-art-tier-and-one-number-separates-them) |
 | **D294** | [The magenta the de-keyer said was gone, on thirteen of thirty-five fights](#d294--the-magenta-the-de-keyer-said-was-gone-on-thirteen-of-thirty-five-fights) |
 | **D295** | [A boss bends a rule of the card game, and three of the first seven were cliffs](#d295--a-boss-bends-a-rule-of-the-card-game-and-three-of-the-first-seven-were-cliffs) |
+| **D296** | [The landmarks had a table of names all along, one screen below the one D282 read](#d296--the-landmarks-had-a-table-of-names-all-along-one-screen-below-the-one-d282-read) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -20511,3 +20512,65 @@ whole fight and leaves two or three a turn to play with.
 And the signature is gated on the TIER, not on the archetype carrying one, because `count_max`
 lets an archetype spawn three of itself — three copies each taking an Energy is not a signature,
 it is a softlock.
+
+---
+
+### D296 — The landmarks had a table of names all along, one screen below the one D282 read
+
+Asked: *"Reroll all the generated landmarks via gemini."*
+
+**The route is built and the art is not in.** This entry is the route, and the reason the
+tier was skipped in the first place.
+
+#### D282's reason for leaving them off was wrong
+
+It wrote that the landmark caps and the other computed drawings "have no table of names to
+key on, so briefing them means inventing the filenames first". That is true of the shrine,
+the ledger, the back door and the key. It is NOT true of the landmarks:
+`Balance.ISO_LANDMARKS` is four ids and `ISO_LANDMARK_NAME` gives each one a sentence, and
+both sit a screen below the props table in the same file.
+
+So the four are on the list as **Tier 8e**, keyed on the id, briefed from the name:
+`iso/landmark_shaft.png`, `_dome`, `_stair`, `_stack` at 192x288. The manifest reads 434
+wanted, 430 present, 4 to provide.
+
+#### What a landmark is, and why it is not a prop
+
+It is a wall block drawn at 2.1x the normal lift (1.35x for the dome) with a mark on its
+TOP FACE, and D177 fixed the rule it has to obey: **a landmark is MASS in the same stone
+and the same light as the wall it stands in.** A feature drawn in its own palette reads as
+a UI marker stuck on the floor — that is the mistake the first dome made, drawn as three
+nested arcs, and a capture of the Ossuary showed a grey wireframe rainbow hanging in the
+dark air beside a wall.
+
+Three consequences in the wiring:
+
+* The painting is drawn **modulated by the block's own light** (`_lit`), exactly as the
+  computed mark is. It is a multiply, not a blit.
+* The brief says the subject carries **no light of its own** — no glow, no shine, no fire.
+  A subject that brings its own light arrives twice-lit, because the multiply above assumes
+  it has none.
+* **The shaft's beam stays computed and is drawn OVER the painting.** Nothing painted can
+  emit, and emitting is that landmark's whole reading: it is visible from further away than
+  anything else on the floor because of one pale polygon, not because of its silhouette.
+  This is the same rule ART.md §8a already keeps for the reach highlight and the chest's
+  pool of light — the game pointing at something, rather than the building.
+
+`iso_landmarks` is a `install_sheet.gd` set, 192x288 and FOOTED: a landmark stands on the
+cap, so padding under it lifts it off the stone it is built out of.
+
+#### The art did not come back, and the reason is now three-for-three
+
+Two requests for the sheet stalled on *"Creating your image"*, one for twenty-five minutes,
+and a third would not leave the composer at all. D281 and D286 recorded the same thing.
+What is different this time is that the cause is visible in the sidebar: **another session
+was driving the same Gemini account through a batch of its own** — a campfire, a merchant's
+stall, a strongroom — while this one waited.
+
+That is not proof, and it is the first hypothesis worth testing when it happens again: the
+model picker showed every row selectable with no reset time, so it is not the daily cap,
+and one account driven by two browsers at once is the one new variable.
+
+**The state this leaves behind is deliberate and it is the D282 shape.** The list asks for
+four files, `iso_run.gd` loads them if they exist, and the computed marks are still drawn
+until they do. A checkout today looks exactly as it did yesterday.

@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**430 files wanted · 430 already present · 0 to provide.**
+**434 files wanted · 430 already present · 4 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -579,4 +579,15 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `iso/prop_dry_weed.png` | 192x192 | **Dry Weed**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three soft circles. |
 | x | `iso/prop_tidewrack.png` | 192x192 | **Tidewrack**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as a handful of small marks. |
 | x | `iso/prop_crusted_ring.png` | 192x192 | **A Crusted Ring**, dressing a `sand` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as an arc and a short stem. |
+
+## Tier 8e — the four landmark caps
+
+*4 files, 4 still to provide.* The one thing on a floor a player navigates by: a block standing twice the height of the wall around it, with a mark on its top that says which of the four it is. All four are drawn in code today — nested diamonds, arcs and stacked polygons.
+
+| ? | file | size | what it is |
+|---|---|---|---|
+|   | `iso/landmark_shaft.png` | 192x288 | **Shaft** — a shaft with daylight a long way up it. Drawn in code today as three nested diamonds brightening upward, under a pale column of light. |
+|   | `iso/landmark_dome.png` | 192x288 | **Dome** — a dome that came down. Drawn in code today as three nested filled arcs, a low mound. |
+|   | `iso/landmark_stair.png` | 192x288 | **Stair** — a stair going nowhere. Drawn in code today as four diamonds stepping up and stopping. |
+|   | `iso/landmark_stack.png` | 192x288 | **Stack** — bone stacked to the roof. Drawn in code today as a column of six small diamonds. |
 

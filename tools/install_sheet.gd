@@ -101,6 +101,10 @@ const SETS := {
 	# their trim left — small, because a ring drawn head-on is about as tall as it is
 	# wide, where a drift seen from above is not.
 	"iso_props": [192, false],
+	# The four landmark caps (Tier 8e). Taller than wide and in `TALL` below, because a
+	# landmark stands on a block top and its whole job is to be read from across a dark
+	# room: a square canvas would scale a tower down to fit its own width.
+	"iso_landmarks": [0, false],
 	# The per-archetype BACK views, one per enemy in `resources/enemies/`. Always driven
 	# with `--only`, like `enemies`: thirty-five will not fit one sheet, and the whole
 	# point of a sheet is that the subjects on it are drawn against each other.
@@ -126,6 +130,7 @@ const TALL := {
 	"iso_figures": Vector2i(128, 192),
 	"iso_furniture": Vector2i(128, 192),
 	"iso_foes": Vector2i(128, 192),
+	"iso_landmarks": Vector2i(192, 288),
 }
 
 ## Sets whose subject STANDS on something, so it is anchored to the bottom of its
@@ -146,7 +151,10 @@ const TALL := {
 ## `install_cutouts.gd` already passes `true` for this family; a sheet has to agree with
 ## the per-file installer or the same archetype lands differently depending on which
 ## tool took it in.
-const FOOTED := ["iso_figures", "iso_furniture", "iso_foes", "enemies", "iso_props"]
+const FOOTED := ["iso_figures", "iso_furniture", "iso_foes", "enemies", "iso_props",
+	# A landmark STANDS on the top face of a block, so padding under it lifts it off the
+	# stone it is built out of — the same reason the figures are here.
+	"iso_landmarks"]
 
 var _dry := false
 
@@ -410,6 +418,14 @@ func _ids(set_name: String) -> Array:
 					if pname == "":
 						continue
 					out.append(["iso/prop_%s.png" % PixelArt.iso_prop_id(pname), pname])
+		# Four ids in `Balance.ISO_LANDMARKS` order, which is the order the manifest prints
+		# Tier 8e in. `ISO_LANDMARK_NAME` is the label, so the mapping printed on every run
+		# reads as the sentence the sheet was asked for rather than as four bare ids.
+		"iso_landmarks":
+			for kind in Balance.ISO_LANDMARKS:
+				var lk := String(kind)
+				out.append(["iso/landmark_%s.png" % lk,
+					String(Balance.ISO_LANDMARK_NAME.get(lk, lk))])
 		"iso_furniture":
 			for e in [["combat", "ordinary fight"], ["elite", "harder fight"],
 					["boss", "the floor's boss"], ["shop", "merchant's stall"],

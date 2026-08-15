@@ -1119,6 +1119,33 @@ func _iso() -> void:
 						"It lies flat on the ground, so it is seen from above at the camera's 27 degrees."),
 					_prop_drawn_as(String(pd.get("shape", "")))]))
 
+	# Tier 8e — the four landmark caps. D282 left these off because briefing them "means
+	# inventing the filenames first"; `Balance.ISO_LANDMARKS` is four ids and
+	# `ISO_LANDMARK_NAME` describes each, so the table was there all along (D296).
+	_section("Tier 8e — the four landmark caps",
+		"The one thing on a floor a player navigates by: a block standing twice the height of the wall around it, with a mark on its top that says which of the four it is. All four are drawn in code today — nested diamonds, arcs and stacked polygons.",
+		Kind.PAINT,
+		"One object standing on the flat top of a stone block, seen from the ISOMETRIC CAMERA THIS GAME ACTUALLY USES rather than head-on: the block's top face is 116x58, exactly 2:1, so the camera looks DOWN on it from about 27 degrees. Painted dark-fantasy storybook, 2-3px dark ink outline all round, real material, heavy and built rather than drawn. IT IS MASS IN THE SAME STONE AS THE WALL IT STANDS IN: cold grey, desaturated, no colour of its own, nothing near white, and no light of its own — the game multiplies it by the block's own light and a subject that carries its own glow arrives twice-lit. Read by SILHOUETTE from the far side of a dark room: two or three big shapes, no fine detail. On nothing, on a flat even field for the matte - no ground, no floor, no shadow, no plinth, no scenery. It stands about one tile wide and up to one and a half tiles tall.",
+		"One row of four, in the order of the table below. Spaced well apart with clear field between them, none touching or overlapping and nothing touching a cell edge. Flat even background of a single colour that appears nowhere in any subject. Install: `godot --headless --script tools/install_sheet.gd -- iso_landmarks <sheet.png> --key --cols=4`")
+	for kind in Balance.ISO_LANDMARKS:
+		var lk := String(kind)
+		_add("iso/landmark_%s.png" % lk, "192x288",
+			"**%s** — %s. Drawn in code today as %s." % [
+				lk.capitalize(), String(Balance.ISO_LANDMARK_NAME.get(lk, lk)),
+				_landmark_drawn_as(lk)])
+
+## What `iso_run.gd` draws for a landmark while nobody has painted it, and what the painting
+## therefore has to beat. The shaft's light BEAM is not in this list on purpose: it is drawn
+## over the painting and stays computed, because nothing painted can emit and emitting is
+## that landmark's whole reading (D296).
+func _landmark_drawn_as(kind: String) -> String:
+	match kind:
+		"shaft": return "three nested diamonds brightening upward, under a pale column of light"
+		"dome": return "three nested filled arcs, a low mound"
+		"stair": return "four diamonds stepping up and stopping"
+		"stack": return "a column of six small diamonds"
+	return "a flat shape"
+
 ## What `iso_run.gd` draws for a prop while nobody has painted it. Named in the brief on
 ## purpose: the fallback is what the painting has to beat, and three of these shapes stand in
 ## for four different props each, which is the gap the tier exists to close (D282).
