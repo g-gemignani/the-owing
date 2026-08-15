@@ -438,6 +438,26 @@ moves.
   Ask of any difficulty control: does it cost the strong player more than the weak one?
   And check that per cell — a mean cannot see the shape.
 
+- **A boss bends a rule; every other enemy is a number (D295).** `EnemyData.Action`'s eight verbs
+  are all quantities, so twelve named bosses read as twelve big cultists. Each now carries exactly
+  one signature — a hand ceiling, a cards-per-turn ceiling, what Block is worth here, or the first
+  card each turn burning — named on the dungeon row before you commit (D41, D187) and again as a
+  band under the boss's name for the whole fight. Measured over 36 cells the aggregate does not
+  move (**mean boss −0.7, run −0.5 points**) while the cells that do move are the decks the rules
+  are aimed at: the Draw build, the strongest in the game, loses 17 points to three-cards-a-turn.
+  **Three of the first seven fields were deleted for being cliffs rather than dials** — a card
+  tax, an Energy tax and a draw tax all subtract from a per-turn resource, and the smallest step
+  each can take is a third of the Energy or a fifth of the draw. The card tax took the Ember Road
+  from 87% to 0%; the draw tax took the tutorial Crypt from 85% to 19%. **A knob whose smallest
+  step is a cliff is not a knob**, and that is the arithmetic to do before authoring a signature,
+  not the fiction — the card tax had the best fiction on the board.
+
+  **And the instrument said all of it was free, because the `B` column had never fought a boss.**
+  `sim_balance.gd`'s `_measure` passed `""` for `p_boss`, so a column headed "Dungeon Boss" rolled
+  a TRASH archetype at boss budget for the whole life of the tool. Found only by sweeping three
+  signatures to absurd values and watching the report move by ±3 (D209's rule earning its keep).
+  D124 and D180 in a third costume.
+
 - **Every turn should have a floor and a ceiling.** Powers (once per turn) put a floor
   under a bad draw without raising the ceiling on a good one (D37). **The power is DEALT at the
   start of a run now — three offered, one taken (D245), rolled by `GameState.select_dungeon` and

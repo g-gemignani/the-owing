@@ -277,6 +277,9 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D290b** | [The map was sorted by the label instead of by the number the label came from](#d290b--the-map-was-sorted-by-the-label-instead-of-by-the-number-the-label-came-from) |
 | **D291** | [The dungeon answers only the first ten levels of your fusing](#d291--the-dungeon-answers-only-the-first-ten-levels-of-your-fusing) |
 | **D292** | [The way back down is on the screen the loss is read on](#d292--the-way-back-down-is-on-the-screen-the-loss-is-read-on) |
+| **D293** | [Six non-combat backdrops were a flatter art tier, and one number separates them](#d293--six-non-combat-backdrops-were-a-flatter-art-tier-and-one-number-separates-them) |
+| **D294** | [The magenta the de-keyer said was gone, on thirteen of thirty-five fights](#d294--the-magenta-the-de-keyer-said-was-gone-on-thirteen-of-thirty-five-fights) |
+| **D295** | [A boss bends a rule of the card game, and three of the first seven were cliffs](#d295--a-boss-bends-a-rule-of-the-card-game-and-three-of-the-first-seven-were-cliffs) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -20190,3 +20193,321 @@ fresh save the Maw is locked already, so "a locked dungeon is refused" passed ag
 IS offered, then strips the clears **and** the depth records — both, because a gate takes depth in
 places that beat you as well as clears (D178). D86's trap, walked into and backed out of inside
 one suite.
+
+### D293 — Six non-combat backdrops were a flatter art tier, and one number separates them
+
+REVIEW.md defect 8 had said since 2026-08-02 that `bg_treasure`, `bg_victory` and
+`bg_defeat` were "visibly a flatter, unrendered art tier than the other 20 backdrops".
+It sat open through eleven decisions because nothing could act on it: **the art manifest
+counts a bad file as present**, so Tier 5c reported "all 6 present" and `ART_PROMPTS.md`
+said there was nothing to ask a generator for. The `REDO` table in `art_manifest.gd`
+exists for exactly this and was empty. A defect that lives in one prose sentence in a
+review is a defect nobody re-derives.
+
+**Measuring it first turned three files into six.** Ink density — the share of pixels
+that are dark AND sit on a luminance gradient, which is an outline rather than a shadow —
+run over all 27 installed backdrops:
+
+```
+the twelve dungeon plates   ink 3.90 - 11.36%     edge energy 0.044 - 0.135
+bg_treasure                 ink  7.38%            0.087
+bg_defeat                   ink  5.91%            0.060
+bg_victory                  ink  4.78%            0.060
+bg_shop                     ink  2.43%            0.028
+bg_rest                     ink  2.05%            0.027
+bg_event                    ink  0.58%            0.020   <- the flattest file in the game
+```
+
+`bg_event` was never on the review's list and is the worst of the six by a factor of
+four. `bg_shop` and `bg_rest` were not on it either. So the job was the whole tier as one
+batch, not three files, and a half-re-rolled tier would have left two dialects on six
+screens — the D114 mistake wearing a different hat.
+
+**`bg_victory` had a second defect the ink number cannot see: 5.797% of the frame over
+0.90 luminance**, against 0.204% in `bg_crypt` and 1.415% in the title-screen variant
+D260 rejected for exactly this. It was an open door onto a white sky. The brief now names
+the light — "deep warm amber pre-dawn haze ... the open doorway reads as amber and old
+gold and never as white and never as a bright sky" — which is D137's "a concrete noun
+beats an adjective" applied to a value rather than a hue. It came back at **0.000%**.
+
+**What the six share, and what it cost to say.** One preamble, six subject lines, the
+D260 six-panel range sheet attached to every request (never `bg_crypt` alone — see ART.md
+§1 on why that teaches a palette as if it were law). Two clauses did the work:
+
+* `full bleed to all four edges, no black bars, no border` — the shipped `bg_event`
+  carried a baked letterbox, and `install_scene_backdrops.gd` strips one but cannot
+  invent the picture behind it.
+* `DENSITY: the room is fully dressed with carved stone, mouldings, a worn floor and
+  scattered debris, no large flat empty wall` — this is the ink number stated as nouns.
+  It moved `bg_event` from 0.58% to 9.62%.
+
+Installed, against the bible at ink 5.51% / mean luminance 0.168 / 0.204% over 0.90:
+
+| file | ink | mean lum | >0.90 |
+|---|---|---|---|
+| `bg_victory` | 4.78 → **12.65** | 0.356 → **0.178** | 5.797 → **0.000** |
+| `bg_shop` | 2.43 → **11.20** | 0.108 → **0.174** | 0.003 → 0.040 |
+| `bg_defeat` | 5.91 → **10.91** | 0.273 → **0.184** | 0.022 → 0.001 |
+| `bg_treasure` | 7.38 → **10.69** | 0.311 → **0.191** | 0.112 → **0.000** |
+| `bg_rest` | 2.05 → **10.51** | 0.181 → **0.200** | 0.008 → 0.108 |
+| `bg_event` | 0.58 → **9.62** | 0.127 → **0.215** | 0.004 → 0.071 |
+
+Mean luminance converged as a side effect and is the part worth noticing: the old six
+spanned 0.108 to 0.356 and the new six span 0.174 to 0.215, which is the dungeons' own
+range. Nothing in the brief asks for consistency across the batch. One preamble asked for
+20-35% six times and got it.
+
+#### `strip_sparkle` was NOT run, and refusing to run it is the finding
+
+ART_PROMPTS.md says to strip first, on the whole batch, before anything crops. It was
+run twice as a dry pass and told two different stories:
+
+```
+4 images   stamp: 371 px, 217-240 in from the right, 100-124 up = 24x25
+6 images   stamp: 226 px, 237-257 in from the right, 132-150 up = 21x19
+```
+
+**A stamp does not move when you add two images to the batch.** The intersection finds
+"lit above its own local background in EVERY frame" and with a handful of images that set
+is non-empty by chance — the twelve dungeon plates it was built for are enough, six are
+not. Cropping the bottom-right 280x240 out of all six and looking confirmed it: no star,
+in any of them. Running the tool would have Laplace-filled 226 real pixels per file to
+remove a watermark that is not there.
+
+So the rule the tool's header needs is a floor, not a switch: the intersection is only
+evidence at a batch size where a coincidence cannot survive it. Below that, look at the
+corners. This is cheap — one crop, one glance — and it is the only check that separates
+"the stamp is here" from "these images happen to be bright in the same place".
+
+#### What the manifest still cannot say
+
+`tools/art_docs.sh --check` reports "current" and `ART_ASSETS.md` still reads **430 files
+wanted, 430 present, 0 to provide** — before this change and after it. That is correct
+and it is the hazard: the shopping list answers "does a file exist", and the six files
+existed the whole time. Everything that decides whether the file is any GOOD lives either
+in the hand-kept `REDO` table or in a review nobody regenerates. This entry does not fix
+that. It records that eleven decisions passed with the answer sitting in a table cell.
+
+### D294 — The magenta the de-keyer said was gone, on thirteen of thirty-five fights
+
+Reported from play: some monsters in battle still wear a bit of magenta, the dogs
+especially. `tools/demagenta.gd` disagreed — pointed at `assets/art/enemies/` it repainted
+30,915 pixels, converged, and reported nothing left. Thirteen creatures still had a pink
+outline afterwards, plainly visible at the size they are drawn.
+
+**The measurement that broke the tie was not a colour, it was a position.** For every
+opaque pixel: does it lean purple, and is it within 4px of transparency?
+
+```
+                    rim      interior          verdict
+crypt_hound        1897         5              key bleed
+ember_hound        2702         0              key bleed
+forge_hound        3273        14              key bleed
+mycelial_lord       860      7773              PAINT — this is the mushroom's cap
+```
+
+Key bleed is what LANCZOS mixed across the alpha boundary on the way down, so it hugs
+that boundary. Paint does not. Every rule below is that one distinction spent.
+
+#### Three separate defects, all hiding behind the same "converged"
+
+**1. `KEY_GREEN_MAX` was measured on the wrong subjects.** D267 set it at 0.16 having
+measured 110 iso files, where every key pixel had green under 0.15. The combat plates fail
+it by a hair and only a hair — green 0.161 on the bog lurker, 0.165 on the crypt hound,
+0.173 on the ember hound, 0.220 on the forge hound, 0.247 on the gardener. The key is pure
+and green-free; what it is BLENDED WITH is not, and these creatures are grey-green where
+the iso figures were not. Raising the ceiling everywhere would put the mycelial lord's cap
+back in range, so it is raised to 0.30 **on the rim only** (`KEY_GREEN_MAX_RIM`).
+
+**2. Most of what a player sees was never in range of either rule.** After the strict pass
+there were still ~25,000 leaning pixels, nearly all of them on the rim at gaps too low for
+`KEY_GAP`. The dilute rule existed and looked only at the contact band under the feet. It
+now also runs on the rim, at its own floor, and the floor is not tuned — it is where the
+two populations stop overlapping:
+
+```
+rim gap          0.06-0.10  0.10-0.14  0.14-0.18  0.18-0.22
+mycelial lord          514         30          0          0
+forge hound            403        595       1106       1756
+ossuary wretch         595        984       1311       1485
+```
+
+`RIM_TINT_GAP = 0.14`. The one subject whose violet is paint stops dead below it and every
+subject wearing bleed has its mass above it.
+
+**3. A hole between the two rules, and it is where the dogs' last pink lived.** A pixel
+over `KEY_GAP` *and* over the relaxed green ceiling was refused by the strict pass for
+being too green and by the dilute pass for leaning too hard. The ember hound's shoulder sat
+at gap 0.231 / green 0.349 and the forge hound's tail at 0.455 / 0.302, both in that hole.
+The rim clause now has no ceiling: the strict pass runs first and takes what it can key, so
+whatever it hands back on the rim has already failed to be paint.
+
+Rim pixels above the floor, across `enemies/`, `iso/` and `iso/foe/`:
+
+| | files | rim px |
+|---|---|---|
+| before | 84 | **67,504** |
+| after | 84 | **1,308** |
+
+The 1,308 are 685 + 623: the two mycelial lord iso plates, refused whole. Every other file
+is at zero.
+
+#### It never settled in one invocation, and nothing said so
+
+The dilute pass rewrites green on the rim, which moves those pixels into range for the
+STRICT pass — so a second invocation always found more (119 + 154 pixels across three
+files) and a third found none. The tool printed "rewritten", looked finished, and had work
+left. `_clean` now runs the strict-then-dilute cycle until a round changes nothing.
+
+#### The guard, and the one that did not work
+
+A rule that treats purple on an outline as bleed needs a way to refuse a subject that is
+purple. First attempt: interior lean over RIM lean, refuse above 1.0. It separates cleanly
+on dirty files — bleed 0.06 to 0.32, paint 6.8 to 288 — and it is **measured against a
+moving target**. Cleaning removes rim lean and leaves interior lean untouched, so the
+second run reads a file the first run fixed as paint: 41 finished files reported as
+refused, and once the hole above was closed the guard started blocking real work on the
+brood mother and the bog lurker.
+
+`PAINT_SHARE` is interior lean over TOTAL OPAQUE AREA, which cleaning cannot move:
+
+```
+every creature plate and iso figure     0.0% - 2.6%
+mycelial_lord_n 38.6%   mycelial_lord_s 35.2%
+```
+
+Refused above 10%, with a thirteen-fold gap either side.
+
+#### The tool's own header was making a promise it could not keep
+
+It said the hue test could be run "over a whole directory without knowing which field each
+file was cut against". That is false outside the creature cutouts, and the numbers are not
+close:
+
+* `assets/art/cards/` — **100% opaque, never cut against a key at all**, and it offered 46
+  files and 46,885 pixels of "key" that is paint.
+* `assets/art/relics/` — `merchants_seal` is a purple wax seal, `reliquary_heart` a violet glow.
+* `assets/art/powers/` — `overwhelm` is a violet mace, `twice_over` a violet ring.
+* `assets/art/ui/` — `frame_card_rarity_3` is Epic, whose entire job is a violet inlay, and
+  the whole directory is COMPUTED by `gen_ui_kit.gd` so any edit here is undone by the next
+  generate (D83).
+
+The header now names the three directories this may be pointed at and says why the rest are
+out of bounds. `PAINT_SHARE` catches the worst of them by accident — the seal, the Epic
+frame, both lords — but `twice_over` at 19.3% and `reliquary_heart` at 1.5% straddle it, so
+the restriction is the protection and the guard is the seatbelt.
+
+#### Tried and not taken: the floor at 0.10
+
+Dropping `RIM_TINT_GAP` to 0.10 touches 82 files and 23,164 more pixels. Rendered against
+0.14 at the size these are drawn, the two are indistinguishable, mycelial gills included —
+so it buys nothing and moves the floor into the band where the lord's own rim has pixels.
+Recorded because the leftover lean is still measurable at 0.06-0.14 and the next person
+will find it and wonder why it was left.
+
+**A near-miss worth writing down.** The 0.10 result was first read off a contact sheet and
+judged to have drained the mushroom's cap, and it had not: the purple dome in that sheet
+was `mycelial_lord_n` from the iso set, which the guard refuses in both runs, while the
+combat plate is a cream cap with violet gills. The revert was correct by luck and wrong by
+reasoning. **A contact sheet says which files to look at; it does not say what changed.**
+Diff the file against its own previous bytes before believing a regression.
+
+---
+
+### D295 — A boss bends a rule of the card game, and three of the first seven were cliffs
+
+Twelve named bosses, and every one of them was a bigger cultist. `EnemyData.Action` holds eight
+verbs — attack, debuff, defend, empower, sunder, enrage, drain — and **every one is a quantity**.
+A fight assembled from them is the same fight at a different size, which is why the deck that beat
+the last boss was always the right deck for the next one.
+
+Each boss now bends one rule the card game otherwise guarantees. Four fields, one seam each, and
+one per boss:
+
+| | |
+|---|---|
+| `sig_hand_cap` | your hand cannot hold more than N |
+| `sig_cards_per_turn` | you may play only N cards a turn |
+| `sig_block_worth_pct` | your Block is worth N% here |
+| `sig_exhaust_first` | the first card you play each turn is gone for good |
+
+Named on the dungeon row before you commit, for the reason the boss and the aspect are (D41,
+D187), and named **again** as a band under the boss's name for as long as the fight lasts — a rule
+read four screens back is a rule that reads as a bug the first time a card does less than its face.
+
+#### The instrument was broken, and it took an absurd value to find out
+
+The first measurement said the signatures changed nothing: boss win rate moved ±6 points, mean
++0.3. That is exactly what "budget-neutral" looks like, and it was wrong.
+
+Per D209, the knob was swept to an absurd value first — hand cap **1**, cards per turn **1**, draw
+tax **4**. The report moved by ±3, and several cells went *up*.
+
+**The `B` column had never fought a named boss.** `_measure` passed `""` for `p_boss`, and
+`_spawn_enemies` only reaches for `named_boss` when it has one — so the column headed "Dungeon
+Boss" rolled a TRASH archetype at boss budget, every run, for the whole life of the tool. Nothing
+about a boss has ever been measurable through it. D124 and D180 in a third costume: **an
+instrument that cannot play the thing reports a confident nothing about it**, and the confident
+nothing is indistinguishable from a correct no-op.
+
+Fixed — `_measure` takes the dungeon's boss on the boss row — and the same sweep then moved the
+Warrens from 96% to 5%.
+
+#### Three fields were cliffs, and the shape of the fault is the finding
+
+With the column repaired, the first authored set measured:
+
+| rule | cell | without | with |
+|---|---|---|---|
+| `sig_draw_tax` 1 | **The Crypt** (the tutorial) | 85% | **19%** |
+| `sig_energy_tax` 1 | The Drowned Market | 87% | **0%** |
+| `sig_card_tax` 1 | The Ember Road | 87% | **0%** |
+| `sig_card_tax` 2 | The Drowned Market | 49% | **0%** |
+
+All three **subtract from a per-turn resource**, and at this game's scale the smallest step each
+can take is a large fraction of the whole engine: one of three Energy, one of five cards drawn,
+or — worst — one Energy on *every card* in a three-Energy turn. There was no gentler setting to
+retreat to, because each field's minimum useful value was already the cliff.
+
+They are deleted. What survives is the rules that can be **dialled** — a ceiling or a percentage,
+where the next value along is a small step rather than a different game.
+
+**A knob whose smallest step is a cliff is not a knob.** That is the test a new signature has to
+pass before it is authored, and it is a question about arithmetic rather than about fiction. The
+card tax had the best fiction on the board — the Last Vendor charges you — and it was unusable.
+
+#### Where it landed
+
+Re-measured over 36 cells, dialled signatures against no signatures:
+
+**mean boss delta −0.7 points, mean run delta −0.5 points.** Three cells moved more than nine, and
+each is a deck the rule is aimed at: the **Draw build** loses 17 points at the Drowned Market's
+three-cards-a-turn, which is the strongest build in the game (D280: `cap` 11.53x) meeting the rule
+written for it. That is content, not a difficulty change — the aggregate does not move and the
+targeting does.
+
+#### The guard, and the one mutation that did not fail
+
+`tests/test_signature.gd` discovers its subjects on both axes: `EnemyData.signature_fields()`
+walks the property list and the suite walks the enemy catalogue. A field added later is already a
+subject. It asserts that every boss carries exactly one, that nothing else carries any, that every
+field is authored somewhere, that every one changes something a player can feel, that the dungeon
+row names it, and that no signature can hand the player a turn they cannot take.
+
+Every seam was checked by breaking it. **Six of seven failed and one did not**, and that one is
+worth the entry on its own: the cards-per-turn check played until the engine refused, and with the
+rule deleted it ran the hand empty and indexed `hand[0]` off the end — so it errored instead of
+asserting, and reported a pass. It now keeps a card in hand and asks *what* refused. **A check
+that can run out of subject reports the same pass as a rule that works.**
+
+#### Two things the arithmetic threw out before they were built
+
+`sig_exhaust_first` was written first as "every card you play is gone for good". A boss runs 12
+turns (`TIER_TARGET_TURNS`) against a 12-to-20 card deck, so that empties the deck around turn
+four and the remaining eight turns are the player watching. **A rule that ends the fight for you
+is a lose condition wearing a puzzle's clothes.** One card a turn costs the same twelve over the
+whole fight and leaves two or three a turn to play with.
+
+And the signature is gated on the TIER, not on the archetype carrying one, because `count_max`
+lets an archetype spawn three of itself — three copies each taking an Energy is not a signature,
+it is a softlock.

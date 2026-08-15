@@ -288,7 +288,15 @@ func _init() -> void:
 				Balance.max_hp_for(clears, relic_hp1),
 				run["complete"] * 100.0, run["avg_fights"], run["avg_avoided"]]
 			for tier in [Balance.Tier.NORMAL, Balance.Tier.ELITE, Balance.Tier.BOSS]:
-				var r := _measure(deck, dungeon, tier, 1.0, relics, roster, prof_power)
+				# The dungeon's OWN boss on the boss row (D295). This column passed `""` for
+				# nine years of decisions and therefore rolled a TRASH archetype at boss budget:
+				# `_spawn_enemies` only reaches for `named_boss` when it has one. So a column
+				# headed "Dungeon Boss" had never fought a named boss, and nothing about a boss
+				# was measurable through it — found when three signatures swept to absurd values
+				# moved it by ±2. D124 and D180 exactly: an instrument that cannot play the thing
+				# reports a confident nothing about it.
+				var r := _measure(deck, dungeon, tier, 1.0, relics, roster, prof_power,
+					dd.boss if dd != null and tier == Balance.Tier.BOSS else "")
 				line += " %s %.0f%%(%.1ft,-%.0f%%hp)" % [
 					_tier_short(tier), r["win_rate"] * 100.0, r["avg_turns"], r["hp_lost_pct"] * 100.0]
 			print(line)
@@ -1851,7 +1859,8 @@ func _deck(loadout: Dictionary, level: int = 1) -> Array[CardData]:
 	return deck
 
 func _measure(deck: Array[CardData], dungeon: int, tier: int, hp_mult: float,
-		relics: Array = [], roster: Array = [], power: PowerData = null) -> Dictionary:
+		relics: Array = [], roster: Array = [], power: PowerData = null,
+		boss: String = "") -> Dictionary:
 	var wins := 0
 	var turns_total := 0
 	var hp_lost_total := 0
@@ -1865,7 +1874,7 @@ func _measure(deck: Array[CardData], dungeon: int, tier: int, hp_mult: float,
 		var eng := CombatEngine.new()
 		# Untaxed here too (D238), for the same reason: these columns must price the deck the way
 		# a real fight does, and a real fight no longer scales to relics.
-		eng.setup(deck, max_hp, max_hp, dungeon, tier, "", [], roster, power, "", relics)
+		eng.setup(deck, max_hp, max_hp, dungeon, tier, "", [], roster, power, boss, relics)
 		var guard := 0
 		while not eng.over() and guard < 200:
 			guard += 1

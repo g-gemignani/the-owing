@@ -19,3 +19,4 @@ rule_threshold = PackedInt32Array(45, 4)
 rule_action = PackedInt32Array(5, 4)
 rule_value = PackedInt32Array(0, 2)
 rule_once = PackedInt32Array(0, 0)
+sig_cards_per_turn = 2

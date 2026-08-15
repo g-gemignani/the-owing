@@ -87,6 +87,11 @@ var end_btn: Button
 var power_btn: Button
 var menu_btn: Button
 var place_label: Label
+## The boss's signature, under its name, for as long as the fight lasts (D295). Hidden on every
+## other fight in the game. Built empty here and filled in `_refresh`, because `_build_ui` runs
+## BEFORE the engine exists — the first version read `eng` from the builder and took the whole
+## combat screen down with it, which is a thing three scene tests noticed and no unit test could.
+var sig_label: Label
 var power_ring: Panel
 var power_art: TextureRect
 var power_fx: TextureRect
@@ -224,6 +229,15 @@ func _build_ui() -> void:
 	header.add_child(place_label)
 
 	menu_btn = UI.exit_button(header, "Menu", _pause, 38.0)
+
+	# The boss's rule, under its name, for as long as the fight lasts (D295). Named on the
+	# dungeon row before the player commits (D41, D187) and then named again HERE, because a rule
+	# read on a screen four steps back is a rule that reads as a bug the first time a card costs
+	# more than its face. It is a band rather than a line in the log for the same reason: the log
+	# scrolls and this is true for every turn of the fight.
+	sig_label = UI.label(root, "")
+	sig_label.add_theme_color_override("font_color", Color(0.95, 0.65, 0.45))
+	sig_label.visible = false
 
 	# --- bottom left: everything about YOU -----------------------------------
 	#
@@ -917,6 +931,12 @@ func _refresh() -> void:
 	else:
 		said.append("incoming %d" % eng.enemy_intent)
 	status_label.text = "    ".join(said)
+	# Off the ENGINE and not off the dungeon's boss, so the band says what this fight is actually
+	# doing. The two agree today; reading the dungeon would go on agreeing after somebody made
+	# them differ, which is the half that would not be found.
+	if sig_label != null:
+		sig_label.text = eng.signature_text()
+		sig_label.visible = sig_label.text != ""
 	_refresh_vitals(p)
 	_refresh_orbs()
 	_refresh_buffs(p)

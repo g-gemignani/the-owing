@@ -19,3 +19,4 @@ rule_threshold = PackedInt32Array(2, 45)
 rule_action = PackedInt32Array(7, 6)
 rule_value = PackedInt32Array(0, 2)
 rule_once = PackedInt32Array(0, 1)
+sig_exhaust_first = true

@@ -64,6 +64,116 @@ enum Trigger {
 ## 1 = fires at most once per fight (an enrage should not re-trigger every turn).
 @export var rule_once: PackedInt32Array = PackedInt32Array()
 
+@export_group("Signature (bosses only)")
+## The one thing this boss does that no number can say (D295).
+##
+## Every verb in `Action` above is a QUANTITY — hit harder, shield, weaken, drain. A fight built
+## out of them is the same fight at a different size, which is why twelve named bosses read as
+## twelve big cultists. What makes a Hearthstone boss memorable is that it breaks a rule of the
+## card game itself, so the deck that beat the last one is the wrong deck here.
+##
+## Each field below bends one rule the card game otherwise guarantees, and each has exactly one
+## seam in `CombatEngine` — the same discipline `RelicData`'s rule modifiers keep, pointing the
+## other way. **A boss carries exactly one**, enforced by `tests/test_signature.gd`: two would be
+## a difficulty setting wearing a rule's clothes, and the player could not name what went wrong.
+##
+## Zero means "unset" on every one of them, which is why `block_worth_pct` is 0-for-100 rather
+## than 100-for-100: a default of 100 in a `.tres` would be indistinguishable from an author
+## deliberately setting it, and a signature nobody chose is the one thing this group must not be
+## able to grow by accident.
+##
+## **Three of the first eight were built, measured and deleted, and they failed the same way.**
+## `sig_card_tax` (+N to every card), `sig_energy_tax` (-N Energy a turn) and `sig_draw_tax`
+## (-N cards a turn) all SUBTRACT FROM A PER-TURN RESOURCE, and at this game's scale the
+## smallest step each can take is a large fraction of the whole engine: one of three Energy,
+## one of five cards drawn, or — worst — one Energy on every card in a three-Energy turn.
+## Measured against the repaired boss column: the card tax took the Ember Road from 87% to 0%,
+## the draw tax took the CRYPT, the tutorial dungeon, from 85% to 19%, and the energy tax took
+## the Drowned Market from 87% to 0%. There was no gentler setting to retreat to in any of the
+## three, because each one's minimum useful value was already the cliff.
+##
+## What survives are the rules that can be DIALLED — a ceiling or a percentage, where the next
+## value along is a small step rather than a different game. **A knob whose smallest step is a
+## cliff is not a knob**, and that is the property to test a new signature against before
+## authoring it, not the fiction.
+##
+## The original note, kept because it is the case that found the rule: at
+## `MAX_ENERGY` 3 the smallest step an integer cost can take is +1, and +1 on every card is a
+## turn of one card where there were three. Measured, +1 took the Ember Road from **87% to 0%**
+## and +2 took the Drowned Market from 40% to 0%. There was no gentler setting to retreat to,
+## because the field's minimum useful value already cost two thirds of a turn. **A knob whose
+## smallest step is a cliff is not a knob**, and the two bosses that wore it took rules that can
+## be dialled instead.
+##
+## Non-bosses author none. That is not a style rule — `count_max` above lets an archetype spawn
+## three of itself, and three copies each taking an Energy is not a signature, it is a softlock.
+## Hand size ceiling while this fight lasts. Bites the draw builds hardest, which are the
+## strongest in the game (D280's table: Draw at 11.53x against Barricade at 1.30x).
+@export var sig_hand_cap: int = 0
+## Most cards that may be played in one turn.
+@export var sig_cards_per_turn: int = 0
+## What your Block is worth here, as a percent. D45 says block cannot be a complete answer at
+## depth, and until now the only thing saying so was piercing damage.
+@export var sig_block_worth_pct: int = 0
+## The FIRST card you play each turn leaves the fight for good. Turns the fight into a race
+## against your own deck rather than against the boss's HP bar.
+##
+## "First each turn" and not "every card", which is what this was first written as and what the
+## arithmetic threw out. A boss runs 12 turns (`TIER_TARGET_TURNS`) and a run deck is 12 to 20
+## cards, so exhausting everything played empties the deck around turn four and the remaining
+## eight turns are the player watching. **A rule that ends the fight for you is a lose condition
+## wearing a puzzle's clothes.** One a turn costs the same 12 cards over the whole fight while
+## leaving two or three a turn to play with, which is a race the player is in rather than a
+## countdown they are subject to.
+@export var sig_exhaust_first: bool = false
+
+## Field names of the signature group, discovered from the property list rather than written out.
+##
+## D250's lesson, and D89's before it: a hand-kept list of what a resource contains is a list that
+## goes stale the moment a field is added, and the failure is silent — a new signature would be
+## authored, honoured nowhere, and pass every test. Everything that asks "which signatures exist"
+## asks here: `signature_of`, `signature_text`, and the suite that checks each one is read.
+static func signature_fields() -> Array[String]:
+	var out: Array[String] = []
+	for p in EnemyData.new().get_property_list():
+		var n := String(p["name"])
+		if n.begins_with("sig_"):
+			out.append(n)
+	return out
+
+## Which signature this archetype carries, and at what size: `["sig_energy_tax", 1]`, or `[]` for
+## none. The pair rather than the name alone, because every caller that wants one wants the other.
+func signature_of() -> Array:
+	for f in signature_fields():
+		var v = get(f)
+		if v is bool:
+			if v:
+				return [f, 1]
+		elif int(v) != 0:
+			return [f, int(v)]
+	return []
+
+## What the signature does, in the words the player is shown before committing (D41, D187).
+##
+## Written HERE and not in `Balance.boss_warning`, because the rule and the sentence about it have
+## to move together — a boss line generated from a field the sentence does not know about is the
+## D50 lie, and the whole value of naming a boss in advance is that the naming is true.
+func signature_text() -> String:
+	var s := signature_of()
+	if s.is_empty():
+		return ""
+	var n: int = int(s[1])
+	match String(s[0]):
+		"sig_hand_cap":
+			return "your hand cannot hold more than %d cards" % n
+		"sig_cards_per_turn":
+			return "you may play only %d cards a turn" % n
+		"sig_block_worth_pct":
+			return "your Block is worth %d%% here" % n
+		"sig_exhaust_first":
+			return "the first card you play each turn is gone for good"
+	return ""
+
 func rule_count() -> int:
 	return mini(rule_trigger.size(), mini(rule_action.size(), rule_threshold.size()))
 

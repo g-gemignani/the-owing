@@ -3282,7 +3282,18 @@ static func boss_warning(dungeon_id: String) -> String:
 		# first letter should change.
 		var lead := when.substr(0, 1).to_upper() + when.substr(1)
 		says.append("%s it %s" % [lead, does])
-	return "; ".join(says) + "." if not says.is_empty() else ""
+	var sentence := "; ".join(says) + "." if not says.is_empty() else ""
+	# The signature FIRST, and in its own sentence (D295). It is the thing that decides which
+	# deck to bring, where the conditional rules above decide how to play the fight once you are
+	# in it — so a player skimming the row has to meet it before a semicolon-joined list of
+	# triggers. The wording is `EnemyData`'s, not this function's, because the rule and the
+	# sentence about it have to move together or the row starts promising what the fight will
+	# not do (D50).
+	var sig := b.signature_text()
+	if sig != "":
+		var lead2 := sig.substr(0, 1).to_upper() + sig.substr(1)
+		return "%s. %s" % [lead2, sentence] if sentence != "" else "%s." % lead2
+	return sentence
 
 static func final_dungeon() -> String:
 	return DUNGEONS[DUNGEONS.size() - 1]

@@ -133,6 +133,34 @@ var resolving_play: bool = false
 
 var dungeon: int = 1
 var tier: int = Balance.Tier.NORMAL
+
+## The rule this fight's boss bends, as `["sig_energy_tax", 1]`, or `[]` for every other fight
+## in the game (D295). Read at `_spawn_enemies` and honoured at seven seams below, each of which
+## names it — a signature applied in a helper nobody can find is a rule the player cannot learn.
+var signature: Array = []
+
+## How big this fight's signature is, or 0 when it is not the one being asked about. The ONE
+## reader of `signature`, so a seam cannot misspell a field name and silently do nothing: the
+## name is compared here and nowhere else.
+func sig(field: String) -> int:
+	return int(signature[1]) if signature.size() == 2 and String(signature[0]) == field else 0
+
+## The most cards a hand may hold this fight. `MAX_HAND_SIZE` (D120) unless a boss says otherwise.
+##
+## An accessor rather than the constant, because the cap is read in two places — the draw itself
+## and the line that tells the player a draw was eaten — and a signature honoured by one of them
+## is a rule that fires without saying so.
+func hand_cap() -> int:
+	var n := sig("sig_hand_cap")
+	return n if n > 0 else Balance.MAX_HAND_SIZE
+
+## The signature in the player's words, or "" when this fight has none. Asked of the ENGINE
+## rather than of the dungeon's boss, because this is what the fight is actually doing — the two
+## agree today and reading the dungeon would go on agreeing after somebody made them differ.
+func signature_text() -> String:
+	if signature.is_empty() or archetypes.is_empty():
+		return ""
+	return (archetypes[0] as EnemyData).signature_text()
 var ratio: float = 1.0
 var turn: int = 0
 
@@ -252,6 +280,12 @@ func _spawn_enemies(forced_archetype: String) -> void:
 	var arch := Balance.enemy(id)
 	if arch == null:
 		arch = EnemyData.new()
+
+	# The boss's signature, and ONLY a boss's (D295). Gated on the tier rather than on the
+	# archetype carrying one, because `count_max` lets an archetype spawn three of itself and
+	# three copies each taking an Energy is not a signature, it is a softlock. A boss is single
+	# by construction, so the tier is the property that makes this safe.
+	signature = arch.signature_of() if tier == Balance.Tier.BOSS else []
 
 	var count: int = arch.spawn_count()
 	# `run_progress` is how deep the RUN is, 0 at the mouth and 1 at the boss (D270). Negative means
@@ -443,7 +477,7 @@ func draw_cards(n: int) -> void:
 		# BEFORE the reshuffle below, deliberately. A refused draw must not be able to
 		# turn the discard pile over: that is the same free deck cycle by another route,
 		# and it would reorder the pile of a player who did nothing but hold ten cards.
-		if hand.size() >= Balance.MAX_HAND_SIZE:
+		if hand.size() >= hand_cap():
 			draws_lost += n - i
 			break
 		if draw_pile.is_empty():
@@ -474,8 +508,8 @@ func take_draw_notice() -> String:
 	var n := draws_lost
 	draws_lost = 0
 	if n == 1:
-		return "Hand full at %d — the draw stays in the pile." % Balance.MAX_HAND_SIZE
-	return "Hand full at %d — %d draws stay in the pile." % [Balance.MAX_HAND_SIZE, n]
+		return "Hand full at %d — the draw stays in the pile." % hand_cap()
+	return "Hand full at %d — %d draws stay in the pile." % [hand_cap(), n]
 
 ## What this card costs RIGHT NOW: its levelled cost, less any discount standing.
 ##
@@ -535,11 +569,26 @@ func play_cost(card: CardData) -> int:
 ## and then grants 14 is the D50 lie in a new costume. The face and `_resolve` both
 ## call this while the hand is still intact and the tally has not moved, so the two
 ## cannot disagree — which is why `play_card` does its exhaust bookkeeping afterwards.
+## Will `card` be gone for good once played — its own `exhaust`, or the boss taking the first
+## card of every turn (D295)?
+##
+## `already_played` is passed in rather than read off the field, because the two callers stand on
+## opposite sides of the increment: `projected_exhausted` asks before `cards_played_this_turn`
+## moves and `play_card`'s disposal asks after. A predicate that read the field itself would be
+## right for one of them and silently wrong for the other, and the visible half of that is a card
+## face promising a `per_exhausted` payout one short of what lands — D50 with a fresh subject.
+func exhausts(card: CardData, already_played: int) -> bool:
+	return card.exhaust or (sig("sig_exhaust_first") > 0 and already_played == 0)
+
 func projected_exhausted(card: CardData) -> int:
 	var n := exhausted_this_combat
 	if card.exhaust_hand:
 		n += maxi(0, hand.size() - (1 if card in hand else 0))
-	if card.exhaust:
+	# The same widening `play_card`'s disposal makes (D295), and it has to be made here too or
+	# the face lies: under a boss that burns everything, a `per_exhausted` card would advertise
+	# a number one short of what it is about to grant. That is D50 in its original costume, and
+	# the two readers of "will this card be exhausted" are exactly these two.
+	if exhausts(card, cards_played_this_turn):
 		n += 1
 	# Capped, and the cap is why the payoffs can be priced at all — see
 	# Balance.EXHAUST_TALLY_CAP for the numbers that made it necessary. Applied HERE
@@ -605,6 +654,14 @@ func why_not(card: CardData) -> String:
 	# DOWN and a discount buys the first one down again, and a card the player has
 	# been promised is cheaper has to actually be cheaper at the one place the game
 	# checks whether it can be afforded.
+	# D295, and FIRST because it is the answer that is true about the whole turn rather than
+	# about this card. Told as a rule rather than as a refusal — the player has to be able to
+	# plan the turn around it, and "you have played your three" is planning information where
+	# a greyed-out card is only a symptom.
+	var per_turn := sig("sig_cards_per_turn")
+	if per_turn > 0 and cards_played_this_turn >= per_turn:
+		return "You may play only %d cards a turn here, and you have played %d." % [
+			per_turn, cards_played_this_turn]
 	var cost := play_cost(card)
 	if cost > energy:
 		return "%s needs %d energy and you have %d." % [card.name, cost, energy]
@@ -795,7 +852,13 @@ func play_card(card: CardData) -> String:
 		msg += "Burned %d card%s out of your hand%s. " % [
 			burned, "" if burned == 1 else "s", " (they return to the pile)" if returns else ""]
 	# exhausted cards leave the combat entirely instead of returning to the discard
-	if not card.exhaust:
+	#
+	# D295: a boss can make that true of EVERY card. Written as a widening of the card's own
+	# `exhaust` rather than as a branch of its own, so the signature inherits the three things
+	# this block already gets right — the tally counts it, `exhaust_returns` still redirects it,
+	# and `per_exhausted` still collects it. A parallel path would have had to restate all three
+	# and would have disagreed with this one the first time either moved (D34).
+	if not exhausts(card, cards_played_this_turn - 1):
 		discard_pile.append(card)
 	else:
 		exhausted_this_combat += 1
@@ -951,6 +1014,13 @@ func card_block(card: CardData) -> int:
 	var m := _mod_mult("block_pct")
 	if m != 1.0 and b > 0:
 		b = maxi(1, int(round(float(b) * m)))
+	# D295, and AFTER the relics for the reason the card tax goes on after the discounts: the
+	# boss's rule is the thing the fight is about, so a relic pool cannot buy its way out of it.
+	# Floored at one rather than zero — a guard that grants nothing at all is a dead card, and
+	# a signature that deletes a card type is a difficulty setting rather than a puzzle.
+	var worth := sig("sig_block_worth_pct")
+	if worth > 0 and b > 0:
+		b = maxi(1, int(round(float(b) * float(worth) / 100.0)))
 	return b
 
 ## The face text with this fight's numbers in it.
