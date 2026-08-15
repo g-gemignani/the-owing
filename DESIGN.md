@@ -254,6 +254,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D263** | [One route for images, and the docs stop offering a second](#d263--one-route-for-images-and-the-docs-stop-offering-a-second) |
 | **D264** | [The endpoint generator is deleted, and two of its rules outlived it](#d264--the-endpoint-generator-is-deleted-and-two-of-its-rules-outlived-it) |
 | **D265** | [Fights got a shape, and the reason the 5x never assembles is the price list](#d265--fights-got-a-shape-and-the-reason-the-5x-never-assembles-is-the-price-list) |
+| **D266** | [A metric that measures the player, and it says the 5x was there all along](#d266--a-metric-that-measures-the-player-and-it-says-the-5x-was-there-all-along) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -18185,3 +18186,87 @@ words and this column is the only place it is written down.
 **A justification that names a mechanism ages badly.** All three comments read as dead the
 moment the file went, and only one reading of them was correct. Worth stating the rule and the
 cost of breaking it, rather than the thing that used to catch it.
+
+---
+
+### D266 — A metric that measures the player, and it says the 5x was there all along
+
+D265 ended by naming what was missing: `esc` reads damage per turn out of a real fight, and a real
+fight ends, so once the deck can kill inside the turns the fight lasts, the number is the enemy's HP
+divided by those turns. Five player-side changes left it flat at ~1.6 for that reason.
+
+#### What `cap` is
+
+`_capability()` sets up a `CombatEngine` against a target that cannot die, with a player that cannot
+die, and plays `CAP_TURNS` turns with **`_take_turn` — the same driver the real fights use.** Damage
+per turn comes off the same tally the game reads. Sampled twice per run: before the first fight, and
+after the last. The ratio is `cap`.
+
+Three properties it has and `esc` does not:
+
+* **Nothing truncates it.** No enemy dies early and no run ends, so the reading is what the deck
+  does rather than what the fight allowed.
+* **Both samples face an identical probe** — same depth, same tier, one enemy, same HP — so the only
+  difference between them is what the player is holding.
+* **Every run reports one.** `esc` needs two won normal fights and is silent otherwise; it managed
+  16 cells of 18 while `cap` reported all 18. The cells it cannot see are the ones where runs die,
+  which is exactly where the interesting answer turned out to live.
+
+Played with the driver rather than computed from a formula, for the reason this file has paid for
+four times (D124, D208, D233, D265): a formula is a second opinion about what the engine does. The
+cost is the defensive tax — the driver blocks before it spends the rest — and that is correct,
+because the tax is in both samples and divides out.
+
+ONE living enemy, always. Damage per turn rises with the number of enemies because an AoE card hits
+all of them, so a probe that rolled a swarm one time and a single foe the next would report the roll
+— the distribution fault D231 found inside `esc`, avoided rather than inherited.
+
+#### What it says
+
+18 cells, 200 trials, `--spoils=8`:
+
+| | |
+|---|---|
+| `cap` median | 1.60x |
+| `cap` mean | **3.08x** |
+| range | 0.82x to **11.26x** |
+| `esc` over the same runs | 1.58x |
+
+And split by whether the run survives:
+
+| | cells | median `cap` |
+|---|---|---|
+| over half the runs finish | 7 | **4.11x** |
+| most runs die | 11 | 1.38x |
+
+Correlation between `cap` and completion: **r = 0.53**.
+
+**The 5x is already in the game.** A run that lives to the boss ends about four times stronger than
+it started, and the best cell measured **11.26x**. D265 concluded that "the content cannot reach 5x"
+from three experiments that all failed to move `esc`; that conclusion was an artefact of the
+instrument, and it is now withdrawn. The content reaches it. **Most runs die before they get there.**
+
+#### Which makes the death rate the growth problem
+
+The 60% death rate was chosen deliberately (D244) and deaths were pushed EARLIER on purpose —
+*"die early and cheap, win late and absurd"*. Measured against `cap`, that trade has a cost nobody
+had a number for: the median player never sees the escalation the whole design is built around,
+because the median player is dead at fight 2.7 holding 1.38x.
+
+So the three things asked for — a deck that grows 5x, fights with more turns in them, and a death
+worth having — are one problem seen from three sides. The growth exists and is gated behind
+survival. **Making the opening survivable is not a difficulty change, it is what puts the escalation
+in front of the player**, and it is the same change that moves deaths from fight 2.7 to the deep end
+where a death has a build in it.
+
+#### And two cells where the deck got WEAKER
+
+`cap` came back **below 1.0** in two cells: 0.82x and 0.90x. A run ended less capable than it began.
+
+The mechanism is that `earn_card` appends to `run_deck`, and a 20-card deck that gains a weak card
+draws its good cards less often. Damage per turn falls. Nothing in the game says so, the card reward
+screen presents every card as a gain, and `power_ratio` cannot see it either because that is power
+per energy and this is a draw-quality effect.
+
+That is a reward that makes you worse, and until now there was no number in this tool that could
+show one.
