@@ -379,6 +379,25 @@ effects are drawn at runtime by `scripts/fx.gd`.
   scaling weight is the real fix. The playtest is live rather than pending — the player is playing,
   and "the dungeons feel off" is where D275 came from.
 
+  **And the pillar is about to take a deliberate, bounded wedge (D291, decided and not built).**
+  Because the ratchet prices every fused level, fusing raises both sides of the equation and cannot
+  move a wall: a twelve-card deck at d4 prices 8.56 at Lv15 and 13.19 at Lv40, both under the 20.90
+  ceiling, so 289 copies and 48,076 gold buy the same fight. The grind pays nothing until the ratio
+  crosses the ceiling and then the dungeon collapses at once, which is the worst shape a grind can
+  have. So a card will be priced at `PRICED_LEVEL_FULL` (10) levels in full and a
+  `PRICED_LEVEL_SHARE` (0.25) of everything above, while delivering at its real level — bounded at
+  about **1.5x**, against D230's yardstick that every relic in the game handed over free is 1.18x.
+  The first ten levels stay fully priced, so D36's opening promise holds. **Nothing is built: the
+  entry is the decision and the arithmetic, and both constants have to be swept per cell first.**
+
+  **A guard found blind on the way, and not yet fixed (D291).** `test_upgrade.gd` pins
+  `MAX_ACHIEVABLE_RATIO` against **ten copies of `hack`** — 23.14, comfortably under 31.7. Twenty
+  maxed `cheap_shot` is an equally legal deck (`deck_valid` bounds the size and nothing bounds the
+  copies) and prices at **54.49**, past the deepest dungeon's ceiling of 33.25, because
+  `power_ratio` is power per energy and that card costs 0. It is an overcharge rather than an
+  exploit — D280's archetype fault at its limit — and the lesson is the older one: **a guard that
+  names its subject guards nothing new.** D89's art list in a fourth costume.
+
 - **Completion percentage is a constraint, not the goal (D231).** The tool has printed
   `Target: RUN completion ~40-60%` since D54 and every difficulty entry since has been an
   argument about moving cells into that band. Under the goal this project is now aimed at —

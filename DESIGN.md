@@ -275,6 +275,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D289** | [The powers screen was describing the game from before the power was dealt](#d289--the-powers-screen-was-describing-the-game-from-before-the-power-was-dealt) |
 | **D290** | [Gold stops buying a power, and a place hands it over instead](#d290--gold-stops-buying-a-power-and-a-place-hands-it-over-instead) |
 | **D290b** | [The map was sorted by the label instead of by the number the label came from](#d290b--the-map-was-sorted-by-the-label-instead-of-by-the-number-the-label-came-from) |
+| **D291** | [The dungeon answers only the first ten levels of your fusing](#d291--the-dungeon-answers-only-the-first-ten-levels-of-your-fusing) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -19959,3 +19960,148 @@ be stronger than the first thing a dungeon gives you. Not fixed, because the sta
 span the attack, defence and neutral axes the offer's tilt needs (D256), and picking the six weakest
 instead would leave that tilt with one pole. **The starter set is chosen for shape, not for
 strength, and those two cannot both be the criterion.**
+
+---
+
+### D291 — The dungeon answers only the first ten levels of your fusing
+
+The ask, stated plainly: beat a dungeon, hit a wall at the next one, fuse stronger cards, come
+back and win. That is the RPG progression this game's fiction and its fusion screen both promise.
+**It is not what the code does, and the reason is structural rather than a tuning miss.**
+
+#### Why fusing cannot move a wall
+
+`power_ratio` prices the deck. `scaling_ratio` clamps that price at the dungeon's ceiling. Below the
+ceiling the enemies match your deck exactly, so fusing raises both sides of the equation.
+
+Measured, ratio by card level, twelve cards:
+
+| deck | Lv1 | Lv5 | Lv10 | Lv15 | Lv20 | Lv25 | Lv40 | Lv60 | Lv100 |
+|---|---|---|---|---|---|---|---|---|---|
+| Starter (hack, cover, stave_in, shoulder) | 1.19 | 2.80 | 4.42 | 5.98 | 7.02 | 8.00 | 10.85 | 12.64 | 16.26 |
+| Mid (six ids, twelve cards) | 1.35 | 3.84 | 6.26 | 8.56 | 9.54 | 10.48 | 13.19 | 14.80 | 18.05 |
+
+Against the ceilings — d1 1.40, d2 7.90, d3 14.40, d4 20.90, d5 22.00, d6 24.15, d7 28.70, d8 33.25.
+
+Read the Mid row against d4. At Lv15 the deck prices at 8.56 and the ceiling is 20.90, so the
+enemies scale to 8.56. Fuse to Lv40 and they scale to 13.19. **The wall did not move.** The player
+spent 289 copies and 48,076 gold and the fight is the same fight.
+
+The grind pays only where the ratio crosses the ceiling, and for a twelve-card deck that never
+happens below d5. **So the payoff is nothing, nothing, nothing, and then the dungeon collapses in a
+single run.** That is the worst shape a grind can have. A grind has to pay a little every time.
+
+What a level costs, for scale:
+
+| level | copies | gold |
+|---|---|---|
+| 10 | 34 | 1,686 |
+| 15 | 61 | 4,559 |
+| 25 | 133 | 15,645 |
+| 40 | 289 | 48,076 |
+| 100 | 1,474 | 421,541 |
+
+Lv100 is not a destination. The band a player really travels is Lv1 to about Lv40, and that is the
+band the change below has to land in.
+
+#### The decision
+
+**Price a card at part of its fused level. Deliver at all of it.**
+
+```
+const PRICED_LEVEL_FULL := 10
+const PRICED_LEVEL_SHARE := 0.25
+
+priced_level(l) = l                                  when l <= PRICED_LEVEL_FULL
+priced_level(l) = 10 + round((l - 10) * 0.25)        otherwise
+```
+
+`deck_power` and `deck_cost` both read the card at that level. **Both, not one.** Levelling buys the
+energy cost of a rule-only card down (`_cost_budget`), so pricing the power at the capped level and
+the cost at the real one would *raise* the ratio rather than lower it. `deck_cost` is the divisor.
+
+The first ten levels stay fully priced, which keeps D36's opening promise: a fresh player is never
+scaled for growth they have not had.
+
+#### What the shape buys, measured
+
+Free strength, as delivered ratio over priced ratio. 1.00 means nothing changed.
+
+| cap | share | Lv10 | Lv15 | Lv20 | Lv25 | Lv40 | Lv60 | Lv100 |
+|---|---|---|---|---|---|---|---|---|
+| 5 | 0.00 | 1.63 | 2.23 | 2.48 | 2.73 | 3.44 | 3.85 | 4.70 |
+| 10 | 0.00 | 1.00 | 1.37 | 1.52 | 1.67 | 2.11 | 2.36 | 2.88 |
+| 15 | 0.00 | 1.00 | 1.00 | 1.11 | 1.22 | 1.54 | 1.73 | 2.11 |
+| **10** | **0.25** | **1.00** | **1.27** | **1.25** | **1.29** | **1.45** | **1.47** | **1.51** |
+| 10 | 0.50 | 1.00 | 1.12 | 1.11 | 1.15 | 1.26 | 1.20 | 1.25 |
+
+Two properties picked the bold row.
+
+**It pays at once and it keeps paying.** Every fuse past Lv10 moves the number. A flat cap pays
+nothing until the cap and then rises without limit, which is the same all-or-nothing shape this
+entry is written to remove — only moved to a different level.
+
+**It is bounded.** A flat cap of 10 reaches 2.11x at Lv40 and 2.88x at Lv100. That is a difficulty
+change wearing a grind reward's clothes. The yardstick is D230: eight free relics moved escalation
+from 1.09x to 1.18x and bought eight points of run completion. **1.5x on the whole deck is already
+larger than every relic in the game handed over at once**, so the ceiling on this knob belongs near
+1.5 and not near 3.
+
+#### The two options this was chosen over
+
+**A — keep the ratchet and stop selling fusion as the answer to a wall.** Correct for the shape the
+project is converting toward, and it refuses something the player asked for.
+
+**B — fixed enemy strength per dungeon.** Delivers the fantasy in full and deletes the apparatus the
+project is built on. Difficulty would become a function of hoarding, and the card game would stop
+deciding runs.
+
+C keeps the ratchet where it protects a new player, and puts a bounded, felt reward past it.
+
+#### Found on the way: the ceiling guard names its subject, so it is blind
+
+`tests/test_upgrade.gd` asserts that a maxed deck does not climb past `MAX_ACHIEVABLE_RATIO` (31.7).
+Its comment states the stake correctly — *"if a maxed deck quietly climbs past it the endgame stops
+resisting and nothing says so"*. Its subject is **ten copies of `hack`**. That reads 23.14 and passes.
+
+A legal deck of twenty maxed `cheap_shot` prices at **54.49**, against the deepest ceiling of 33.25.
+`deck_valid` checks only that a deck holds between 12 and 20 cards. There is no per-card copy limit
+anywhere in the tree.
+
+The cause is the divisor. `power_ratio` is power per energy, `cheap_shot` costs 0, and `deck_cost`
+floors at 1.0 — so twenty cards divide by one.
+
+Two readings, and the second is the one worth keeping:
+
+* **54.49 is an overcharge, not an exploit.** A high ratio scales the enemies UP, so that deck is
+  priced as the strongest in the game and plays as one of the weakest. It is D280's and D285's
+  archetype fault in its extreme form, and it points at the same repair: `power_ratio` charges
+  cheap decks for throughput they cannot use.
+* **The guard cannot see it because its subject is one hand-named card.** D89's art list, D180's
+  relic list and D250's rule-changer list, in a fourth costume. **A guard that names its subject
+  guards nothing new.** It has to sweep the catalogue and price the worst case it finds.
+
+Not fixed here, and deliberately so: it moves the same numbers D291 moves, and two changes to one
+divisor cannot be measured against each other.
+
+#### What is NOT built
+
+The code. This entry is the decision and the arithmetic, in that order, per D79.
+
+Before it ships:
+
+1. **Sweep both constants per cell** with `tools/sim_balance.gd`, never on the table mean. D175: a
+   mean cannot see the shape, and a knob that lands only on the strong deck is the wrong knob.
+2. **Sweep each to an absurd value first** (D209). If the report barely notices, the change is being
+   clamped away somewhere and a small move from it means nothing.
+3. **Write the guard as a discovery** — the free multiplier bounded across the whole catalogue, not
+   asserted for one deck. See the section above for what happens otherwise.
+4. **Hold the tree still while measuring.** D285 recorded two sessions reading 1% and 17% for the
+   same cell an hour apart, with the tree as the only difference.
+
+#### Where this sits beside D290
+
+D290 has just taken powers off gold and put them on the dungeons that hold them. That is this same
+argument from the other side: **the meta layer buys access and variety well, and buys numbers
+badly.** D291 does not reverse it. It says that a number the player did pay for has to be felt, and
+that today it is not.
