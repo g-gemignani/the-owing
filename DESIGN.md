@@ -242,6 +242,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D251** | [Two channels, and the page that says which is which](#d251--two-channels-and-the-page-that-says-which-is-which) |
 | **D252** | [The offer belonged to the screen, so it could be re-dealt by walking out](#d252--the-offer-belonged-to-the-screen-so-it-could-be-re-dealt-by-walking-out) |
 | **D253** | [The power choice gets its own screen, and the art list reopens](#d253--the-power-choice-gets-its-own-screen-and-the-art-list-reopens) |
+| **D254** | [The screen shipped with empty circles, and it took a photograph to find out](#d254--the-screen-shipped-with-empty-circles-and-it-took-a-photograph-to-find-out) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -17107,3 +17108,79 @@ capture happens the first time anyone runs it somewhere with a display.
 
 The scene is instantiated and audited by `playable_test.gd` on every run, so it builds, lays out and
 has its exits checked. That is not the same as looking at it.
+
+---
+
+### D254 — The screen shipped with empty circles, and it took a photograph to find out
+
+D253 shipped the Power Pick screen and said outright that it had not been photographed, because this
+machine had no display. It has one. Reported back: *"the circles do not show any image inside it"*,
+and *"I would like them centered in the center of the page"*.
+
+Both true, and the first one is the entry.
+
+#### Three faults, and every automated check passed on all of them
+
+**The sigils never drew.** The ring rendered, the art did not, and the letter fallback did not either
+— so the circles were empty. The texture was loading: a probe confirmed
+`PixelArt.power_art("bulwark")` returns a `CompressedTexture2D`. The cause was the layout. The orb
+was built as three siblings inside a plain `Control` — a `Panel` ring, a `TextureRect` sigil and a
+flat `Button`, each on FULL_RECT anchors — which is the shape `combat.gd` uses and which did not
+survive being moved into a `VBoxContainer` cell.
+
+Rebuilt as **one node**: a `Button` carrying the ring as its StyleBox and the sigil as its `icon`,
+with `expand_icon` to fill. A Button lays out its own background and its own icon, so there is no
+anchor arithmetic left to be wrong about. Hover brightens the rim, which the three-node version could
+not do at all.
+
+**The row sat on the floor of the screen.** `UI.spacer` is `SIZE_EXPAND_FILL`, so one of them does not
+centre anything — it pushes everything after it to the bottom. Centring takes one on each side.
+
+**The backdrop was the tiling pattern, not the dungeon.** `UI.scene_backdrop` was called first and
+then `UI.screen` painted its own backdrop over it, falling through to the tile because it was given
+no scene key. **A backdrop applied before the thing that also applies backdrops is a backdrop nobody
+sees** — and it looked exactly like a missing file. The dungeon id goes to `UI.screen` as its `scene`
+argument now.
+
+And one the capture found that nobody had asked about: over the Maw's plate the third column's
+*"Draw 1."* and *"free"* landed on the bright mouth of the cave and stopped being readable, while the
+same text over the first column was fine. That is D123's rule — **translucent text reads against the
+backdrop, not against the colour you chose** — so the caption sits on its own dark plate.
+
+#### The guards, and two that were worse than useless
+
+The suite instantiates every scene in `scenes/`, audits its exits, and had nothing to say about any of
+this. So a guard was written, and the first two attempts both looked like assertions and were not:
+
+1. **A scene check that every offered circle carries an icon.** Passed with the fallback deleted,
+   because a fresh save is offered Bulwark, Foresight and Scythe — and all three are painted. **A
+   guard over a random sample of three tests the sample.**
+2. **A catalogue check that every power resolves to *some* icon.** Vacuous: `Icons.tex` is procedural
+   and never returns null, so the condition could not fail. It read like a real assertion and
+   asserted nothing.
+
+Both were found by mutation, not by reading them. What can actually go wrong is the screen not ASKING
+for the fallback — which is exactly what the first version did, falling back to a drawn letter and
+throwing away the procedural glyph the rest of the game has used since D121. That is what is checked
+now, off the source, and removing the fallback fires it. The scene-level icon check is kept beside
+it: it is weak alone and it covers the integration the source check cannot.
+
+#### The lesson, which D89 already wrote
+
+*"Judge art in context, against the thing it actually replaces."* D89 said it about procedural enemy
+plates rejected off a contact sheet, and the correction there also came from a capture. This is the
+same failure with the roles reversed: not art rejected on bad evidence, but a layout **accepted** on
+no evidence, in a project whose suite is otherwise thorough enough to make that feel safe.
+
+D253's own entry said the screen was unverified and named the risk — *"a row of orbs is exactly the
+sort of layout that reads fine in code and wrong on screen"* — and shipped it anyway. Writing the risk
+down is not the same as not taking it.
+
+**The capture is now cheap and there is a display:**
+
+```bash
+DISPLAY=:0 LIBGL_ALWAYS_SOFTWARE=1 godot --rendering-driver opengl3 res://tools/Screenshots.tscn
+```
+
+Thirty-four screens, about a minute, into `~/.local/share/Deckcrawl/shots/`. There is no reason for a
+layout change to go unphotographed again.

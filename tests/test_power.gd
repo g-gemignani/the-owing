@@ -100,6 +100,29 @@ func _init() -> void:
 			fails += 1
 			print("FAIL the deck builder rolls its own power offer — re-opening it would re-deal (D252)")
 
+	# --- the Power Pick falls back to the procedural glyph (D254) ---
+	#
+	# The screen shipped with three empty circles. Two guards were tried before this one and both
+	# were weak, which is the part worth recording:
+	#
+	#   * A scene check that every offered circle carries an icon passed while the fallback was
+	#     deleted — a fresh save is offered Bulwark, Foresight and Scythe, and all three ARE painted.
+	#     **A guard over a random sample of three tests the sample.**
+	#   * A catalogue check that every power resolves to *some* icon was VACUOUS: `Icons.tex` is
+	#     procedural and never returns null, so the condition could not fail. It read like a real
+	#     assertion and asserted nothing.
+	#
+	# What can actually go wrong is the screen not ASKING for the fallback — which is exactly what
+	# the first version did, falling back to a drawn letter instead. So that is what is checked, off
+	# the source, the way `test_relic.gd` and D252's own wiring checks do.
+	var ppsrc := FileAccess.open("res://scripts/power_pick.gd", FileAccess.READ)
+	if ppsrc != null:
+		var pptxt := ppsrc.get_as_text()
+		ppsrc.close()
+		if pptxt.find("Icons.for_card") == -1:
+			fails += 1
+			print("FAIL the Power Pick has no procedural fallback — 20 of the 30 powers have no painting, so their circles would be empty (D254)")
+
 	# --- a power must raise the scaling ratio (else the ratchet leaks) ---
 	var deck := _starter()
 	var bare: float = Balance.power_ratio(deck)

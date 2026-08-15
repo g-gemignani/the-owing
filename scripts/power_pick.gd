@@ -23,17 +23,24 @@ const ORB := 168.0
 const ORB_INSET := 21.0
 
 func _ready() -> void:
-	# The dungeon's OWN backdrop. This screen is the threshold of a specific place, so the place is
-	# what belongs behind it — and it costs no new art, which matters because 20 of the 30 powers do
-	# not have a sigil yet (D253). `reliquary` is the fallback: a room where things are kept.
-	if not UI.scene_backdrop(self, GameState.dungeon_id):
-		UI.scene_backdrop(self, "reliquary")
-
+	# The dungeon's OWN backdrop, handed to `UI.screen` as its `scene` rather than painted first.
+	# Calling `scene_backdrop` before it did nothing visible: `UI.screen` paints a backdrop of its
+	# own, and with no scene key it falls through to the tiling pattern — which then covered the
+	# painting underneath it. **A backdrop applied before the thing that also applies backdrops is a
+	# backdrop nobody sees**, and it looked exactly like a missing file.
+	#
+	# `reliquary` is the fallback — a room where things are kept — for a dungeon whose plate is not
+	# painted, and `UI.screen` falls through to the tiling pattern if that is missing too.
 	var dd := GameState.dungeon_data()
-	var col := UI.screen(self, "What will you carry?",
-		"", "", false, "", false)
+	var scene_key := GameState.dungeon_id
+	if scene_key == "" or PixelArt.scene_art(scene_key) == null:
+		scene_key = "reliquary"
+	var col := UI.screen(self, "What will you carry?", "", scene_key)
 	UI.label(col, "One ability, fired once a turn, every turn. It is yours for %s and no longer." % [
 		dd.name if dd != null else "this run"])
+	# A spacer on BOTH sides of the row, which is what centres it. `UI.spacer` is
+	# SIZE_EXPAND_FILL, so one of them does not centre anything — it pushes everything after it to
+	# the bottom, which is exactly where the first version of this screen put the circles.
 	UI.spacer(col)
 
 	var offer: Array = GameState.power_offer
@@ -57,82 +64,92 @@ func _ready() -> void:
 		p = p.duplicate()
 		p.level = int(MetaState.powers.get(String(pid), 1))
 		row.add_child(_orb(String(pid), p))
+	UI.spacer(col)
 
 func _orb(pid: String, p: PowerData) -> Control:
 	var cell := VBoxContainer.new()
 	cell.add_theme_constant_override("separation", UITheme.sep(6))
 	cell.custom_minimum_size.x = UITheme.px(230)
 
-	var holder := Control.new()
-	var d := UITheme.px(ORB)
-	holder.custom_minimum_size = Vector2(d, d)
-	holder.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	cell.add_child(holder)
-
-	# The ring, copied in shape from the fight's orb so the two read as the same object.
-	var ring := Panel.new()
-	var rsb := StyleBoxFlat.new()
-	rsb.bg_color = Color(0.10, 0.09, 0.14, 0.88)
-	rsb.border_color = Color(0.86, 0.72, 0.38, 0.85)
-	rsb.set_border_width_all(3)
-	rsb.corner_radius_top_left = 999
-	rsb.corner_radius_top_right = 999
-	rsb.corner_radius_bottom_left = 999
-	rsb.corner_radius_bottom_right = 999
-	ring.add_theme_stylebox_override("panel", rsb)
-	ring.set_anchors_preset(Control.PRESET_FULL_RECT)
-	ring.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	holder.add_child(ring)
-
-	var sigil := PixelArt.power_art(pid)
-	if sigil != null:
-		var art := TextureRect.new()
-		art.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		var inset := UITheme.px(ORB_INSET)
-		art.offset_left = inset
-		art.offset_top = inset
-		art.offset_right = -inset
-		art.offset_bottom = -inset
-		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(art)
-	else:
-		# Twenty of the thirty powers have no sigil yet (D250 added them, the art did not follow), and
-		# an empty ring is a rendering fault to look at. The initial is a placeholder that reads as
-		# deliberate — and it is DERIVED from the name, so a sigil arriving later needs no edit here.
-		var letter := Label.new()
-		letter.set_anchors_preset(Control.PRESET_FULL_RECT)
-		letter.text = p.name.substr(0, 1).to_upper()
-		letter.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		letter.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		letter.add_theme_font_size_override("font_size", int(UITheme.px(ORB) * 0.42))
-		letter.add_theme_color_override("font_color", Color(0.86, 0.72, 0.38, 0.9))
-		letter.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		holder.add_child(letter)
-
-	# The whole circle is the button, flat and over the art, so the target is the thing being looked
-	# at rather than a bar underneath it (D205b).
+	# ONE node, not a stack of anchored ones. The first version built the ring, the sigil and the
+	# button as three siblings inside a plain `Control` with FULL_RECT anchors — the shape
+	# `combat.gd` uses — and the ring drew while the sigil did not, on a screen where the texture
+	# was provably loading. A Button carries its own StyleBox and its own icon and lays both out
+	# itself, so there is no anchor arithmetic left to be wrong about.
+	#
+	# `expand_icon` is what makes it fill: without it a 128px sigil sits at 128px in the middle of a
+	# 168px circle regardless of the button's size.
 	var btn := Button.new()
-	btn.flat = true
-	btn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var d := UITheme.px(ORB)
+	btn.custom_minimum_size = Vector2(d, d)
+	btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	btn.expand_icon = true
+	btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_CENTER
+	# The painted sigil when one is installed, the procedural glyph when it is not — the same
+	# fallback `powers_screen.gd` and the relics screen run on (D121, D122). Twenty of the thirty
+	# powers have no painting yet (D250), and the first version of this screen fell back to a drawn
+	# LETTER instead, which threw away a working icon the rest of the game already draws.
+	var painted := PixelArt.power_art(pid)
+	btn.icon = painted if painted != null else Icons.tex(Icons.for_card(p))
+	for state in ["normal", "hover", "pressed", "focus"]:
+		btn.add_theme_stylebox_override(state, _ring(state == "hover" or state == "pressed"))
 	btn.pressed.connect(_confirm.bind(pid))
 	UI.hoverable(btn, "%s\n%s\nCosts %s, once per turn.%s" % [
 		p.name, p.effect_text(),
 		"nothing" if p.eff_cost() == 0 else "%d Energy" % p.eff_cost(),
 		"" if MetaState.powers.has(pid) else "\nYou have never carried this one."])
-	holder.add_child(btn)
+	cell.add_child(btn)
 
-	var name_lbl := UI.label(cell, "%s  Lv%d" % [p.name, p.level])
+	# The caption sits on a PLATE, not straight on the painting. D123's rule, and the capture is what
+	# found it: over the Maw's plate the third column's "Draw 1." and "free" landed on the bright
+	# mouth of the cave and stopped being readable, while the same text over the first column was
+	# fine. **Translucent text reads against the backdrop, not against the colour you chose** — so
+	# the fix is ink on its own ground rather than a lighter font.
+	var plate := PanelContainer.new()
+	var psb := StyleBoxFlat.new()
+	psb.bg_color = Color(0.06, 0.05, 0.09, 0.78)
+	psb.set_corner_radius_all(int(UITheme.px(8)))
+	psb.content_margin_left = UITheme.px(10)
+	psb.content_margin_right = UITheme.px(10)
+	psb.content_margin_top = UITheme.px(6)
+	psb.content_margin_bottom = UITheme.px(6)
+	plate.add_theme_stylebox_override("panel", psb)
+	cell.add_child(plate)
+	var text := VBoxContainer.new()
+	text.add_theme_constant_override("separation", UITheme.sep(4))
+	plate.add_child(text)
+
+	var name_lbl := UI.label(text, "%s  Lv%d" % [p.name, p.level])
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	var eff := UI.label(cell, p.effect_text())
+	var eff := UI.label(text, p.effect_text())
 	eff.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	eff.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	eff.add_theme_color_override("font_color", Color(0.85, 0.80, 0.62))
-	var cost := UI.label(cell, "free" if p.eff_cost() == 0 else "%d Energy" % p.eff_cost())
+	eff.add_theme_color_override("font_color", Color(0.92, 0.87, 0.68))
+	var cost := UI.label(text, "free" if p.eff_cost() == 0 else "%d Energy" % p.eff_cost())
 	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cost.add_theme_color_override("font_color", Color(0.70, 0.68, 0.60))
+	cost.add_theme_color_override("font_color", Color(0.80, 0.78, 0.70))
 	return cell
+
+## The circle itself: a 999-radius StyleBox, the same shape the fight puts in the corner of the
+## screen. Brighter on hover, because the whole circle is the target and it has to say so.
+func _ring(lit: bool) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.14, 0.12, 0.19, 0.92) if lit else Color(0.10, 0.09, 0.14, 0.88)
+	sb.border_color = Color(1.0, 0.86, 0.50, 1.0) if lit else Color(0.86, 0.72, 0.38, 0.85)
+	sb.set_border_width_all(4 if lit else 3)
+	sb.corner_radius_top_left = 999
+	sb.corner_radius_top_right = 999
+	sb.corner_radius_bottom_left = 999
+	sb.corner_radius_bottom_right = 999
+	# Keeps the sigil off the rim: `expand_icon` fills the whole content box, and a 999-radius
+	# corner bites the four corners of anything taken to its edge.
+	var pad := int(UITheme.px(ORB_INSET))
+	sb.content_margin_left = pad
+	sb.content_margin_right = pad
+	sb.content_margin_top = pad
+	sb.content_margin_bottom = pad
+	return sb
 
 ## Take one and go down.
 ##

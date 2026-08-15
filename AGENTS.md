@@ -465,6 +465,14 @@ effects are drawn at runtime by `scripts/fx.gd`.
   standing on top of the light (D192). There is one list and one decision now, so a new tall
   thing joins by being tall rather than by somebody remembering a parallel array.
 
+- **Photograph a layout change before believing it (D254).** The Power Pick screen shipped with
+  three EMPTY circles: the ring drew, the sigil did not, the row sat on the floor of the screen and
+  the backdrop was the tiling pattern because `UI.scene_backdrop` ran before `UI.screen` painted
+  over it. Every automated check passed on all four faults — the suite instantiates every scene and
+  audits its exits, which is enough to make shipping a layout feel safe. One capture found all of
+  them plus a contrast fault nobody had asked about. It costs a minute:
+  `DISPLAY=:0 LIBGL_ALWAYS_SOFTWARE=1 godot --rendering-driver opengl3 res://tools/Screenshots.tscn`.
+
 - **Judge art in context, against the thing it actually replaces.** Procedural enemy
   plates were rejected off a contact sheet at 4x, in isolation, against an imagined
   alternative — then a capture of the combat screen showed the incumbent was a 16x16

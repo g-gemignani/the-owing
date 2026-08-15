@@ -52,6 +52,7 @@ func _ready() -> void:
 	await _the_fight_reacts()
 	await _a_key_is_taken_off_the_floor()
 	await _every_offer_is_pressable()
+	await _the_power_pick_shows_its_sigils()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -676,6 +677,38 @@ func _buff_is_stated(inst: Node, word: String, n: int) -> bool:
 					and String((inner as Label).text).strip_edges() == str(n):
 				return true
 	return false
+
+## The three circles must have something IN them (D254).
+##
+## They shipped empty. The texture loaded — a probe proved it — and the ring drew, and the sigil did
+## not, because the art was a FULL_RECT-anchored sibling inside a plain `Control` and only a capture
+## could show that nothing arrived. Every automated check passed on a screen that rendered three
+## empty rings.
+##
+## So the assertion is the one thing a capture told us to ask: does each choice carry an icon? It is
+## cheap because the fallback is the same procedural glyph `powers_screen.gd` uses, so this holds for
+## all thirty powers and not only the ten that are painted.
+func _the_power_pick_shows_its_sigils() -> void:
+	_start_a_run("crypt")
+	GameState.select_dungeon("crypt")
+	var inst = (load("res://scenes/PowerPick.tscn") as PackedScene).instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	var offered: int = GameState.power_offer.size()
+	var with_icon := 0
+	for c in _controls(inst):
+		var b := c as Button
+		if b != null and b.icon != null:
+			with_icon += 1
+	if offered == 0:
+		_fails += 1; print("FAIL the Power Pick screen was offered nothing to show")
+	elif with_icon < offered:
+		_fails += 1
+		print("FAIL the Power Pick shows %d icons for %d powers — a circle with nothing in it reads as a rendering fault" % [
+			with_icon, offered])
+	inst.queue_free()
+	await get_tree().process_frame
 
 func _controls(n: Node) -> Array[Control]:
 	var out: Array[Control] = []
