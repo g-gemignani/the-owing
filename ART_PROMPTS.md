@@ -8,9 +8,9 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**4 files can be generated.** The rest of the list cannot, and the sections below
-say which and why — the expensive mistake is not a bad painting, it is a good
-painting of a thing that had to be computed.
+**Nothing is outstanding.** Every file the game looks for is present, so there is
+nothing here to ask a generator for. The sections below are kept for the next
+thing added to a catalogue, which will appear in them the moment it is.
 
 ## Where the images come from
 
@@ -36,7 +36,7 @@ it on re-rolls, and pick the rest up after the reset.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 4 times.
+   improve it between images. Its job is to be identical 0 times.
 4. **The block makes an image agree with the REFERENCE, not with the image it
    will be shown on top of.** For almost everything that is the same thing,
    because they are seen one at a time. `ui/logo.png` is the exception — a plate
@@ -157,17 +157,5 @@ Nothing to generate here — all 16 present.
 
 ## Tier 8e — the four landmark caps
 
-One object standing on the flat top of a stone block, seen from the ISOMETRIC CAMERA THIS GAME ACTUALLY USES rather than head-on: the block's top face is 116x58, exactly 2:1, so the camera looks DOWN on it from about 27 degrees. Painted dark-fantasy storybook, 2-3px dark ink outline all round, real material, heavy and built rather than drawn. IT IS MASS IN THE SAME STONE AS THE WALL IT STANDS IN: cold grey, desaturated, no colour of its own, nothing near white, and no light of its own — the game multiplies it by the block's own light and a subject that carries its own glow arrives twice-lit. Read by SILHOUETTE from the far side of a dark room: two or three big shapes, no fine detail. On nothing, on a flat even field for the matte - no ground, no floor, no shadow, no plinth, no scenery. It stands about one tile wide and up to one and a half tiles tall.
-
-**Generate this tier as ONE image, not 4.** One row of four, in the order of the table below. Spaced well apart with clear field between them, none touching or overlapping and nothing touching a cell edge. Flat even background of a single colour that appears nowhere in any subject. Install: `godot --headless --script tools/install_sheet.gd -- iso_landmarks <sheet.png> --key --cols=4`
-Cells in the order of the table below, left to right then top to bottom.
-
-**4 to generate.** Style block above, then one of these as the last line:
-
-| save as | size | subject |
-|---|---|---|
-| `iso/landmark_shaft.png` | 192x288 | **Shaft** — a shaft with daylight a long way up it. Drawn in code today as three nested diamonds brightening upward, under a pale column of light. |
-| `iso/landmark_dome.png` | 192x288 | **Dome** — a dome that came down. Drawn in code today as three nested filled arcs, a low mound. |
-| `iso/landmark_stair.png` | 192x288 | **Stair** — a stair going nowhere. Drawn in code today as four diamonds stepping up and stopping. |
-| `iso/landmark_stack.png` | 192x288 | **Stack** — bone stacked to the roof. Drawn in code today as a column of six small diamonds. |
+Nothing to generate here — all 4 present.
 

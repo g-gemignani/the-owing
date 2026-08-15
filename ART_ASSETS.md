@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**434 files wanted · 430 already present · 4 to provide.**
+**434 files wanted · 434 already present · 0 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -566,28 +566,4 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `iso/prop_cracked_flags.png` | 192x192 | **Cracked Flags**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two or three hairlines. |
 | x | `iso/prop_fallen_slab.png` | 192x192 | **A Fallen Slab**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as one flat diamond with a lit edge. |
 | x | `iso/prop_stacked_bone.png` | 192x192 | **Stacked Bone**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
-| x | `iso/prop_iron_ring.png` | 192x192 | **An Iron Ring**, dressing a `stone` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as an arc and a short stem. |
-| x | `iso/prop_spoil.png` | 192x192 | **Spoil**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
-| x | `iso/prop_scree.png` | 192x192 | **Scree**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as a handful of small marks. |
-| x | `iso/prop_dropped_beam.png` | 192x192 | **A Dropped Beam**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as one flat diamond with a lit edge. |
-| x | `iso/prop_roots.png` | 192x192 | **Roots**, dressing a `earth` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as three soft circles. |
-| x | `iso/prop_growth_patch.png` | 192x192 | **A Growth Patch**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three soft circles. |
-| x | `iso/prop_fungal_clusters.png` | 192x192 | **Fungal Clusters**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
-| x | `iso/prop_wet_flags.png` | 192x192 | **Wet Flags**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two or three hairlines. |
-| x | `iso/prop_hanging_matter.png` | 192x192 | **Hanging Matter**, dressing a `moss` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as three soft circles. |
-| x | `iso/prop_silt_drift.png` | 192x192 | **A Silt Drift**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two pale wedges. |
-| x | `iso/prop_dry_weed.png` | 192x192 | **Dry Weed**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three soft circles. |
-| x | `iso/prop_tidewrack.png` | 192x192 | **Tidewrack**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as a handful of small marks. |
-| x | `iso/prop_crusted_ring.png` | 192x192 | **A Crusted Ring**, dressing a `sand` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as an arc and a short stem. |
-
-## Tier 8e — the four landmark caps
-
-*4 files, 4 still to provide.* The one thing on a floor a player navigates by: a block standing twice the height of the wall around it, with a mark on its top that says which of the four it is. All four are drawn in code today — nested diamonds, arcs and stacked polygons.
-
-| ? | file | size | what it is |
-|---|---|---|---|
-|   | `iso/landmark_shaft.png` | 192x288 | **Shaft** — a shaft with daylight a long way up it. Drawn in code today as three nested diamonds brightening upward, under a pale column of light. |
-|   | `iso/landmark_dome.png` | 192x288 | **Dome** — a dome that came down. Drawn in code today as three nested filled arcs, a low mound. |
-|   | `iso/landmark_stair.png` | 192x288 | **Stair** — a stair going nowhere. Drawn in code today as four diamonds stepping up and stopping. |
-|   | `iso/landmark_stack.png` | 192x288 | **Stack** — bone stacked to the roof. Drawn in code today as a column of six small diamonds. |
-
+| x | `iso/prop_iron_ring.png` | 192x192 | **An Iron Ring**, dressing a `stone` floor. It hangs on a vertical wall face, so it is seen HEAD-
