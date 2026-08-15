@@ -271,6 +271,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D285** | [Death becomes a debt, block cannot be re-priced, and D280's table was misread](#d285--death-becomes-a-debt-block-cannot-be-re-priced-and-d280s-table-was-misread) |
 | **D286** | [The dressing is painted, and the list reads zero for the first time](#d286--the-dressing-is-painted-and-the-list-reads-zero-for-the-first-time) |
 | **D287** | [A commit carried the caller and left the callee behind, and only CI could see it](#d287--a-commit-carried-the-caller-and-left-the-callee-behind-and-only-ci-could-see-it) |
+| **D288** | [Every size on the floor was a canvas height, and only the hero filled her canvas](#d288--every-size-on-the-floor-was-a-canvas-height-and-only-the-hero-filled-her-canvas) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -19639,3 +19640,76 @@ the cheap fix.** The split was reasoned about at the time, and the entanglement 
 `DESIGN.md`, `art_manifest.gd` and the two documents generated from it was even called
 out — the miss was one symbol, one level deeper than the file list. Two sessions editing
 one checkout should hand off through a commit, not through the tree.
+
+---
+
+### D288 — Every size on the floor was a canvas height, and only the hero filled her canvas
+
+Asked: *"The size of the iron ring is too big. Check also the others. Also the camp fire is
+too big. Fix them all compared to the hero."*
+
+Both were right, and checking the others found the reason they were right, which is worth
+more than either fix.
+
+#### `SPRITE_H` is a table of CANVAS heights and it reads like a table of subject heights
+
+Every sprite file is 128x192 and bottom-anchored. `IsoFooting.rect` scales the WHOLE FILE
+to `SPRITE_H x TILE_H`, so a subject wider than that 2:3 aspect hits the width limit first
+and leaves its headroom empty. What the player sees is the number in the table times the
+file's own fill, and nothing in the source says so.
+
+Measured on the installed art, against the hero's 126px of subject:
+
+| role | fill | x hero | |
+|---|---|---|---|
+| hero | 98% | **1.00** | |
+| combat | 98% | 1.00 | |
+| elite | **55%** | 0.62 | its number is the LARGEST in the table |
+| boss | 82% | 0.93 | |
+| shop | 81% | 0.81 | |
+| event | 98% | 0.98 | |
+| treasure | 59% | 0.56 | |
+| rest | 84% | **0.83** | a campfire she could warm her hands on the top of |
+| wander | 98% | 0.89 | the note above it says she is taller than a spider |
+
+`elite` at 2.45 is the biggest number in the table and drew the second-smallest subject.
+**Two entries one notch apart can land 40% apart on screen.**
+
+The three fight markers are left alone, and the reason is the same measurement read
+properly: a wide marker is read by AREA, not by height, and by area they escalate — combat
+5670, elite 7176, boss 11934 px. The table is not lying about them; it is lying about how
+to compare them.
+
+Changed: **`rest` 2.15 -> 1.15** (0.83x the hero -> 0.45x, a knee-high fire) and
+**`wander` 1.95 -> 1.70** (0.89x -> 0.77x, which is what "taller than a spider" means).
+
+#### One constant was two things, and the ring paid for it
+
+`PROP_WALL` sized every painting that hangs on a wall face. D286 brought it from 0.52 to
+0.30 by looking at a capture; both numbers were chosen to suit the drapes, and at 0.30 an
+iron ring is 34px across against a 126px hero — **a door-ring a quarter of a person tall.**
+
+It is now two constants picked by the prop's own `shape`, which already says which kind of
+thing hangs there: `PROP_WALL_RING` 0.16 for a fixture and `PROP_WALL_DRAPE` 0.34 for
+matter falling down the face. The ring lands at 18.3px, which is within a pixel of the
+computed arc it replaced — the placeholder had this right and two painted revisions did
+not.
+
+#### `tools/iso_scale.gd`, and why it parses the source instead of restating it
+
+The report above is the tool. It converts both families to one unit — a multiple of the
+hero — so a ring and a campfire and a boss can be argued about in one sentence, which
+neither `SPRITE_H` (canvas heights) nor `PROP_TILE` (tile widths) allows on its own.
+
+`iso_run.gd` references autoloads and cannot be loaded in a `--script` run, so the obvious
+implementation copies `SPRITE_H` into the tool. That copy is a restated constant and this
+project has been bitten by three. It parses the table out of the source text instead: a
+value changed in `iso_run.gd` changes the report, and a table that moves fails the tool
+loudly rather than being measured against a stale twin.
+
+**The general finding, which will happen again on the next tier:** a size constant chosen
+against a computed placeholder is a guess about art that does not exist yet. Nothing was
+wrong with `PROP_WALL` 0.52 while every prop was an arc and two lines. It was wrong the
+moment the first painting loaded, and no test could have said so — the file was present,
+the matte passed, the bounding box filled. Only a measurement against something with a
+known height can.
