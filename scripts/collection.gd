@@ -70,11 +70,6 @@ const W_DECK_PICK := 260.0
 var mode: int = Mode.MANAGE
 var selection: Dictionary = {}   # id -> copies chosen for the deck
 
-## The three powers this visit is offering, and which one is taken (D245). Rolled once and held, so
-## a filter toggle cannot re-deal the hand — a re-rollable offer of three is a choice of all of them.
-var run_power_offer: Array = []
-var chosen_power: String = ""
-
 ## Which saved deck `selection` was last loaded from, "" if none. It is what rename
 ## and delete ACT ON (D212): both need a target, and the alternative — a control on
 ## every chip in the Load bar — puts a destructive button one misclick from the load
@@ -822,22 +817,32 @@ func _write_info(shown: Array) -> void:
 ## so each run has a different lens — that is run DIVERGENCE and not escalation, because a power held
 ## from the first fight raises the first fight and the last one equally.
 ##
-## The offer is rolled ONCE per visit to this screen and kept in `run_power_offer`, not re-rolled on
-## every `_refresh()`. Re-rolling would let a player reject the deal by toggling a filter, which turns
-## a choice of three into a choice of all of them with extra clicks.
+## The offer belongs to the RUN and is rolled by `GameState.select_dungeon` (D252). This screen only
+## displays it. It was rolled here at first, and this screen is reachable from the overworld, the
+## pause menu AND the crawl — so backing out and coming back dealt three new powers, and a choice of
+## three you can re-draw is a choice of all of them with extra steps.
+##
+## Mid-run it shows what the run is CARRYING instead. The offer is spent by then, and showing three
+## live buttons on a screen whose Start button is not the way back into the dungeon is an invitation
+## to press something that does nothing.
 func _refresh_powers() -> void:
 	for c in power_box.get_children():
 		c.queue_free()
-	if run_power_offer.is_empty():
-		run_power_offer = MetaState.power_offer(3)
-		if not run_power_offer.is_empty() and chosen_power == "":
-			chosen_power = String(run_power_offer[0])
-	if run_power_offer.is_empty():
+	if GameState.in_run():
+		var held := GameState.run_power
+		var carried := UI.label(power_box,
+			"carrying %s Lv%d" % [held.name, held.level] if held != null else "carrying nothing")
+		if held != null:
+			UI.hoverable(carried, "%s\n%s\nCost %s, once per turn. Chosen when you came down here." % [
+				held.name, held.effect_text(),
+				"free" if held.eff_cost() == 0 else "%dE" % held.eff_cost()])
+		return
+	if GameState.power_offer.is_empty():
 		var none := Label.new()
 		none.text = "no power is open to you yet"
 		power_box.add_child(none)
 		return
-	for pid in run_power_offer:
+	for pid in GameState.power_offer:
 		var pd := Balance.power(String(pid))
 		if pd == null:
 			continue
@@ -847,7 +852,7 @@ func _refresh_powers() -> void:
 		pd.level = int(MetaState.powers.get(String(pid), 1))
 		var pb := Button.new()
 		UITheme.style_button(pb)
-		var on: bool = String(pid) == chosen_power
+		var on: bool = String(pid) == GameState.chosen_power
 		var owned: bool = MetaState.powers.has(String(pid))
 		# No "(new)" suffix on the FACE. It widened this button enough to push the deck panel past its
 		# width budget, which `CardGridTest` measures at 180px for the row — a label that costs a
@@ -859,7 +864,7 @@ func _refresh_powers() -> void:
 			pd.name, pd.effect_text(), "free" if pd.eff_cost() == 0 else "%dE" % pd.eff_cost(),
 			"" if owned else "\nYou have never carried this one. It comes at level 1 — gold levels it for next time."])
 		pb.pressed.connect(func():
-			chosen_power = String(pid)
+			GameState.chosen_power = String(pid)
 			_refresh())
 		power_box.add_child(pb)
 
@@ -1233,6 +1238,6 @@ func _on_start() -> void:
 			msg_label.text = "cannot take that debt now — go back and check the terms"
 			return
 	Audio.play("enter")
-	GameState.enter_dungeon(MetaState.build_deck(selection), chosen_power)
+	GameState.enter_dungeon(MetaState.build_deck(selection), GameState.chosen_power)
 	GameState.autosave()   # the run exists from here on and can be resumed
 	get_tree().change_scene_to_file(GameState.run_scene())

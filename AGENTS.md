@@ -341,7 +341,8 @@ effects are drawn at runtime by `scripts/fx.gd`.
 
 - **Every turn should have a floor and a ceiling.** Powers (once per turn) put a floor
   under a bad draw without raising the ceiling on a good one (D37). **The power is DEALT at the
-  start of a run now — three offered, one taken (D245)** — so each run has a different centre
+  start of a run now — three offered, one taken (D245), rolled by `GameState.select_dungeon` and
+  carried in the run (D252)** — so each run has a different centre
   instead of the best owned power every time. It buys variance and cannot buy escalation: a power
   held from the first fight raises the first and the last equally, which is the third time that
   fact has decided something here (D233, D237, D245). **Thirty powers now (D250)** — twenty authored, varied in

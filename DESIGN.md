@@ -240,6 +240,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D249** | [The smallest legal deck is the deck you are handed](#d249--the-smallest-legal-deck-is-the-deck-you-are-handed) |
 | **D250** | [Thirty powers, and a derived guard that had gone blind](#d250--thirty-powers-and-a-derived-guard-that-had-gone-blind) |
 | **D251** | [Two channels, and the page that says which is which](#d251--two-channels-and-the-page-that-says-which-is-which) |
+| **D252** | [The offer belonged to the screen, so it could be re-dealt by walking out](#d252--the-offer-belonged-to-the-screen-so-it-could-be-re-dealt-by-walking-out) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16970,3 +16971,61 @@ this tree gets several a day.
 Pages must be switched on once for the repository, with its source set to **GitHub Actions**. That is
 a repository setting and cannot be made from a workflow file. Until it is, the `pages` job fails on
 `configure-pages` and nothing else in the pipeline is affected.
+
+---
+
+### D252 — The offer belonged to the screen, so it could be re-dealt by walking out
+
+Asked directly: *"didn't we want the player to choose out of three powers at the beginning of every
+dungeon?"* We did, and D245 built it on the wrong object. Two bugs, both from the same mistake.
+
+#### The offer was rolled by the deck-builder SCREEN
+
+`Collection.tscn` is opened from three places: the overworld, the pause menu, and a button inside the
+crawl. `_refresh_powers()` rolled a fresh `MetaState.power_offer(3)` whenever it found the field
+empty, and the field was an instance variable on a screen that is created new every time it opens.
+
+So a player who disliked the three could **back out to the overworld and come back for another
+three.** An offer you can re-draw is a choice of all of them with extra steps.
+
+What makes this worth an entry rather than a fix is that **the comment beside that roll warned about
+exactly this failure and then guarded the narrower half of it.** It said a re-rollable offer of three
+is a choice of all of them, and it stopped `_refresh()` from re-dealing *within* one visit — the
+filter-toggle case — while leaving the door open across visits. Naming a hazard is not the same as
+closing it, and the half that got closed was the half that was easy to see from inside the function.
+
+#### And mid-run it showed an offer that meant nothing
+
+The same screen is reachable from inside a dungeon, where the run already has its power. D245's
+change had replaced the old display — *which power are you carrying* — with three live buttons whose
+Start button is not the way back into the crawl. A regression introduced by the feature, on the one
+screen the player opens mid-run to check what they are holding.
+
+#### The fix is one sentence: an offer is a decision, and a decision belongs to the thing it decides
+
+`GameState.power_offer` and `GameState.chosen_power`, rolled by `select_dungeon()` — the moment a
+dungeon is picked. The screen only displays them. Re-picking a dungeon deals a new hand, which is
+correct: that is choosing a different run, not rejecting this one's terms. Both are written into the
+run's save, so a resumed run remembers what it was dealt.
+
+Mid-run the panel reads `carrying Bulwark Lv3` instead, with the effect on the tooltip.
+
+#### The suite could not see either bug, and the check had to be split
+
+Neither half was visible to `tests/test_power.gd`, so it now asserts both. It could not assert them
+the same way, and the reason is worth writing down: **`select_dungeon` reaches MetaState through
+`get_node_or_null("/root/MetaState")`, and a `--script` run has no autoloads.** Building the two
+nodes by hand needs `call_deferred` and a frame — `add_child` from `_init()` fails silently, which is
+how this was found — and this suite's `_init` cannot await one.
+
+So the check is split by what each half can reach:
+
+* **Behaviour**, on `MetaState.power_offer` directly: three distinct ids, every one of them past the
+  depth gate the save has actually opened.
+* **Wiring**, read off the source, the way `test_relic.gd` and `test_death.gd` already do:
+  `select_dungeon` must roll it, `collection.gd` must **not**, and both `run_to_dict` and
+  `run_from_dict` must carry it.
+
+Mutation-checked, because a source-inspection assertion is the easiest kind to write vacuously.
+Putting the roll back into the screen fires *"the deck builder rolls its own power offer"*; taking it
+out of `select_dungeon` fires *"select_dungeon does not roll the power offer"*.

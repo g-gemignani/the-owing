@@ -39,6 +39,67 @@ func _init() -> void:
 		if p.level_capped() < 2:
 			fails += 1; print("FAIL power %s cannot be levelled" % id)
 
+	# --- the offer is one per DUNGEON, and re-opening the deck builder cannot re-deal it (D252) ---
+	#
+	# Neither half of the D252 bug was visible to this suite, and both were real: the offer was rolled
+	# by the deck-builder SCREEN, which is reachable from the overworld, the pause menu and the crawl,
+	# so walking out and back in dealt three new powers. An offer you can re-draw is a choice of all
+	# of them with extra steps.
+	#
+	# Split deliberately between BEHAVIOUR and WIRING. `power_offer` is asserted for real; where it is
+	# rolled from cannot be, because `select_dungeon` reaches meta through
+	# `get_node_or_null("/root/MetaState")` and a `--script` run has no autoloads — building the two
+	# nodes needs `call_deferred` and a frame, which this suite's `_init` cannot await. So the wiring
+	# is read off the source, the way `test_relic.gd` and `test_death.gd` already do.
+	var m4 = Meta_.new()
+	m4.path_prefix = SANDBOX
+	m4.slot = 6
+	m4.new_save()
+	var offer: Array = m4.power_offer(3)
+	var open_ids: Array = []
+	for pid2 in Balance.POWERS:
+		if m4.power_available(String(pid2)):
+			open_ids.append(String(pid2))
+	if offer.size() != mini(3, open_ids.size()):
+		fails += 1
+		print("FAIL a fresh save offered %d powers of %d open" % [offer.size(), open_ids.size()])
+	var dupes := {}
+	for pid3 in offer:
+		if dupes.has(pid3):
+			fails += 1; print("FAIL the offer repeated %s" % pid3)
+		dupes[pid3] = true
+		if not (String(pid3) in open_ids):
+			fails += 1; print("FAIL offered %s, which this save's depth has not opened" % pid3)
+
+	# WIRING: rolled by the run, displayed by the screen, never the other way round — and carried
+	# through the save, so a resumed run remembers what it was dealt. All four are read off the
+	# source, because none is reachable from a bare instance: `select_dungeon` needs the autoload
+	# lookup and `run_to_dict` returns {} without a traversal.
+	var gsrc := FileAccess.open("res://scripts/game_state.gd", FileAccess.READ)
+	if gsrc != null:
+		var gtxt := gsrc.get_as_text()
+		gsrc.close()
+		var sel := gtxt.find("func select_dungeon")
+		var nxt := gtxt.find("\nfunc ", sel + 10)
+		var body := gtxt.substr(sel, maxi(0, nxt - sel))
+		if body.find("power_offer") == -1:
+			fails += 1
+			print("FAIL select_dungeon does not roll the power offer — one offer per dungeon (D252)")
+		for half in [["run_to_dict", "written into"], ["run_from_dict", "read back out of"]]:
+			var at := gtxt.find("func %s" % String(half[0]))
+			var to := gtxt.find("\nfunc ", at + 10)
+			if at >= 0 and gtxt.substr(at, maxi(0, to - at)).find("power_offer") == -1:
+				fails += 1
+				print("FAIL the power offer is never %s the run — a resumed run forgets its terms" % [
+					String(half[1])])
+	var csrc := FileAccess.open("res://scripts/collection.gd", FileAccess.READ)
+	if csrc != null:
+		var ctxt := csrc.get_as_text()
+		csrc.close()
+		if ctxt.find("MetaState.power_offer(") != -1:
+			fails += 1
+			print("FAIL the deck builder rolls its own power offer — re-opening it would re-deal (D252)")
+
 	# --- a power must raise the scaling ratio (else the ratchet leaks) ---
 	var deck := _starter()
 	var bare: float = Balance.power_ratio(deck)

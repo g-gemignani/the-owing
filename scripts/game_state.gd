@@ -376,6 +376,7 @@ func run_to_dict() -> Dictionary:
 		"traversal": traversal.save_state(),
 		"escrow_cards": escrow_cards, "escrow_gold": escrow_gold,
 		"run_relics": run_relics, "escrow_packs": escrow_packs,
+		"power_offer": power_offer, "chosen_power": chosen_power,
 		"keys": keys,
 		"shop_stock": shop_stock,
 		"combat": combat_state,
@@ -421,6 +422,11 @@ func run_from_dict(d: Dictionary) -> bool:
 			escrow_cards.append(id)
 	escrow_gold = maxi(0, int(d.get("escrow_gold", 0)))
 	# a relic renamed or removed since the save is simply dropped, like a card
+	power_offer = []
+	for opid in d.get("power_offer", []):
+		if String(opid) in Balance.POWERS:
+			power_offer.append(String(opid))
+	chosen_power = String(d.get("chosen_power", ""))
 	run_relics = []
 	for rid in d.get("run_relics", []):
 		if meta.RELIC_CATALOG.has(rid):
@@ -557,10 +563,28 @@ func reset_run_progress() -> void:
 	combat_state = {}
 
 ## Choose which named dungeon to attempt (D6). Sets difficulty from its data.
+## The three powers this run is offered, and the one taken (D252).
+##
+## On the RUN and not on the deck-builder screen, which is where D245 first put them. That screen is
+## reachable from the overworld, from the pause menu and from inside the crawl, and it rolled a fresh
+## offer every time it opened — so a player who disliked the three could walk out and walk back in
+## for another three. **The comment beside that roll warned about exactly this and then guarded only
+## the re-draws WITHIN one visit** (`_refresh()`), which is the narrower half of the problem.
+##
+## An offer is a decision, and a decision belongs to the thing it decides.
+var power_offer: Array = []
+var chosen_power: String = ""
+
 func select_dungeon(id: String) -> void:
 	dungeon_id = id
 	var d := Balance.dungeon(id)
 	dungeon = d.difficulty if d != null else 1
+	# Rolled HERE, at the moment a dungeon is picked, so it is one offer per dungeon and re-entering
+	# the deck builder shows the same three. Re-picking the dungeon deals a new hand, which is
+	# correct: that is choosing a different run, not rejecting this one's terms.
+	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+	power_offer = meta.power_offer(3) if meta != null else []
+	chosen_power = String(power_offer[0]) if not power_offer.is_empty() else ""
 
 ## Start the selected dungeon with a chosen deck (D4: per-dungeon deck).
 ## `power_id` is the one chosen from the run-start offer (D245). Empty falls back to whatever the
