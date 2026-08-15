@@ -259,11 +259,12 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D268** | [The manifest asks whether a file is there, and nothing asked whether it agrees](#d268--the-manifest-asks-whether-a-file-is-there-and-nothing-asked-whether-it-agrees) |
 | **D269** | [The README is written for a player, and the pictures are a claim that has to be re-checked](#d269--the-readme-is-written-for-a-player-and-the-pictures-are-a-claim-that-has-to-be-re-checked) |
 | **D271** | [A panel that redraws may not roll dice](#d271--a-panel-that-redraws-may-not-roll-dice) |
+| **D272** | [A green suite on a dirty tree says nothing about what was pushed](#d272--a-green-suite-on-a-dirty-tree-says-nothing-about-what-was-pushed) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
 
-**Cited but never written up:** D48 D93 D100 D110 D234. Each is referenced by number
+**Cited but never written up:** D48 D93 D100 D110 D234 D270. Each is referenced by number
 somewhere in this file and has no entry of its own. D110 is the documented
 case — D112 records it being left alone while a concurrent session held it.
 
@@ -18566,3 +18567,58 @@ The rule being kept is that a draw function draws: what it shows is decided befo
 
 Checked by putting the bug back: the guard reports it and names the needle it found. With the fix
 in place the suite is 46 green.
+### D272 — A green suite on a dirty tree says nothing about what was pushed
+
+CI went red on `b611e0e` with `scripts/combat.gd` failing to parse: `Static function
+"card_verdict()" not found in base "Balance"`. Three suites fell with it — `test_compile`,
+`CardTextTest` and `PlayableTest`, the last two because `Combat.tscn` has combat.gd as its root
+script and a scene whose root will not compile presents nothing to press.
+
+The suite had reported **46 passed, 0 failed** minutes earlier.
+
+#### What happened
+
+Two sessions were working the same checkout. The other one was building D270's reward verdict, which
+is two halves in two files: a `Balance.card_verdict()` call in `combat.gd`, and the static function
+in `balance.gd`.
+
+`git status` at the top of the turn showed `combat.gd` clean, so it was treated as mine to stage
+whole. By the time it was staged, the other session had written its call into it. `git add
+scripts/combat.gd` took their half; `balance.gd` stayed unstaged, so the other half did not go.
+
+The local run passed because the working tree held **both** halves. The push contained one.
+
+#### The two rules
+
+**`git status` is a snapshot, not a lease.** On a tree with a second session on it, the gap between
+reading the status and staging a file is a window in which that file can change. Nothing in git
+warns about this: `git add <path>` stages what the file says now, and it is silent about how that
+differs from what was read.
+
+**A suite that ran against the working tree has not tested the commit.** The working tree is the
+union of everybody's unfinished work. What CI runs is `HEAD` and nothing else, and the difference
+between them is exactly the class of bug that reaches `main` — a call without its definition, a
+constant without its use, a test without the fixture it reads.
+
+So the check is a clean checkout of what was actually committed:
+
+```bash
+git worktree add --detach /tmp/verify HEAD && /tmp/verify/tests/run.sh
+```
+
+Run that way, `HEAD` reported the same three failures CI did, and reported them in 27 seconds rather
+than after a round trip through a runner. With the missing half committed it reports 46 green.
+
+#### What was NOT done, and why
+
+The tempting repair was to take the other session's call back out of `combat.gd` and restore the
+commit to only this session's work. That would have **deleted their work**: their edit existed in
+exactly one place, the file that had just been committed, so removing it from the tree removes it
+from everywhere.
+
+The repair is therefore additive — commit the definition the call needs. It changes no behaviour
+that `b611e0e` had not already published, and it leaves the rest of D270 where its author left it.
+
+The wider version of this is worth keeping: **on a shared tree, prefer the repair that adds to the
+one that reverts.** A revert on a file somebody else is editing is a merge you are performing
+blind, on their behalf, without their half of the reasoning.

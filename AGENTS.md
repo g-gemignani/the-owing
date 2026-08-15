@@ -1669,6 +1669,21 @@ REVIEW.md    a review of the game AS A GAME (2026-08-01) — playability, graphi
   `godot --headless --script tools/sim_balance.gd` (paste the numbers).
 - **Before committing content or code:** `tests/run.sh` must be green, including
   `test_compile`, `PlayableTest` and `test_content`.
+- **Green on the working tree is not green on the commit (D272).** The working tree is the
+  union of everybody's unfinished work; CI runs `HEAD`. When another session is on the same
+  checkout — which is normal here — verify the thing you actually pushed:
+
+  ```bash
+  git worktree add --detach /tmp/verify HEAD && /tmp/verify/tests/run.sh
+  ```
+
+  This is how a call reached `main` without its definition: `git status` showed `combat.gd`
+  clean, the other session wrote into it before it was staged, `git add <path>` took their
+  half, and the local suite passed because the tree still held both halves. **`git status` is
+  a snapshot, not a lease.** Stage by hunk, or re-read a file between checking it and adding it.
+- **On a shared tree, prefer the repair that ADDS to the one that reverts (D272).** Somebody
+  else's uncommitted edit may exist in exactly one place — the file you just committed — so
+  taking it back out deletes it everywhere. Commit the missing half instead.
 - **Before committing anything that touches content or decisions:** run the three
   generators — `tools/art_docs.sh`, `tools/design_index.sh`, `tools/readme_downloads.sh`
   (or all three with `--check` first). Nothing runs them automatically, and a commit
