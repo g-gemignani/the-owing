@@ -681,9 +681,9 @@ is left. The order below is **visible damage per image generated**, not file cou
 Roughly 110 images in all, which is five or six days of the free tier — so the ordering is
 the part of this section that matters most.
 
-**Done so far: §8c and §8d, the four wall materials (D281).** What is left, in order: the
-26 dressing drawings (§8a), the 30 power sigils (§8b), the 38 relic icons (§8e), and two
-single files (§8f).
+**Done so far: the four wall materials (§8c, §8d — D281) and the sixteen dressing props
+(§8a — D286).** What is left, in order: the ten remaining dressing drawings (§8a), the 30
+power sigils (§8b), the 38 relic icons (§8e), and two single files (§8f).
 
 **Read the numbers, not the adjectives.** Two measurements decide whether a set belongs
 to this game, and both come off `tools/` scripts rather than off an opinion:
@@ -703,9 +703,22 @@ rather than paintings, and no measurement is needed to see it.
 
 ---
 
-### 8a — The dressing: 26 drawings that make the dungeon diverse, and none of them is art
+### 8a — The dressing  ·  the 16 PROPS are DONE (D286); 10 single drawings remain
 
-**This is the largest item on the list and it was the last one found.** Everything that
+The sixteen named props are painted and installed, off one sheet, and the manifest reads
+**430 wanted, 430 present, 0 to provide** (D286). `PROP_WALL` came down from 0.52 to 0.30
+with them: a constant chosen against a computed placeholder is a guess about art that does
+not exist yet, and one capture was enough to see it.
+
+**What is left in this section is the ten drawings that have no table of names to key on**
+— the four landmark caps, the mark on a pushable wall, the back door, the shrine, the
+ledger, the way down and the key on the floor. Briefing them means inventing the filenames
+first, which is why D282 left them off.
+
+The rest of this section is the argument that put the props on the list. It is kept because
+those ten are still in it.
+
+**This was the largest item on the list and it was the last one found.** Everything that
 varies one floor from the next — the clutter on the ground, the things nailed to the walls,
 the landmark you take a bearing off — is drawn by `iso_run.gd` with `draw_line`,
 `draw_circle` and `draw_colored_polygon`. No texture, no ink, no paint. An iron ring is an

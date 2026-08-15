@@ -269,6 +269,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D283** | [The title plate was the one painting nobody told about the palette](#d283--the-title-plate-was-the-one-painting-nobody-told-about-the-palette) |
 | **D284** | [The tier had a shopping list, a loader and a prompt, and no way in](#d284--the-tier-had-a-shopping-list-a-loader-and-a-prompt-and-no-way-in) |
 | **D285** | [Death becomes a debt, block cannot be re-priced, and D280's table was misread](#d285--death-becomes-a-debt-block-cannot-be-re-priced-and-d280s-table-was-misread) |
+| **D286** | [The dressing is painted, and the list reads zero for the first time](#d286--the-dressing-is-painted-and-the-list-reads-zero-for-the-first-time) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -19546,3 +19547,45 @@ One new variable: **a second Claude session was driving the same Gemini account 
 time**, on the D283 cartouche. Whether concurrent use is what stalls a generation is not
 established here; it is written down because the next person to meet this should check for
 it before spending an hour on the prompt.
+
+---
+
+### D286 — The dressing is painted, and the list reads zero for the first time
+
+D282 put the sixteen props on the shopping list and D284 built the way in. This is the
+art. `ART_ASSETS.md` now reads **430 files wanted, 430 already present, 0 to provide** —
+the first time the manifest has had nothing outstanding since it was written.
+
+All sixteen came off ONE sheet, which is the argument the sheet installers were built on:
+the model sees the set while drawing it, so the line weight and the palette agree by
+construction rather than by prompting. Sixteen separate requests would also have been
+sixteen chances to answer the preamble instead of the subject.
+
+#### Two defects, and only one of them cost anything
+
+**The capture is not the picture.** The sheet came back 16:9 on a 2:1 viewport, so the
+overlay capture carried a band of black down one side. That band falls INSIDE the
+right-hand column of cells, where the matte reads it as *"background is not flat (0% of
+the border agrees)"* and refuses. Four of sixteen failed, and they were the four wall
+props — the whole right-hand column. `install_sheet.gd` gets `--crop=x,y,w,h` for it,
+given rather than searched, for the reason `install_iso_material.gd` already gives:
+autocrop trims a picture's own dark edges and the only symptom is an aspect nobody checks.
+
+**The generator wrote the word HEAD-ON above three cells**, in a brief whose last line
+forbids lettering. It cost nothing, and the reason is the one the sparkle taught: text
+beside a subject is a small disconnected island, the despeckle drops islands under a
+fraction of the largest, and the installed rings have no text in them. A subject with
+deliberate floating detail would have lost it the same way.
+
+#### The scale constant could not be judged until there was a painting
+
+`PROP_WALL` was 0.52 and is 0.30. Both prop constants are fractions of the tile's WIDTH,
+so 0.52 draws a 60px ring on a wall face that is 64.8px wide and **52.2px tall**: it
+overflowed the face vertically and read as a hole punched through the wall rather than as
+a ring bolted to it. The computed arc it replaced was 18.6px across, so 0.30 sits between
+them.
+
+Worth stating plainly, because it will happen again on the next tier: **a constant chosen
+against a computed placeholder is a guess about art that does not exist yet.** Nothing was
+wrong with 0.52 while every prop was an arc and two lines; it was wrong the moment the
+first painting loaded, and one capture was enough to see it.
