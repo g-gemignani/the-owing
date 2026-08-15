@@ -8,9 +8,9 @@ same reason: a hand-kept prompt sheet goes stale, and a prompt naming an enemy
 the game no longer has produces a painting with nowhere to go. The *why* is
 [ART.md](ART.md); that file is the shopping list; this one is the wording.
 
-**Nothing is outstanding.** Every file the game looks for is present, so there is
-nothing here to ask a generator for. The sections below are kept for the next
-thing added to a catalogue, which will appear in them the moment it is.
+**16 files can be generated.** The rest of the list cannot, and the sections below
+say which and why — the expensive mistake is not a bad painting, it is a good
+painting of a thing that had to be computed.
 
 ## Where the images come from
 
@@ -21,7 +21,7 @@ to plan a batch around. It works for one image and for fifty. A long list is a
 multi-day job and nothing shortens it — budget the day's allowance, spend some of
 it on re-rolls, and pick the rest up after the reset.
 
-## The three rules that do the work
+## The four rules that do the work
 
 1. **One generator, for everything — but one generator is not enough.** The art
    already in the game came from two different tools and it is visible: the
@@ -36,7 +36,16 @@ it on re-rolls, and pick the rest up after the reset.
    stronger constraint on palette and line weight than any adjective. `main_menu.jpg`
    is what a request without it looks like.
 3. **Paste the style block below unchanged, then one subject line.** Do not
-   improve it between images. Its job is to be identical 0 times.
+   improve it between images. Its job is to be identical 16 times.
+4. **The block makes an image agree with the REFERENCE, not with the image it
+   will be shown on top of.** For almost everything that is the same thing,
+   because they are seen one at a time. `ui/logo.png` is the exception — a plate
+   composited onto `main_menu.png` — and it took the preamble's violet-grey
+   default while the backdrop under it had overridden that to cold teal in its own
+   subject line. Two rows, one preamble, two answers, and nothing compares two
+   assets to each other (D283). So: if an asset lands ON another asset, pin its
+   palette in its subject line the way that asset pins its own, and attach that
+   asset alongside the style bible.
 
 ```
 Painted dark-fantasy storybook illustration, in the style of the attached reference image.
@@ -141,4 +150,32 @@ Nothing to generate here — all 70 present.
 ## Tier 8b — isometric furniture
 
 Nothing to generate here — all 7 present.
+
+## Tier 8d — the dressing on the floor
+
+One small object or patch, seen from the ISOMETRIC CAMERA THIS GAME ACTUALLY USES rather than head-on: the floor tile is 116x58, exactly 2:1, so the camera looks DOWN at the floor from about 27 degrees above it. A thing LYING ON THE GROUND is therefore seen mostly from above and reads as a flattened shape, not as an elevation. Painted dark-fantasy storybook, 2-3px dark ink outline all round, real material, one saturated accent at most. DARK: it lies on a floor the player has to read past, so it must be no brighter than the stone around it and nothing in it may be near white. On nothing, on a flat even field for the matte - no ground, no shadow, no plinth, no scenery. It is drawn about three quarters of a tile across, so it is read by its SILHOUETTE: two or three big shapes, no fine detail.
+
+**Generate this tier as ONE image, not 16.** One row per terrain, four cells to the row, in the order of the table below. Spaced well apart with clear field between them, none touching or overlapping and nothing touching a cell edge. Flat even background of a single colour that appears nowhere in any subject. Install: `godot --headless --script tools/install_sheet.gd -- iso_props <sheet.png> --key --cols=4`
+Cells in the order of the table below, left to right then top to bottom.
+
+**16 to generate.** Style block above, then one of these as the last line:
+
+| save as | size | subject |
+|---|---|---|
+| `iso/prop_cracked_flags.png` | 192x192 | **Cracked Flags**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two or three hairlines. |
+| `iso/prop_fallen_slab.png` | 192x192 | **A Fallen Slab**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as one flat diamond with a lit edge. |
+| `iso/prop_stacked_bone.png` | 192x192 | **Stacked Bone**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
+| `iso/prop_iron_ring.png` | 192x192 | **An Iron Ring**, dressing a `stone` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as an arc and a short stem. |
+| `iso/prop_spoil.png` | 192x192 | **Spoil**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
+| `iso/prop_scree.png` | 192x192 | **Scree**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as a handful of small marks. |
+| `iso/prop_dropped_beam.png` | 192x192 | **A Dropped Beam**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as one flat diamond with a lit edge. |
+| `iso/prop_roots.png` | 192x192 | **Roots**, dressing a `earth` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as three soft circles. |
+| `iso/prop_growth_patch.png` | 192x192 | **A Growth Patch**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three soft circles. |
+| `iso/prop_fungal_clusters.png` | 192x192 | **Fungal Clusters**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
+| `iso/prop_wet_flags.png` | 192x192 | **Wet Flags**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two or three hairlines. |
+| `iso/prop_hanging_matter.png` | 192x192 | **Hanging Matter**, dressing a `moss` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as three soft circles. |
+| `iso/prop_silt_drift.png` | 192x192 | **A Silt Drift**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two pale wedges. |
+| `iso/prop_dry_weed.png` | 192x192 | **Dry Weed**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three soft circles. |
+| `iso/prop_tidewrack.png` | 192x192 | **Tidewrack**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as a handful of small marks. |
+| `iso/prop_crusted_ring.png` | 192x192 | **A Crusted Ring**, dressing a `sand` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as an arc and a short stem. |
 

@@ -7,7 +7,7 @@ Every image the game will look for, generated from the content catalogues so it
 cannot fall out of step with them. The *why* behind all of it is [ART.md](ART.md);
 this is the shopping list.
 
-**414 files wanted · 414 already present · 0 to provide.**
+**430 files wanted · 414 already present · 16 to provide.**
 
 Paths are relative to `assets/art/`. Author UI assets at **2x** and downsample.
 The interface is laid out at a FIXED 1280x720 and the engine's `canvas_items`
@@ -434,7 +434,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `fonts/display.ttf` | - | Display face for titles and card names. Cinzel Bold 2.000, OFL 1.1 — Roman inscriptional, which is what the frame kit is already pretending to be. Bold, not Regular: this is the card NAME too, and `UI.fit_label` takes a name to 7px in a crowded fan where hairline serifs disappear. Wired as `UITheme.display_face()`. |
 | x | `fonts/body.ttf` | - | Body face for rules text. Must stay legible at 12px, since card text shrinks to fit — Fira Sans Regular 4.203, OFL 1.1, picked by rendering the shortlist at 12/14/16px rather than by taste: largest x-height and most open counters of the set. Theme `default_font`, so nothing falls back to the engine face. |
 | x | `main_menu.png` | 1280x720 | The title screen backdrop. `main_menu.gd` resolves it through `PixelArt.title_art_path()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. It was `.jpg` until D114 renamed it on the re-roll; this row is one of the references that had to move with it, and it did not until D122 noticed the tier still reporting one file missing. |
-| x | `ui/logo.png` | 1600x480 | The wordmark. The title screen sets a plain Label reading 'THE OWING' into this plate's empty middle. The ONE asset that has to carry text: generate the ornament, set the type yourself. |
+| x | `ui/logo.png` | 1600x480 | The wordmark. The title screen sets a plain Label reading 'THE OWING' into this plate's empty middle. The ONE asset that has to carry text: generate the ornament, set the type yourself. It is also the one asset composited over another painting, so its palette is pinned to that painting's, not to the reference's. |
 | x | `ui/boot_splash.png` | 1280x720 | Boot splash. None configured. |
 
 ## Tier 8a — isometric figures
@@ -556,4 +556,27 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 | x | `iso/rest.png` | 128x192 | A campfire. A light source, so it is the one thing here that glows. |
 | x | `iso/event.png` | 128x192 | A standing rune-stone. Something to read, not to fight. |
 | x | `iso/treasure.png` | 128x192 | A chest, shut. |
+
+## Tier 8d — the dressing on the floor
+
+*16 files, 16 still to provide.* What varies one floor from the next. All sixteen are drawn in code today — lines, circles and stacked diamonds, with no texture, ink or paint on any of them.
+
+| ? | file | size | what it is |
+|---|---|---|---|
+|   | `iso/prop_cracked_flags.png` | 192x192 | **Cracked Flags**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two or three hairlines. |
+|   | `iso/prop_fallen_slab.png` | 192x192 | **A Fallen Slab**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as one flat diamond with a lit edge. |
+|   | `iso/prop_stacked_bone.png` | 192x192 | **Stacked Bone**, dressing a `stone` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
+|   | `iso/prop_iron_ring.png` | 192x192 | **An Iron Ring**, dressing a `stone` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as an arc and a short stem. |
+|   | `iso/prop_spoil.png` | 192x192 | **Spoil**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
+|   | `iso/prop_scree.png` | 192x192 | **Scree**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as a handful of small marks. |
+|   | `iso/prop_dropped_beam.png` | 192x192 | **A Dropped Beam**, dressing a `earth` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as one flat diamond with a lit edge. |
+|   | `iso/prop_roots.png` | 192x192 | **Roots**, dressing a `earth` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as three soft circles. |
+|   | `iso/prop_growth_patch.png` | 192x192 | **A Growth Patch**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three soft circles. |
+|   | `iso/prop_fungal_clusters.png` | 192x192 | **Fungal Clusters**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three stacked diamonds. |
+|   | `iso/prop_wet_flags.png` | 192x192 | **Wet Flags**, dressing a `moss` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two or three hairlines. |
+|   | `iso/prop_hanging_matter.png` | 192x192 | **Hanging Matter**, dressing a `moss` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as three soft circles. |
+|   | `iso/prop_silt_drift.png` | 192x192 | **A Silt Drift**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as two pale wedges. |
+|   | `iso/prop_dry_weed.png` | 192x192 | **Dry Weed**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as three soft circles. |
+|   | `iso/prop_tidewrack.png` | 192x192 | **Tidewrack**, dressing a `sand` floor. It lies flat on the ground, so it is seen from above at the camera's 27 degrees. Drawn in code today as a handful of small marks. |
+|   | `iso/prop_crusted_ring.png` | 192x192 | **A Crusted Ring**, dressing a `sand` floor. It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across. Drawn in code today as an arc and a short stem. |
 

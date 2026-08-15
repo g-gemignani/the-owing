@@ -13,10 +13,24 @@ extends Control
 ## screen with no title on it.
 const LOGO_ART := "res://assets/art/ui/logo.png"
 ## Where that middle is, as fractions of the file. Measured off the pixels, not
-## eyeballed: the flat panel is the widest unbroken run of one tone in the image and
-## it spans x 0.14–0.85, y 0.33–0.68 of the 1600x480, with the carved scrollwork
-## starting immediately outside it. Type set to the whole plate would be cut across
-## the border. Inset from the measurement so a descender never touches the moulding.
+## eyeballed: the flat panel is the widest unbroken run of one tone in the image, and on
+## the D283 re-cut it spans x 0.075–0.924, y 0.240–0.762 of the 1600x480, with the carved
+## scrollwork starting immediately outside it. Type set to the whole plate would be cut
+## across the border. Inset from the measurement so a descender never touches the
+## moulding.
+##
+## The rect below is UNCHANGED across that re-cut, and the re-measurement is why it is
+## allowed to be. The plate it was fitted to had a tighter panel — x 0.14–0.85, y
+## 0.33–0.68 — so these numbers were close to its edges and are merely comfortable
+## inside the new one. Kept rather than re-derived because widening the rect would grow
+## the wordmark (the font size below is a fraction of `LOGO_TEXT.size.y`), and that is a
+## change to how the title looks, not a repair to where it sits.
+##
+## **`tools/install_chrome.gd` carries a copy of this rect, as the `logo` recipe's
+## `ink_box`, and the two must stay equal.** That tool grades the plate until pale type
+## clears 4.5:1 *over this rectangle*; measured anywhere else the number is about a
+## surface no glyph sits on. It cost a plate to learn — one whose panel carried pale
+## mineral drips read 4.65:1 across the middle 30% and 3.30:1 across this rect (D283).
 const LOGO_TEXT := Rect2(0.19, 0.35, 0.62, 0.30)
 
 func _ready() -> void:
@@ -150,12 +164,20 @@ func _cut_the_wordmark(col: VBoxContainer) -> void:
 	# first screen that is not 1280 wide.
 	title.add_theme_font_size_override("font_size",
 		int(h * LOGO_TEXT.size.y * 0.74))
-	# And inked from the plate rather than fixed white. The carved stone is a LIGHT
-	# face: measured off the render, white type on it comes to 3.6:1, under the
-	# 4.5:1 every other piece of text on this screen is held to, while the dark ink
-	# comes to 5.0:1. `UITheme.ink_for` reads the middle of the texture — which for
-	# this file is exactly the empty panel — and returns dark on a light face, so a
-	# re-cut that darkens the stone flips the type back to pale with no edit here.
+	# And inked from the plate rather than fixed white. `UITheme.ink_for` reads the
+	# middle of the texture — which for this file is exactly the empty panel — and
+	# returns dark on a light face, pale on a dark one.
+	#
+	# That last clause has now been exercised. The plate WAS light: warm carved stone
+	# at luminance 0.75, where white type measured 3.6:1 against the 4.5:1 every other
+	# string on this screen is held to and the dark ink measured 5.0:1, so it took INK.
+	# D283 re-cut it in the backdrop's own cold slate and it came back at 0.152, so the
+	# same call now returns PALE and the wordmark reads at 4.6:1 with no edit here —
+	# which is the whole point of asking the texture rather than writing a colour down.
+	#
+	# The 4.6 is not luck either. `install_chrome.gd` grades this plate to it at install
+	# time, against the same centre box this function samples, because a cartouche is
+	# asked for in adjectives and a contrast ratio is a number.
 	title.add_theme_color_override("font_color", UITheme.ink_for(tex))
 	col.add_child(plate)
 	col.move_child(plate, 0)

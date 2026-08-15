@@ -407,8 +407,24 @@ const SHELL := [
 	## being the most-seen image in the game (D114).
 	["main_menu.png", "1280x720", "The title screen backdrop. `main_menu.gd` resolves it through `PixelArt.title_art_path()`. The menu column is the LEFT 40% under a 0.82 scrim held across 42%, so the left third is covered and the subject belongs right of centre. It was `.jpg` until D114 renamed it on the re-roll; this row is one of the references that had to move with it, and it did not until D122 noticed the tier still reporting one file missing.", Kind.SCENE,
 		"The camera sits low, almost at the waterline, inside a drowned crypt. The bottom half of the frame is black still water holding a long mirrored reflection. On the RIGHT a great broken doorway leans half sunk, and cold blue-green light comes through it from a room beyond. A lone hooded figure wades away from the camera toward that light, right of centre, water to the knee. The LEFT of the frame is open dark water and shadow with nothing in it. THE WHOLE FRAME IS COLD TEAL: blue-green light, wet slate, drowned stone, black water. No orange, no magenta, no leaf green anywhere. The light through the doorway is the only light source."],
-	["ui/logo.png", "1600x480", "The wordmark. The title screen sets a plain Label reading 'THE OWING' into this plate's empty middle. The ONE asset that has to carry text: generate the ornament, set the type yourself.", Kind.PAINT,
-		"An ornamental stone cartouche, wide and shallow, carved edge, symmetrical, EMPTY across its whole middle where type will be set later. No lettering of any kind."],
+	## The palette clause is not decoration. This plate is the ONE painting in the tree
+	## that is composited over another painting, and the first cut was briefed without
+	## one: it came back warm grey-green mossy stone with a near-white panel, sat on the
+	## cold teal drowned crypt, and read as pasted in from a different game (D283). The
+	## row above pins its own palette in the same words for the same reason; a shared
+	## PREAMBLE saying "cool desaturated violet-grey" was not enough, because the
+	## reference is a violet room and the surface this lands on is a teal one.
+	##
+	## The FRAME/PANEL split is load-bearing too, and it is the second thing D283 paid
+	## for. A brief that only says "the middle is flat and empty" gets weathering painted
+	## across the middle anyway, because the weathering is what makes the subject
+	## interesting; the wording that works names the raised frame as the place it all
+	## lives and says every mark STOPS at the frame's inner edge. What is at stake is not
+	## tidiness — `install_chrome.gd` grades this plate until pale type clears 4.5:1 over
+	## `LOGO_TEXT`, and one pale drip inside that rect drove a plate from 4.65:1 down to
+	## 3.30:1 and would have needed a x0.331 grade, i.e. a silhouette, to rescue.
+	["ui/logo.png", "1600x480", "The wordmark. The title screen sets a plain Label reading 'THE OWING' into this plate's empty middle. The ONE asset that has to carry text: generate the ornament, set the type yourself. It is also the one asset composited over another painting, so its palette is pinned to that painting's, not to the reference's.", Kind.PAINT,
+		"A long low stone tablet that has spent years underwater, seen head-on, with a RAISED OUTER FRAME and a SUNKEN MIDDLE PANEL. All of the weathering lives on the raised outer frame and none of it on the sunken panel: a crust of silt and small barnacles along the BOTTOM EDGE and the two bottom corners, a dark waterline stain, thin mineral runs trickling down. Every drip, run, streak, stain, chip, barnacle and speck STOPS at the inner edge of the frame. THE SUNKEN PANEL IS ABSOLUTELY FLAT AND EMPTY: one unbroken rectangle of dark slate at one even value, corner to corner, with no drip, run, streak, stain, crack, grain, crust, highlight, shading or gradient on it, and no lettering of any kind. It is the flattest, cleanest, emptiest part of the picture and it is DARKER than the frame around it. THE STONE AND THE CRUST ARE COLD: wet blue-grey slate and pale bone-white with a green-grey cast, under the same blue-green light as a drowned crypt. No warm grey, tan, ochre, brown, beige, cream, sand, moss or leaf green anywhere. The tablet stands alone on a pure black field, touching no edge, with nothing else in the frame. The image is a wide letterbox strip, a 10:3 banner, and the tablet is four times wider than it is tall."],
 	["ui/boot_splash.png", "1280x720", "Boot splash. None configured.", Kind.SCENE,
 		"A shut iron door at the foot of a stair, one lantern burning above it, seen head-on. Nobody in frame."],
 	## `ui/cursor.png` and `ui/cursor_press.png` used to close this table: a painted iron
@@ -1081,6 +1097,42 @@ func _iso() -> void:
 	_add("iso/event.png", "128x192", "A standing rune-stone. Something to read, not to fight.")
 	_add("iso/treasure.png", "128x192", "A chest, shut.")
 
+	# Tier 8d — the dressing. See D268 for why it is on the list at all and D282 for why it
+	# is keyed on the prop's NAME.
+	_section("Tier 8d — the dressing on the floor",
+		"What varies one floor from the next. All sixteen are drawn in code today — lines, circles and stacked diamonds, with no texture, ink or paint on any of them.",
+		Kind.PAINT,
+		"One small object or patch, seen from the ISOMETRIC CAMERA THIS GAME ACTUALLY USES rather than head-on: the floor tile is 116x58, exactly 2:1, so the camera looks DOWN at the floor from about 27 degrees above it. A thing LYING ON THE GROUND is therefore seen mostly from above and reads as a flattened shape, not as an elevation. Painted dark-fantasy storybook, 2-3px dark ink outline all round, real material, one saturated accent at most. DARK: it lies on a floor the player has to read past, so it must be no brighter than the stone around it and nothing in it may be near white. On nothing, on a flat even field for the matte - no ground, no shadow, no plinth, no scenery. It is drawn about three quarters of a tile across, so it is read by its SILHOUETTE: two or three big shapes, no fine detail.",
+		"One row per terrain, four cells to the row, in the order of the table below. Spaced well apart with clear field between them, none touching or overlapping and nothing touching a cell edge. Flat even background of a single colour that appears nowhere in any subject. Install: `godot --headless --script tools/install_sheet.gd -- iso_props <sheet.png> --key --cols=4`")
+	for terrain in Balance.ISO_TERRAINS:
+		for entry in Balance.iso_props(terrain):
+			var pd: Dictionary = entry
+			var pname := String(pd.get("name", ""))
+			if pname == "":
+				continue
+			var on_wall: bool = String(pd.get("on", "ground")) == "wall"
+			_add("iso/prop_%s.png" % PixelArt.iso_prop_id(pname), "192x192",
+				("**%s**, dressing a `%s` floor. %s Drawn in code today as %s." % [
+					pname.capitalize(), terrain,
+					("It hangs on a vertical wall face, so it is seen HEAD-ON rather than from above, and it is drawn about half a tile across."
+						if on_wall else
+						"It lies flat on the ground, so it is seen from above at the camera's 27 degrees."),
+					_prop_drawn_as(String(pd.get("shape", "")))]))
+
+## What `iso_run.gd` draws for a prop while nobody has painted it. Named in the brief on
+## purpose: the fallback is what the painting has to beat, and three of these shapes stand in
+## for four different props each, which is the gap the tier exists to close (D282).
+func _prop_drawn_as(shape: String) -> String:
+	match shape:
+		"cracks": return "two or three hairlines"
+		"slab": return "one flat diamond with a lit edge"
+		"pile": return "three stacked diamonds"
+		"ring": return "an arc and a short stem"
+		"growth": return "three soft circles"
+		"drift": return "two pale wedges"
+		"scatter": return "a handful of small marks"
+	return "a flat shape"
+
 ## The zone a dungeon belongs to, as an ID — `Balance.zone_of()` returns the resource
 ## and the accent table is keyed by id.
 func _zone_id_of(dungeon_id: String) -> String:
@@ -1162,7 +1214,7 @@ func _emit_prompts() -> void:
 	print("multi-day job and nothing shortens it — budget the day's allowance, spend some of")
 	print("it on re-rolls, and pick the rest up after the reset.")
 	print("")
-	print("## The three rules that do the work")
+	print("## The four rules that do the work")
 	print("")
 	print("1. **One generator, for everything — but one generator is not enough.** The art")
 	print("   already in the game came from two different tools and it is visible: the")
@@ -1178,6 +1230,15 @@ func _emit_prompts() -> void:
 	print("   is what a request without it looks like.")
 	print("3. **Paste the style block below unchanged, then one subject line.** Do not")
 	print("   improve it between images. Its job is to be identical %d times." % todo)
+	print("4. **The block makes an image agree with the REFERENCE, not with the image it")
+	print("   will be shown on top of.** For almost everything that is the same thing,")
+	print("   because they are seen one at a time. `ui/logo.png` is the exception — a plate")
+	print("   composited onto `main_menu.png` — and it took the preamble's violet-grey")
+	print("   default while the backdrop under it had overridden that to cold teal in its own")
+	print("   subject line. Two rows, one preamble, two answers, and nothing compares two")
+	print("   assets to each other (D283). So: if an asset lands ON another asset, pin its")
+	print("   palette in its subject line the way that asset pins its own, and attach that")
+	print("   asset alongside the style bible.")
 	print("")
 	print("```")
 	print(PREAMBLE)

@@ -528,7 +528,7 @@ Painted objects on transparent, lit from upper-left, ink-outlined, readable at
 |---|---|---|
 | `fonts/display.ttf` | — | **done** — Cinzel Bold (OFL); `UITheme.style_title` and card names |
 | `fonts/body.ttf` | — | **done** — Fira Sans Regular (OFL); the `Theme` default |
-| `ui/logo.png` | 1600×480 | the title is a plain `Label` reading `"THE OWING"`, set into the painted cartouche |
+| `ui/logo.png` | 1600×480 | the title is a plain `Label` reading `"THE OWING"`, set into the painted plate. **Re-cut in D283**, twice over: the shipped plate is a drowned stone tablet, silt and barnacle crust along its bottom edge, chosen from four directions rendered into the real title screen. It replaced a warm pale cartouche that did not belong on a cold teal backdrop, and then a cold rococo one that did belong and was not wanted. This is the one asset composited on top of another painting, so its manifest row pins its palette to that painting's rather than to the reference's, and all its weathering is briefed onto the raised outer frame — a drip crossing the sunken panel is a drip under the wordmark. Graded at install to hold 4.5:1 across `LOGO_TEXT` |
 | `icon/icon_*.png` (6) | 48×48 grid | **done (D181)** — *generated*, not painted: `tools/gen_icon.gd`. A gold coin with a skull struck into it and a bite out of its rim, authored on a 48-cell grid and scaled by whole numbers to 192 / 384 / 432 — the two Android adaptive layers, the themed layer, the legacy launcher icon and the project icon. Not 256×256, because 256 ÷ 48 is 5.33 |
 | `ui/boot_splash.png` | 1280×720 | none configured |
 
@@ -738,6 +738,13 @@ dead data today, and it is the ready-made brief for sixteen paintings.
 So the re-roll here is also a small design win: **key the sprites on the NAME, not the
 shape**, and the Crypt gets stacked bone where the Warrens gets spoil, which is what the
 table already says and the screen has never shown.
+
+**They are on the shopping list now (D282).** `ART_ASSETS.md` carries them as **Tier 8d —
+the dressing on the floor**, sixteen rows, sixteen still to provide, with the wording in
+`ART_PROMPTS.md`. `iso_run.gd` loads `iso/prop_<id>.png` per prop and keeps the computed
+shape wherever no file exists, so they can land one at a time. The four landmark caps, the
+mark, the door, the shrine, the ledger, the stair and the key are NOT on it — they have no
+table of names to key on, so briefing them means inventing the filenames first.
 
 Sixteen props plus the four landmark caps is twenty images — one day of the free tier. Draw
 them the way the existing `iso/` furniture is drawn (`shop`, `rest`, `treasure`, `event` are

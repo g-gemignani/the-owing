@@ -55,23 +55,55 @@
 ## tighter glow under a normal one — dividing a near-black tail by its own alpha to
 ## recover "true" colour amplifies the noise down there into speckle.
 ##
-## **LUMAKEY.** The fifth case, and the one that has now been wrong twice. Three files
-## are dark art on a dark field, which the flood-fill matte cannot key at all — the
-## subject sits inside its own background's tolerance, so the fill walks straight
+## **LUMAKEY.** The fifth case, and **nothing in the table carries it today.** Three
+## files were dark art on a dark field, which the flood-fill matte cannot key at all —
+## the subject sits inside its own background's tolerance, so the fill walks straight
 ## through it and hands back a plausible, mostly-transparent file (D125). These key on
 ## DISTANCE FROM THE FIELD instead, and unlike `glow` they keep their geometry, because
 ## the tuning was measured against a subject whose GEOMETRY could not be allowed to
 ## move. `_lumakey` has the measurements; the short version is that "distance", "field"
 ## and "zero" each had to be defined more carefully than the first attempt defined them
 ## (D133).
+##
+## Two of the three were the cursors, gone with the pointer in D138. The third was the
+## logo, and D283 moved it to the matte — not because the key was wrong, but because the
+## plate stopped being what the key is for: recoloured from pale stone to cold dark
+## slate, its flat middle now sits 0.095 clear of `TOL` and the flood fill it was hiding
+## from can no longer reach it, while the KEY started reading that same dark middle as
+## half-transparent. The two techniques trade places at roughly a mid grey.
+##
+## Kept rather than deleted, and this paragraph is the whole reason: the next asset that
+## comes back dark on black needs D125 and D133's four numbers, and they are only cheap
+## to have because nobody has to measure them again. `ART.md` §2 has one prompt line
+## against ever needing it — ask for the field, do not accept what turns up.
 extends SceneTree
 
 const Cut := preload("res://tools/cutout_lib.gd")
 const OUT := "res://assets/art/ui/"
 
-## --- `lumakey` tuning. All four were measured off the two cursor plates in D133 —
-## the worst case the key ever met, and gone from the tree since D138 — and the logo
-## still needs every one of them. See `_lumakey` for what each is holding back.
+## The two inks the theme sets type in. `ink_contrast` below has to agree with
+## `UITheme.ink_for` about which of them lands on a plate and how dark it is, so these
+## are copies of `UITheme.INK` and `UITheme.PALE` — and a copy is exactly the thing this
+## file argues against everywhere else, so it is checked rather than trusted.
+##
+## Preloading `ui_theme.gd` was tried first and is not available: it pulls in `ui.gd`,
+## which reaches for the `UITheme` AUTOLOAD, and a `--script` tool has no autoloads. The
+## chain fails to compile, and it fails the quiet way — Godot prints "Failed to compile
+## depended scripts" and the tool runs on anyway, which is the same trap
+## `tests/menu_art_test.gd` documents at the top of itself.
+##
+## So: copied, and `_inks_match_theme()` reads the theme as text at startup and refuses
+## to install if either line has moved. That turns the copy from something that goes
+## stale silently into something that stops the tool.
+const INK := Color(0.13, 0.09, 0.07)
+const PALE := Color(0.949, 0.914, 0.831)
+const THEME_SRC := "res://scripts/ui_theme.gd"
+
+## --- `lumakey` tuning. All four were measured off the two cursor plates in D133 — the
+## worst case the key ever met, and gone from the tree since D138. The logo was the last
+## thing that needed them and it moved to the matte in D283, so NOTHING in `KIT` reaches
+## this code today; see the LUMAKEY paragraph above for why it is still here. Each number
+## is a measurement, not a taste: `_lumakey` says what it is holding back.
 ##
 ## How wide a band around the frame edge is sampled to find the field level. Six pixels
 ## of a 64px cursor, which is enough to out-vote the corner the spike's tip sits in.
@@ -208,26 +240,48 @@ var KIT := {
 	# Same reason as the HUD block above: loose `ui/` paintings with no catalogue
 	# behind them. Added in D122, when the tier was finally generated.
 	"logo": {
-		# LUMAKEY, not matte. The cartouche is carved stone on a near-black field, so
-		# the subject sits inside the flood fill's own tolerance and the fill walks
-		# through it: shipped, this file was 44% opaque against 74.8% non-black RGB —
-		# the flat inner panel survived and every piece of carved scrollwork, which is
-		# the entire reason the asset exists, was transparent (D125).
+		# MATTE, not lumakey, since D283 recoloured the plate. The two keys make opposite
+		# assumptions and the plate changed sides.
 		#
-		# The one of the three that was NOT also broken by the first `lumakey`. Its
-		# field really is pure black — every ring out to nine pixels reads 0.0000 — so
-		# the border mean the old key trusted happened to be right here, and the plate
-		# came back on a genuinely transparent field. Checked on grey, on black and on
-		# a light panel in D133 before being cleared: no square, no haze. It is
-		# re-installed with the rest only so the file on disk is what the tool
-		# produces; the knee costs it a soft outer fringe under alpha 15 and moves the
-		# bounding box not at all (74.82% -> 72.26% opaque, box (32, 49) 1536x381 both
-		# sides).
+		# `lumakey` sets alpha from |luminance - field| and then rescales by the peak, so
+		# a subject is opaque in proportion to how far it sits from its own background.
+		# That was right while the cartouche was pale stone on black: panel at 0.75
+		# against a field at 0.006, everything in it near the peak. The re-cut plate is
+		# COLD DARK slate, and the same key read its flat middle at 0.235 against a peak
+		# of 0.4595 and installed the panel — the one part of this asset that has to be
+		# solid, because type is set on it — at **alpha 0.39**. It looked right on the
+		# title screen only because what shows through is the black scrim behind it.
+		# Measured: 19.3% of the file above alpha 0.5, against 72.26% before.
+		#
+		# The flood fill was refused here in D125 for the opposite failure, and that
+		# reason has expired with the same re-cut. It walks through a subject that sits
+		# inside `TOL` of its field; at 0.235 against pure black the panel is 0.095 clear
+		# of the 0.14 tolerance, so the fill stops at the plate's outer ink line and
+		# `fill_trapped` returns the middle. Measured after the switch, not assumed —
+		# see the opacity line the tool prints.
 		"canvas": Vector2i(1600, 480),
 		"crop": Rect2(0.0, 0.0, 1.0, 1.0),
-		"matte": false,
+		"matte": true,
 		"stretch": false,
-		"lumakey": true,
+		"lumakey": false,
+		# The only asset here with type set ON it, so the only one with a contrast to
+		# hold. The bar is 4.5:1 — not a number picked for this plate, but the one every
+		# other string on the title screen is already held to, and the one the plate was
+		# missing. `_hold_ink_contrast` has the working.
+		#
+		# A plain 4.5, with no cushion on it. It was briefly 4.6, to buy back the
+		# difference between the box the grade sampled and the box the type actually
+		# covers — which is a fudge standing in for measuring the right region. `ink_box`
+		# below is the fix, so the target can be the bar itself again.
+		"ink_contrast": 4.5,
+		# THE RECTANGLE THE WORDMARK COVERS, in fractions of the file. This is
+		# `main_menu.gd`'s `LOGO_TEXT` and it must stay equal to it: that screen anchors
+		# the Label to exactly this rect, so anything measured outside it is a surface no
+		# glyph sits on, and anything inside it that goes unmeasured is a surface a glyph
+		# sits on unchecked. The second mistake is the expensive one — a plate with pale
+		# drips down its panel passed at 4.65:1 on the centre box while the type box read
+		# 3.30:1.
+		"ink_box": Rect2(0.19, 0.35, 0.62, 0.30),
 	},
 	"boot_splash": {
 		# A SCENE, so opaque and stretched, like `card_back`: it fills its frame edge
@@ -257,6 +311,14 @@ func _init() -> void:
 			positional.append(String(a))
 	if positional.is_empty():
 		print("usage: -- <src_dir> [--dry]")
+		quit(2)
+		return
+
+	# Before anything is written, not after: a plate graded against the wrong ink is a
+	# file that has to be regenerated, and the check costs one file read.
+	var drift := _inks_match_theme()
+	if drift != "":
+		print(drift)
 		quit(2)
 		return
 	var src: String = positional[0]
@@ -362,7 +424,10 @@ func _shape(img: Image, spec: Dictionary) -> String:
 		img.copy_from(dst)
 		return ""
 	if not spec["stretch"]:
-		return Cut.cut(img, canvas, false)
+		var cut := Cut.cut(img, canvas, false)
+		if cut != "":
+			return cut
+		return _hold_ink_contrast(img, spec)
 
 	# Matte, then FILL rather than fit. `Cut.place()` cannot do this — it preserves
 	# aspect on purpose, because a stretched monster is a deformed monster. A
@@ -393,6 +458,161 @@ func _shape(img: Image, spec: Dictionary) -> String:
 	sub.resize(canvas.x, canvas.y, Image.INTERPOLATE_LANCZOS)
 	img.copy_from(sub)
 	return ""
+
+
+## Are `INK` and `PALE` above still the theme's own? Text match, on purpose: the point
+## is to catch the theme being EDITED, and reading the file is the only way to see that
+## from a tool that cannot load it.
+func _inks_match_theme() -> String:
+	var f := FileAccess.open(THEME_SRC, FileAccess.READ)
+	if f == null:
+		return "cannot read %s — the inks below cannot be checked" % THEME_SRC
+	var txt := f.get_as_text()
+	for line in ["const INK := Color(0.13, 0.09, 0.07)",
+			"const PALE := Color(0.949, 0.914, 0.831)"]:
+		if not txt.contains(line):
+			return ("%s no longer contains `%s`.\n" % [THEME_SRC, line]
+				+ "  The inks copied into install_chrome.gd have gone stale, so every\n"
+				+ "  `ink_contrast` grade would be measured against the wrong colour.\n"
+				+ "  Copy the new value across and re-run.")
+	return ""
+
+
+## Darken or lift a plate until the type set on it reads, and say by how much.
+##
+## Only for the assets that CARRY TEXT — one, today: `logo`, whose whole middle exists
+## for the game's name to be set into. Everything else here is a widget the theme draws
+## text beside rather than on, and gets no `ink_contrast` key and no grade.
+##
+## Why this is here and not in the prompt. D283 re-cut the cartouche from warm pale
+## stone to cold dark slate, because the pale one did not belong on the title painting.
+## The recolour moved its middle to luminance 0.235 — which is neither: `UITheme.ink_for`
+## flipped the wordmark to PALE, correctly, and PALE on 0.235 measures **3.23:1**,
+## under the 4.5:1 every other string on that screen is held to. The plate before it was
+## 0.75 and failed the other way round, at 3.6:1 for white. A middle value fails BOTH
+## inks at once, and no wording of "darker than the carved edge" makes a generator land
+## a number. So it is asked for loosely and corrected to a measurement here, the same
+## trade `install_card_sheet` makes for saturation.
+##
+## Multiplied, not offset, and over the WHOLE plate rather than the panel alone. Lifting
+## the panel by itself would leave the scrollwork where it was and read as a hole cut in
+## the middle of the carving; scaling everything keeps the relief intact and moves the
+## plate as one object. At the measured 0.70 the carved edge lands at 0.32, inside the
+## range the backdrop's own stonework occupies, so the plate gets closer to the painting
+## rather than further from it.
+##
+## TWO regions, not one, and separating them is the whole of this function's second bug.
+##
+## `ink_box` is where the TYPE GOES. The MEAN of the box `UITheme.ink_for` samples — the
+## centre 35-65% — picks WHICH ink, because that is the box the runtime picks it from, and
+## grading against a different region than the decision is made from is how the two come
+## apart. But the WORST PIXEL, which is what the grade is solved against, has to come off
+## the region the glyphs actually cover, and those are not the same rectangle.
+##
+## Both halves were learned the expensive way, in that order:
+##
+## 1. **Mean is not enough.** `tests/menu_art_test.gd` holds every backdrop in the game to
+##    a worst-pixel ratio, and a painted panel is not flat. Graded on its mean the first
+##    plate landed 4.53:1 average with its brightest pixel still at **4.37:1** — under the
+##    bar exactly where a glyph is thinnest.
+## 2. **The centre box is not the type box, and the gap is not small.** `main_menu.gd`
+##    sets the wordmark into `LOGO_TEXT` — x 0.19-0.81, y 0.35-0.65 — which is nearly
+##    three times the width of the centre 35-65% box. On a plate whose panel carried pale
+##    mineral drips down its face, the centre box read a clean **4.65:1** and the type box
+##    read **3.30:1**: the streaks the glyphs sit on were simply outside the sample. That
+##    is not a margin a fudge factor can cover, and an earlier +0.1 on the target was
+##    exactly such a fudge. So the recipe carries the rectangle, and the tool measures the
+##    surface it is actually talking about.
+##
+## The number that comes out of this is only as good as `ink_box` agreeing with the screen
+## that draws the type. They are two constants in two files and there is no way to make
+## them one, so the `logo` recipe names its counterpart and `main_menu.gd` names this.
+func _hold_ink_contrast(img: Image, spec: Dictionary) -> String:
+	var want: float = spec.get("ink_contrast", 0.0)
+	if want <= 0.0:
+		return ""
+	var mean := _centre_luma(img)
+	# Mirror `ink_for`: dark ink on a light face, pale ink on a dark one.
+	var pale := mean <= 0.5
+	var ink: Color = PALE if pale else INK
+	var ink_l := ink.get_luminance()
+	# Where the glyphs land. Defaults to the box the ink was picked from, so a recipe that
+	# does not know its type rect still gets the old behaviour rather than no check.
+	var box: Rect2 = spec.get("ink_box", Rect2(0.35, 0.35, 0.30, 0.30))
+	# The pixel in THAT box that reads WORST against the ink: the brightest one under pale
+	# type, the darkest one under dark type.
+	var before := _extreme_in(img, box, pale)
+	if _contrast(ink_l, before) >= want:
+		print("        ink: centre %.4f, worst-in-type-box %.4f, %s at %.2f:1, no grade needed" % [
+			mean, before, "PALE" if pale else "INK", _contrast(ink_l, before)])
+		return ""
+
+	# The luminance that clears `want` against this ink, solved rather than searched.
+	# Away from the ink in whichever direction the ink is not.
+	var target := (((ink_l + 0.05) / want) - 0.05) if pale else (((ink_l + 0.05) * want) - 0.05)
+	if target <= 0.0 or target >= 1.0:
+		return "no plate luminance clears %.1f:1 against the ink %s" % [want, ink]
+	var scale := target / maxf(before, 0.0001)
+	var w := img.get_width()
+	var h := img.get_height()
+	for y in h:
+		for x in w:
+			var c := img.get_pixel(x, y)
+			# Alpha untouched. This is a grade, not a second matte.
+			img.set_pixel(x, y, Color(minf(c.r * scale, 1.0), minf(c.g * scale, 1.0),
+				minf(c.b * scale, 1.0), c.a))
+	var after := _extreme_in(img, box, pale)
+	print("        ink: centre %.4f -> %.4f, worst-in-type-box %.4f -> %.4f (x%.3f), %s %.2f:1 -> %.2f:1 against %.1f:1" % [
+		mean, _centre_luma(img), before, after, scale, "PALE" if pale else "INK",
+		_contrast(ink_l, before), _contrast(ink_l, after), want])
+	# Clipping in the highlights, or a scale the solve did not actually reach, is worth
+	# refusing rather than shipping: the number above would then be a claim, not a check.
+	if _contrast(ink_l, after) < want - 0.05:
+		return "graded to %.2f:1, short of the %.1f:1 asked for" % [_contrast(ink_l, after), want]
+	return ""
+
+
+## The worst-reading pixel of `box` (fractions of the image): brightest under pale type,
+## darkest under dark type. Fully transparent pixels are skipped — a hole in the plate is
+## not a colour the type is ever drawn on, and under a pale ink one would otherwise set the
+## whole grade off the transparent field.
+func _extreme_in(img: Image, box: Rect2, pale: bool) -> float:
+	var w := img.get_width()
+	var h := img.get_height()
+	var x0 := clampi(int(box.position.x * w), 0, w - 1)
+	var y0 := clampi(int(box.position.y * h), 0, h - 1)
+	var x1 := clampi(int(box.end.x * w), x0 + 1, w)
+	var y1 := clampi(int(box.end.y * h), y0 + 1, h)
+	var worst := 0.0 if pale else 1.0
+	for y in range(y0, y1):
+		for x in range(x0, x1):
+			var c := img.get_pixel(x, y)
+			if c.a <= 0.0:
+				continue
+			var l := c.get_luminance()
+			worst = maxf(worst, l) if pale else minf(worst, l)
+	return worst
+
+
+## Mean luminance of the centre 35-65% box, which is what `UITheme.ink_for` reads.
+func _centre_luma(img: Image) -> float:
+	var w := img.get_width()
+	var h := img.get_height()
+	var tot := 0.0
+	var n := 0
+	for y in range(int(h * 0.35), maxi(int(h * 0.65), int(h * 0.35) + 1)):
+		for x in range(int(w * 0.35), maxi(int(w * 0.65), int(w * 0.35) + 1)):
+			tot += img.get_pixel(x, y).get_luminance()
+			n += 1
+	return tot / maxf(1.0, float(n))
+
+
+## The ratio `tests/menu_art_test.gd` reports, in the same terms, so the two numbers can
+## be compared. Not linearised — that is the yardstick this project already measures its
+## backdrops with, and one screen quoting a different definition of contrast than the
+## suite does is worse than both of them being approximate.
+func _contrast(a: float, b: float) -> float:
+	return (maxf(a, b) + 0.05) / (minf(a, b) + 0.05)
 
 
 ## Alpha from DISTANCE TO THE FIELD, geometry untouched. For a subject the flood-fill

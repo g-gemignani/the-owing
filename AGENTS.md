@@ -345,20 +345,29 @@ effects are drawn at runtime by `scripts/fx.gd`.
   1.40x, so two independent yardsticks agree: **1.5x is a fact about the design, not an artifact of
   the metric.** Per-cell completion now spans 0-99% and needs fitting per cell.
 
-  **The target is now 5x escalation and a 60% death rate (D242).** Measured against it (D243):
-  the content pass reached **1.62x** mean, 1.94x best, and enemy damage at **x1.8 hits 40%
-  completion exactly** with deaths moving earlier (4.1 → 2.7 fights). The two targets are
-  INDEPENDENT — enemy damage does not move `esc` at all — so a tuning pass cannot buy escalation
-  and a content pass cannot buy a death rate. 5x is not reachable on damage-per-turn with five
-  relics a run: it needs more relics per run, far larger magnitudes, or a better yardstick
-  (turns-to-kill can reach 5x; damage-per-turn is bounded by the enemy's own pool).
+  **`esc` was the wrong yardstick and the 5x has arrived on the right one (D265, D266).** Five
+  separate player-side changes left `esc` flat at ~1.6 — the content pass, an enemy-damage sweep, a
+  commitment tilt, a build-planning driver, and 50% more relics. It reads damage per turn out of a
+  fight that ENDS, so once the deck can kill inside the fight it reports enemy HP growth and nothing
+  about the player. **When every change to one side of an equation leaves a number unmoved, the
+  number is about the other side.**
 
-  **What is left, in order (D241): PLAY IT, then rewrite the nineteen relics that are still
-  numbers, then re-fit the ladder, then guarantee a decision on every floor.** The playtest is
-  first because every figure above came from the simulator, and six entries of instrument bugs
-  (D124, D180, D208, D233, D237, D239) are the argument against scheduling more measurement. The
-  tool cannot tell a rising escalation number from a reward that lands flat, and REVIEW.md's
-  "rewards do not land" is still open.
+  `cap` replaced it: damage per turn against a target that cannot die, sampled at both ends of a run
+  and played with the same driver the real fights use. It now reads **median 3.27x, mean 4.72x, max
+  20.04x** — the 5x, on a metric that did not exist when it was asked for. Completion sits at 38%
+  and `real` at 47%, which has held near half through nine consecutive changes.
+
+  **D241 is discharged and D280 replaced it.** What got the growth there was not content: it was
+  D270's within-run difficulty ramp (nothing had raised enemy strength as a run descended, so the
+  first fight was the hardest moment in the game) and D275's pacing (the floor is the unit now, and
+  depth adds floors — The Maw is 20 encounters against the Crypt's 10, where both were 12).
+
+  **What is left: archetype spread, and block's double job (D285).** Combo clears 100% at the
+  Foundry and Status 4%. Re-pricing block would help the defensive builds and is refused for now —
+  `BLOCK_VALUE` is the numerator of `BASELINE_CARD_POWER`, the divisor of every ratio in the game,
+  so moving it opens the unpriced-throughput hole in powers. Splitting it into a shop price and a
+  scaling weight is the real fix. The playtest is live rather than pending — the player is playing,
+  and "the dungeons feel off" is where D275 came from.
 
 - **Completion percentage is a constraint, not the goal (D231).** The tool has printed
   `Target: RUN completion ~40-60%` since D54 and every difficulty entry since has been an
@@ -1238,6 +1247,19 @@ These are failure modes that have actually bitten this project. Treat each as a 
   leaves colour alone — so the check that finds this is opaque coverage against surviving
   RGB, not looking at the thumbnail. The tool even printed the tell (`dropped_islands`) and
   nobody read it.
+
+  **The replacement key does the same thing in the other direction, and the trigger is a
+  RECOLOUR rather than a bug.** `lumakey` was written for these files and sets alpha from
+  distance to the field, so a subject is opaque in proportion to how far it sits from its
+  own background. That held while `ui/logo.png` was pale stone on black. D283 re-cut the
+  same plate in cold dark slate, and the same key installed its flat middle — the part
+  type is set on — at **alpha 0.39**, 19.3% of the file above alpha 0.5 against 72.26%
+  before. Nothing about the tool changed and nothing warned. So the rule generalises:
+  **an installer recipe is a claim about the art's VALUES, and re-generating an asset can
+  expire it.** The two techniques trade places at roughly a mid grey — the flood fill
+  refuses dark-on-dark, the luma key refuses dark-subject — and picking one once is not
+  picking it forever. Re-read the opacity line after every re-cut, not just after a code
+  change.
 
   **The cue that works is local FLATNESS, not colour and not an edge** (`STD_FLAT`, D153).
   The installers verify the border is flat before cutting, so background is smooth by
