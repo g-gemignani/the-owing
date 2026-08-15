@@ -1275,6 +1275,14 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `config/version` disagree, because a release page and a Settings screen stating different
   versions is the D34 shape in the one field only a bug report would ever compare.
 
+  **A second channel is safe only while it cannot become the default download (D251).** A
+  rolling build of `main` is published again, and the thing that makes it safe is one flag:
+  `--latest=false` keeps `releases/latest/download/<file>` resolved to the newest `v*` release,
+  so the rolling build is reachable for anyone who wants it and invisible to a stranger. That
+  is the precise failure D227 removed — not that a build of main existed, but that it was the
+  newest thing on the page and so the one a player took. What the permanence rule buys is the
+  anonymous link; what this adds is that the link keeps pointing at the build somebody chose.
+
   A downloads badge stays deleted through both channels, for two different reasons. On the
   rolling one GitHub counted per release object and the object was recreated on every push, so
   the counter reset several times a day and read 0 after real downloads (D158). Per tag it
@@ -1546,17 +1554,24 @@ docs/        the README's screenshots, and nothing else. Carries a .gdignore:
              nothing in the game loads them and Godot would otherwise write a
              .import and a .uid beside each one
 .github/     ci.yml — suite and export-readiness on every push and PR, then
-             (on a `v*` TAG only, D227) three build-* jobs and one release job,
-             all on Ubuntu. The iOS job is written and COMMENTED OUT — three
+             (on a `v*` TAG or a push to main, D227/D251) three build-* jobs, one
+             release job and one pages job, all on Ubuntu. TWO channels through
+             the one release job: a `v*` tag publishes a release that is KEPT,
+             main publishes ONE rolling prerelease under `main-latest` that the
+             next push replaces. The iOS job is written and COMMENTED OUT — three
              rounds, never past xcodebuild, and its log needs admin rights to
              read (D147); it is preserved verbatim because the preset patch and
              the macOS setup do work. The Android key is a per-build throwaway
              unless the repository holds one secret. The README's download links
              are stable without naming a version because
              `releases/latest/download/` resolves to the current release, which
-             is why the release is published `--latest` and never
-             `--prerelease` (D142, D227). actions/setup-godot/ is the shared
-             cache-and-install step, and runs on both Linux and macOS
+             is why a version is published `--latest` and never `--prerelease`
+             (D142, D227) and why the rolling build is published
+             `--prerelease --latest=false` — the same rule read from both ends.
+             The pages job renders tools/downloads_page.py to GitHub Pages, which
+             is where every downloadable version is listed (D251).
+             actions/setup-godot/ is the shared cache-and-install step, and runs
+             on both Linux and macOS
 README.md    the front page, and the ONLY file here written for a PLAYER rather
              than for whoever works on this. What the game is, how to get it,
              what you do in it. Keep developer material out of it — it has one

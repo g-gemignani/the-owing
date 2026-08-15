@@ -239,6 +239,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D248** | [Going in owing opens on the first clear, because a wager on a stranger is a coin toss](#d248--going-in-owing-opens-on-the-first-clear-because-a-wager-on-a-stranger-is-a-coin-toss) |
 | **D249** | [The smallest legal deck is the deck you are handed](#d249--the-smallest-legal-deck-is-the-deck-you-are-handed) |
 | **D250** | [Thirty powers, and a derived guard that had gone blind](#d250--thirty-powers-and-a-derived-guard-that-had-gone-blind) |
+| **D251** | [Two channels, and the page that says which is which](#d251--two-channels-and-the-page-that-says-which-is-which) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -16880,3 +16881,92 @@ Bands now ascend everywhere: powers read LEGENDARY 10.0–10.7 over EPIC 8.7–9
 
 Over 200 offers on a fully-cleared save, **all 30 powers appear and all 30 come up first**, so the
 depth gate paces the pool without stranding anything — the same property D223 asserts for relics.
+
+### D251 — Two channels, and the page that says which is which
+
+Asked for: keep the builds for the tagged versions and for `main`, and put a link in the README to
+a page listing every version that can be downloaded.
+
+#### What existed
+
+D227 narrowed the pipeline to one channel. Before it, every green push to `main` published a
+rolling build under the fixed tag `latest`; after it, a binary exists only for a `v*` tag. The
+reasoning was sound and is worth restating, because this entry brings the rolling channel back:
+mid-way through a design inversion (D226) the rolling build was **the newest thing on the releases
+page**, so it was what an arriving player downloaded, and nothing on the page could say *not that
+one*.
+
+That failure was never "a build of main exists". It was "a build of main is the default download".
+
+#### The two channels
+
+| | tag | kept | flags |
+|---|---|---|---|
+| version | the `v*` tag pushed | every one, for ever | `--latest` |
+| main | `main-latest` | only the newest | `--prerelease --latest=false` |
+
+`--latest=false` is the whole of D227's lesson expressed as one flag. `releases/latest/download/<file>`
+— every download link in the README — resolves to the newest **non-prerelease** release, so the
+rolling build cannot become what a stranger is handed however new it is. The channel is reachable
+for anyone who wants today's build, and invisible to anyone who does not.
+
+**The rolling tag is `main-latest`, not `main`.** A git tag sharing a name with a branch makes every
+`git checkout main` and `git show main` in the repository ambiguous, and git resolves that in the
+branch's favour *silently* — a footgun with no error message, planted in a repository whose owner
+would meet it while bisecting something else.
+
+**One `release` job serves both.** They differ in four values — tag, title, gh flags, whether the tag
+is cleaned up — and in nothing else: the artifacts, the staging, the stock-taking and the notes are
+identical. `steps.chan` decides those four once and every later step reads its outputs. A second job
+would be that whole body copied to vary a tag name; a ref test repeated across five steps is the D34
+shape in a workflow file, where four of the five get updated when the rule moves.
+
+`--cleanup-tag` flips with the channel, and the reason is the direction the tag travels. A `v*` tag is
+the pipeline's **input** — a developer pushed it to ask for this build — so deleting it would erase
+the version being published. `main-latest` is the pipeline's **output**: nobody pushed it, it must
+move to the new commit every time, and a tag left standing after its release is deleted is one the
+next `create` silently reuses, publishing today's assets against last week's commit. That is the same
+provenance bug D227's version assertion exists to prevent, arriving by a different door.
+
+That assertion also had to learn about the second channel: `stamp_build.sh` fails when the tag it is
+given disagrees with `config/version`, and `github.ref_name` is `main` on the rolling channel. The
+workflow passes `""` there, which is the argument's documented "do not check".
+
+#### The page, and why /releases is not it
+
+GitHub already lists every release. Three things it cannot do, and each one is where a player closes
+the tab:
+
+* it cannot separate a version somebody chose to publish from the rolling build of `main`. Both are
+  "a release", and the newest row is the one that is not meant to be the default;
+* every asset row is a filename and a byte count. Which one a Windows machine wants is a guess unless
+  you already know what `x86_64` means;
+* the notes are release notes — written for somebody following the project, not for somebody who
+  wants the game.
+
+`tools/downloads_page.py` renders the releases API into one page: stable versions newest-first, each
+with a labelled button per platform and a size, then the rolling build under a heading that says in
+words that it is replaced on every push. Published to GitHub Pages by a `pages` job that runs after
+`release`, because it renders what that job just published — run in parallel and the page shows the
+state from before this build.
+
+**It is not committed.** A copy in the tree would be a second statement of a fact the API owns, wrong
+from the next release onward — D207's finding about the README's typed sizes, which were correct once
+and three megabytes stale by the time anyone looked.
+
+**A version is a tag starting with `v`, and the page filters on exactly that.** The first cut said
+"everything that is not the rolling tag", which is wrong in both directions: the repository still
+carries a `latest` release from the channel D227 removed, and that would have been listed as a stable
+version. Filtering on the `prerelease` flag would be wrong too — that flag is a mechanism GitHub also
+uses for ordering, and a stable version demoted when a newer one landed is still a version somebody
+published.
+
+#### What this does not do
+
+The rolling channel keeps **one** build of `main`. Every tagged version is kept for ever; every push
+to `main` destroys the previous main build. Keeping all of them would mean a release per commit, and
+this tree gets several a day.
+
+Pages must be switched on once for the repository, with its source set to **GitHub Actions**. That is
+a repository setting and cannot be made from a workflow file. Until it is, the `pages` job fails on
+`configure-pages` and nothing else in the pipeline is affected.

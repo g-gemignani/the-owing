@@ -7,9 +7,14 @@ name: ci
 # be threaded through by hand. The JOB names are unchanged, so any required status
 # check still resolves.
 
-# The suite runs on everything; the BUILDERS run only on a `v*` tag (D227). Those are
-# deliberately different triggers: a regression should be caught on the push that caused
-# it, and a binary should exist only for a state somebody decided to name.
+# The suite runs on everything; the BUILDERS run on a `v*` tag and on a push to `main`
+# (D227, widened in D251). Two channels, and they are not the same promise:
+#
+#   a `v*` tag  -> a release that is KEPT, and every one ever cut stays downloadable;
+#   main        -> ONE rolling prerelease under `main-latest`, replaced on every push.
+#
+# A regression is still caught by the suite on the push that caused it, which is why the
+# test job's trigger is untouched and the builders hang off `needs:`.
 on:
   push:
     branches: [main]
@@ -72,19 +77,20 @@ jobs:
   # --- builders -----------------------------------------------------------------
   #
   # One job per platform family rather than one job that exports everything, because
-  # they no longer share a machine: iOS can only be built on macOS. They run only on a
-  # `v*` TAG (D227), for the same reason the release does — every push and every PR gets
-  # the suite and the export-readiness check, which is what catches a project-side
-  # regression, and the binaries are only wanted for a state somebody chose to publish.
+  # they no longer share a machine: iOS can only be built on macOS. They run on a `v*` TAG
+  # and on a push to `main` (D251) — never on a pull request, where the head is somebody
+  # else's commit and there is nothing to publish it as.
   #
   # `startsWith(github.ref, 'refs/tags/v')` rather than a match on `github.ref_name`,
-  # because a BRANCH called `v-something` would satisfy the second and not the first.
+  # because a BRANCH called `v-something` would satisfy the second and not the first. The
+  # main arm is compared against `refs/heads/main` for the mirror image of that reason: a
+  # TAG called `main` would otherwise pass it, and this workflow creates rolling tags.
 
   build-desktop:
     needs: [test, export-ready]
     if: >-
       github.event_name == 'push'
-      && startsWith(github.ref, 'refs/tags/v')
+      && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
       && github.repository_owner == 'g-gemignani'
     runs-on: ubuntu-latest
     steps:
@@ -105,7 +111,8 @@ jobs:
       - name: Stamp the build
         run: >-
           tools/stamp_build.sh "$(git rev-parse --short=7 HEAD)"
-          "${{ github.run_number }}" "${{ github.ref_name }}"
+          "${{ github.run_number }}"
+          "${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}"
 
       # `--export-release` is not reliably a truthful exit code — it returns non-zero
       # on import warnings that did not stop it, which is why `tests/export_ready.sh`
@@ -165,7 +172,7 @@ jobs:
       signing: ${{ steps.key.outputs.signing }}
     if: >-
       github.event_name == 'push'
-      && startsWith(github.ref, 'refs/tags/v')
+      && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
       && github.repository_owner == 'g-gemignani'
     runs-on: ubuntu-latest
     steps:
@@ -276,7 +283,8 @@ jobs:
       - name: Stamp the build
         run: >-
           tools/stamp_build.sh "$(git rev-parse --short=7 HEAD)"
-          "${{ github.run_number }}" "${{ github.ref_name }}"
+          "${{ github.run_number }}"
+          "${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}"
 
       - name: Export the APK
         env:
@@ -456,34 +464,78 @@ jobs:
 
   # --- publish ------------------------------------------------------------------
   #
-  # One release per `v*` tag (D227). It was a rolling build of main under the fixed tag
-  # `latest`, published on every green push; the reasoning was that a channel depending on
-  # somebody remembering to cut a tag is a download link that goes stale. That held while
-  # every push was an improvement to a prototype. It stops holding the moment the tree is
-  # mid-way through a design inversion (D226): a rolling channel publishes the half-built
-  # state as the thing to download, and there is no way to say "not that one".
+  # Two channels through one job (D251), because they differ in four values and in nothing
+  # else — the artifacts, the staging, the stock-taking and the notes are identical, and a
+  # second job would be that whole body copied to vary a tag name.
   #
-  # The README's links stay permanent WITHOUT a fixed tag name, because
-  # `/releases/latest/download/<file>` is resolved by GitHub to the newest non-prerelease
-  # release. That is the whole reason `--prerelease` is gone below: the flag is a mechanism,
-  # not a claim, and setting it would take the stable URL away. The notes still say
-  # prototype, which is where that claim belongs.
+  #   a `v*` tag       -> a release that is KEPT. `--latest`, no prerelease flag, and the
+  #                       tag is the pipeline's INPUT, so it is never cleaned up.
+  #   a push to main   -> ONE prerelease under `main-latest`, deleted and recreated every
+  #                       push. Here the tag is an OUTPUT of the pipeline, so it IS cleaned
+  #                       up: the release must point at the new commit, and a tag left
+  #                       behind would make the next `create` land on the old one.
+  #
+  # D227 removed a rolling channel and this brings one back, deliberately narrower. What
+  # broke then was that the rolling build was the DEFAULT download: it was the newest thing
+  # on the releases page mid-way through a design inversion (D226), with no way to say "not
+  # that one". Two things now say it. `--latest=false` keeps
+  # `/releases/latest/download/<file>` — the URLs the README serves — resolved to the newest
+  # `v*` release and never to this, and the downloads page prints the rolling build under a
+  # heading that says it is replaced on every push. The channel is reachable for anyone who
+  # wants today's build; it is not what an arriving player is handed.
+  #
+  # `main-latest` and not `main`: a tag with the same name as a branch makes every
+  # `git checkout main` in the repository ambiguous, and git resolves it silently.
   release:
     needs: [build-desktop, build-android]
     if: >-
       github.event_name == 'push'
-      && startsWith(github.ref, 'refs/tags/v')
+      && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main')
       && github.repository_owner == 'g-gemignani'
     runs-on: ubuntu-latest
     permissions:
       contents: write
-    # Per tag, so two tags pushed together publish in parallel instead of queueing behind
-    # one group. Queued rather than cancelled within a tag: a re-run of the same tag racing
-    # itself would otherwise leave half a release standing.
+    # Per ref, so two tags pushed together publish in parallel instead of queueing behind
+    # one group. Queued rather than cancelled within a ref: a re-run of the same tag racing
+    # itself would otherwise leave half a release standing. On main that queueing is
+    # load-bearing rather than incidental — two pushes a minute apart both delete and
+    # recreate one tag, and cancelling the first mid-delete is how `main-latest` ends up
+    # with no release under it at all.
     concurrency:
       group: release-${{ github.ref_name }}
       cancel-in-progress: false
     steps:
+      # Which channel this run is, decided ONCE and read from outputs everywhere below.
+      # Every later step then contains no `if`, no second `startsWith`, and no second
+      # opinion about what `main-latest` is called — the D34 shape in a workflow file is a
+      # ref test repeated in five steps, four of which get updated when the rule moves.
+      - name: Decide which channel this is
+        id: chan
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF#refs/tags/v}" != "$GITHUB_REF" ]; then
+            {
+              echo "kind=tag"
+              echo "tag=$GITHUB_REF_NAME"
+              echo "title=The Owing $GITHUB_REF_NAME"
+              # A version is what the README's links resolve to, and `--latest` is explicit
+              # rather than left to GitHub's own ordering, which picks by tag date and would
+              # hand the pointer to a hotfix cut from an older branch.
+              echo "flags=--latest"
+            } >> "$GITHUB_OUTPUT"
+          else
+            {
+              echo "kind=main"
+              echo "tag=main-latest"
+              echo "title=The Owing — build of main"
+              # `--latest=false` is the flag holding the README's download URLs up. Without
+              # it this prerelease becomes what `/releases/latest/download/<file>` serves,
+              # which is D227's failure exactly.
+              echo "flags=--prerelease --latest=false"
+            } >> "$GITHUB_OUTPUT"
+          fi
+          cat "$GITHUB_OUTPUT"
+
       - uses: actions/download-artifact@v4
         with:
           path: staged
@@ -509,12 +561,30 @@ jobs:
       - name: Write the release notes
         env:
           SIGNING: ${{ needs.build-android.outputs.signing }}
+          KIND: ${{ steps.chan.outputs.kind }}
         run: |
           set -euo pipefail
-          cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
+          # What this build IS, first, because it is the one thing that differs between the
+          # two channels and the one thing somebody deciding whether to download needs.
+          if [ "$KIND" = main ]; then
+            cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
+          **This is the rolling build of `main`, not a version.** It is replaced by the next
+          push, it is whatever is being worked on today, and half-finished work is expected
+          in it. For the build that was decided to be worth publishing, take the
+          [latest release](https://github.com/g-gemignani/the-owing/releases/latest); every
+          version ever cut is on the
+          [downloads page](https://g-gemignani.github.io/the-owing/).
+          NOTES
+          else
+            cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
           A build of the commit this tag names. It is a **prototype**: the version number
-          orders the releases and promises nothing beyond that. Saves carry their own
-          version and are migrated forward, so an existing character survives the upgrade.
+          orders the releases and promises nothing beyond that.
+          NOTES
+          fi
+          cat >> "$RUNNER_TEMP/notes.md" <<'NOTES'
+
+          Saves carry their own version and are migrated forward, so an existing character
+          survives the upgrade.
 
           | platform | file | first run |
           |---|---|---|
@@ -582,11 +652,14 @@ jobs:
       # came from a commit it did not. The assets go up in the create call itself, so a
       # failed upload cannot leave an empty release standing where a good one was.
       #
-      # **Without `--cleanup-tag`, and that is the important word here.** On the rolling
-      # channel the tag was an output of the pipeline and deleting it was free. A `v*` tag
-      # is the pipeline's INPUT — the thing the developer pushed to ask for this build — and
-      # `--cleanup-tag` would delete it from the repository, so a re-run of the same tag
-      # would erase the version it was asked to publish.
+      # **`--cleanup-tag` on one channel and not the other, and that is the important word
+      # here.** A `v*` tag is the pipeline's INPUT — the thing the developer pushed to ask
+      # for this build — and cleaning it up would delete from the repository the version it
+      # was asked to publish, so a re-run of the same tag would erase it. `main-latest` is
+      # the pipeline's OUTPUT: nobody pushed it, it has to move to the new commit every
+      # time, and a tag left standing after the release under it is deleted is a tag the
+      # next `create` silently reuses — publishing today's assets against last week's
+      # commit, which is the provenance bug D227's tag check exists to prevent.
       - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -596,28 +669,93 @@ jobs:
           # repository, `view` reports no release, the delete is skipped, and `create`
           # ends on "a release with that tag already exists" (D146).
           GH_REPO: ${{ github.repository }}
+          KIND: ${{ steps.chan.outputs.kind }}
+          TAG: ${{ steps.chan.outputs.tag }}
+          TITLE: ${{ steps.chan.outputs.title }}
+          FLAGS: ${{ steps.chan.outputs.flags }}
         run: |
           set -euo pipefail
-          tag="$GITHUB_REF_NAME"
+          # An `if` and not `[ "$KIND" = main ] && cleanup=...`. Under `set -e` the second
+          # form is an AND-list whose status is the failing test's, and whether that exits
+          # is a corner of the spec bash and dash read differently. A publish step is the
+          # wrong place to be relying on which shell the runner image points `bash` at.
+          cleanup=""
+          if [ "$KIND" = main ]; then
+            cleanup="--cleanup-tag"
+          fi
           # Checked, then deleted WITHOUT `|| true`. The first version swallowed the
           # delete's exit code, so when a repository rename made the API 301 the delete
           # away, the failure surfaced three lines later as "a release with that tag
           # already exists" — a true message about the wrong cause (D146).
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release delete "$tag" --yes
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes $cleanup
           fi
-          # `--latest` is explicit rather than left to GitHub's own ordering, which picks by
-          # tag date and would hand the pointer to a hotfix cut from an older branch. It is
-          # what `/releases/latest/download/<file>` resolves, so it is what the README's
-          # download links serve — the one flag holding those links up.
-          gh release create "$tag" staged/* \
+          # $FLAGS is deliberately UNQUOTED: it carries one or two whole flags decided by
+          # the channel step, and quoting it would pass `--prerelease --latest=false` as a
+          # single argument that gh rejects. It is set by this workflow and never by input.
+          gh release create "$TAG" staged/* \
             --target "$GITHUB_SHA" \
-            --latest \
-            --title "The Owing $tag" \
+            $FLAGS \
+            --title "$TITLE" \
             --notes-file "$RUNNER_TEMP/notes.md"
           {
-            echo "### Published"
-            echo "<https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}>"
+            echo "### Published — $KIND channel"
+            echo "<https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}>"
             echo
             find staged -maxdepth 1 -type f -printf '- %f\n' | sort
           } >> "$GITHUB_STEP_SUMMARY"
+
+  # --- the downloads page -------------------------------------------------------
+  #
+  # Every version that can still be downloaded, on one page (D251). It is generated from
+  # the releases API and never committed: a copy in the tree would be a second statement of
+  # a fact the API owns, and it would be wrong from the next release onward.
+  #
+  # Deployed after `release` rather than beside it, because it renders what that job just
+  # published — run in parallel and the page shows the state from before this build. It is
+  # also reachable from `workflow_dispatch`, which is the way to rebuild it after a release
+  # is edited or deleted by hand, and the only path here that does not need `release` to
+  # have run.
+  #
+  # This needs Pages switched on for the repository with its source set to **GitHub
+  # Actions** (Settings -> Pages). That is a one-time repository setting and cannot be made
+  # from a workflow file; until it is set, this job fails on `configure-pages` and nothing
+  # else in the pipeline is affected.
+  pages:
+    needs: [release]
+    if: >-
+      always()
+      && github.repository_owner == 'g-gemignani'
+      && (needs.release.result == 'success' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    # One page, one deployment. Cancelled rather than queued, which is the opposite of the
+    # release job's choice and correct for the opposite reason: a superseded render of a
+    # page has nothing in it worth waiting for, and two pushes a minute apart should leave
+    # the newer one standing rather than the older one finishing last.
+    concurrency:
+      group: pages
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+
+      # The token is for the rate limit only — the endpoint is public and this works
+      # unauthenticated, which is what lets the same script run on a laptop.
+      - name: Build the page
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/downloads_page.py site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

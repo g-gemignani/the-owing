@@ -7,6 +7,10 @@ binaries, and this link always serves the newest of them:
 
 **<https://github.com/g-gemignani/the-owing/releases/latest>**
 
+Every version ever published, plus today's build of `main`, is on the downloads page:
+
+**<https://g-gemignani.github.io/the-owing/>**
+
 Or, from a checkout with **Godot 4.7**:
 
 ```bash
@@ -16,9 +20,18 @@ GODOT=/path/to/godot ./run.sh      # or put godot on PATH and run ./run.sh
 ## The release pipeline
 
 `.github/workflows/ci.yml` runs the suite and checks every preset is still exportable on
-**every push and every pull request**. It builds and publishes only when a **`v*` tag** is
-pushed, and only after both of those pass (D227). Cutting a release is therefore two
-commands, and the second one is the decision:
+**every push and every pull request**. It builds and publishes on a **`v*` tag** and on a
+**push to `main`**, and only after both of those pass (D227, widened in D251). Never on a pull
+request, where the head is somebody else's commit and there is nothing to publish it as.
+
+Two channels, and they make different promises:
+
+| channel | tag | kept? | what it is |
+|---|---|---|---|
+| **version** | the `v*` tag you pushed | every one, for ever | a state somebody decided to name. `--latest`, so this is what the README's download links resolve to |
+| **main** | `main-latest` | only the newest | the rolling build. Deleted and recreated on every push, `--prerelease --latest=false` |
+
+Cutting a version is therefore two commands, and the second one is the decision:
 
 ```bash
 git tag -a v0.2.0 -m "what changed"
@@ -31,20 +44,57 @@ git push origin v0.2.0
 | `build-android` | `ubuntu-latest` | the runner image already carries a JDK and the SDK; Godot finds both through `JAVA_HOME` and `ANDROID_HOME` |
 | ~~`build-ios`~~ | `macos-latest` | written, **commented out** — it never got past `xcodebuild` (D147) |
 
-Eight things about it are deliberate and easy to undo by accident:
+## The downloads page
 
-* **The suite and the builders run on different triggers, on purpose.** A regression should
-  be caught on the push that caused it; a binary should exist only for a state somebody
-  decided to name. Widening the builders back to every push to `main` is what D227 undid.
+`tools/downloads_page.py` renders every release the API reports into one page, and the `pages`
+job publishes it to GitHub Pages after `release`. It is **not committed**: it is a rendering of
+the releases API, so a copy in the tree would be a second statement of a fact the API owns and
+would be wrong from the next release onward. Run it anywhere to see what it would publish:
+
+```bash
+python3 tools/downloads_page.py site && xdg-open site/index.html
+```
+
+It needs Pages switched on once, in **Settings → Pages**, with the source set to **GitHub
+Actions**. Until that is done the `pages` job fails on `configure-pages` and nothing else in
+the pipeline is affected.
+
+A version is a tag starting with `v`, and the page filters on exactly that. Not on the
+`prerelease` flag: that is a mechanism GitHub also uses for ordering, and a stable version
+demoted when a newer one landed is still a version somebody published.
+
+## What is deliberate
+
+Thirteen things about the pipeline are deliberate and easy to undo by accident:
+
+* **The two channels differ in four values and nothing else.** One `release` job serves
+  both: `steps.chan` decides the tag, the title, the gh flags and whether the tag is cleaned
+  up, and every step after it reads those outputs. A second job would be the whole body
+  copied to vary a tag name, and a ref test repeated in five steps is the shape where four
+  of them get updated when the rule moves.
+* **`--latest=false` on the main channel is load-bearing.** It is the one flag keeping
+  `releases/latest/download/<file>` — every download link in the README — resolved to the
+  newest version and never to the rolling build. D227 removed a rolling channel because it
+  became the default download mid-way through a design inversion (D226); it is back under
+  D251 with that flag, and with a downloads page that says in words which is which.
+* **The rolling tag is `main-latest`, not `main`.** A git tag sharing a name with a branch
+  makes every `git checkout main` in the repository ambiguous, and git resolves it silently.
 * **The download links contain no version, and still need no fixed tag.**
   `releases/latest/download/<file>` is resolved by GitHub to the current release's asset, so
-  the README's links never change while the releases behind them do. This is why the release
-  is published with `--latest` and **not** with `--prerelease`: that endpoint skips
+  the README's links never change while the releases behind them do. This is why a *version*
+  is published with `--latest` and never with `--prerelease` — that endpoint skips
   prereleases, and setting the flag would silently take every download link on the page down.
-* **`gh release delete` runs without `--cleanup-tag`.** On the old rolling channel the tag was
-  an output and deleting it was free. A `v*` tag is the pipeline's *input* — the thing that
-  asked for the build — so cleaning it up would erase the version being published and make a
-  re-run impossible.
+  The rolling build carries both, which is the same rule read from the other end: it is a
+  prerelease precisely so that endpoint keeps skipping it.
+* **`--cleanup-tag` is passed on the main channel and never on a version.** A `v*` tag is the
+  pipeline's *input* — the thing that asked for the build — so cleaning it up would erase the
+  version being published and make a re-run impossible. `main-latest` is the pipeline's
+  *output*: nobody pushed it, it has to move to the new commit every time, and a tag left
+  standing after its release is deleted is one the next `create` silently reuses — publishing
+  today's assets against last week's commit.
+* **The version assertion is passed only on a tag.** `github.ref_name` is `main` on the
+  rolling channel, and handing that to `stamp_build.sh` as a version would fail every push.
+  The workflow passes `""` there, which is the argument's documented "do not check".
 * **A tag that disagrees with `config/version` fails the build.** `tools/stamp_build.sh` is
   given the tag and refuses to stamp if it does not match, because the alternative is a
   release page saying 0.2.0 over a binary that reports 0.1.0 in Settings — visible only in a

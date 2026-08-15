@@ -34,6 +34,10 @@ Pick your machine, download, open. There is no installer and no account.
 because typed ones were three megabytes stale and nobody could tell (D207).</sub>
 <!-- END GENERATED DOWNLOADS -->
 
+**[Every version, on one page →](https://g-gemignani.github.io/the-owing/)** The table above is
+the current release. That page lists every version ever published, each with its own downloads,
+and at the bottom the rolling build of `main` — today's work, replaced on every push.
+
 **Your computer will probably warn you the first time.** That is expected and it is not about
 this game specifically: Windows and macOS show that warning for anything not bought from a
 company with a paid publishing certificate, which this isn't. The steps above get past it. On
