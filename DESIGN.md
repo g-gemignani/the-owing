@@ -258,13 +258,15 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D267** | [The floor was drawn at a fifth of its size, so nothing painted on it could survive](#d267--the-floor-was-drawn-at-a-fifth-of-its-size-so-nothing-painted-on-it-could-survive) |
 | **D268** | [The manifest asks whether a file is there, and nothing asked whether it agrees](#d268--the-manifest-asks-whether-a-file-is-there-and-nothing-asked-whether-it-agrees) |
 | **D269** | [The README is written for a player, and the pictures are a claim that has to be re-checked](#d269--the-readme-is-written-for-a-player-and-the-pictures-are-a-claim-that-has-to-be-re-checked) |
+| **D270** | [The dungeon follows the player down, and two rewards stop lying](#d270--the-dungeon-follows-the-player-down-and-two-rewards-stop-lying) |
 | **D271** | [A panel that redraws may not roll dice](#d271--a-panel-that-redraws-may-not-roll-dice) |
 | **D272** | [A green suite on a dirty tree says nothing about what was pushed](#d272--a-green-suite-on-a-dirty-tree-says-nothing-about-what-was-pushed) |
+| **D275** | [The floor becomes the unit, and depth starts buying something](#d275--the-floor-becomes-the-unit-and-depth-starts-buying-something) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
 
-**Cited but never written up:** D48 D93 D100 D110 D234 D270. Each is referenced by number
+**Cited but never written up:** D48 D93 D100 D110 D234. Each is referenced by number
 somewhere in this file and has no entry of its own. D110 is the documented
 case — D112 records it being left alone while a concurrent session held it.
 
@@ -18462,14 +18464,45 @@ face takes the ground UV and its sides take the wall UV, so the same stone is dr
 larger on top of a wall than on its face. The better answer is probably that a wall CAP is not
 a course of masonry and should be its own material.
 
+#### The dressing, which is bigger than the walls and was found last
+
+Asked, once the wall arithmetic was written down: *"with details of the wall I meant the
+drawings that are added on top to make the dungeon diverse, those also need a re-rolling no?"*
+
+They do, and it is the largest item on the list. **Everything that varies one floor from the
+next is drawn with `draw_line`, `draw_circle` and `draw_colored_polygon`** — 16 props, 4
+landmark caps, the mark on a pushable wall, the back door, the shrine, the ledger, the way
+down and a key on the floor. Twenty-six drawings, no texture, no ink, no paint. An iron ring
+is an arc and a 2px stem; a heap of stacked bone is three diamonds at rising brightness.
+
+**D176 was right when it wrote that, and D267 is what changed the answer.** Its argument was
+that "there is no prop in any art pack, these are shapes rather than silhouettes", and on a
+floor of computed noise a computed shape belongs. Painting the floor and the walls did not
+make the dressing look worse in isolation — it made it **the only untextured thing left on
+the surface**, which is the same trap in reverse: the fix to one dialect promoted another.
+
+Two things fell out of counting them.
+
+**The names are more specific than the pictures.** `ISO_PROPS` names sixteen things across
+four terrains — *stacked bone*, *spoil*, *fungal clusters*, *tidewrack* — and the view keys on
+`shape`, of which there are seven. So three of those four are the same three diamonds, and
+nothing in the game has ever drawn a bone. Painting them keyed on the NAME rather than the
+shape is therefore not only an art pass; it is content the table has been claiming for four
+content passes and the screen has never shown.
+
+**And the `name` field is read by nothing.** Not the view, not the hint line, not a test —
+`grep` finds one writer and no readers. It is dead data, and it is also a ready-made brief for
+sixteen paintings, which is a pleasant way for dead data to end.
+
 #### What the list is ordered by
 
-Visible damage per image generated, not by count. The 30 power sigils go first — they are the
-only set in the game that is not painted at all, they are on a screen the player opens every
-run, and 30 images is one day of the free tier. The four wall materials go second because two
-of them are a re-roll and two were never painted, and all four share one brief. The 38 relics
-go last of the big sets: they are the largest number of files and the smallest thing on screen
-at 22px, and the fix is a value correction rather than new subjects.
+Visible damage per image generated, not by count. **The 26 dressing drawings go first now** —
+they are the most off-style thing on the screen the player spends the most turns on, and D267
+is what put them there. The 30 power sigils go second: the only other set that is not painted
+at all, on a screen opened every run. The four wall materials go third, because two are a
+re-roll and two were never painted and all four share one brief. The 38 relics go last of the
+big sets — the most files, the smallest thing on screen at 22px, and a value correction rather
+than new subjects.
 
 **Nothing on the list is missing art.** Every item is installed, working, and in the wrong
 dialect — which is a different kind of debt, and the first time this project has written one
@@ -18523,6 +18556,103 @@ The content table was checked against the catalogues rather than trusted: 100 ca
 30 powers, 35 enemies, 12 bosses, 12 dungeons, 20 events, 45 errands, 16 debts, 46 suites. One
 caption was wrong and is fixed — *"One power carried per run"* has not been true since D245 made
 it an offer of three.
+
+---
+
+### D270 — The dungeon follows the player down, and two rewards stop lying
+
+Three changes, and the first is the one that matters.
+
+#### Nothing raised enemy strength as a run went down
+
+`GameState.dungeon` is set once by `select_dungeon` and never moves. Relics have been untaxed since
+D230, so `ratio` barely moves either. Nothing anywhere read a floor number or a fight index.
+
+So enemy strength was a function of the PLACE and of the deck brought to it — and the run was flat
+while the player grew about 4x across it (D266):
+
+| | player | enemy |
+|---|---|---|
+| fight 1 | 1x | full strength |
+| fight 6 | ~4x | the same |
+
+**The first fight was the hardest moment in the game.** That is where the deaths were, at fight 2.7
+of 6, and it is why the back half of a surviving run was a walk.
+
+`run_ramp(progress, band)` fixes it, with `progress` coming from `Traversal.progress()` — 0 at the
+mouth, 1 at the boss. Both bands **start below 1.0**, because the point is not to add difficulty but
+to MOVE it: HP runs 0.75 → 1.70 and damage 0.80 → 1.30. A ramp that only climbed would make the game
+harder and leave the deaths exactly where they were.
+
+HP ramps further than damage. A tougher enemy makes a fight longer, which a better deck can answer;
+more damage makes it shorter and less answerable, and D209's depth inversion is what happens when
+that is pushed.
+
+**Negative `progress` means no ramp, and that is the default.** Six test suites and both budget
+estimators ask these functions what a fight costs ON AVERAGE, which is a question about the dungeon
+and not about a moment in one run. A default of 0.0 would have quietly answered all of them with the
+opening's 0.75.
+
+#### The re-fit, which the ramp made necessary and D266 made checkable
+
+The ramp alone took completion to 20%, far under the band: the opening got easier and the back half
+got much harder, and runs died in the middle instead. `ENEMY_DAMAGE_BASE_MULT` was set to 1.6 by
+D244 against a game with flat difficulty and 4-turn fights, and it no longer described this one.
+
+| `ENEMY_DAMAGE_BASE_MULT` | completion | deaths at fight | `cap` median |
+|---|---|---|---|
+| 1.60 | 20% | 2.9 | 2.72x |
+| 1.30 | 29% | 3.6 | 3.08x |
+| 1.15 | 36% | 4.0 | 2.46x |
+| **1.05** | **41%** | **4.1** | 2.30x |
+
+Taken at 1.05. Against the session's start:
+
+| | before | after |
+|---|---|---|
+| turns N/E/B | 3.70 / 4.46 / 4.56 | **2.69 / 5.97 / 8.87** |
+| won N/E/B | 88 / 76 / 58% | 99 / 84 / 46% |
+| completion | 40% | 41% |
+| deaths at fight | 2.7 | **4.1** |
+
+Trash collapses, the boss is a fight, deaths moved deep, and completion held. **Three things asked
+for separately — a deck that grows, fights with turns in them, and a death worth having — turned out
+to be one change**, and it is the one nobody had proposed because `esc` could not see the problem.
+
+#### A reward screen that lied about half its offers
+
+D266 found two cells where `cap` came back BELOW 1.0: runs that ended less capable than they began.
+`earn_card` appends, and a weak card in a 20-card deck means the good cards come up less often.
+
+The screen already priced dilution — *"one card seen every 4.2 turns instead of 4.0"* — and that
+line is the same sentence whether the card is the best in the pool or the worst. It prices taking
+*a* card. It says nothing about taking *this* card.
+
+`card_verdict` compares the offer with the deck that would take it, in power per energy, and bands
+the answer rather than printing it, because the ratio is an estimate and "0.94x" reads as a
+precision the model does not have. Measured across the catalogue:
+
+| deck | reads WEAKER | reads stronger | neutral |
+|---|---|---|---|
+| starter | 2 | 89 | 9 |
+| median | 29 | 26 | 45 |
+| **top-20** | **77** | 6 | 17 |
+
+Which is the right shape and is the check that it is not vacuous: a starter deck should take almost
+anything, a finished deck should take almost nothing, and the middle should be a decision. The last
+row is the `cap < 1.0` case, now stated on the screen where the choice is made.
+
+#### And the camp got its third leg
+
+Recover and Sharpen shipped together, and two options is a coin flip. Temper raises one card of the
+run deck by a level. Neither of the others was replaced: `REST_HEAL_FRAC` is tuned against the damage
+a run accumulates, and Sharpen is the only in-run thinning the game has.
+
+It is **small and that is measured**: one card up one level moves `power_ratio` by x1.011, and a camp
+is offered once per run. The camp's worth is the choice between healing, thinning and sharpening —
+three things a run wants at once and can have one of. It is not a growth lever, and D266 says where
+growth actually comes from.
+
 ### D271 — A panel that redraws may not roll dice
 
 Reported: take the relic offered after an elite, and the three cards underneath change.
@@ -18567,6 +18697,7 @@ The rule being kept is that a draw function draws: what it shows is decided befo
 
 Checked by putting the bug back: the guard reports it and names the needle it found. With the fix
 in place the suite is 46 green.
+
 ### D272 — A green suite on a dirty tree says nothing about what was pushed
 
 CI went red on `b611e0e` with `scripts/combat.gd` failing to parse: `Static function
@@ -18622,3 +18753,91 @@ that `b611e0e` had not already published, and it leaves the rest of D270 where i
 The wider version of this is worth keeping: **on a shared tree, prefer the repair that adds to the
 one that reverts.** A revert on a file somebody else is editing is a merge you are performing
 blind, on their behalf, without their half of the reasoning.
+
+---
+
+### D275 — The floor becomes the unit, and depth starts buying something
+
+The player reported the dungeons feeling off — "decisions, encounters per floor". Measured across
+12 dungeons x 40 generations, and it is one fault with three faces.
+
+#### Depth added floors and no content
+
+The encounter mix is an ABSOLUTE count per dungeon and it was dealt round robin over a floor count
+that grows with difficulty. Both halves were authored sensibly. Their product was not:
+
+| dungeon | depth | floors | encounters | per floor |
+|---|---|---|---|---|
+| Crypt | 1 | 2 | 12 | **6.0** |
+| Slag Pits | 4 | 3 | 13 | 4.3 |
+| Abyssal Stair | 7 | 4 | 11 | **2.8** |
+| The Maw | 8 | 4 | 12 | 3.0 |
+
+**Totals sat at about 12 everywhere.** The Maw was the same length as the Crypt — 5 to 6 fights
+either way — so depth bought more stairs and nothing else, and the extra difficulty arrived entirely
+as bigger numbers.
+
+And because a flat budget was split more ways, **the floor SHRANK as the player descended.** The
+tutorial dungeon had the biggest floors in the game. A floor stopped being a unit anyone could hold
+in their head: a run was `7/4, 5/3` or `3/2, 3/2, 3/2, 2/1` with nothing saying which.
+
+So the floor is the constant now. `ENCOUNTERS_PER_FLOOR = 5`, and `scale_mix_to_floors` keeps each
+dungeon's authored character while scaling its total to `floors * 5`. Crypt 10, Slag Pits 15, The
+Maw 20 — measured at **5.0 per floor for all twelve dungeons**, range 4 to 6.
+
+#### What the guards caught, and one of them was right
+
+`test_traversal` failed three ways and each was worth reading.
+
+* *"floors must SPLIT the budget, not multiply it"* — the correct rule when the total was fixed, and
+  the bug once the total scales. Updated to assert the same PROPERTY against the budget the dungeon
+  is actually built from.
+* *"the budget did not come with you"* — **this one was right and I was wrong.** The first version
+  scaled against the deepened floor count, which quietly made the back door a discount. D190 is
+  explicit that a deep entry is the same dungeon dealt more densely, and D88 is the scar for a skip
+  that changes difficulty invisibly. The budget now scales against the FULL depth.
+* The aspect guard, for the same reason as the first.
+
+#### The rest count is the half that nearly shipped broken
+
+Proportional scaling gives growth to whatever is already large. The Slag Pits went from 5 fights to
+7 while **its rests stayed at one**, because one of thirteen scales to 1.15 and floors back to one.
+
+| | completion | `cap` median | `cap` mean | `cap` max |
+|---|---|---|---|---|
+| before pacing | 41% | 2.30x | 3.42x | 8.83x |
+| pacing, rests unfixed | 32% | 2.36x | 2.47x | **4.46x** |
+| pacing + a rest per floor | 31% | **3.09x** | **3.87x** | **13.38x** |
+
+**Attrition scales with fights, so healing has to scale with it** or a longer dungeon is only a more
+punishing one. `mix_minimum` gives rests a floor of `floors - 1`; everything else keeps one.
+
+The middle row is what a longer dungeon looks like without that, and the tell is `cap` max collapsing
+from 8.83x to 4.46x: the deep runs that used to reach high capability stopped surviving to it.
+
+#### The re-fit
+
+Longer runs mean more attrition, so `ENEMY_DAMAGE_BASE_MULT` moved again — 1.05 to **0.97**.
+
+| | completion | `cap` median | `cap` mean | `cap` max |
+|---|---|---|---|---|
+| 1.05 | 31% | 3.09x | 3.87x | 13.38x |
+| **0.97** | **37%** | 2.83x | **3.50x** | 11.53x |
+| 0.90 | 44% | 1.98x | 3.10x | 8.86x |
+
+0.90 sits inside the historic 40-60% band and 0.97 does not, and 0.97 is taken anyway. **D231
+demoted completion from a target to a constraint** — *neither ~0% nor ~100%*, because a band scores
+a thrilling loss as failure and a walkover as perfect — and D266 gave the project a number that
+measures the player instead. 37% clears the constraint; `cap` is what is being steered.
+
+#### Two things that turned out not to be problems
+
+**No floor lacks a decision.** 0 of 1320 sampled floors. D240's remaining half — *"a guaranteed
+relic decision on floors holding neither elite nor chest"* — has no subject in this model and is
+closed rather than built.
+
+**The warrens is not missing an elite.** It authors `enc_elites = 0` deliberately and spends it on
+five combats, the most in the game, which is what its own description says: *"Overrun. Nothing here
+fights alone."* It still offers relics from four chests. Reported here as a content bug, checked,
+and it is a variation. `mix_minimum` preserves it: a zero stays zero, and only a site the dungeon
+authored above zero is guaranteed to survive scaling.

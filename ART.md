@@ -675,14 +675,20 @@ until two PNGs sit side by side.
 
 Every file the game asks for is installed (§5, and `ART_ASSETS.md` counts it). This
 section is the other question, the one a manifest cannot ask: **does it agree?** D267
-answered it for the isometric floor and found six dialects in one game; what follows is
-what is left, in the order of visible damage per image generated.
+answered it for the isometric floor and found six dialects in one game; D268 counted what
+is left. The order below is **visible damage per image generated**, not file count.
+
+Roughly 110 images in all, which is five or six days of the free tier — so the ordering is
+the part of this section that matters most.
 
 **Read the numbers, not the adjectives.** Two measurements decide whether a set belongs
 to this game, and both come off `tools/` scripts rather than off an opinion:
 
 * **Mean luminance over opaque pixels.** The game is dark. The style bible sits at 0.30.
 * **Ink fraction** — the share of opaque pixels under 0.18 luma. The bible is a third.
+
+Neither number can be taken on a set that is not painted at all — §8a and §8b are drawings
+rather than paintings, and no measurement is needed to see it.
 
 | set | files | mean luma | ink | over 0.80 |
 |---|---|---|---|---|
@@ -693,7 +699,53 @@ to this game, and both come off `tools/` scripts rather than off an opinion:
 
 ---
 
-### 8a — The 30 power sigils  ·  the worst set in the game
+### 8a — The dressing: 26 drawings that make the dungeon diverse, and none of them is art
+
+**This is the largest item on the list and it was the last one found.** Everything that
+varies one floor from the next — the clutter on the ground, the things nailed to the walls,
+the landmark you take a bearing off — is drawn by `iso_run.gd` with `draw_line`,
+`draw_circle` and `draw_colored_polygon`. No texture, no ink, no paint. An iron ring is an
+arc and a 2px stem. A heap of stacked bone is three diamonds at rising brightness. A growth
+patch is three circles.
+
+That was the right call when it was made (D176: "there is no prop in any art pack, these are
+shapes rather than silhouettes"), and D267 is what changed the answer. **Painting the floor
+and the walls did not make the dressing look better — it made it the only untextured thing
+left on the surface.** Vector shapes on a noise floor read as part of the noise; the same
+shapes on painted flagstones read as an overlay.
+
+What there is, all of it computed:
+
+| what | count | drawn as |
+|---|---|---|
+| ground and wall props (`Balance.ISO_PROPS`) | 16 named, **7 drawings** | lines, circles, stacked diamonds |
+| landmark caps (`Balance.ISO_LANDMARKS`) | 4 — shaft, dome, stair, stack | nested diamonds and columns |
+| the mark on a pushable wall (D182) | 1 | a crack with a pale bleed |
+| the back door (D206) | 1 | a slab outline |
+| the shrine, the ledger | 2 | polygons |
+| the way down, and a key lying on the floor | 2 | nested diamonds, a drawn key |
+
+**And the names are more specific than the pictures.** `ISO_PROPS` names sixteen things —
+*stacked bone*, *spoil*, *fungal clusters*, *tidewrack*, *a dropped beam* — but the view
+keys on `shape`, so three of those are the same three diamonds and nothing ever draws a bone.
+The `name` field is read by **nothing**: not the view, not the hint line, not a test. It is
+dead data today, and it is the ready-made brief for sixteen paintings.
+
+So the re-roll here is also a small design win: **key the sprites on the NAME, not the
+shape**, and the Crypt gets stacked bone where the Warrens gets spoil, which is what the
+table already says and the screen has never shown.
+
+Sixteen props plus the four landmark caps is twenty images — one day of the free tier. Draw
+them the way the existing `iso/` furniture is drawn (`shop`, `rest`, `treasure`, `event` are
+painted and in-style; see §8e for the one exception), on the chroma key, matted with
+`tools/install_cutouts.gd`, and anchored the way `IsoFooting` anchors everything else.
+
+**Keep computed, deliberately:** the reach highlight, the chest's pool of light and the
+stair's lit lip. Those are the game pointing at something rather than the building, and D87,
+D172 and the stair's own note all argue their loudness is the point. A painted stair mouth
+is still worth having; its contrast is not negotiable.
+
+### 8b — The 30 power sigils  ·  the worst set that IS a set of files
 
 Flat vector clip art: one thin uniform stroke, flat fill, saturated primaries. `scythe.png`
 is a line and a pale wash. They are the only set in the game that is not painted at all,
@@ -707,7 +759,7 @@ Ask for painted objects rather than symbols — the thing the power IS, drawn th
 relic is drawn — and hold them to mean 0.30 with a 2-3px ink outline. Thirty images, and
 they can go four or six to a sheet.
 
-### 8b — The four wall materials  ·  the ink cannot survive the projection
+### 8c — The four wall materials  ·  the ink cannot survive the projection
 
 **This is arithmetic, and it is the reason the walls look soft while the floor looks
 painted.** With `TILE_W` 116, `TILE_H` 58 and `WALL_LIFT` 0.9:
@@ -738,14 +790,14 @@ correct answer — or bring the two numbers together.
 Re-roll all four with that brief: `rock_stone`, `rock_moss`, and the two that were never
 painted at all —
 
-### 8c — `rock_earth` and `rock_sand`  ·  never painted
+### 8d — `rock_earth` and `rock_sand`  ·  never painted
 
 Still the generated noise, because the daily image cap closed before they were reached.
 The Warrens is where it shows: a painted floor under flat walls, and it is the one screen
 in the four terrains that still looks unfinished. Install with `--luma=0.42`, which is
 what `TINT_WALL_TOP` / `_R` / `_L` were tuned against.
 
-### 8d — The 38 relic icons  ·  right brush, wrong value
+### 8e — The 38 relic icons  ·  right brush, wrong value
 
 The technique is correct — painted, inked, soft — and the VALUE is wrong by a wide
 measured margin. **Mean 0.58 against the bible's 0.30**, a fifth of every icon brighter
@@ -760,7 +812,7 @@ game's value: **dark, one accent, ink at 2-3px, nothing over 0.80**, and checked
 black ground rather than against the generator's field — which is where a pale object hides
 (the trap D267's skill notes call the missing half).
 
-### 8e — Two single files
+### 8f — Two single files
 
 * **`iso/shop.png`, the market stall.** Cream and white stripes; the brightest object
   anywhere on the isometric floor, and it is a shop rather than a light source. Re-roll it
