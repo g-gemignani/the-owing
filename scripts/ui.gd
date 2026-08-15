@@ -42,8 +42,15 @@ static func screen(root: Control, title: String, art: String = "",
 	elif zone != "" and zone_backdrop(root, zone, foot):
 		pass
 	else:
-		# tiling pixel backdrop, themed by wherever the player currently is
-		root.add_child(PixelArt.backdrop(_context_zone()))
+		# The last resort — and `iso_run.gd` is the only caller in the game that reaches
+		# it, because every other `screen()` call names a scene or a zone. So for as long
+		# as this branch went straight to the tiling pixel pattern, the screen the player
+		# spends the most turns on was the one screen still wearing the Kenney dialect,
+		# and the comment above the call in `iso_run` said the opposite (D263).
+		var here := _context_zone()
+		if not crawl_backdrop(root, here):
+			# tiling pixel backdrop, themed by wherever the player currently is
+			root.add_child(PixelArt.backdrop(here))
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	UITheme.pad(margin)
@@ -331,6 +338,30 @@ static func scene_backdrop(root: Control, scene: String, foot: bool = false) -> 
 ## (`bg_zone_<id>`) because `foundry` names both a zone and a dungeon.
 static func zone_backdrop(root: Control, zone_id: String, foot: bool = false) -> bool:
 	return _painted_backdrop(root, PixelArt.zone_art(zone_id), foot, ZONE_DIM)
+
+## Heavier again, and for a third reason. The zone dim above is about text crossing a
+## picture. This one is about a picture standing behind a LIT SCENE: the isometric
+## crawl draws its own floor, its own light field and its own figures on top, and a
+## backdrop at reading brightness competes with that floor for the eye instead of
+## giving it a room to stand in. At 0.78 the painting reads as the dark of the place
+## and nothing on it competes with the stone.
+const CRAWL_DIM := 0.78
+
+## The painted room behind a screen that draws its own lit scene over it — which is
+## the isometric crawl, and only the crawl (D263).
+##
+## The DUNGEON's own battle backdrop is preferred over the zone establishing shot, and
+## that order is the point rather than a fallback chain that happened to come out this
+## way. The zone shot is an outdoor view with a sky in it and the crawl is indoors; the
+## battle backdrop is the same room the fights on this floor happen in, so the walk and
+## the fight share a *place* rather than only a palette. The zone shot is what is left
+## for a dungeon nobody has painted yet, and the tiling pixel pattern is what is left
+## after that.
+static func crawl_backdrop(root: Control, zone_id: String) -> bool:
+	var tex := PixelArt.battle_art(GameState.dungeon_id)
+	if tex == null:
+		tex = PixelArt.zone_art(zone_id)
+	return _painted_backdrop(root, tex, false, CRAWL_DIM)
 
 static func _painted_backdrop(root: Control, tex: Texture2D, foot: bool,
 		dim: float = SCENE_DIM) -> bool:

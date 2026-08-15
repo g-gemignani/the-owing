@@ -33,6 +33,12 @@ upstream `OFL.txt` verbatim beside it. See `fonts/PROVENANCE.txt`.
 | fonts/body.ttf           | the Theme default, via UITheme | DOWNLOADED — OFL, see fonts/PROVENANCE.txt |
 | fonts/display.ttf        | headings and card names        | ″                            |
 
+**How images are made here: the Gemini web app, driven by Claude in Chrome.** That is
+the route, it is the only one, and the `gemini-browser` skill is the write-up — how to
+attach the style reference, how to get the file to disk, and the daily cap to plan a
+batch around. It is complete for one image and for fifty. Do not go looking for a
+faster route; plan the batch across days instead.
+
 **Two generators is two dialects.** The backdrops above came from Gemini and Leonardo
 and it is visible in a contact sheet. Everything from here on goes through ONE tool,
 with `bg_crypt.png` attached to every request as the style reference — that image

@@ -984,7 +984,14 @@ func relic_offer(tier: int, deck: Array = [], n: int = 3, exclude: Array = []) -
 	var pool: Array = unowned_relics(exclude)
 	if pool.is_empty():
 		return []
-	var lean := Balance.deck_lean(deck)
+	# The lean of the RUN, not of the deck alone (D265). `exclude` is already the relics this run
+	# holds — every caller passes `GameState.run_relics` — so the commitment is here for free and no
+	# call site changes.
+	var held: Array = []
+	for hid in exclude:
+		if RELIC_CATALOG.has(String(hid)):
+			held.append(load(String(RELIC_CATALOG[String(hid)])) as RelicData)
+	var lean := Balance.run_lean(deck, held)
 	var wtbl: Array = Balance.WEIGHTS[tier]
 	var ids: Array = []
 	var weights: Array = []

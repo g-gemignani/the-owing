@@ -1515,13 +1515,49 @@ func _spoils_pool() -> Array:
 ## itself is bucketed by, so the driver prefers what suits the deck it is holding rather than the
 ## biggest number on the table.
 func _choose_spoil(pool: Array, deck: Array, held: Array) -> RelicData:
-	var lean := Balance.deck_lean(deck)
+	# `run_lean`, not `deck_lean` (D265). The game's offer sharpens on what the run already holds,
+	# and a driver reading only the deck models a player who never commits to a build — which is
+	# the D239 fault ("a driver that picked at random would model a player who does not choose")
+	# one level up: this one chooses, but chooses each relic as if it were the first.
+	var lean := Balance.run_lean(deck, held)
+	# The three candidates are drawn WEIGHTED BY AFFINITY, without replacement — which is what
+	# `MetaState.relic_offer` does. They used to be drawn uniformly, with affinity used only to pick
+	# between the three, and that made the instrument blind to the whole offer: a tilt decides WHICH
+	# THREE APPEAR, and a uniform draw has already thrown that away before the tilt is consulted.
+	#
+	# Measured: sharpening the tilt on the run's held relics (D265) moved every number by less than
+	# noise, and the reason was here, not in the change. **A weighting change cannot be measured by
+	# an instrument that does not weight.** D124's family, and the fourth time in this file.
+	#
+	# Rarity weighting (`Balance.WEIGHTS[tier]`) is still absent here and the game has it, so this
+	# pool over-samples legendaries. That gap predates this fix and is left alone deliberately —
+	# `power_value()` in the score below leans the same way, so correcting one without the other
+	# would make the driver worse, not better.
+	var cand_ids: Array = []
+	var weights: Array = []
+	for r in pool:
+		if r in held:
+			continue
+		cand_ids.append(r)
+		weights.append(Balance.relic_affinity(r, lean))
 	var best: RelicData = null
 	var best_score := -1.0
-	for _k in 3:
-		var cand: RelicData = pool[randi() % pool.size()]
-		if cand in held:
-			continue
+	for _k in mini(3, cand_ids.size()):
+		var total := 0.0
+		for w in weights:
+			total += float(w)
+		if total <= 0.0:
+			break
+		var roll := randf() * total
+		var pick := cand_ids.size() - 1
+		for i in cand_ids.size():
+			roll -= float(weights[i])
+			if roll < 0.0:
+				pick = i
+				break
+		var cand: RelicData = cand_ids[pick]
+		cand_ids.remove_at(pick)
+		weights.remove_at(pick)
 		var score: float = cand.power_value() * Balance.relic_affinity(cand, lean)
 		if score > best_score:
 			best_score = score

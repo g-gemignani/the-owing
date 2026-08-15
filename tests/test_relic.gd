@@ -406,16 +406,24 @@ func _init() -> void:
 			rule_count += 1
 			continue
 		# Energy and draw are not rules, but they multiply everything the deck does — which is the
-		# reason `power_value` prices them apart from the flat fields. A relic doing one of those,
-		# or firing on a trigger, is not a stat line either.
-		if r2.bonus_energy > 0 or r2.extra_draw > 0 or r2.trigger_count() > 0:
+		# reason `power_value` prices them apart from the flat fields. A relic doing one of those
+		# is not a stat line either.
+		#
+		# `trigger_count() > 0` used to be a third clause HERE, and that was the tell (D262). This
+		# suite knew a trigger is not a stat line while `breaks_a_rule()` did not, so four pure
+		# triggers reached this branch and were waved through one line later — the definition
+		# lived in two places and the two disagreed, which is what D250 moved `changes_a_rule()`
+		# onto `CardData` to stop. The term is in the predicate now, so this clause is gone.
+		if r2.bonus_energy > 0 or r2.extra_draw > 0:
 			continue
 		bare_stats.append(r2.id)
 	if not bare_stats.is_empty():
 		fails += 1
 		print("FAIL %d relics only move a number: %s" % [bare_stats.size(), ", ".join(bare_stats)])
 	# ...and rule-breakers must stay the bulk of the pool, which is what the escalation rides on
-	# (D233/D243/D257). Measured at 32 of 38; the floor is a majority.
+	# (D233/D243/D257). Measured at 36 of 38 once the predicate could see triggers (D262); the
+	# floor is a majority. Read the number with D262's caveat: the predicate counts a single flat
+	# `damage_pct` as a rule, so 36 is a ceiling on how interesting the pool is, not a reading of it.
 	if rule_count * 2 <= MetaState.RELIC_CATALOG.size():
 		fails += 1
 		print("FAIL only %d of %d relics break a rule — a pool of numbers cannot escalate" % [

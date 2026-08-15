@@ -981,9 +981,9 @@ func _backdrops() -> void:
 
 func _relics() -> void:
 	_section("Tier 6a — relic icons",
-		"Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.",
+		"Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` draws one beside every row (D259).",
 		Kind.PAINT,
-		"One OBJECT, three-quarter view, centred, on a flat even field for the matte. Lit from upper-left. No hand holding it, no pedestal, no ground, no shadow, no background scenery. It is drawn at 22px in a row of thirty — MEASURED off the built screen, not the 48 this brief used to claim, which was written before anything was on it and before the row pitch was known (D121). At 22px the whole job is silhouette and one memorable colour: two or three big shapes, one clear outline, no small detail and no fine text-like ornament, because none of it survives. A beautifully rendered trinket that reads as a brown smudge has failed. Paint what the relic IS, not what it does.")
+		"One OBJECT, three-quarter view, centred, on a flat even field for the matte. Lit from upper-left. No hand holding it, no pedestal, no ground, no shadow, no background scenery. It is drawn at 22px in a row of every relic in the catalogue — MEASURED off the built screen, not the 48 this brief used to claim, which was written before anything was on it and before the row pitch was known (D121). At 22px the whole job is silhouette and one memorable colour: two or three big shapes, one clear outline, no small detail and no fine text-like ornament, because none of it survives. A beautifully rendered trinket that reads as a brown smudge has failed. Paint what the relic IS, not what it does.")
 	for rid in MetaState.RELIC_CATALOG:
 		var r := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
 		if r == null:
@@ -1151,6 +1151,17 @@ func _emit_prompts() -> void:
 		print("say which and why — the expensive mistake is not a bad painting, it is a good")
 		print("painting of a thing that had to be computed.")
 	print("")
+	# Named once, at the top, so nobody reading this sheet has to go and find out where
+	# the pictures come from. There is one route and it is written up in full.
+	print("## Where the images come from")
+	print("")
+	print("**The Gemini web app, driven by Claude in Chrome.** That is the route, it is the")
+	print("only one, and the `gemini-browser` skill is the write-up: how to attach the style")
+	print("reference, how to get the file to disk, and the daily cap of roughly 20-25 images")
+	print("to plan a batch around. It works for one image and for fifty. A long list is a")
+	print("multi-day job and nothing shortens it — budget the day's allowance, spend some of")
+	print("it on re-rolls, and pick the rest up after the reset.")
+	print("")
 	print("## The three rules that do the work")
 	print("")
 	print("1. **One generator, for everything — but one generator is not enough.** The art")
@@ -1287,9 +1298,12 @@ func _emit_prompt_section(s: Array) -> void:
 	# in what comes back. A re-roll with no stated defect is how a bad file gets
 	# replaced by a differently bad file.
 	if not redone.is_empty():
-		# ONE line, and it has to START with the asterisk: `gen_pollinations.py`
-		# recognises operator prose by the line's first character, so a wrapped second
-		# line is picked up as art direction and pasted into the prompt (D109).
+		# ONE line, and it has to START with the asterisk. The rule was written for a
+		# parser that read the first character to tell operator prose from art direction
+		# (D109); that parser is deleted (D264) and the rule outlived it, because the
+		# hazard was never the parser. Whoever pastes a prompt into the browser now makes
+		# the same mistake by eye, and D112 is what it costs: an operator sentence in the
+		# prompt told the generator that a picture it had not drawn yet was wrong.
 		print("**%d to RE-ROLL** — these files exist and are wrong. Same style block and same subject line as a first draft; what is on disk is not a constraint on what comes back." % redone.size())
 		print("")
 		var reasons := {}
@@ -1301,10 +1315,11 @@ func _emit_prompt_section(s: Array) -> void:
 			# sentence is the part that has to land.
 			#
 			# The leading asterisk is load-bearing for the same reason the RE-ROLL
-			# header's is: `gen_pollinations.py` tells operator prose from art
-			# direction by the line's first character, and without it this sentence was
-			# pasted into the prompt — telling the generator that the picture it had
-			# not drawn yet was already wrong (D112).
+			# header's is: it marks the line as being for the operator and not for the
+			# generator. Without it this sentence was pasted into the prompt, telling
+			# the generator that the picture it had not drawn yet was already wrong
+			# (D112). A parser used to enforce that and no longer exists (D264); a
+			# reader has to honour it now, which is the weaker guarantee of the two.
 			print("*All %d have the same defect: %s.*" % [
 				redone.size(), reasons.keys()[0]])
 		else:
@@ -1328,8 +1343,9 @@ func _sheet_set(note: String) -> String:
 ## The subject table. Carries the target SIZE per row, because the shape of the
 ## request is per FILE and not per tier: Tier 0 is five square-ish cutouts and one
 ## portrait card back, and a tier-wide "generate a square image" asked for the card
-## back at 1:1 when the card is 320x448 (D109). `gen_pollinations.py` reads this
-## column and picks the aspect from it.
+## back at 1:1 when the card is 320x448 (D109). The column is read by whoever writes
+## the prompt: a chat box has no size parameter, so the aspect has to be said in words,
+## which makes this column the only place the right shape is written down.
 func _prompt_table(rows: Array) -> void:
 	print("| save as | size | subject |")
 	print("|---|---|---|")

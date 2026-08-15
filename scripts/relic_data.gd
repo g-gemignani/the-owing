@@ -1,9 +1,17 @@
-## Relic — persistent character progression, held outside the deck (Phase 7).
+## Relic — power found inside one run, held outside the deck (Phase 7).
 ## Data-only Resource, one .tres per relic, same convention as cards and enemies.
 ##
-## Relics are permanent power that never appears in `deck_power`, so every relic
-## MUST report a `power_value()`: `Balance.power_ratio` folds it in, otherwise
-## collecting relics would silently outrun enemy scaling (see D5/D10).
+## **A relic does not persist (D238).** It is found in a run, it leaves with the run,
+## and `MetaState` has no way to grant one — `grant_relic` is deleted. What survives is
+## `MetaState.relics_seen`, a log of what the character has MET, which carries no power.
+##
+## Every relic MUST still report a `power_value()`, and the reason changed with D238.
+## It used to be priced INTO `Balance.power_ratio`, because permanent power that never
+## reaches `deck_power` would otherwise outrun enemy scaling (D5/D10). Relics now reach
+## the fight through `CombatEngine.setup`'s `p_untaxed` slot and the priced argument is
+## `[]`, so the value is read by the offer, the shop price and the rarity bands instead.
+## The pillar is unchanged: persistent power lives in the deck and is priced, found
+## power is free and temporary.
 class_name RelicData
 extends Resource
 
@@ -107,8 +115,23 @@ extends Resource
 ## It cannot be fully derived — `modifier_power()` deliberately excludes `cost_reduction` and
 ## `free_first_card`, which are priced as throughput in `power_value()`. So two fields are still
 ## named. The distance between them and the fields they name is now one screen instead of one repo.
+##
+## **D262 found it blind in the other direction, and this is the third time.** `modifier_power()`
+## never reads the trigger arrays, so a relic whose WHOLE identity is a trigger returned false:
+## Bone Charm, Field Kit, Lucky Penny and Scholar's Lens all measured as "only a number" while
+## carrying no number at all. That is backwards against this file's own definition one screen
+## down — *"a trigger is what turns '+2 Strength' into kill something and draw"* — and it is the
+## D250 shape exactly, where `changes_a_rule()` skipped `discount_next` for the same reason.
+## `trigger_count()` is the term that was missing.
+##
+## **What it still gets wrong is the OTHER half, and that half is a judgement rather than a bug.**
+## Any non-zero `damage_pct` makes `modifier_power()` positive, so the eleven relics that carry one
+## flat percent and nothing else are counted here. D257 knew and said so above. Do not read this
+## predicate as "the pool has N interesting relics" — measured at D262 the 38 are 11 single flat
+## percents, 2 flat energy or draw, 4 pure triggers and 21 conditional rules.
 func breaks_a_rule() -> bool:
-	return modifier_power() > 0.0 or cost_reduction > 0 or free_first_card
+	return (modifier_power() > 0.0 or cost_reduction > 0 or free_first_card
+		or trigger_count() > 0)
 
 ## When a triggered effect fires. Relics used to be nine flat stat fields — every
 ## one of them "+15 max HP" — so a relic changed your numbers but never how you

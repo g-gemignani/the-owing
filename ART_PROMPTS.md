@@ -12,6 +12,15 @@ the game no longer has produces a painting with nowhere to go. The *why* is
 nothing here to ask a generator for. The sections below are kept for the next
 thing added to a catalogue, which will appear in them the moment it is.
 
+## Where the images come from
+
+**The Gemini web app, driven by Claude in Chrome.** That is the route, it is the
+only one, and the `gemini-browser` skill is the write-up: how to attach the style
+reference, how to get the file to disk, and the daily cap of roughly 20-25 images
+to plan a batch around. It works for one image and for fifty. A long list is a
+multi-day job and nothing shortens it — budget the day's allowance, spend some of
+it on re-rolls, and pick the rest up after the reset.
+
 ## The three rules that do the work
 
 1. **One generator, for everything — but one generator is not enough.** The art

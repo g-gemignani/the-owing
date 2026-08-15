@@ -31,8 +31,27 @@ extends SceneTree
 ## violet thing in the set (0.1).
 const KEY_GAP := 0.22
 ## ...and the pixel has to be bright enough to be the key rather than a dark shadow that
-## happens to lean blue-red.
-const KEY_MIN := 0.35
+## happens to lean blue-red. **Was 0.35, and that is the number the whole remaining defect
+## was hiding behind (D263.)**
+##
+## The key is pure (1, 0, 1), so a rim that is key BLENDED WITH A DARK SUBJECT keeps the hue
+## and loses the brightness. Measured over the 110 installed iso files: every leaning pixel
+## in the set tops out between 0.30 and 0.349, and not one of them reaches 0.35. So the gap
+## rule and the brightness rule were reading the same rim from opposite ends, and 14,556
+## pixels across 89 of the 110 files walked out between them — a pink hairline on nearly
+## every creature on the floor, on the day D202 reported none. It reported none because it
+## measured with this threshold.
+const KEY_MIN := 0.12
+## What makes that lower floor safe, and it is the rule the brightness one was always a proxy
+## for: the key has NO GREEN, so what survives of it keeps green near zero in ABSOLUTE terms
+## rather than merely below the other two channels.
+##
+## Measured across the same 110 files: of the 14,556 pixels that pass `KEY_GAP`, every one
+## has green under 0.15 and 13,259 of them under 0.05, and not one pixel with a gap over 0.30
+## reaches green 0.06. Painted violet fails the other way round: the mycelial lord's cap sits
+## at roughly (0.6, 0.5, 0.75), where green is HIGH and the gap is 0.1 — so it misses both
+## halves of this test rather than one, which is what makes lowering the brightness safe.
+const KEY_GREEN_MAX := 0.16
 ## A SECOND, gentler rule for what the key leaves behind once it is diluted: the drop shadow
 ## the brief told the generator not to draw, tinted mauve by the field it was drawn on. Too
 ## desaturated for `KEY_GAP`, and still plainly a purple smear under a rat at tile size.
@@ -98,7 +117,8 @@ func _init() -> void:
 
 ## Is this the chroma key rather than paint?
 static func _is_key(c: Color) -> bool:
-	return minf(c.r, c.b) - c.g > KEY_GAP and maxf(c.r, c.b) > KEY_MIN
+	return minf(c.r, c.b) - c.g > KEY_GAP and maxf(c.r, c.b) > KEY_MIN \
+		and c.g < KEY_GREEN_MAX
 
 
 ## The diluted key in a drop shadow: purple-leaning, but only down in the contact band, where

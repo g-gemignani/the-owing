@@ -345,7 +345,7 @@ sets NEAREST globally for the pixel assets, which would alias smooth art.
 
 ## Tier 6a — relic icons
 
-*38 files, 0 still to provide.* Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` makes no icon call at all today — all 30 render as text rows.
+*38 files, 0 still to provide.* Painted objects on transparent, lit from upper-left, ink-outlined, readable at 48px. `relics_screen.gd` draws one beside every row (D259).
 
 | ? | file | size | what it is |
 |---|---|---|---|

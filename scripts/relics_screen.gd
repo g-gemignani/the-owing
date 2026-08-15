@@ -1,19 +1,21 @@
-## Relic inventory — all thirty slots, held and unheld.
+## Relic catalogue — every slot, found and unfound.
 ##
-## Read-only: relics are earned, never spent, so this screen's job is to make the
-## run's accumulated character legible.
+## Read-only, and since D238 it is a record rather than an inventory. A relic is found
+## inside a run and leaves with it, so nothing here is owned. What the screen reads is
+## `MetaState.relics_seen`, the log of what this character has MET, which is deliberately
+## the one part of a relic that carries no power. The run's actual holdings are on the
+## Cards screen, because those change the value of the rest of the deck.
 ##
-## It used to do that by counting, and only by counting: "0 of 30 relics found",
-## "None yet", "Still undiscovered: 30" — one fact stated three times, and past it a
+## It used to state the count, and only the count: "0 of 30 relics found", "None yet",
+## "Still undiscovered: 30" — one fact stated three times, and past it a
 ## fresh save saw nothing at all, four short lines in the corner of an empty frame.
 ## A count is not a collection. This lists every SLOT, so what is out there has a
-## shape before you own any of it (D116). No relic art exists yet, so the slot is
-## text; when the thirty paintings land they go in the cell beside the name and
-## nothing else here has to move.
+## shape before you have met any of it (D116). Each slot carries its painted icon
+## (D259 closed the set), drawn beside the name.
 ##
 ## **An unfound slot shows its name and its rarity, and withholds only the effect.**
-## The alternative — thirty rows of "???" — is the old defect with more rows: it
-## states "you have not found this" twenty-four times and says nothing else, and a
+## The alternative — a screen of "???" — is the old defect with more rows: it
+## states "you have not found this" once per unfound row and says nothing else, and a
 ## want-list you cannot read is not a want-list. The name is safe to print because
 ## there is nothing to plan against it: a relic is a rarity-weighted roll off a boss
 ## or an elite (`MetaState.pick_relic`), never a thing you can go and buy, so knowing
@@ -27,23 +29,23 @@ extends Control
 ## Grouped by RARITY, because rarity is the one axis of a relic the player can act
 ## on: a deeper, harder fight rolls rarer ones (`Balance.WEIGHTS`, tilted by
 ## difficulty in `Balance.tier_weights`). It is also the only interesting shape the
-## set has — 7 / 8 / 7 / 5 / 3, a pyramid — and a flat alphabetical list of thirty
-## names hides it. Within a group the catalogue order stands: a slot that jumped
+## set has — 14 / 9 / 7 / 5 / 3, a pyramid — and a flat alphabetical list of all
+## thirty-eight hides it. Within a group the catalogue order stands: a slot that jumped
 ## somewhere else the moment it was filled would make the list feel unstable, and
 ## a fixed place is a thing the player can learn.
 ##
 ## The bracketed tag comes from `CardData.rarity_badge`, the one owner of that
-## convention (D115), and is printed ONCE per group instead of on all thirty rows —
+## convention (D115), and is printed ONCE per group instead of on every row —
 ## the group header IS the rarity, so a badge per row would be the screen's old
 ## say-it-three-times habit at a smaller scale. Colour carries it on the rows.
 const COLUMNS := 3
 
 ## Column floor, in unscaled px. Three columns is what fills 1280 with entries this
-## short; one column of thirty one-line rows leaves half the frame empty, which is
+## short; one column of one-line rows leaves half the frame empty, which is
 ## the defect being fixed. Measured against the widest string the relic table can
 ## actually produce rather than picked (the D95 rule): the longest effect line,
 ## Reliquary Heart's "Below 50% HP, gain 3 Strength. Once per combat.", renders 380px
-## at 16px font, so at this floor every one of the thirty holds a single line — and
+## at 16px font, so at this floor every slot holds a single line — and
 ## a longer one added later wraps inside its cell instead of shoving the grid wider.
 const SLOT_WIDTH := 380.0
 
@@ -51,9 +53,11 @@ const SLOT_WIDTH := 380.0
 ## the gap above it, which is where a group gets its air. Traded against the row
 ## pitch until the empty state fit: at 34 the last Legendary row was cut in half by
 ## the scroll edge, and at 26 the gap above a header (32px) was within 5px of the
-## pitch inside one (27px), so the five groups read as one list of thirty. 30 puts
-## 36 against 27 and still fits all thirty slots in 720px with no scrolling at all,
-## which is the empty state's one real virtue.
+## pitch inside one (27px), so the five groups read as one list. 30 puts
+## 36 against 27, which is the gap the groups need. **The "empty state fits 720px with
+## no scrolling" claim was measured at thirty relics and is not re-measured at
+## thirty-eight** — the list scrolls either way (`UI.scroll` below), so this is a
+## comment that has stopped being a fact rather than a layout that has broken.
 const HEAD_LEADING := 30.0
 
 ## How far an unfound name recedes. By INK, never by `modulate`: a translucent label
@@ -76,9 +80,9 @@ const UNFOUND_DIM := 0.32
 
 ## How big a relic icon draws in its row, in unscaled px. Sized against the ROW, not
 ## against the 128px the file ships at: an HBox is as tall as its tallest child, so the
-## icon sets the grid's pitch the moment it exceeds the name line, and ten rows plus
-## five headers have to clear 720px with no scrollbar — the one virtue the empty state
-## has, and what HEAD_LEADING above is tuned for.
+## icon sets the grid's pitch the moment it exceeds the name line, and the rows plus
+## five headers have to clear 720px with no scrollbar — what HEAD_LEADING above is
+## tuned for. Both measurements were taken at thirty relics and at ten rows per column.
 ##
 ## Measured, not picked, by rendering the screen and reading the scrollbar column:
 ## 34 and 26 both scroll (the Legendary group falls off the bottom), 22 does not. So
@@ -117,9 +121,11 @@ func _ready() -> void:
 		groups[r.rarity].append({"relic": r, "owned": owned})
 
 	# The count, once — and then what to go and do about it, which is the part the
-	# three old lines never said. A boss is the guaranteed source (`combat.gd` grants
-	# one on a clear); an elite drops one at risk, and a few events hand one over.
-	UI.label(col, "%d of %d met. Elites offer three to choose from; some events hand one over." % [
+	# three old lines never said. The sources are the elite and the chest, each of which
+	# lays out three to choose from (D239, D240), plus a few events. **The boss is not a
+	# source any more (D238)**: its grant sat three statements before `clear_run()`, so a
+	# run-scoped relic there would have lived for one function call.
+	UI.label(col, "%d of %d met. Elites and chests each offer three to choose from, and some events hand one over." % [
 		found, slots])
 	# Said plainly, once, because it is the single biggest change to how this game works and a
 	# player reading a list of relics they cannot buy or keep needs it said here rather than
@@ -128,7 +134,7 @@ func _ready() -> void:
 		"Relics are lent, not owned: what you find is yours until the run ends, win or lose."),
 		"This list is a record of what you have met. Meeting one is permanent; holding it is not.")
 	# Stated once, for the whole list, instead of writing "undiscovered" beside
-	# twenty-four rows. Dropped when there is nothing left to withhold.
+	# every unfound row. Dropped when there is nothing left to withhold.
 	if found < slots:
 		UI.label(col, "An unfound relic shows its name and its rarity. What it does is learned by holding it.")
 	# ...and the OTHER reason a slot is empty, which is new and is not "you have been
@@ -146,10 +152,10 @@ func _ready() -> void:
 			% [sealed, Wording.count(reach, "clear")])
 		seal.add_theme_color_override("font_color", Color(0.95, 0.78, 0.45))
 
-	# Empty, all thirty slots and their five headers fit 720px with no scrollbar at
-	# all — measured, and what HEAD_LEADING is tuned against. Every slot that fills in
-	# grows an effect line, so a well-stocked save runs about 900px and has to scroll,
-	# the same way the collection does. `scrollbar_track`/`scrollbar_grabber` are
+	# Empty, the slots and their five headers were measured to fit 720px with no
+	# scrollbar at thirty relics, which is what HEAD_LEADING is tuned against. Every
+	# slot that fills in grows an effect line, so a well-stocked save runs past that
+	# and has to scroll, the same way the collection does. `scrollbar_track`/`scrollbar_grabber` are
 	# installed now, so this is the painted scrollbar rather than Godot's default.
 	var list := UI.scroll(col)
 	for rarity in CardData.Rarity.size():
@@ -161,7 +167,7 @@ func _ready() -> void:
 			if bool(e["owned"]):
 				held += 1
 		# The gate is per RARITY, so it goes on the group header and nowhere else —
-		# the same rule that keeps the rarity badge off all thirty rows. A sealed
+		# the same rule that keeps the rarity badge off every row. A sealed
 		# group says what would open it and how far off that is, because "sealed" on
 		# its own is the "???" row this screen was built to stop printing (D223).
 		var to_go: int = Balance.relic_clears_to_go(rarity, reach)
@@ -175,7 +181,7 @@ func _ready() -> void:
 		# separation cannot put it on one side only — so the header carries a floor
 		# under its height and sits at the bottom of it. Without this, the first
 		# capture had "[Uncommon]" jammed against the last Common name and the five
-		# groups read as one list of thirty.
+		# groups read as one list.
 		head.custom_minimum_size.y = UITheme.px(HEAD_LEADING)
 		head.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
 		var grid := GridContainer.new()

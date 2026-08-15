@@ -91,10 +91,16 @@ pays.
 | **Cards can be read mid-turn, in place.** | **A chest shows you what kind of lock it has.** |
 
 **Then get out.** Everything you picked up is held, not banked. Beat the thing at the bottom and
-it is permanently yours. Die on the way and you forfeit most of it. That is the whole tension of
-the game: the deeper you push, the more you are carrying, and the more a bad turn costs.
+it is permanently yours. Die on the way and you lose a share of the haul, set by how far down you
+got — reach the bottom and half of it still comes home. Nothing you already owned is ever taken.
+That is the whole tension of the game: the deeper you push, the more you are carrying, and the
+more a bad turn costs.
 
-**Between runs, you build.** Duplicate cards fuse into stronger versions. Gold buys relics and
+**Relics are lent, not owned.** Elites and chests each lay out three and you take one. They work
+for the rest of the run and then they are gone, win or lose. What you keep is the record of
+having met them.
+
+**Between runs, you build.** Duplicate cards fuse into stronger versions. Gold buys and levels
 powers. Beating places opens new ones — and sometimes opens a back way into a neighbouring
 place, one floor shorter with all the same fights packed into it.
 
@@ -112,9 +118,9 @@ place, one floor shorter with all the same fights packed into it.
 | Cards | 100, each with its own illustration, each levellable |
 | Enemies | 35 kinds, plus 12 named bosses — one per dungeon |
 | Places | 12 dungeons across 5 regions, from gentle to genuinely hard |
-| Relics and powers | 30 relics, 10 powers |
+| Relics and powers | 38 relics, found on a run and lent for it — 30 powers, three dealt at the door |
 | Things to find | events, chests, hidden rooms, riddles, altars |
-| Jobs and debts | 46 floor jobs and 16 debts, drawn from what you actually did |
+| Jobs and debts | 45 floor jobs and 16 debts, drawn from what you actually did |
 
 A full run takes somewhere between fifteen minutes and an hour, depending on how deep the place
 is and how much of it you decide to turn over.

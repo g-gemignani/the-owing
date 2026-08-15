@@ -33,7 +33,14 @@ The loop:
    usually three doors rather than one, and a gate takes depth in places that beat you as
    well as clears (D178). Difficulty is a *choice*, shown up front, with the boss named
    before you commit.
-2. **Deck builder** — assemble a run deck from your owned cards and equip one Power. Between
+2. **Deck builder** — assemble a run deck from your owned cards. The Power is no longer
+   equipped here: press Start and the run deals **three, weighted by the deck you just
+   built**, and you pick one on a screen of its own between the door and the floor
+   (D245, D253, D256). The offer cannot be shown on this screen, because the deck that
+   weights it is the thing this screen is for — three faces drawn against a deck still
+   being edited would be replaced at the threshold, and that reads as a re-roll nobody
+   asked for. Mid-run the bar here shows what the run is CARRYING, which is the one true
+   thing left to say about a power once the offer is spent. Between
    `MIN_DECK_SIZE` and `MAX_DECK_SIZE` (20) cards, and the floor is *derived* from the opening
    collection rather than picked (D249): the deck you are handed is the smallest one the game
    accepts, so no deck is ever weaker than the one it taught you with. Up to
@@ -68,7 +75,7 @@ The loop:
    saving for a chest, or a question whose answer is the room you are standing in (D185,
    D186). Some floors ask something of you as well, written in a ledger standing in the floor's
    own lit room — you walk to it to find out what it wants, and reading it is what takes it on
-   (D184, D203). What it asks is drawn from forty-six rows over a counter the fights and the
+   (D184, D203). What it asks is drawn from forty-five rows over a counter the fights and the
    floor both fill, so it can want damage dealt, poison landed, a wall of block, ground covered,
    or a fight won without playing an attack — and every one of them asks for MORE, never less,
    because a condition that paid for declining content would be a difficulty dial wearing a
@@ -79,12 +86,20 @@ The loop:
    than easier, and only offered where the place can actually get shorter (D190, D206).
    (Three older traversal models — a node graph, a card draw, a dice board — lost to it in
    D88 and were deleted in D94; the `Traversal` seam they shared is still there.)
-4. **Meta** — winning banks the run's gold and cards permanently; dying forfeits most
-   of it. Between runs you fuse duplicates into levels, buy and level Powers and
-   Relics, and unlock deeper zones. The thirty relics are the long tail: each rarity is
+4. **Meta** — winning banks the run's gold and cards permanently. **Dying costs what you
+   chose to risk and never what you already owned (D231, D235):** the escrow pays back a
+   share set by depth, the door stake stays forfeit because it is the one cost you placed
+   yourself, and the collection pays *nothing* — `penalize_death` is deleted. Between runs
+   you fuse duplicates into levels, buy and level Powers, and unlock deeper zones.
+   **Relics are not in that list, because a relic does not persist (D238).** It is found on
+   a run — three offered by an elite, three by a chest — and it leaves when the run does,
+   won or lost. What survives is `MetaState.relics_seen`, a record of what the character
+   has MET, deliberately the one part of a relic that carries no power. The thirty-eight
+   are still the long tail of the *catalogue*: each rarity is
    sealed until you have cleared enough, and the last of them do not open until four
-   clears past the twelfth dungeon (D223), so finishing the set is something you do
-   after the game rather than halfway through it. **Rarity is a claim about strength,
+   clears past the twelfth dungeon (D223), so meeting the whole set is something you do
+   after the game rather than halfway through it — the gate now governs what may enter the
+   pool rather than what you own. **Rarity is a claim about strength,
    and it is derived rather than authored** (D224): every card's and every relic's band
    is written from `power_value()` by `tools/rerarify.gd` — cards, relics and the thirty
    Powers alike (D225) — the bands may not overlap, and the rarity suite fails a
@@ -111,19 +126,23 @@ The loop:
 
 Two-tier state makes this work:
 
-- **`MetaState`** — the persistent character: collection, decks, relics, powers,
-  gold, clears. On disk, versioned, migrated.
-- **`GameState`** — one ephemeral run. Rebuilt each dungeon, risked on death.
+- **`MetaState`** — the persistent character: collection, decks, powers, gold, clears,
+  and `relics_seen` (a record of relics met, at zero power). On disk, versioned, migrated.
+- **`GameState`** — one ephemeral run. Rebuilt each dungeon, risked on death. **The
+  relics a run finds live here** (`run_relics`) and are lost with it (D238).
 
 ## Content at a glance
 
 100 cards · 8 build archetypes · 35 enemy archetypes (all painted) · 12 bosses (one named per
-dungeon) · 38 relics (32 break a rule, the other 6 are energy or draw — so none is a bare stat
-line, D233/D237/D243/D257, no two alike) ·
+dungeon) · 38 relics — **counted off the catalogue at D262, not off `breaks_a_rule()`**:
+21 conditional rules, 4 pure triggers, 11 that carry one flat `damage_pct` or `block_pct` and
+nothing else, 2 flat energy or draw (D233/D237/D243/D257). The predicate reads 36 of 38 and that
+is not the same claim — it went blind to the four pure triggers until D262 added the term, and it
+still counts a lone flat percent as a rule ·
 30 powers (13 lean attack, 7 lean defence, 10 neutral; three dealt to suit the deck, on their own
 screen, D253/D256) · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
-4 pocket prizes · 3 pocket mouths · 3 toll questions · 46 errands and 16 debts over 44 counters · 3 aspects ·
+4 pocket prizes · 3 pocket mouths · 3 toll questions · 45 errands and 16 debts over 44 counters · 3 aspects ·
 24 sound effects · 5 score tracks · 46 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
@@ -280,10 +299,12 @@ effects are drawn at runtime by `scripts/fx.gd`.
   apply and whose power is kept out of `power_ratio` — and `tools/sim_balance.gd --spoils=N`
   lends every run N of them. Eight free relics move the escalation from 1.09x to **1.18x**,
   saturating by five, against a target of 3x; what they do buy is eight points of run completion
-  and six of end-of-run HP. Because only **5 of 30 relics raise what a turn is worth** — eleven
-  keep you alive, three pay you — so a draw of eight expects 1.3 that can raise damage per turn.
-  **Untaxing the relics as they exist today is a difficulty reduction wearing a power fantasy's
-  clothes**, and shipping it alone would spend the pillar to buy a tuning change.
+  and six of end-of-run HP. Because only **5 of the 30 relics that existed then raised what a turn
+  is worth** — eleven kept you alive, three paid you — so a draw of eight expected 1.3 that could
+  raise damage per turn. **Untaxing the relics as they existed then is a difficulty reduction
+  wearing a power fantasy's clothes**, and shipping it alone would have spent the pillar to buy a
+  tuning change. (That count is D230's reading of a 30-relic pool. D233, D237, D243 and D257
+  rebuilt it: 38 now, and the composition is in "Content at a glance".)
 
   **The rule now reads: persistent power lives in the deck and is priced; found power is free
   and temporary.** Relics are found in a run and leave with it (D238), so the invariant above
@@ -1566,12 +1587,11 @@ tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map
              `--file=<png> --box=x,y,w,h` for one image, which has no
              intersection to find the stamp with — D163),
              bench_iso.gd (how long is a floor to generate and to walk — the crawl is
-             most of the simulator's runtime, so check here before a full report),
-             gen_pollinations.py (drives ART_PROMPTS.md through Pollinations;
-             PARSES the sheet rather than restating it, and refuses any
-             text-only model because the style reference is mandatory — D100.
-             `--browser` prints the same prompts for pasting into a chat UI
-             by hand, no key — it prints its own paste count — D102)
+             most of the simulator's runtime, so check here before a full report)
+
+             No tool generates art. Images are made in the Gemini web app driven
+             by Claude in Chrome; ART_PROMPTS.md is the wording and the
+             `gemini-browser` skill is the how (D263, D264).
 docs/        the README's screenshots, and nothing else. Carries a .gdignore:
              nothing in the game loads them and Godot would otherwise write a
              .import and a .uid beside each one

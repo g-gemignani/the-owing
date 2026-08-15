@@ -160,3 +160,28 @@ if ((${#strays[@]})); then
 	echo "   not a suite. Anything else is a test writing outside the prefix it was given.)" >&2
 	exit 1
 fi
+
+# The generated documents, checked rather than trusted (D262).
+#
+# `--check` existed on all three generators from the day they were written and NOTHING
+# CALLED IT. AGENTS.md said so about itself — "a generated document with no check is a
+# document that is true on the day it is written" — and then ART_ASSETS.md carried a line
+# claiming `relics_screen.gd` renders thirty relics as text rows, through three content
+# passes, an icon set and eight new relics. D210 is the same failure with two documents
+# instead of one. So this is the caller.
+#
+# It is NOT a suite: it runs after the count is printed and does not move "46 passed". A
+# stale document is not a failing test, it is a failing commit, and this is the last thing
+# between the two.
+#
+# `tools/readme_downloads.sh --check` is deliberately absent. It reads the GitHub releases
+# API, and a test run that needs the network fails on a train. Run that one by hand before
+# a release, which is the only time its subject changes.
+gen_rc=0
+for gen in tools/art_docs.sh tools/design_index.sh; do
+	"$gen" --check >/dev/null 2>&1 || { echo "STALE: $gen --check — run '$gen'" >&2; gen_rc=1; }
+done
+if ((gen_rc)); then
+	echo "  (the suites passed; a generated document is out of step with what generated it)" >&2
+	exit 1
+fi

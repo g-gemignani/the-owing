@@ -90,6 +90,41 @@ const LIGHT_COLD := Color(0.86, 0.95, 1.16)
 ## palette here is a second palette to drift from the first.
 const PROP_DARK := 0.62
 const PROP_PALE := 1.28
+## How many floor tiles one repeat of the ground material spans (D263). See `_draw_ground`.
+##
+## It is the SCALE KNOB for every painted floor: a feature drawn at a fraction f of the
+## material is drawn at f x N tiles on the floor, so at 3 a stone painted a third of the way
+## across its texture arrives one tile wide. Chosen against the material rather than the
+## grid — the textures are 256px, a tile is 116x58, and 3 puts a 40px stone at roughly
+## 45x22 on screen, which is the size the paintings draw one at.
+##
+## Raising it shrinks the stonework and lengthens the period; lowering it magnifies both.
+## Below about 2 the repeat is short enough to read as wallpaper in an open room.
+const GROUND_UV_TILES := 3
+## Ink (D263). The painted rooms carry a 2-3px dark outline on every foreground object,
+## and until now nothing the floor drew carried one — so the painted hero standing on a
+## computed floor read as a sticker laid on a texture rather than as a figure in a room.
+##
+## Two rules keep it from becoming the lattice D87 deleted. **It is drawn on
+## SILHOUETTES, never on tiles**: a floor edge is inked only where the neighbour is not
+## drawable ground, and a rock edge only where the neighbour is not rock, so a run of
+## blocks is one inked mass and a room is one inked slab. And **it is drawn on the
+## boundary of what you KNOW**, which grows as the floor is learned — the same shape the
+## fog was already describing, now stated in line as well as in value.
+const COL_INK := Color(0.05, 0.05, 0.08, 0.80)
+const INK_W := 2.5
+## The shadow a figure drops on the tile it stands on. Also D263, and the other half of
+## the same complaint: D202 told the generator not to paint a drop shadow and
+## `tools/demagenta.gd` lifts whatever survived, which is right for the FILE and left
+## every figure in the game hovering a few pixels over the stone.
+##
+## Drawn by the view rather than baked into the sprite, so it lands on the ground the
+## figure is actually standing on, stays put while a walking figure's gait lifts it, and
+## costs nothing on a sheet that gets regenerated. Flattened 2:1 like every other shape
+## here, and drawn as three ellipses at falling alpha because one hard-edged blob under
+## a painted figure reads as a hole in the floor.
+const SHADOW_R := 0.20
+const SHADOW_A := 0.30
 const COL_REACH := Color(0.98, 0.78, 0.35)   ## an exit you can walk through now
 const COL_YOU := Color(0.55, 0.90, 1.0)
 const COL_THREAT := Color(1.0, 0.36, 0.34)   ## something walking, while you can see it
@@ -432,8 +467,14 @@ func _foe_role(enemy_id: String, face: String) -> String:
 	return ""
 
 func _build_ui() -> void:
-	# UI.screen gives the zone backdrop, the root margin and the content column, so
-	# this screen cannot be the one that forgets the backdrop again (D56).
+	# UI.screen gives the backdrop, the root margin and the content column, so this
+	# screen cannot be the one that forgets the backdrop again (D56).
+	#
+	# It is the only screen in the game that names neither a scene nor a zone, and for
+	# a long time that meant it got the tiling PIXEL pattern while every other screen
+	# got a painting — the crawl was the last live user of the Kenney dialect, on the
+	# screen with the most turns in it (D263). `UI.crawl_backdrop` is what that branch
+	# reaches now: this dungeon's own battle backdrop, at CRAWL_DIM.
 	var root := UI.screen(self, "")
 
 	# Two deliberate rows rather than one line, and no taller than the one line was
@@ -736,6 +777,25 @@ func _occludes_player(x: int, y: int, tv: TraversalIso) -> bool:
 ## Does this cell touch ground the player knows about? Used to decide whether a
 ## piece of rock is a wall worth drawing or just unexplored nothing. Diagonals count,
 ## so an outside corner does not come out notched.
+## Ground the ground pass actually draws a diamond for: not rock, and either lit or on
+## the frontier. Written once here rather than inline, because D263's ink asks the same
+## question of the four NEIGHBOURS that pass 1 asks of the tile itself, and two spellings
+## of one predicate is the D34 trap in miniature — the day one of them learns about a new
+## cell type the slab gets inked along a seam that is not there.
+func _is_ground(tv: TraversalIso, x: int, y: int) -> bool:
+	if tv == null:
+		return false
+	if tv.cell(x, y) == TraversalIso.WALL:
+		return false
+	return tv.lit(x, y) or tv.frontier(x, y)
+
+## A rock BLOCK the standing pass actually draws: not ground, and walling in ground you
+## know about. The second half matters as much as the first — unknown cells away from the
+## explored edge are not drawn at all, so a block beside one of them has an exposed face
+## there and must be inked along it.
+func _is_block(tv: TraversalIso, x: int, y: int) -> bool:
+	return not _is_ground(tv, x, y) and _walls_known_ground(tv, x, y)
+
 func _walls_known_ground(tv: TraversalIso, x: int, y: int) -> bool:
 	for dy in [-1, 0, 1]:
 		for dx in [-1, 0, 1]:
@@ -817,6 +877,15 @@ func _draw_floor() -> void:
 			if reach.has(i):
 				floor_view.draw_polyline(quad + PackedVector2Array([quad[0]]),
 					COL_REACH, UITheme.px(3.0))
+			# The slab's own outline (D263) — and it is NOT the lattice D87 deleted,
+			# because it is drawn on the four edges with no ground on the far side of
+			# them and on no others. Two tiles of stone side by side share an edge that
+			# never gets a line; the shape that does get one is the whole known floor.
+			# `_diamond` is top / right / bottom / left, and on a 2:1 projection those
+			# four edges face (x,y-1), (x+1,y), (x,y+1) and (x-1,y) in that order.
+			_ink_edges(quad, [
+				_is_ground(tv, x, y - 1), _is_ground(tv, x + 1, y),
+				_is_ground(tv, x, y + 1), _is_ground(tv, x - 1, y)], 1.0)
 
 	# Pass 2: everything with height, back to front — walls AND standing art together,
 	# because they occlude each other. A wall in front of a monster has to be able to
@@ -1003,6 +1072,37 @@ func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
 			floor_view.draw_colored_polygon(poly, tint * 0.5)
 		else:
 			floor_view.draw_colored_polygon(poly, tint, square, tex)
+	# The block's silhouette, inked (D263). Drawn after the faces and before the dressing,
+	# so a ring hanging on the rock sits inside its outline rather than under it.
+	#
+	# Which edges are silhouette and which are interior is worked out from the four
+	# neighbours, so a run of blocks comes out as ONE inked mass of rock rather than as a
+	# wall of enormous bricks — the same rule the floor slab uses, applied to the material
+	# on the other side of it. The two lower faces point at (x,y+1) and (x+1,y); the top
+	# face has all four; and the three vertical creases are interior wherever the block
+	# they lean on is drawn as well.
+	#
+	# A lifted block (the landmark) is inked whole, because it stands taller than anything
+	# beside it and every one of its creases is visible above its neighbours' tops.
+	var ink_a: float = wash.a
+	var whole: bool = tv == null or not is_equal_approx(lift_mult, 1.0)
+	var n_up: bool = (not whole) and _is_block(tv, x, y - 1)
+	var n_right: bool = (not whole) and _is_block(tv, x + 1, y)
+	var n_down: bool = (not whole) and _is_block(tv, x, y + 1)
+	var n_left: bool = (not whole) and _is_block(tv, x - 1, y)
+	_ink_edges(PackedVector2Array([top + lift, right + lift, bottom + lift, left + lift]),
+		[n_up, n_right, n_down, n_left], ink_a)
+	if not n_down:
+		_ink_line(left, bottom, ink_a)             # the ground line of the left face
+	if not n_right:
+		_ink_line(bottom, right, ink_a)            # ...and of the right face
+	if not n_down and not n_left:
+		_ink_line(left + lift, left, ink_a)        # the left corner of the block
+	if not n_right and not n_up:
+		_ink_line(right + lift, right, ink_a)      # the right corner
+	if not n_down or not n_right:
+		_ink_line(bottom + lift, bottom, ink_a)    # the front corner, between the two faces
+
 	# Wall dressing goes on the right-hand face, which is the lit one of the two and the one
 	# a 2:1 projection gives the most area to. On the face rather than on the top, because a
 	# ring or a run of roots is a thing on a WALL — put on the top it reads as litter on a
@@ -1133,9 +1233,24 @@ func _draw_key(centre: Vector2, t: Vector2, scale: float = 1.0, alpha: float = 1
 ## approximate (a diamond is a parallelogram, so the affine UV interpolation across
 ## the two triangles has no seam).
 ##
-## Each tile is offset into the material by an irrational-ish per-cell amount so the
-## floor does not read as wallpaper. Integer offsets would have been useless — the
-## material is seamless, so shifting by a whole period gives the identical patch back.
+## **The material flows ACROSS the tiles, not once per tile (D263).** Each diamond used to
+## take the whole unit square with a per-cell offset, so one repeat of a 256px material was
+## squeezed into one 116x58 diamond and every feature in it came out about a fifth of the
+## size it was painted at. That is survivable for noise, which is what the computed
+## materials are, and it is fatal for anything painted: a flagstone the size of a tile
+## arrives five to a tile and reads as gravel. It also chopped every feature at every tile
+## edge, because the offset was deliberately DISCONTINUOUS between neighbours.
+##
+## So the UV comes off the GRID instead. A diamond's four corners are the grid points
+## (x-0.5, y-0.5), (x+0.5, y-0.5), (x+0.5, y+0.5) and (x-0.5, y+0.5) — that is what a 2:1
+## projection means — and dividing those by `GROUND_UV_TILES` gives one texture repeat every
+## N tiles, continuous across every shared edge by construction. A stone crossing a tile
+## boundary now continues on the other side, which is what a floor does.
+##
+## The old per-cell offset went with it, and its job goes to N. It existed so the floor did
+## not read as wallpaper, which was a real risk when every tile showed the WHOLE material;
+## at N tiles per repeat the period is N times longer than a tile and the fog reaches the
+## edge of the room before the pattern comes round again.
 ##
 ## `tints` is FOUR colours, one per corner, not one for the tile — and that is what keeps
 ## the light field from undoing D87 (D176). The first version multiplied one flat tint per
@@ -1154,12 +1269,13 @@ func _draw_ground(quad: PackedVector2Array, x: int, y: int, tints: PackedColorAr
 			flat.append(Color(c) * 0.5)
 		floor_view.draw_polygon(quad, flat)
 		return
-	var off := Vector2(
-		fposmod(float(x) * 0.37 + float(y) * 0.11, 1.0),
-		fposmod(float(y) * 0.41 + float(x) * 0.17, 1.0))
+	# `_diamond` is top / right / bottom / left, which are these four grid points.
+	var k: float = 1.0 / float(GROUND_UV_TILES)
+	var gx := float(x)
+	var gy := float(y)
 	var uvs := PackedVector2Array([
-		Vector2(0, 0) + off, Vector2(1, 0) + off,
-		Vector2(1, 1) + off, Vector2(0, 1) + off])
+		Vector2(gx - 0.5, gy - 0.5) * k, Vector2(gx + 0.5, gy - 0.5) * k,
+		Vector2(gx + 0.5, gy + 0.5) * k, Vector2(gx - 0.5, gy + 0.5) * k])
 	floor_view.draw_polygon(quad, tints, uvs, tex)
 
 # --- the light, the surface, and the things lying about (D176/D177) --------------
@@ -1613,6 +1729,9 @@ func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
 		return
 	var lift: Vector2 = IsoFooting.gait_lift(t, walk_t) if walking else Vector2.ZERO
 	var stretch: float = IsoFooting.gait_stretch(walk_t) if walking else 1.0
+	# Under the sprite, and NOT lifted with it: a gait raises the body off the ground and
+	# the shadow is the thing that says so (D263).
+	_contact_shadow(centre, t, alpha)
 	floor_view.draw_texture_rect(tex,
 		_footed_rect(tex, centre + lift, t, key, role, stretch), false, ink)
 
@@ -1660,6 +1779,7 @@ func hero_art_name() -> String:
 func _draw_you(centre: Vector2, t: Vector2) -> void:
 	# offset to the same place the feet land, not to the tile's exact centre, so the ring
 	# closes around the boots instead of trailing a hoop's worth of floor in front of them
+	_contact_shadow(centre + Vector2(0, t.y * 0.04), t, 1.0)
 	_ground_ring(centre + Vector2(0, t.y * 0.04), t, 0.30,
 		Color(COL_YOU.r, COL_YOU.g, COL_YOU.b, 0.55))
 	# Which painting, and whether it is the mirrored copy: both come from `IsoFooting`, which
@@ -1689,6 +1809,38 @@ func _draw_you(centre: Vector2, t: Vector2) -> void:
 	floor_view.draw_circle(centre - Vector2(0, t.y * 0.30), t.y * 0.17,
 		Color(0.05, 0.07, 0.10, 0.85))
 	floor_view.draw_circle(centre - Vector2(0, t.y * 0.32), t.y * 0.13, COL_YOU)
+
+## Ink the edges of a closed polygon whose far side is NOT the same material. `inside[i]`
+## is the edge from `poly[i]` to `poly[i + 1]`, wrapping; true means "same stuff over
+## there", and a shared edge is never drawn. See `COL_INK`.
+func _ink_edges(poly: PackedVector2Array, inside: Array, alpha: float) -> void:
+	var col := Color(COL_INK.r, COL_INK.g, COL_INK.b, COL_INK.a * alpha)
+	for i in poly.size():
+		if bool(inside[i]):
+			continue
+		floor_view.draw_line(poly[i], poly[(i + 1) % poly.size()], col, UITheme.px(INK_W))
+
+## One straight ink stroke, for the vertical creases of a rock block, which are not the
+## edge of any one polygon this file draws.
+func _ink_line(a: Vector2, b: Vector2, alpha: float) -> void:
+	floor_view.draw_line(a, b,
+		Color(COL_INK.r, COL_INK.g, COL_INK.b, COL_INK.a * alpha), UITheme.px(INK_W))
+
+## The contact shadow under one standing figure (D263). See `SHADOW_R`.
+##
+## `alpha` is the caller's own fade, so a wall drawn translucent over the player takes
+## its shadow down with it and an occluded figure does not leave a hard black patch
+## behind the stone it is standing behind.
+func _contact_shadow(centre: Vector2, t: Vector2, alpha: float) -> void:
+	for s in 3:
+		var k: float = 1.0 - 0.26 * float(s)
+		var pts := PackedVector2Array()
+		for i in 24:
+			var a: float = TAU * float(i) / 24.0
+			pts.append(centre + Vector2(cos(a) * t.x * SHADOW_R * k,
+				sin(a) * t.y * SHADOW_R * k))
+		floor_view.draw_colored_polygon(pts,
+			Color(COL_INK.r, COL_INK.g, COL_INK.b, SHADOW_A * alpha / 3.0))
 
 ## A ring lying ON the ground, `r` of a tile across. Flattened 2:1 like every other
 ## shape on this floor, because a true circle stops reading as a patch of lit floor the

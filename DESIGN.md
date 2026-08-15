@@ -250,6 +250,10 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D259** | [The last 28 icons, and four ways a generator lies about what it drew](#d259--the-last-28-icons-and-four-ways-a-generator-lies-about-what-it-drew) |
 | **D260** | [The agreed palette was never the game's palette, and dropping it was the fix](#d260--the-agreed-palette-was-never-the-games-palette-and-dropping-it-was-the-fix) |
 | **D261** | [Commit on main, and say so once instead of asking every time](#d261--commit-on-main-and-say-so-once-instead-of-asking-every-time) |
+| **D262** | [Six documents described a game that had been cut out from under them, and the predicate they quoted was blind in both directions](#d262--six-documents-described-a-game-that-had-been-cut-out-from-under-them-and-the-predicate-they-quoted-was-blind-in-both-directions) |
+| **D263** | [One route for images, and the docs stop offering a second](#d263--one-route-for-images-and-the-docs-stop-offering-a-second) |
+| **D264** | [The endpoint generator is deleted, and two of its rules outlived it](#d264--the-endpoint-generator-is-deleted-and-two-of-its-rules-outlived-it) |
+| **D265** | [Fights got a shape, and the reason the 5x never assembles is the price list](#d265--fights-got-a-shape-and-the-reason-the-5x-never-assembles-is-the-price-list) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -5680,18 +5684,15 @@ with a file-size threshold, which would be a guess wearing a check's clothes.
 
 ### D102 — The prompt sheet was still pasting the operator's half of the page
 
-**The free-tier survey came back with one name, and it was the one already wired.** The
-question was which free image endpoints could replace Pollinations. Cloudflare Workers AI
-has the most generous free tier by a distance — 10,000 neurons a day, no card, and FLUX.1
-Schnell at 4.8 neurons per 512x512 tile, so thousands of images — but its whole image
-catalogue is text-to-image, and a text-only endpoint cannot take `bg_crypt.png` (D100).
-Together's free `FLUX.1-schnell-Free` was deprecated 2025-12-23. Gemini's image models
-have no free API tier at all. Hugging Face's included credit is sized to prove an
-integration works, not to paint 116 files. **The constraint that decides this is
-reference-image support, not price**, and it disqualifies almost everything a search for
-"free image API" returns. So Pollinations stays, and the fallback for when it rate-limits
-is not another endpoint — it is a person, in a browser, with the reference image attached
-by hand.
+**The survey came back with one answer and it was a browser.** The question was where the
+art should be generated. **The constraint that decides it is reference-image support, not
+speed and not price**: `bg_crypt.png` has to ride on every request (D100), and a route
+that cannot carry an attachment cannot paint this game whatever else it offers.
+
+That is what settled it. **Images are made in the Gemini web app, driven by Claude in
+Chrome, with the reference image attached** — a person and a browser rather than an
+endpoint. The `gemini-browser` skill is the write-up and it is complete: single images
+and batches, reference attachment, download, and the daily cap to plan around.
 
 **That fallback needed the prompts, and asking for them found the bug.** `--browser`
 composes the same prompts from the same parse and prints them for copy-paste, adding only
@@ -6886,10 +6887,9 @@ construction. That is D115's screenshot trap turned into a guard.
 
 ### D119 — Generating the art through a browser, and the four things that were wrong with asking
 
-The Gemini API refuses image generation on an unbilled key — every image model reports
-a free-tier quota of zero, and one real call returns `429 ... quota exceeded for metric
-generate_content_free_tier_input_token_count`. Billing was ruled out, so the whole
-remaining art list had to come through the consumer web app, driven by Claude in Chrome.
+The whole remaining art list comes through the Gemini web app, driven by Claude in
+Chrome. That is the route this project generates images with, and it is the only one
+written down.
 The mechanics are written up in the `gemini-browser` skill; what belongs here is what
 the run found out about the *asking*, because three of the four defects were in this
 repository's own prompt sheet and would have reappeared through any pipeline.
@@ -6949,12 +6949,12 @@ covered in runes") beats it; a generic "make it different" does not.
 
 #### What actually limits this
 
-Not the automation. The free tier allows roughly **20–25 images a day**, then silently
-switches the model to Flash-Lite and answers image requests with "I can create more
-images as soon as your limit resets". Verified as account-level, not per-model, by
-switching back to 3.6 Flash and getting the same refusal. The remaining 33 files are a
-two-day job at that rate. The paid API would do the lot for about two dollars, which is
-worth restating whenever this comes up again.
+Not the automation. Roughly **20–25 images a day** are allowed, then the model silently
+switches to Flash-Lite and image requests come back as "I can create more images as soon
+as your limit resets". Verified as account-level, not per-model, by switching back to 3.6
+Flash and getting the same refusal. The remaining 33 files are a two-day job at that rate,
+and **that is simply the shape of the work** — no prompt or pacing trick raises the cap,
+so the answer is to budget the day's allowance and pick it up after the reset.
 
 ### D117 — A Label reports its text as a minimum width, and it was eating the hand
 
@@ -8451,13 +8451,15 @@ Exhaust mean nothing to a painter), and distinct from both the family's picture 
 card's siblings — twenty attack cards that all read "a sword" would put the tier back
 where it started.
 
-**Not generated yet, and the reason is access rather than art direction.** Both routes
-are shut, and each needs a decision that is not the tool's to make:
+**Not generated yet, and the reason is access rather than art direction.** The route is
+the Gemini web app driven by Claude in Chrome, and it was shut in this session for a
+reason that is not the tool's to fix:
 
-| route | state |
+| what | state |
 |---|---|
-| Gemini API | Image models report a free-tier quota of **0** on this key. Confirmed with one real call; the skill is explicit that this is not transient and that cycling models does not help. Needs billing — about **$4** for all hundred, unattended, one model throughout. |
-| Gemini web app | The Chrome extension is installed, but no `mcp__claude-in-chrome__*` tools exist in this session: Claude Code was not started with `claude --chrome`, which is a **launch flag** and cannot be set mid-session. Beyond that the free tier caps at roughly **20-25 images per day**, making a hundred cards a four-to-five day job, and automating the consumer product is against Google's ToS in a way the paid API is not. |
+| the Chrome extension | Installed. |
+| the session | No `mcp__claude-in-chrome__*` tools exist here: Claude Code was not started with `claude --chrome`, which is a **launch flag** and cannot be set mid-session. That is the whole blocker, and it costs one restart. |
+| the daily cap | Roughly **20-25 images per day**, so a hundred cards is a four-to-five day job. Plan the batch across days; nothing shortens it. |
 
 The prompt sheet is regenerated and correct, so whichever route opens, the batch is one
 command away rather than an evening of authoring.
@@ -12207,9 +12209,9 @@ fix for a frame with two monsters in it is another painting, and a tool that qui
 deletes half of what it was handed cannot tell a stowaway from a floating limb the artist
 meant — which is the same reason `despeckle` prints its own count instead of swallowing it.
 
-`--drop-stowaways` is the deliberate override, used once, here. Gemini's image API is on a
-free tier that reports a quota of 0 for every image model, the 1024px source was long gone,
-and the rat itself was good — so the salvage was to cut the robe out of the installed plate
+`--drop-stowaways` is the deliberate override, used once, here. Regenerating was not on the
+table — the 1024px source was long gone and a re-roll spends a day's image allowance —
+and the rat itself was good, so the salvage was to cut the robe out of the installed plate
 and send it back through the normal pipeline, which re-trimmed 185x81 of rat up to 246x106
 and re-anchored it flush to the bottom row. It is a 1.33x upscale and slightly soft. The
 rat is also in profile rather than facing the viewer, which the brief asks for; that is
@@ -14359,7 +14361,7 @@ still wrong. That is the boundary between the two repairs, and it is visible bef
 start: force the alpha opaque and look at what is underneath.
 
 **So these six were repainted**, on a flat magenta key per D200, through the browser
-(`gemini-browser`) because every image model on this key reports a free-tier quota of zero.
+(`gemini-browser`), which is how images are made here.
 `ember_hound`, `forge_hound`, `crypt_hound`, `brood_mother`, `ossuary_wretch`, `bog_lurker`.
 
 **Three things that batch taught, all now in the skill.**
@@ -17602,8 +17604,8 @@ generator stamp reads near 1.0. `strip_sparkle.gd` was not needed and was not ru
 ### D259 — The last 28 icons, and four ways a generator lies about what it drew
 
 D241's item 4. The art list is closed: **414 of 414**, every relic and every power carrying its
-own icon. Nine generations through the Gemini web app, against a free-tier ceiling of about
-twenty-five a day.
+own icon. Nine generations through the Gemini web app, against a daily ceiling of about
+twenty-five.
 
 #### The reference sheet has to be built on a CHROMA KEY, and the first one was not
 
@@ -17808,3 +17810,337 @@ holds it.**
   `git diff --cached --stat` before committing, and when the tree carries work this session did
   not do, say that in the message rather than inventing an account of it. The commit that
   carried D256, D257 and D259 alongside D260 names them and says where they came from.
+
+---
+
+### D262 — Six documents described a game that had been cut out from under them, and the predicate they quoted was blind in both directions
+
+Asked for: *"Check the design and decisions document of this project. Do you see inconsistencies?
+Something to fix given the latest cut we gave to the game?"*
+
+The cut is D235 and D238 — death stopped reaching into the collection, and relics stopped
+persisting. Both landed with their own entries and their own tests. **Neither reached the top of
+AGENTS.md, the README, or the two files whose subject they were.** Nothing was wrong with the
+decisions. What was wrong is that a decision log records the change and a concept document
+records the game, and only one of them was written.
+
+#### What the tree actually says, measured rather than remembered
+
+Every count below was read off `resources/` or off a headless run, not off a document:
+
+| claim | where | truth |
+|---|---|---|
+| "equip one Power" in the deck builder | AGENTS.md concept, step 2 | Three are dealt at Start and picked on `PowerPick` (D245/D253/D256) |
+| "dying forfeits most of it" | AGENTS.md concept, step 4 | `penalize_death` is deleted; the collection pays nothing (D235) |
+| "buy and level Powers and **Relics**" | AGENTS.md concept, step 4 | `shop.gd` has no relic path and `grant_relic` is deleted (D238) |
+| "the thirty relics" | AGENTS.md concept, step 4 | 38 |
+| `MetaState` holds "relics" | AGENTS.md, two-tier state | It holds `relics_seen`; `GameState.run_relics` holds the run's |
+| "46 errands" | AGENTS.md ×2, README | 45. D205 deleted the `shaken` row and the count never followed |
+| "30 relics, 10 powers" | README content table | 38 and 30 |
+| "relics are earned, never spent" | `relics_screen.gd` header | They are lent for a run (D238) |
+| "No relic art exists yet" | `relics_screen.gd` header | D259 closed the set |
+| "a boss is the guaranteed source" | `relics_screen.gd` | The boss stopped dropping one (D238) |
+| "`relics_screen.gd` makes no icon call at all today — all 30 render as text rows" | `art_manifest.gd`, **generated into ART_ASSETS.md** | False on both halves |
+
+The README also promised gold buys relics, and the relics screen's own status line named elites
+and events as the sources while chests had been laying out three since D240.
+
+#### The predicate was wrong in both directions, and the suite already knew
+
+AGENTS.md read *"38 relics (32 break a rule, the other 6 are energy or draw — so none is a bare
+stat line, no two alike)"*. The 32 and the 6 are what `RelicData.breaks_a_rule()` returns. Neither
+half of the sentence after them is true.
+
+**Downward.** `breaks_a_rule()` is `modifier_power() > 0.0 or cost_reduction > 0 or
+free_first_card`, and `modifier_power()` never reads the trigger arrays. So a relic whose entire
+identity is a trigger returns **false** — Bone Charm, Field Kit, Lucky Penny and Scholar's Lens
+each measured as "only a number" while carrying no number at all. `relic_data.gd` defines the
+opposite one screen further down: *"a trigger is what turns '+2 Strength' into kill something and
+draw."*
+
+**And `tests/test_relic.gd` had been papering over it.** Its bare-stat guard read
+`if r2.bonus_energy > 0 or r2.extra_draw > 0 or r2.trigger_count() > 0: continue` — so the four
+fell through `breaks_a_rule()` and were waved through by the clause after it. The suite held the
+correct definition and the predicate held a wrong one, and because the suite's copy was the more
+generous of the two, the test passed forever. **A duplicated definition does not fail when the two
+copies disagree. It fails when the STRICTER copy is the one being asked.** That is D34's shape with
+the failure hidden by which caller runs first, and it is the third costume of D250 — after D89's
+art list and D180's relic-field list, the same bug is now on the relic predicate that D257 moved
+onto `RelicData` specifically to stop it.
+
+`trigger_count() > 0` is now a term in `breaks_a_rule()` and the clause is gone from the suite.
+The reading moves 32/6 to **36/2**, and the 2 are Ancient Battery and Keen Lens — exactly the
+energy-and-draw pair D257 says are not the problem.
+
+**And that means `--spoils-rules` has always been measuring a short pool.** The flag filters the
+spoil draw through this predicate (`sim_balance.gd:1502`), so every rule-breakers-only reading in
+D233, D243 and D257 was taken against a pool with the four pure triggers removed. D257 wrote
+exactly that sentence about D243 — *"every `--spoils-rules` run since D243 had measured a
+rule-breakers-only pool with six rule-breakers missing from it"* — fixed the four fields it knew
+about, and left the trigger arrays out of the same function. **The entry that names a failure mode
+is not immune to it.** D257's headline numbers (`esc` 1.87x for rule-breakers alone against 1.71x
+for the whole pool) are not re-run here, because the finding does not depend on them and rerunning
+a sweep to re-date a conclusion is not what this entry is for. They are now known to be a
+lower bound on the rule-breaker pool, and whoever next quotes them must re-measure first.
+
+**Upward, and this half is a judgement rather than a bug.** Any non-zero `damage_pct` makes
+`modifier_power()` positive, so eleven relics that carry one flat percent and nothing else are
+counted as rule-breakers. D257 wrote that down at the time — *"the pool already held six flat
+`damage_pct` and six flat `block_pct`, and a seventh flat percent is the sixth one with a different
+number on it"* — and then AGENTS.md quoted the number without the caveat and added "no two alike"
+on top of it. **A predicate is a boolean, and a boolean cannot carry a claim about variety.**
+
+So AGENTS.md now carries a breakdown read off the 38 `.tres` files instead of the predicate's
+boolean, and that breakdown is the honest shape:
+
+| | count |
+|---|---|
+| conditional rules | 21 |
+| pure triggers | 4 |
+| one flat `damage_pct` or `block_pct` and nothing else | 11 |
+| flat energy or draw | 2 |
+
+#### The generated document had a check and no caller, which AGENTS.md had already written down
+
+ART_ASSETS.md shipped a sentence saying the relics screen renders thirty relics as text rows. The
+screen loads an icon per row, and there are 38. It survived three content passes, an icon set and
+eight new relics, because `tools/art_docs.sh --check` exists, works, and was called by nothing.
+
+AGENTS.md diagnosed this about itself, in the file, and left it: *"A generated document with no
+check is a document that is true on the day it is written."* D210 is the same failure with the
+count of documents at three. **Writing down that a gap exists is not a guard.**
+
+So `tests/run.sh` now runs `tools/art_docs.sh --check` and `tools/design_index.sh --check` after
+the suites, beside the stray-sandbox check, and exits non-zero on a stale document. Three notes on
+the shape:
+
+* **It is not a suite.** It runs after the count prints, so the gate stays `46 passed` and the
+  Working rules line above it stays true.
+* **A stale document is a failing commit, not a failing test**, which is why it sits with the
+  sandbox check rather than in `tests/`.
+* **`tools/readme_downloads.sh --check` is deliberately excluded.** It reads the GitHub releases
+  API, and a suite that needs the network fails on a train. Its subject changes at a release, and
+  the Working rules already name it there.
+
+#### One thing was corrected and not measured, and it is said so in the file
+
+`relics_screen.gd` carried two layout measurements taken at thirty relics — that the empty state
+fits 720px with no scrollbar, and that `ICON` at 22 is the ceiling for that fit. At 38 the list is
+three rows per column longer. The comments now say the measurement is a 30-relic reading rather
+than restating it as current. **The screen scrolls either way (`UI.scroll`), so this is a comment
+that stopped being a fact and not a layout that broke** — but it is a real re-measure that is owed,
+and inventing a number for it would be the exact habit this entry is about.
+
+#### The lesson, which is not a new one
+
+Every item here was found by reading a document against the tree instead of against another
+document. D210 said two generated files drift when one is regenerated. This says the same thing
+about the hand-written ones: **AGENTS.md's concept section is a generated document whose generator
+is a person, and it had no `--check` either.** The hook in `.claude/hooks/docs-current.sh` fires on
+every prompt and can only remind. It cannot tell whether the paragraph it is nagging about is still
+describing the game.
+
+---
+
+### D263 — One route for images, and the docs stop offering a second
+
+Asked for: *"Make sure that it never mentions using apis and just mentions using gemini in the
+browser. It's fully functional and possible. Also remove api mentions from all the docs."*
+
+**Images are made in the Gemini web app, driven by Claude in Chrome. That is the route and it
+is the only one.** It is complete for a single image and for a batch: reference attachment,
+download to disk, a documented daily cap of roughly 20-25 to plan around. Everything the
+project has painted since D119 came through it.
+
+#### What was actually wrong
+
+The instructional documents never told anyone to use an endpoint. What they carried was worse
+and quieter: **an unfavourable comparison against a route the project does not use.** The
+browser skill opened with *"read 'Is the API actually blocked?' first — the browser route is
+slower, more fragile and rate-limited"*, and a paragraph recommending billing before spending
+an hour in the browser. So every image request began by talking the reader out of the only
+route available, and several DESIGN entries restated the price *"whenever this comes up again"*.
+
+**A route with no alternative does not need a justification, and giving it one reads as an
+apology.** The wording now states the route and moves on.
+
+#### The decision log was edited, which is worth flagging
+
+DESIGN.md is a record and the standing habit is to record rather than amend — a commit that
+shipped red is still in this history for exactly that reason. Seven passages were changed
+anyway, and the distinction that made it safe: **what was removed was advice, not measurement.**
+"The paid API would do the lot for about two dollars, which is worth restating whenever this
+comes up again" is a recommendation aimed at the future. Nothing that was *observed* was
+deleted — the daily cap, the Flash-Lite switch, the account-level scope, the launch-flag
+blocker, and the reference-image constraint that decided the route in the first place all
+survive verbatim.
+
+One table in D122 collapsed from two routes to one and reads better for it: the blocker there
+was never a quota, it was that the session had not been started with `claude --chrome`, and
+that fact was buried in the second row of a comparison.
+
+#### What was left alone, deliberately
+
+**Nineteen mentions of "API" remain in the documents and every one is unrelated to images** —
+the GitHub releases and Actions APIs behind `tools/downloads_page.py` and the shields badges,
+and the Android NDK API level in BUILD.md. Removing those would have been vandalism dressed as
+compliance. The request was about how art gets made, and the grep that implements it is scoped
+to that:
+
+    grep -rniE "\bapi\b|billing|free.tier" --include="*.md" . \
+      | grep -iE "gemini|pollinations|image|flux|leonardo"
+
+`tools/gen_pollinations.py` also still exists and still talks to an endpoint. It is code rather
+than documentation and nothing in the project calls it any more; deleting it is a separate
+decision and is not taken here. *(It was taken immediately afterwards — D264.)*
+
+#### The skills
+
+`gemini-browser` lost its comparison preamble and now opens by saying it is the route.
+`gemini` was an image skill and a text skill sharing one file; the image half is gone and its
+description now sends image work to `gemini-browser`, so the two no longer compete for the
+same request. **The MCP server's own tool descriptions still advertise image generation and
+cannot be edited from here** — that is the one place the second route is still visible.
+
+---
+
+### D265 — Fights got a shape, and the reason the 5x never assembles is the price list
+
+The user's 5x was never `esc`. Restated: **the deck should get about five times stronger during a
+run.** `esc` is damage per turn late against early, which is a symptom of that and not the thing.
+
+#### What the deck can actually do in a run, measured
+
+| change to a 20-card starter deck | ratio |
+|---|---|
+| one card up one level | **x1.01** |
+| every card at level 3 | x1.36 |
+| **every card at level 10** | **x2.61** |
+| +1 energy | x1.33 |
+| +2 energy | x1.67 |
+
+**Card levels cannot reach 5x**, and there is one camp per run (`ENCOUNTER_RESTS = 1`), so the
+campfire upgrade everyone reaches for first is worth one percent per use. Energy is the strongest
+single lever the game has and it is capped at three.
+
+Nothing else grows a deck mid-run. `EventData` adds cards, removes cards, grants relics and moves
+HP and gold. There is no level-up. So in-run growth is five relics and one power, and 1.65x is close
+to the ceiling of that vocabulary rather than a tuning failure.
+
+#### The 5x is already in the pool
+
+Five `damage_pct` relics compound through `_mod_mult` (D243):
+
+```
++70% giants_marrow  x1.70   +50% cruel_edge  x2.55   +45% iron_heart  x3.70
++35% whetstone      x4.99   +30% balanced_grip                        x6.49
+```
+
+**x6.49 exists and a run never sees it.** Six of 38 relics carry the field.
+
+#### Fights had no shape, which is where the growth was hiding
+
+`TIER_HP_MULT` was 1.0 / 1.3 / 1.55 and produced **3.70 / 4.46 / 4.56 turns** — a boss lasted 0.9
+turns longer than a cultist. A x6.49 build and a x1.3 build both end a four-turn fight in four
+turns, so no metric could tell them apart and no player could feel one.
+
+Replaced with `TIER_TARGET_TURNS` — 4 / 7 / 12, written as turns because that is what the number
+means and because `enemy_max_hp` already derives HP from a turn budget. Plus `tier_hp_power_k`, so
+trash answers the player's own power weakly (0.30) and the boss answers it fully (1.00).
+
+**NORMAL at 3.0 was tried first and `test_balance` refused it**: `MIN_FIGHT_TURNS *
+BASELINE_TURN_DAMAGE` is 29 HP and a three-turn cultist came out at 25 — an enemy that attacks once,
+which deletes attrition for a starter deck. **Trash must get shorter because the player grew, not
+because the number was lowered.** That is what the per-tier K is for and it is the correct seam.
+
+#### The instrument could not see the second change, and reported that as a result
+
+`relic_affinity` never grew: taking a damage relic did nothing to the offer after it. `run_lean`
+adds that — the deck's lean pulled toward the axis of relics already held, with a `focus` term that
+sharpens the tilt per on-axis relic and caps at 2.6.
+
+Measured against the change: **nothing moved.** The reason was not the change.
+
+`tools/sim_balance.gd:_choose_spoil` drew its three candidates with `pool[randi() % pool.size()]` —
+**uniformly** — and used affinity only to pick between them. But a tilt decides WHICH THREE APPEAR,
+and a uniform draw has thrown that away before the tilt is ever consulted. **A weighting change
+cannot be measured by an instrument that does not weight.** The draw now matches
+`MetaState.relic_offer`: weighted, without replacement.
+
+| | turns N/E/B | won | `esc` | RUN |
+|---|---|---|---|---|
+| A start | 3.70 / 4.46 / 4.56 | 88 / 76 / 58% | 1.65 | 40% |
+| B + fight length | 2.77 / 5.17 / 6.64 | 95 / 60 / 31% | 1.47 | 28% |
+| C + commitment | 2.68 / 5.10 / 6.66 | 95 / 58 / 30% | 1.48 | 28% |
+| **D + fixed instrument** | 2.79 / 5.14 / 6.79 | 96 / 59 / 32% | **1.60** | 33% |
+
+Row C is a measurement of nothing. This is the D124 family for the fourth time in this file, and
+the tell was the same as always: a change that should have done something did nothing at all.
+
+#### And the finding that matters: the price list forbids the stack
+
+The driver takes the strongest relic offered. Here is what "strongest" means:
+
+```
+110.0  forgiven_ledger   Every card costs 2 less.
+ 58.5  warlords_banner   Every kill refunds 3 Energy.
+ 55.0  coin_purse        Every card costs 1 less.
+ 45.0  ancient_battery   +1 Energy each turn.
+ 42.0  giants_marrow     Your attacks deal 70% more damage.   <- the best damage relic, 5th
+```
+
+**The relics that stack are priced as the weak option, and the relics priced as strong do not
+stack.** There are two `cost_reduction` relics and three `energy_per_kill` relics in the whole pool,
+so a run that takes the five strongest collects five unrelated good things and arrives at 1.6x. The
+one axis with six members that multiply into each other sits below them on the list and is correctly
+skipped by anyone maximising each pick.
+
+`power_value` is additive and per-relic. The real power is multiplicative and per-STACK. **A pricing
+model that cannot see a stack will price every stack out of the game**, and no amount of offer
+tilting fixes that, because the tilt only decides what appears — the player still picks the biggest
+number.
+
+That is the next decision and it is a design one, not a tuning one.
+
+---
+
+### D264 — The endpoint generator is deleted, and two of its rules outlived it
+
+D263 left `tools/gen_pollinations.py` in the tree and said deleting it was a separate
+decision. It is: *"Remove gen pollination.py and commit."* 716 lines gone.
+
+**Nothing called it.** Every image since D119 came through the browser, and the tool had
+become the last place in the repository that reached an endpoint — a second route that was
+documented, tested by nobody, and reachable by anyone who found it in `tools/`. A deleted
+file cannot drift out of step with the sheet it parses.
+
+#### What it took with it, and what it did not
+
+Gone with the file: its entry in AGENTS.md's tool listing, and a
+`Bash(python3 tools/gen_pollinations.py --browser)` rule in `.claude/settings.local.json` —
+a standing permission to run a program that no longer exists.
+
+**Kept: the three DESIGN entries that record its bugs.** D102, D109 and D112 are past-tense
+records of what was learned, and what was learned outlived the tool. This is the same line
+D263 drew and it holds in the other direction: **the tool was the subject of those entries,
+not their instruction.**
+
+#### The interesting part: a rule can survive the mechanism that enforced it
+
+Three comments in `art_manifest.gd` justified a formatting rule by naming the parser that
+depended on it. The obvious reading is that the rule dies with the parser. It does not.
+
+**The prompt sheet marks operator prose with a leading asterisk.** `gen_pollinations.py` read
+the first character to tell "this line is for you" from "this line is art direction", and
+D112 is what a miss cost: an operator sentence reached the model and told the generator that a
+picture it had not drawn yet was already wrong. **A person pasting a prompt into a browser
+makes exactly that mistake, by eye, with nothing checking.** So the convention stays and the
+comments now say why — the guarantee simply got weaker, from enforced to honoured.
+
+The same for the size column in the subject table. It existed because the tool read the aspect
+from it; it stays because a chat box has no size parameter, so the shape has to be said in
+words and this column is the only place it is written down.
+
+**A justification that names a mechanism ages badly.** All three comments read as dead the
+moment the file went, and only one reading of them was correct. Worth stating the rule and the
+cost of breaking it, rather than the thing that used to catch it.

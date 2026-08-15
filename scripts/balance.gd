@@ -818,12 +818,84 @@ static func relic_affinity(r, lean: Dictionary) -> float:
 	if directed <= 0.0:
 		return 1.0
 	var share_atk := atk / directed
-	return 1.0 + AFFINITY_TILT * (share_atk * float(lean["attack"])
+	# `focus` is how committed the RUN already is (D265). Absent means 1.0, so a caller that only
+	# has a deck gets exactly the old behaviour.
+	var tilt := AFFINITY_TILT * float(lean.get("focus", 1.0))
+	return 1.0 + tilt * (share_atk * float(lean["attack"])
 		+ (1.0 - share_atk) * float(lean["defence"]))
 
-## How hard the tilt pulls. At 1.5 a perfectly-matched relic is about twice as likely as a
-## mismatched one, which is a nudge and not a filter.
+## How hard the tilt pulls at zero commitment. At 1.5 a perfectly-matched relic is about twice as
+## likely as a mismatched one, which is a nudge and not a filter — and that is right for the FIRST
+## offer, where the deck is the only thing that has spoken.
 const AFFINITY_TILT := 1.5
+
+## How much each relic already held sharpens the next offer (D265).
+##
+## The tilt used to be constant, so taking a damage relic did nothing to the offer after it. That
+## is why a run could not assemble the thing the pool already contains: **five damage relics
+## compound to x6.49 in combat, and only 6 of 38 relics carry `damage_pct`**, so a flat 2.5x tilt
+## over five draws hands a player one or two of them and a pile of unrelated numbers.
+##
+## Commitment is what a draft is. Each on-axis relic already taken raises the tilt for the next
+## offer, so a run that starts down an axis is pushed further down it — which is the sentence
+## `relic_affinity` has always carried ("picks push you FURTHER into what you already are") without
+## the arithmetic to back it.
+##
+## It is still not a filter. At three relics in, the tilt is 1.5 x 1.9 = 2.85, so a matched relic is
+## about four times a mismatched one and the mismatched one is still on the table. The offer is
+## three of thirty-odd; something off-axis appears in almost every one.
+const AFFINITY_FOCUS_PER_RELIC := 0.30
+## Ceiling on that, so a long run cannot turn the offer into a single-axis vending machine.
+const AFFINITY_FOCUS_MAX := 2.6
+
+## The lean the OFFER should read: what the deck is, pulled toward what the run has already taken.
+##
+## `deck_lean` alone describes the thesis the player brought. It cannot describe the build they are
+## assembling, because it never sees a relic. This adds that half, and it is the difference between
+## an offer that answers "what did you bring" and one that answers "what are you becoming".
+static func run_lean(deck: Array, held: Array = []) -> Dictionary:
+	var lean := deck_lean(deck)
+	if held.is_empty():
+		return lean
+	# Where the held relics point, by the same reading `relic_affinity` takes of one relic.
+	var atk := 0.0
+	var def := 0.0
+	for r in held:
+		if r == null:
+			continue
+		var a := float(r.damage_pct) * 0.6 + float(r.start_strength) * 4.5
+		if r.attacks_hit_all:
+			a += 21.0
+		if r.repeat_first_attack:
+			a += 15.0
+		a += float(r.lone_damage_pct) * 0.27 + float(r.wounded_damage_pct) * 0.18
+		a += float(r.opener_damage_pct) * 0.12 + float(r.kill_damage_pct) * 0.39
+		a += float(r.lifesteal_pct) * 0.32
+		var d := float(r.block_pct) * 0.4 + float(r.start_block) * 0.8
+		d += float(r.start_dexterity) * 4.0 + float(r.bonus_max_hp) * 0.5
+		d += float(r.block_per_card) * 6.0 + float(r.block_heals_pct) * 0.2
+		d += float(r.retaliate_pct) * 0.2
+		if r.block_carries:
+			d += 6.0
+		atk += a
+		def += d
+	var directed := atk + def
+	if directed <= 0.0:
+		return lean          # every relic held is a neutral one; the deck still decides
+	# Blend, so the deck never stops mattering, and count only the relics that HAVE an axis.
+	var on_axis := 0
+	for r in held:
+		if r != null and (atk + def) > 0.0:
+			on_axis += 1
+	var pull: float = clampf(float(on_axis) * 0.22, 0.0, 0.75)
+	var held_atk := atk / directed
+	var out := {
+		"attack": lerpf(float(lean["attack"]), held_atk, pull),
+		"defence": lerpf(float(lean["defence"]), 1.0 - held_atk, pull),
+		"other": float(lean["other"]) * (1.0 - pull),
+		"focus": minf(AFFINITY_FOCUS_MAX, 1.0 + AFFINITY_FOCUS_PER_RELIC * float(on_axis)),
+	}
+	return out
 
 ## The same question for a POWER, and read by `MetaState.power_offer` (D256).
 ##
@@ -931,8 +1003,31 @@ static func power_ratio(deck: Array, relics: Array = [], equipped_power = null) 
 ## damage the player can actually block, rather than an unwinnable race.
 ## Enemy HP must be high enough that a fight lasts ~4+ turns — an enemy that dies
 ## in 2 turns only ever attacks once, which makes attrition (the real difficulty)
-## disappear. Boss/elite multipliers are modest because the base is already large.
-const TIER_HP_MULT := {Tier.NORMAL: 1.0, Tier.ELITE: 1.3, Tier.BOSS: 1.55}
+## disappear.
+##
+## **How long a fight of each tier is meant to last, in turns (D265).**
+##
+## This replaces `TIER_HP_MULT`, which said 1.0 / 1.3 / 1.55 and produced fights of
+## 3.7 / 4.5 / 4.6 turns — **a boss lasted 0.9 turns longer than a cultist.** Every fight in
+## the game was the same length, and that is what made the escalation invisible: five damage
+## relics compound to x6.49, and a x6.49 build and a x1.3 build both end a 3-turn fight in
+## 3 turns. There was nowhere for the growth to show.
+##
+## Written as TURNS rather than as an HP multiplier because that is what the number means, and
+## because `enemy_max_hp` already derives HP from a turn budget for exactly this reason: the
+## pacing stays put when another constant moves.
+##
+## The shape is variance, not length. The boss is three times a cultist, so a build has somewhere
+## to be spent. `ESCALATION_MAX` (1.6) is reached at turn 11, so a 12-turn boss does not run away
+## from the player — the escalation stops climbing before the fight does.
+##
+## **NORMAL stays at 4.0, and the first attempt at 3.0 was wrong.** `test_balance` refused it:
+## `MIN_FIGHT_TURNS * BASELINE_TURN_DAMAGE` is 29 HP and a 3-turn cultist came out at 25, which is
+## an enemy that attacks once. Trash must get shorter because the PLAYER grew, not because the
+## number was lowered — a starter deck still owes the same three turns of attrition it always did.
+## That is what `tier_hp_power_k` is for, and it is the correct seam for this: it shortens trash
+## only for the deck that earned it.
+const TIER_TARGET_TURNS := {Tier.NORMAL: 4.0, Tier.ELITE: 7.0, Tier.BOSS: 12.0}
 const TIER_DMG_BONUS := {Tier.NORMAL: 0, Tier.ELITE: 1, Tier.BOSS: 2}
 const TIER_NAME := {Tier.NORMAL: "Cultist", Tier.ELITE: "Elite", Tier.BOSS: "Dungeon Boss"}
 
@@ -3207,13 +3302,34 @@ const OFFENSE_SHARE := 0.5
 static func enemy_max_hp(dungeon: int, tier: int, ratio: float) -> int:
 	# damage a baseline deck lands per turn while also blocking
 	var dps := MAX_ENERGY * BASELINE_CARD_POWER * OFFENSE_SHARE
-	var base := dps * TARGET_NORMAL_TURNS + dungeon * 5.0
-	base *= float(TIER_HP_MULT[tier])
+	# The tier's own turn budget (D265). The depth term rides the same ratio, so a boss at depth
+	# stays three times a cultist at that depth rather than drifting toward it.
+	var tier_turns := float(TIER_TARGET_TURNS[tier])
+	var base := (dps * TARGET_NORMAL_TURNS + dungeon * 5.0) * (tier_turns / TARGET_NORMAL_TURNS)
 	var sr := scaling_ratio(dungeon, ratio)
-	base *= 1.0 + HP_POWER_K * (sr - 1.0) \
+	base *= 1.0 + tier_hp_power_k(tier) * (sr - 1.0) \
 		+ HP_POWER_K_HIGH * maxf(0.0, sr - HIGH_POWER_FLOOR)
 	base *= ascension_mult() * difficulty_hp_mult()
 	return int(round(base))
+
+## How hard each tier answers the player's OWN power (D265).
+##
+## `HP_POWER_K` was one number for every tier, fitted to hold fight length flat as decks improve.
+## Holding it flat is the thing being removed: a maxed deck met a cultist that had grown with it and
+## the fight took the same four turns it always had, so meta progression was invisible too.
+##
+## Trash answers weakly, so a strong deck cuts through it — that is where the power fantasy lives.
+## The boss answers fully, so a strong deck still gets a fight. Elites keep the old number, which
+## puts them where they already were.
+##
+## Note this is the META axis, not the within-run one. Relics have not been priced into `ratio`
+## since D230, so in-run growth is already unanswered by every tier; this decides what a FUSED
+## deck meets when it walks in.
+static func tier_hp_power_k(tier: int) -> float:
+	match tier:
+		Tier.NORMAL: return 0.30
+		Tier.BOSS: return 1.00
+	return HP_POWER_K
 
 ## Enemy attack for turn `turn` (1-based). `roll` in [0,3] keeps randomness
 ## caller-side.
