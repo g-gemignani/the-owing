@@ -20572,9 +20572,33 @@ That is not proof, and it is the first hypothesis worth testing when it happens 
 model picker showed every row selectable with no reset time, so it is not the daily cap,
 and one account driven by two browsers at once is the one new variable.
 
-**The state this leaves behind is deliberate and it is the D282 shape.** The list asks for
-four files, `iso_run.gd` loads them if they exist, and the computed marks are still drawn
-until they do. A checkout today looks exactly as it did yesterday.
+#### The art is in, after three attempts that failed three different ways
+
+**One: every subject was drawn sitting on a big stone block.** My own prompt put it there.
+I named the block to explain the camera angle — "each object stands on the flat top of a
+stone block whose top face is 116x58" — and the browser skill's rule is that every noun in
+a justification is a thing that can be drawn. The game draws that block itself, so
+installing these would have stacked a block on a block.
+
+**Two: with the block gone, it came back too dark.** Installed, the four measured **0.10 to
+0.16 mean luminance with 63-88% ink**, against 0.35 for the rune-stone standing beside them
+on the same floor. That is the relics' defect (D268) mirrored: right technique, wrong value,
+and invisible to every automated check because the file is present and the matte passed.
+The brief caused it. "Nothing near white" plus "no light of its own" reads as *paint it
+black*, and it fights the one thing this asset is for.
+
+**Three: pale weathered stone, ink kept to the outline and the hollows.** 0.23 to 0.58, and
+the stair reads across a dark room in a capture of the Drowned Market.
+
+#### They install one at a time, and that is a property of the subjects
+
+`--cols=4` cannot cut this sheet. The dome and the stair are each wider than a quarter of
+it, so every 4-column split puts subject on a cell border, and the matte refuses a cell
+whose border is 66-79% field against the 80% it needs. Four `--only` runs with a `--crop`
+box read off the sheet by eye installs all four cleanly. That is what `--crop` was added
+for in D286, used a second time for a different reason than it was written for.
+
+**434 wanted, 434 present, 0 to provide.**
 
 ---
 

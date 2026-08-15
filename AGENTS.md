@@ -156,7 +156,7 @@ model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4
 24 sound effects · 5 score tracks · 48 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
-**Art: 430 files wanted, 430 present, 0 to provide — the list is CLOSED again (D286).**
+**Art: 434 files wanted, 434 present, 0 to provide — the list is CLOSED again (D296).**
 was 205/205/0 at D129, then D131 opened Tier 3b (one illustration per card) and took it to
 205/305; the hundred were painted four to a picture, a 2x2 grid of 4:3 cells tiling one
 4:3 image, which turned a hundred browser requests into twenty-five (D136). It closed at
@@ -164,7 +164,9 @@ was 205/205/0 at D129, then D131 opened Tier 3b (one illustration per card) and 
 added, and D259 closed it: every relic and every power now has its own icon and no power
 falls back to a drawn letter. It reopened once more to 414/430 for the sixteen isometric
 props D282 put on it — the dressing that varies one floor from the next, drawn in code
-until then — and D286 closed it off one sheet. The shopping
+until then — and D286 closed it off one sheet. Then to 430/434 for the four landmark caps,
+which D282 had skipped for want of filenames that turned out to exist already, and D296
+closed it. The shopping
 list is
 generated — `tools/art_docs.sh`, which writes ART_ASSETS.md and ART_PROMPTS.md together
 — so it cannot fall out of step with the catalogues **once it is re-run**. It went three
