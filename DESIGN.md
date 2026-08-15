@@ -270,6 +270,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D284** | [The tier had a shopping list, a loader and a prompt, and no way in](#d284--the-tier-had-a-shopping-list-a-loader-and-a-prompt-and-no-way-in) |
 | **D285** | [Death becomes a debt, block cannot be re-priced, and D280's table was misread](#d285--death-becomes-a-debt-block-cannot-be-re-priced-and-d280s-table-was-misread) |
 | **D286** | [The dressing is painted, and the list reads zero for the first time](#d286--the-dressing-is-painted-and-the-list-reads-zero-for-the-first-time) |
+| **D287** | [A commit carried the caller and left the callee behind, and only CI could see it](#d287--a-commit-carried-the-caller-and-left-the-callee-behind-and-only-ci-could-see-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -19589,3 +19590,52 @@ Worth stating plainly, because it will happen again on the next tier: **a consta
 against a computed placeholder is a guess about art that does not exist yet.** Nothing was
 wrong with 0.52 while every prop was an arc and two lines; it was wrong the moment the
 first painting loaded, and one capture was enough to see it.
+
+### D287 — A commit carried the caller and left the callee behind, and only CI could see it
+
+The suite passed locally and the same commit turned CI red. Nothing about the machine
+differed. What differed is that **the suite ran against the working tree and CI ran
+against the commit**, and on this tree those were not the same thing.
+
+Two sessions were working in one checkout. One held `tools/art_manifest.gd`; the other
+was adding Tier 8d, the sixteen floor props. That session's own commit says so out loud —
+*"the one-line fix to the printed command sits in tools/art_manifest.gd, which another
+session is holding. It lands with their commit."* It did. What did not land with it was
+`scripts/pixel_art.gd`, where the function that line calls is defined:
+
+```
+tools/art_manifest.gd:1114   _add("iso/prop_%s.png" % PixelArt.iso_prop_id(pname), ...)
+scripts/pixel_art.gd:636     static func iso_prop_id(prop_name: String) -> String:
+```
+
+So the commit contained a call to a function that did not exist in it. On disk both were
+present and everything passed. In the commit only the caller was there, `art_manifest.gd`
+failed to parse, and `tools/art_docs.sh --check` reported both generated documents STALE —
+which is `tests/run.sh` exiting 1 after the suite has already printed `46 passed`.
+
+**The generated-document check is what caught this, and it is worth noting that no test
+did.** D262 added that check because a document with no check is true only on the day it
+is written. It turns out to also be the project's only assertion that a TOOL still parses,
+because tools are not autoloaded and `test_compile.gd` does not reach them.
+
+#### The three things worth keeping
+
+**A green suite says the working tree is consistent. It says nothing about the commit.**
+Here the gap was widened by staging early: `git add` took a snapshot, the parallel session
+kept editing, and the suite then ran against files newer than the ones staged. Anything
+verified before `git commit` on a shared tree is a claim about a tree that no longer
+exists. Verify what was committed — `git worktree add --detach <sha>` and run there — or
+stage and commit in one motion with nothing in between.
+
+**A caller and its callee are one commit.** The obvious version of this rule is about
+refactors. The version that bit here is about a boundary between two sessions: the caller
+was in a file one session owned and the callee in a file the other owned, so neither
+session's own change was incomplete. Only the union was. When splitting a shared tree by
+FILE, check that no file being committed names a symbol defined in a file being left
+behind.
+
+**A shared working tree does not have a "my files" partition, and saying so out loud is
+the cheap fix.** The split was reasoned about at the time, and the entanglement of
+`DESIGN.md`, `art_manifest.gd` and the two documents generated from it was even called
+out — the miss was one symbol, one level deeper than the file list. Two sessions editing
+one checkout should hand off through a commit, not through the tree.
