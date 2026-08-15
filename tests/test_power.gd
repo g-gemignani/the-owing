@@ -288,20 +288,47 @@ func _init() -> void:
 		if not seen_grant.has(String(pid3)):
 			fails += 1
 			print("FAIL %s is granted by no dungeon and is not a starter — no save can ever hold it (D290)" % pid3)
-	# ...and the deepest places hand over the rarest powers, which is what D255's clears gate was
-	# FOR. The gate is a place now, so the property is asserted on the ORDER rather than on a table
-	# of counts: a dungeon's grants must never be rarer than the next dungeon's.
-	var last_rarity := -1
+	# ...and the deepest places hand over the STRONGEST powers, which is what D255's clears gate was
+	# FOR. The gate is a place now, so the property is asserted on the order rather than on a table
+	# of counts.
+	#
+	# Asserted on `power_value()` and NOT on the rarity band (D290b). The first version of this
+	# check compared bands, which is the coarse view of the same number and passed a map with real
+	# inversions in it: the Warrens at difficulty 2 handed over a 6.0 while the Foundry at 3 gave a
+	# 4.8, both UNCOMMON, so a band comparison saw nothing wrong. **A check written against the
+	# label cannot see a fault in the number the label came from.**
+	#
+	# `is_equal_approx` rather than `<`, because two powers priced the same are a tie and not an
+	# inversion — and floats compared with a bare operator make a tie fail about half the time.
+	var last_pv := -1.0
+	var last_name := ""
 	for did2 in Balance.DUNGEONS:
 		for gid2 in Balance.powers_for_dungeon(String(did2)):
 			var gp := Balance.power(String(gid2))
 			if gp == null:
 				continue
-			if gp.rarity < last_rarity:
+			var pv := gp.power_value()
+			if pv < last_pv and not is_equal_approx(pv, last_pv):
 				fails += 1
-				print("FAIL %s (%s) is granted after a rarer power — depth must not hand back down" % [
-					gid2, CardData.rarity_badge(gp.rarity)])
-			last_rarity = maxi(last_rarity, gp.rarity)
+				print("FAIL %s (%.1f, from %s) is granted after the stronger %s (%.1f) — depth must not hand back down" % [
+					gp.name, pv, did2, last_name, last_pv])
+			last_pv = maxf(last_pv, pv)
+			last_name = gp.name
+	# The bands must still ascend with depth, which they do for free once the sort is by the number
+	# they are derived from. Kept as a SEPARATE assertion rather than trusted: D250 allows the top
+	# band to overlap the one below it, so "sorted by power_value" does not imply "sorted by band"
+	# in general — it only happens to today, and a retune of `TOP_BAND_FLOOR` could part them.
+	var last_rarity := -1
+	for did3 in Balance.DUNGEONS:
+		for gid3 in Balance.powers_for_dungeon(String(did3)):
+			var gp2 := Balance.power(String(gid3))
+			if gp2 == null:
+				continue
+			if gp2.rarity < last_rarity:
+				fails += 1
+				print("FAIL %s (%s) is granted after a rarer power — the bands stopped ascending with depth" % [
+					gid3, CardData.rarity_badge(gp2.rarity)])
+			last_rarity = maxi(last_rarity, gp2.rarity)
 	var fresh = Meta_.new()
 	fresh.path_prefix = SANDBOX
 	fresh.slot = 7

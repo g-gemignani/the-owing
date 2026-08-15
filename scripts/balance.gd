@@ -615,16 +615,29 @@ static func _build_power_grants() -> void:
 	for pid in POWERS:
 		if not (pid in STARTER_POWERS):
 			rest.append(String(pid))
-	# Sorted by rarity, ties broken by catalogue order — `sort_custom` is not stable in Godot, so
-	# the index is part of the key rather than left to chance. Two runs of this must produce the
-	# same map or a save's powers stop matching the screen that explains them.
+	# Sorted by `power_value()` — the measured strength — and NOT by the rarity band (D290b).
+	#
+	# The first version sorted by band and broke ties on catalogue order, which reads as the same
+	# thing and is not. A band is about two points of `power_value` wide, so within one the order
+	# was arbitrary: the Warrens at difficulty 2 handed over Blight at 6.0 while the Foundry at
+	# difficulty 3 gave Nothing Left at 4.8, and the Slag Pits at 4 gave Empty the Purse at 5.0
+	# after the Ember Road at 3 gave Hedge at 6.4. **Rarity ascended and strength did not.**
+	#
+	# Rarity is derived FROM `power_value` (D224), so sorting by the band was throwing away the
+	# precision that produced it and then asserting the coarse version. Sorting by the number keeps
+	# the rarity order — the bands may not overlap below the top one — and fixes the inversions
+	# inside each band for free. The same lesson as D255, one level down: **the derived number is
+	# right, so sort by the number rather than by the label derived from it.**
+	#
+	# `sort_custom` is not stable in Godot, so the catalogue index breaks ties rather than chance.
+	# Two runs must produce the same map or a save's powers stop matching the screen explaining them.
 	var keyed: Array = []
 	for i in rest.size():
 		var p := power(String(rest[i]))
-		keyed.append({"id": String(rest[i]), "rarity": p.rarity if p != null else 0, "i": i})
+		keyed.append({"id": String(rest[i]), "pv": p.power_value() if p != null else 0.0, "i": i})
 	keyed.sort_custom(func(a, b):
-		if int(a["rarity"]) != int(b["rarity"]):
-			return int(a["rarity"]) < int(b["rarity"])
+		if not is_equal_approx(float(a["pv"]), float(b["pv"])):
+			return float(a["pv"]) < float(b["pv"])
 		return int(a["i"]) < int(b["i"]))
 	for d in DUNGEONS.size():
 		var did := String(DUNGEONS[d])

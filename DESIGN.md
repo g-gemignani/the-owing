@@ -274,6 +274,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D288** | [Every size on the floor was a canvas height, and only the hero filled her canvas](#d288--every-size-on-the-floor-was-a-canvas-height-and-only-the-hero-filled-her-canvas) |
 | **D289** | [The powers screen was describing the game from before the power was dealt](#d289--the-powers-screen-was-describing-the-game-from-before-the-power-was-dealt) |
 | **D290** | [Gold stops buying a power, and a place hands it over instead](#d290--gold-stops-buying-a-power-and-a-place-hands-it-over-instead) |
+| **D290b** | [The map was sorted by the label instead of by the number the label came from](#d290b--the-map-was-sorted-by-the-label-instead-of-by-the-number-the-label-came-from) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -19901,3 +19902,60 @@ spare gold and are now one of two — fusion and levels. Whether that leaves lat
 nothing to do is a question for `sim_balance.gd`, which does not model shopping at all, so the
 honest answer is that the instrument cannot see it yet. Flagged rather than guessed, which is D79's
 order.
+
+---
+
+### D290b — The map was sorted by the label instead of by the number the label came from
+
+Asked: *"I would expect that the stronger powers are unlocked by the most difficult dungeons, is it
+the case?"*
+
+Nearly, and the gap was worth the question. **Rarity ascended with depth and strength did not.**
+
+D290 sorted the twenty-four granted powers by rarity band, breaking ties on catalogue position. A
+band is about two points of `power_value` wide, so inside one the order was arbitrary:
+
+| granted by | difficulty | `power_value` |
+|---|---|---|
+| Blight, the Warrens | 2 | 6.0 |
+| Nothing Left, the Foundry | **3** | **4.8** |
+| Hedge, the Ember Road | 3 | 6.4 |
+| Empty the Purse, the Slag Pits | **4** | **5.0** |
+| What You Owe, the Rot Gardens | 5 | 8.6 |
+| Even Out, the Abyssal Stair | 7 | 8.7 |
+
+Two dungeons handed over a weaker power than the shallower place before them, and the fifth dungeon
+came within 0.1 of the seventh.
+
+#### The fault is one line, and the lesson is the one this file keeps relearning
+
+**Rarity is derived FROM `power_value` (D224).** Sorting by the band took the number, threw away the
+precision that produced it, and then ordered by what was left. Sorting by `power_value()` directly
+keeps the rarity order — the bands may not overlap below the top one — and fixes every in-band
+inversion for nothing.
+
+That is D255 one level down. D255 found an authored gate disagreeing with a derived price and
+concluded *"the derived one is right"*. This is the same shape with both numbers derived: **when one
+is derived from the other, sort by the source and not by the label.**
+
+The map now runs 4.0 at the Crypt to 10.7 at the Maw with no dungeon handing back down.
+
+#### The guard could not have caught it, and that is the more useful half
+
+`test_power` already asserted that depth never hands back down — **on the rarity band**. Blight at
+6.0 and Nothing Left at 4.8 are both UNCOMMON, so the band comparison saw two equal values and
+passed. **A check written against the label cannot see a fault in the number the label came from.**
+
+It now asserts on `power_value()`, with `is_equal_approx` so a genuine tie is a tie rather than a
+coin flip on float comparison. The band assertion is KEPT beside it rather than deleted, because
+D250 lets the top band overlap the one beneath it (`TOP_BAND_FLOOR` = 0.85) — so "sorted by
+`power_value`" does not imply "sorted by band" in general. It happens to today, and a retune could
+part them.
+
+#### One thing left alone deliberately
+
+The six starters are `power_value` 3.9 to 4.5, and the Crypt's first grant is 4.0 — so a starter can
+be stronger than the first thing a dungeon gives you. Not fixed, because the starters are chosen to
+span the attack, defence and neutral axes the offer's tilt needs (D256), and picking the six weakest
+instead would leave that tilt with one pole. **The starter set is chosen for shape, not for
+strength, and those two cannot both be the criterion.**
