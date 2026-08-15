@@ -19,6 +19,30 @@ func _defines(path: String, decl: String) -> bool:
 	f.close()
 	return text.find(decl) != -1
 
+## One function's body, read out of a script's SOURCE — from its `func` line to the next
+## declaration at column 0. Source and not reflection, for `_defines`'s reason: loading a UI
+## script here compiles its autoload references and hangs the run.
+##
+## Scoped rather than whole-file, because the thing being asserted is WHERE a call is. The bug
+## this exists for (D271) was one `_roll_rewards(3)` on the wrong side of a function boundary,
+## and the file is allowed — required, in fact — to call it on the other side.
+func _func_body(path: String, decl: String) -> String:
+	var f := FileAccess.open(path, FileAccess.READ)
+	if f == null:
+		return ""
+	var text := f.get_as_text()
+	f.close()
+	var start := text.find(decl)
+	if start == -1:
+		return ""
+	# From the line AFTER the declaration, so a `func _roll_x` whose own name matches a needle
+	# cannot report itself.
+	start = text.find("\n", start)
+	if start == -1:
+		return ""
+	var end := text.find("\nfunc ", start)
+	return text.substr(start, (end - start) if end != -1 else -1)
+
 ## A numeric `const NAME := 1.5` read out of a script's SOURCE, for the same reason
 ## `_defines` reads source: loading a UI script here would compile its autoload
 ## references and hang the run. Returns `fallback` if the constant is not found,
@@ -300,6 +324,34 @@ func _init() -> void:
 	if not _defines("res://scripts/game_state.gd", "pending_debt = false"):
 		fails += 1
 		print("FAIL game_state.gd never clears pending_debt, so the choice outlives its run")
+
+	# --- a panel that redraws may not roll dice (D271) ------------------------------
+	#
+	# `_offer_rewards` is called twice at an elite: once when the fight ends, and again after a
+	# relic is taken, because the relic row has to be redrawn as taken. It also rolled the three
+	# card rewards, so taking the relic dealt three NEW cards underneath — and a player who
+	# waited to see the cards before taking the relic could re-roll them at will, which is D22's
+	# slot machine reached by a door nobody built.
+	#
+	# The rule this asserts is wider than the bug, because the narrow version ("no
+	# `_roll_rewards` here") would pass the day somebody inlines a `randi()`. A draw function is
+	# a draw function: what it shows is decided before it is called.
+	var draw_fns := {
+		"res://scripts/combat.gd": "func _offer_rewards",
+	}
+	for path in draw_fns:
+		var body := _func_body(String(path), String(draw_fns[path]))
+		if body == "":
+			fails += 1
+			print("FAIL %s no longer defines %s — the D271 guard is asserting nothing" % [
+				path, String(draw_fns[path])])
+			continue
+		for die in ["randi(", "randf(", "randi_range(", "pick_random(", "shuffle(", "_roll_"]:
+			if body.find(die) != -1:
+				fails += 1
+				print("FAIL %s rolls '%s' inside %s, which is redrawn after a relic is taken —" % [
+					path, die, String(draw_fns[path])])
+				print("     so the offer changes under the player (D271). Roll it in _win() and read it here.")
 
 	if fails == 0:
 		print("LAYOUT TEST: PASS (actionable content is reachable, no dead ends, no debug text, the debt is paid at the door)")

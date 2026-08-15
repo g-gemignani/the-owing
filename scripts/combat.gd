@@ -78,6 +78,11 @@ var reward_box: VBoxContainer
 ## The three relics an elite is offering, if any (D234/D238). Held on the node rather than passed,
 ## because the reward panel is built in one place and read in another.
 var relic_offer: Array = []
+## The three cards on offer, held for exactly the same reason the relics are — and it took a bug to
+## notice that they were not. `_offer_rewards` is called twice at an elite, once to draw the panel
+## and once after a relic is taken, and the cards were rolled INSIDE it: so taking a relic dealt a
+## new hand of three cards underneath. See D271.
+var card_offer: Array[CardData] = []
 var end_btn: Button
 var power_btn: Button
 var menu_btn: Button
@@ -120,7 +125,7 @@ func _ready() -> void:
 			# the equipped power, and not to what the floor lent you (D238).
 			String(GameState.pending.get("enemy", "")), [], roster,
 			GameState.run_power, dd.boss if dd != null else "", GameState.run_relic_data(),
-			# How deep this run is, which is what the dungeon now ramps against (D267). A fight
+			# How deep this run is, which is what the dungeon now ramps against (D270). A fight
 			# outside a run — there is no such thing today, but `traversal` can be null on a
 			# rebuilt save — passes -1 and gets the un-ramped dungeon.
 			GameState.traversal.progress() if GameState.traversal != null else -1.0)
@@ -2167,12 +2172,20 @@ func _win() -> void:
 	for c in reward_box.get_children():
 		c.queue_free()
 
+	# Rolled HERE, once, beside the relic offer this function already rolls once (D271). Both are
+	# the same kind of thing — what this fight is offering — and both are decided when the fight
+	# ends, not when the panel happens to be drawn.
+	card_offer = _roll_rewards(3)
 	_offer_rewards()
 
 ## Build the reward panel: the relic offer if there is one, then the three cards, then the skip.
 ##
-## Extracted from `_win()` so that taking a relic can rebuild it (D234). Nothing about the panel
-## changed in the move; it needed to be callable twice.
+## Extracted from `_win()` so that taking a relic can rebuild it (D234).
+##
+## **It DRAWS, and it decides nothing.** Everything on the panel is chosen in `_win()` and read
+## from a member here. The extraction was documented as changing nothing about the panel, and it
+## did change one thing: `_roll_rewards(3)` came with it, so the second call dealt three new cards
+## (D271). A function that is called twice may not roll dice.
 func _offer_rewards() -> void:
 	# The relic offer goes FIRST, above the cards. It is the bigger decision — a relic changes a
 	# rule for the rest of the run and a card changes the deck by one — and the panel should read
@@ -2214,7 +2227,7 @@ func _offer_rewards() -> void:
 	# permanent side was not stated anywhere — so "is this a card I have never owned" and
 	# "is this the last copy before a level" were questions the player had to leave the
 	# fight to answer, which in practice meant not answering them.
-	for card in _roll_rewards(3):
+	for card in card_offer:
 		var col := VBoxContainer.new()
 		col.add_theme_constant_override("separation", UITheme.sep(4))
 		# The card holder is SHRINK_CENTER and carries its own minimum size, so the column
@@ -2225,6 +2238,16 @@ func _offer_rewards() -> void:
 		UI.card_button(col, card, Vector2(rw, rbase.y), _on_reward_picked.bind(card),
 			"", null, String(standing["tip"]))
 		UI.collection_line(col, standing)
+		# Whether THIS card is better or worse than the deck taking it (D270). The dilution line
+		# below prices taking *a* card and says the same thing about the best offer and the worst;
+		# this is the half that was missing, and D266 measured runs that ended weaker than they
+		# started because of it.
+		var verdict := Balance.card_verdict(card, GameState.run_deck)
+		if verdict != "":
+			var vl := UI.label(col, verdict)
+			vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			vl.add_theme_color_override("font_color",
+				Color(0.90, 0.55, 0.45) if verdict.begins_with("WEAKER") else Color(0.62, 0.86, 0.58))
 	# What taking one COSTS. Dilution is real — a bigger deck draws each card less
 	# often — but it was invisible, so "take one of three" was an automatic click
 	# rather than a decision. Skipping is a legitimate play and should read as one.

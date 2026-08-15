@@ -854,6 +854,17 @@ effects are drawn at runtime by `scripts/fx.gd`.
 
 These are failure modes that have actually bitten this project. Treat each as a rule.
 
+- **A function that is called twice may not roll dice (D271).** The elite reward panel is
+  drawn once when the fight ends and again after a relic is taken, because the relic row
+  has to redraw as taken — and it rolled the three card rewards, so taking the relic dealt
+  three new cards underneath. The player controls when that second draw happens, which makes
+  it a re-roll on a reward: D22's slot machine reached through a door nobody built, the same
+  shape as quitting to retry a bad turn. **A draw function draws; what it shows is decided
+  before it is called.** `tests/test_layout.gd` reads the body of `_offer_rewards` out of the
+  source and fails on any `randi`, `pick_random`, `shuffle` or `_roll_` inside it. The
+  extraction that introduced this was documented as changing nothing about the panel, which
+  is why nobody looked — **a note saying "nothing changed" is a claim, and it is checkable.**
+
 - **A green suite can hide the whole feature being broken.** Every suite checked the
   ENDPOINTS of the level curve — a maxed card is stronger than a level-1 card, and not
   absurdly stronger — and none ever asked about a step in the middle. 77% of every

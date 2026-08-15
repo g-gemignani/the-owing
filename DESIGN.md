@@ -258,6 +258,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D267** | [The floor was drawn at a fifth of its size, so nothing painted on it could survive](#d267--the-floor-was-drawn-at-a-fifth-of-its-size-so-nothing-painted-on-it-could-survive) |
 | **D268** | [The manifest asks whether a file is there, and nothing asked whether it agrees](#d268--the-manifest-asks-whether-a-file-is-there-and-nothing-asked-whether-it-agrees) |
 | **D269** | [The README is written for a player, and the pictures are a claim that has to be re-checked](#d269--the-readme-is-written-for-a-player-and-the-pictures-are-a-claim-that-has-to-be-re-checked) |
+| **D271** | [A panel that redraws may not roll dice](#d271--a-panel-that-redraws-may-not-roll-dice) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -18521,3 +18522,47 @@ The content table was checked against the catalogues rather than trusted: 100 ca
 30 powers, 35 enemies, 12 bosses, 12 dungeons, 20 events, 45 errands, 16 debts, 46 suites. One
 caption was wrong and is fixed — *"One power carried per run"* has not been true since D245 made
 it an offer of three.
+### D271 — A panel that redraws may not roll dice
+
+Reported: take the relic offered after an elite, and the three cards underneath change.
+
+#### What happened
+
+The elite reward panel holds two offers: three relics on top, three cards below. Taking a relic
+rebuilds the panel, because the relic row has to redraw as taken — a dead row of buttons above live
+ones reads as a bug, which is why D234 made `_offer_rewards` callable twice in the first place.
+
+`_roll_rewards(3)` was inside it. So the second call dealt three new cards.
+
+The relics were already held on the node (`relic_offer`, set in `_win`). The cards were not. Both
+are the same kind of thing — what this fight is offering — and only one of them was treated as a
+fact about the fight rather than a fact about the draw.
+
+#### Why it is worse than a cosmetic reshuffle
+
+The player controls when the rebuild happens. Look at the cards first, dislike them, then take the
+relic: three new cards. The relic was going to be taken anyway, so this costs nothing and can be
+repeated as often as there are relics to take.
+
+That is a re-roll on a reward, which is the thing D22 exists to forbid, arriving through a door
+nobody built. It is the same shape as quitting to retry a bad turn.
+
+#### The fix
+
+`card_offer` is rolled once in `_win()`, beside the relic offer that function already rolls once,
+and `_offer_rewards` reads it. Three lines.
+
+D234's note said the extraction changed nothing about the panel. It changed one thing, and the note
+saying otherwise is why nobody looked: **a function that is called twice may not roll dice.**
+
+#### The guard, and why it is wider than the bug
+
+`test_layout.gd` reads the body of `_offer_rewards` out of the source — scoped to the function,
+because the file is required to call `_roll_rewards` on the other side of that boundary — and fails
+if it contains `randi(`, `randf(`, `randi_range(`, `pick_random(`, `shuffle(` or `_roll_`.
+
+The narrow guard — "no `_roll_rewards` in here" — would pass the day somebody inlines a `randi()`.
+The rule being kept is that a draw function draws: what it shows is decided before it is called.
+
+Checked by putting the bug back: the guard reports it and names the needle it found. With the fix
+in place the suite is 46 green.
