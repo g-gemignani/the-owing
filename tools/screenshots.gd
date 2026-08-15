@@ -108,6 +108,11 @@ const SHOTS := [
 	["Shop", "res://scenes/Shop.tscn", "shop"],
 	["Encounter", "res://scenes/Encounter.tscn", "event"],
 	["Chest", "res://scenes/Chest.tscn", "chest"],
+	# The threshold screen (D253). Photographed because it is three circles laid out by hand against
+	# a painted backdrop, and D89's whole lesson is that art is judged in context against the thing
+	# it replaces — a row of orbs is exactly the kind of layout that reads fine in code and wrong on
+	# screen. It is also where 20 of the 30 powers currently fall back to a letter.
+	["PowerPick", "res://scenes/PowerPick.tscn", "chest"],
 	# The HUB version, not the mid-run one. Every row here enters a dungeon before it
 	# builds the screen, so this was captured in `Mode.LEDGER` — a real screen, but not
 	# the one the world screen's Cards button opens, and the one without the Builds

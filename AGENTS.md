@@ -114,19 +114,25 @@ Two-tier state makes this work:
 
 100 cards · 8 build archetypes · 35 enemy archetypes (all painted) · 12 bosses (one named per
 dungeon) · 38 relics (22 of them multiply throughput, D233/D237/D243, no two alike) ·
-30 powers · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
+30 powers (chosen three-at-a-time on their own screen, D253) · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 46 errands and 16 debts over 44 counters · 3 aspects ·
 24 sound effects · 5 score tracks · 46 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
-**Art: 310 files wanted, 310 present, 0 to provide — the list is closed.** It was
-205/205/0 at D129, then D131 opened Tier 3b (one illustration per card) and took it to
+**Art: 414 files wanted, 386 present, 28 to provide — the list is OPEN again (D253).** It
+was 205/205/0 at D129, then D131 opened Tier 3b (one illustration per card) and took it to
 205/305; the hundred were painted four to a picture, a 2x2 grid of 4:3 cells tiling one
-4:3 image, which turned a hundred browser requests into twenty-five (D136). The shopping
+4:3 image, which turned a hundred browser requests into twenty-five (D136). It closed at
+386/386/0 and stayed closed until this batch: **the 8 relics and 20 powers added by D233,
+D237 and D250 have no icons**, and 20 of the 30 powers now fall back to a drawn letter on
+the Power Pick screen. The shopping
 list is
 generated — `tools/art_docs.sh`, which writes ART_ASSETS.md and ART_PROMPTS.md together
-— so it cannot fall out of step with the catalogues. Two things in it are not paintings and
+— so it cannot fall out of step with the catalogues **once it is re-run**, and nothing
+re-runs it. It has a `--check` mode and no caller: the file said 386/386/0 for three
+content passes while the manifest underneath it had known better all along. A generated
+document with no check is a document that is true on the day it is written. Two things in it are not paintings and
 never will be: the frame kit is computed by `tools/gen_ui_kit.gd`, and the six combat
 effects are drawn at runtime by `scripts/fx.gd`.
 

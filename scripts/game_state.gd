@@ -587,25 +587,41 @@ func select_dungeon(id: String) -> void:
 	chosen_power = String(power_offer[0]) if not power_offer.is_empty() else ""
 
 ## Start the selected dungeon with a chosen deck (D4: per-dungeon deck).
-## `power_id` is the one chosen from the run-start offer (D245). Empty falls back to whatever the
-## save has equipped, which keeps every existing caller — the tools and seven test suites — working
-## unchanged, and is also the honest behaviour for a resumed run that predates the offer.
+## `power_id` is the one chosen from the run-start offer (D245). Empty leaves `run_power` unset, which
+## is the normal path since D253: the deck builder starts the run and the Power Pick screen sets it a
+## moment later. The argument stays because the tools and seven test suites hand a run its power in
+## one call, and they are not wrong to.
 func enter_dungeon(deck: Array[CardData], power_id: String = "") -> void:
 	run_deck = deck
+	# Always ends holding SOMETHING. `set_run_power("")` falls through to whatever the save has
+	# equipped, which is what every tool and test caller relied on before the pick moved onto its own
+	# screen — and it is also what makes quitting on that screen survivable: a run resumed from there
+	# carries the equipped power rather than nothing at all.
+	set_run_power(power_id)
+	generate_map()
+
+## Give the run the power it chose. Split out of `enter_dungeon` because the choosing moved onto its
+## own screen (D253), which runs AFTER the run exists — the stake is spent and the floor is generated
+## by then, so this is the last thing the opening does.
+##
+## An unknown or empty id falls back to whatever the save has equipped, so a run can never reach the
+## floor holding nothing by accident.
+func set_run_power(power_id: String) -> void:
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
 	run_power = null
-	if meta != null:
-		if power_id != "":
-			var p := Balance.power(power_id)
-			if p != null:
-				run_power = p.duplicate()
-				# The LEVEL the save has paid for, if it owns the power at all. A power offered but
-				# never bought arrives at level 1 — the offer opens the pool, and gold is still what
-				# makes one better (D245).
-				run_power.level = int(meta.powers.get(power_id, 1))
-		if run_power == null:
-			run_power = meta.power_data()
-	generate_map()
+	if meta == null:
+		return
+	if power_id != "":
+		var p := Balance.power(power_id)
+		if p != null:
+			run_power = p.duplicate()
+			# The LEVEL the save has paid for, if it owns the power at all. A power offered but never
+			# bought arrives at level 1 — the offer opens the pool, and gold is still what makes one
+			# better (D245).
+			run_power.level = int(meta.powers.get(power_id, 1))
+			chosen_power = power_id
+	if run_power == null:
+		run_power = meta.power_data()
 
 ## Advance to the next dungeon after a boss (HP/heal handled by caller).
 ## Called after clearing a dungeon's boss. Recomputed rather than incremented so

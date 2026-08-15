@@ -1238,6 +1238,9 @@ func _on_start() -> void:
 			msg_label.text = "cannot take that debt now — go back and check the terms"
 			return
 	Audio.play("enter")
-	GameState.enter_dungeon(MetaState.build_deck(selection), GameState.chosen_power)
+	GameState.enter_dungeon(MetaState.build_deck(selection))
 	GameState.autosave()   # the run exists from here on and can be resumed
-	get_tree().change_scene_to_file(GameState.run_scene())
+	# ...and the power is chosen on its own screen, one step further in (D253). The stake is already
+	# spent and the floor is already generated, so this is a threshold rather than a commitment: the
+	# run has begun and the last thing it asks is what you brought to fire.
+	get_tree().change_scene_to_file("res://scenes/PowerPick.tscn")
