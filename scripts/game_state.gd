@@ -637,7 +637,7 @@ func enter_dungeon(deck: Array[CardData], power_id: String = "") -> void:
 			if pick.is_empty():
 				break
 			earn_relic(String(pick[0]))
-	power_offer = meta.power_offer(3, run_deck) if meta != null else []
+	power_offer = meta.power_offer(Balance.POWER_OFFERS, run_deck) if meta != null else []
 	chosen_power = String(power_offer[0]) if not power_offer.is_empty() else ""
 	# Always ends holding SOMETHING. `set_run_power("")` falls through to whatever the save has
 	# equipped, which is what every tool and test caller relied on before the pick moved onto its own

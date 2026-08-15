@@ -272,6 +272,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D286** | [The dressing is painted, and the list reads zero for the first time](#d286--the-dressing-is-painted-and-the-list-reads-zero-for-the-first-time) |
 | **D287** | [A commit carried the caller and left the callee behind, and only CI could see it](#d287--a-commit-carried-the-caller-and-left-the-callee-behind-and-only-ci-could-see-it) |
 | **D288** | [Every size on the floor was a canvas height, and only the hero filled her canvas](#d288--every-size-on-the-floor-was-a-canvas-height-and-only-the-hero-filled-her-canvas) |
+| **D289** | [The powers screen was describing the game from before the power was dealt](#d289--the-powers-screen-was-describing-the-game-from-before-the-power-was-dealt) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -19713,3 +19714,84 @@ wrong with `PROP_WALL` 0.52 while every prop was an arc and two lines. It was wr
 moment the first painting loaded, and no test could have said so — the file was present,
 the matte passed, the bounding box filled. Only a measurement against something with a
 known height can.
+
+---
+
+### D289 — The powers screen was describing the game from before the power was dealt
+
+Asked for: *"From the power screen it's not clear which powers are unblocked and will be rolled with
+the dungeon start and which not. Fix it."*
+
+The report is about one label. What the screen actually had was **four claims, three of them false**,
+all left behind by D245 when the power stopped being equipped and started being dealt.
+
+| what it said | since |
+|---|---|
+| title: *"Powers — one equipped per run"* | D245 |
+| header: *"Equipped: Bulwark"* | D245 |
+| an **Equip** / **Equipped** button on every owned row | D245 |
+| row state: `(owned)` or `(locked)` | always wrong for a bought-able power |
+
+#### The reported bug was the smallest of them
+
+`MetaState.power_offer` draws from powers that are unlocked AND owned, and **tops the pool up from
+everything unlocked while the save owns fewer than `Balance.POWER_OFFERS`** — an offer of one is not
+a choice. So a row has four states and the label printed two. A power that was unlocked and merely
+unbought said **`locked`**, which is the one word a player reads as *the door cannot deal me this*,
+and it was wrong about every buyable row on the screen.
+
+The rows now say `in the deal`, `in the deal for now`, `not bought`, or `sealed`, and the middle one
+exists because the fallback is real: while it is active an unbought power genuinely is in the pool,
+and calling it "not bought" would be the same error with a politer word.
+
+#### The Equip button is deleted, and that is the load-bearing half
+
+A button reading **"Equipped"** beside one row, on a screen whose only question is which power you
+take into a run, answers that question — wrongly, and louder than any label. `equip_power` has not
+decided a run's power since D245. `equipped_power` survives as the fallback `set_run_power("")`
+reads, which every tool and suite relies on and no player can see.
+
+**A fallback is not a decision, so it does not get a control.** D256 removed the deck builder's
+power box on exactly this reasoning — *"a second place to press a decision that already had a first
+one"* — and this was the same box on another screen, left standing because nobody opened it.
+
+`MetaState.equip_power` and `equipped_power` are untouched. The button is gone, not the API.
+
+#### Grouped by rarity, because the gate is
+
+`Balance.POWER_UNLOCK` is indexed by rarity, so a whole rarity is sealed or open together. Grouping
+lets the header say it once — `[Uncommon] 0 of 8 in the deal   SEALED — 1 clear to go (1 clears in
+all)` — instead of eight rows each repeating it. Straight from the relics screen (D223), including
+`SEALED_DIM` = 0.32 and the rule that a sealed row recedes by INK and never by `modulate` (D96).
+
+#### Two constants, because 3 is not 3
+
+`Balance.POWER_OFFERS` is new and separate from `REWARD_CARD_OFFERS` even though both are 3 today.
+They answer different questions — how wide a fight's reward is, against how wide a run's opening
+choice is — and tuning either must not silently move the other. **This screen was written against
+`REWARD_CARD_OFFERS` first, which was right by accident and wrong by meaning.** The literal `3` in
+`game_state.gd` and the default in `power_offer` now read the constant.
+
+#### It took a photograph, twice
+
+D254's lesson, and it earned its keep again. The code was correct and the screen was not.
+
+**First capture.** The headline read *"1 of 30 can be dealt"* and the line three rows under it read
+*"it tops the deal up from everything unlocked"*. Both true, and together nonsense: the honest answer
+was nine. The headline now counts what the pool ACTUALLY holds, fallback included, and the group
+headers count by the same rule so the screen cannot disagree with itself. **A number and its
+exception, printed as two lines, is one wrong number.**
+
+Also in that capture: nine Buy buttons in a straight column and a tenth pushed a hundred pixels
+right, because Running Total's effect text overflowed the label's 520px minimum. The label is
+`SIZE_EXPAND_FILL` now, so a longer effect written later cannot bend the column again. Measured off
+the capture rather than guessed, which is D95's rule.
+
+**Second capture.** `Wording.count(1, "power")` returns `"1 power"`, and the sentence around it read
+*"You own 1 power of them"*. A string built from a helper still has to be read as a sentence.
+
+#### What did not change
+
+No gate moved, no price moved, and `power_offer` is untouched. Every fix here is the screen catching
+up with what the game has done since D245 — which is the same debt D262 found in AGENTS.md and the
+README, on the surface where a player meets it rather than on the surface where an agent does.

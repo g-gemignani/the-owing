@@ -17,11 +17,12 @@
 ## a different screen.
 ##
 ## What a player actually needs here is which powers the door can deal, and the pool rule
-## in `MetaState.power_offer` has three states, not two:
+## in `MetaState.power_offer` has FOUR states, not two:
 ##
 ## * **unlocked and owned** — in the deal.
-## * **unlocked, not owned** — buyable, and dealt anyway while you own fewer than three,
-##   because an offer of one is not a choice.
+## * **unlocked, not owned, and the save owns fewer than `Balance.POWER_OFFERS`** — in the
+##   deal anyway, because the pool tops itself up rather than offer a choice of one.
+## * **unlocked, not owned, once the save owns enough** — buyable, and not dealt.
 ## * **sealed by clears** — cannot be dealt at all.
 ##
 ## The old label collapsed all of that into `(owned)` / `(locked)`, so a power that was
@@ -91,20 +92,33 @@ func _refresh() -> void:
 			in_deal += 1
 		groups[p.rarity].append({"id": pid, "owned": owned, "open": open})
 
+	# `power_offer` tops the pool up from everything unlocked while the save owns fewer than the
+	# offer needs, because an offer of one is not a choice. So while that is true, an UNOWNED
+	# unlocked power can be dealt right now, and the strict owned-and-unlocked count is not the
+	# number the player is asking for.
+	#
+	# The first version of this screen printed the strict count and then a line underneath saying
+	# the door tops up anyway — a photograph showed "1 of 30 can be dealt" above "it tops the deal
+	# up from everything unlocked", which is two numbers arguing in three lines of each other. The
+	# headline is now what the pool ACTUALLY holds, and the line below says why it is bigger.
+	var need: int = Balance.POWER_OFFERS
+	var fallback: bool = in_deal < need
+	var dealable := in_deal
+	if fallback:
+		dealable = 0
+		for rarity in groups:
+			for e in groups[rarity]:
+				if bool(e["open"]):
+					dealable += 1
+
 	# The count the player came here for, and the one the old header never printed. "Equipped:
 	# Bulwark" is gone with the button under it: it named a power the door does not read.
 	info_label.text = "Gold %d    Clears %d    %d of %d can be dealt" % [
-		MetaState.gold, MetaState.clear_count(), in_deal, slots]
+		MetaState.gold, MetaState.clear_count(), dealable, slots]
 
-	# `power_offer` tops the pool up from everything unlocked while the save owns fewer than the
-	# offer needs, because an offer of one is not a choice. That makes an unowned power dealable
-	# RIGHT NOW, which contradicts every other row on the screen — so it is said out loud, and
-	# only while it is true.
-	var need: int = Balance.POWER_OFFERS
-	if in_deal < need:
-		rule_label.text = ("You own %s that can be dealt, and the door needs %d. "
-			+ "Until then it tops the deal up from everything unlocked below.") % [
-			Wording.count(in_deal, "power"), need]
+	if fallback:
+		rule_label.text = ("You own %s. The door needs %d, so until then it deals from every "
+			+ "unlocked power, bought or not.") % [Wording.count(in_deal, "power"), need]
 		rule_label.visible = true
 	else:
 		rule_label.visible = false
@@ -120,9 +134,12 @@ func _refresh() -> void:
 		# the relics screen follows (D223). A sealed group says what would open it and how far off
 		# that is, because "sealed" on its own is the "???" row D116 was built to stop printing.
 		var to_go: int = Balance.power_clears_to_go(rarity, reach)
+		# Counted by the SAME rule the headline uses, fallback included. A group header saying
+		# "1 of 9 in the deal" over nine rows each saying "in the deal" is the screen disagreeing
+		# with itself, which is what the first capture showed.
 		var held := 0
 		for e in entries:
-			if bool(e["owned"]) and bool(e["open"]):
+			if bool(e["open"]) and (bool(e["owned"]) or fallback):
 				held += 1
 		var head := UI.label(list_box, "%s  %d of %d in the deal%s" % [
 			CardData.rarity_badge(rarity), held, entries.size(),
@@ -132,9 +149,9 @@ func _refresh() -> void:
 			if to_go == 0 else Icons.rarity_colour(rarity).darkened(SEALED_DIM))
 
 		for e in entries:
-			_row(String(e["id"]), bool(e["owned"]), bool(e["open"]))
+			_row(String(e["id"]), bool(e["owned"]), bool(e["open"]), fallback)
 
-func _row(pid: String, owned: bool, open: bool) -> void:
+func _row(pid: String, owned: bool, open: bool, fallback: bool) -> void:
 		var p := Balance.power(pid)
 		if p == null:
 			return
@@ -182,6 +199,13 @@ func _row(pid: String, owned: bool, open: bool) -> void:
 			UI.animate_level_glow(glow, PixelArt.level_band(level, p.level_capped()))
 
 		var lbl := Label.new()
+		# EXPAND_FILL, not a fixed width. At 520px the longest row — Running Total's
+		# "Deal 1 damage. +2 per earlier card." — overflowed its own minimum and pushed its Buy
+		# button a hundred pixels right of every other one, so the button column was straight for
+		# nine rows and bent for the tenth. Measured off the capture rather than guessed (D95):
+		# letting the label eat the slack puts every button on the same right edge whatever the
+		# effect text says, and a longer effect written later cannot bend it again.
+		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		lbl.custom_minimum_size.x = UITheme.px(520)
 		# A sealed row recedes by ink, which is what says "not yet" without a badge repeating
 		# the group header above it. `darkened` keeps the rarity hue, so a dim row still says
@@ -189,15 +213,22 @@ func _row(pid: String, owned: bool, open: bool) -> void:
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity)
 			if open else Icons.rarity_colour(p.rarity).darkened(SEALED_DIM))
 		var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
-		# THREE states, not two. The old text printed `(owned)` or `(locked)`, so a power that
-		# was unlocked and merely unbought said "locked" — which is the one word a player reads
-		# as "the door cannot deal me this", and it was wrong about every buyable row.
-		var state := "in the deal" if (owned and open) else (
-			"not bought" if open else "sealed")
+		# FOUR states, not two. The old text printed `(owned)` or `(locked)`, so a power that was
+		# unlocked and merely unbought said "locked" — the one word a player reads as "the door
+		# cannot deal me this", and it was wrong about every buyable row. The fourth state is the
+		# fallback: while the save owns too few, an unbought unlocked power IS in the deal, and
+		# saying only "not bought" there would be the same error with a politer word.
+		var state := "sealed"
+		if open and owned:
+			state = "in the deal"
+		elif open and fallback:
+			state = "in the deal for now"
+		elif open:
+			state = "not bought"
 		lbl.text = "%s  [%s]  %s   Lv%d/%d   (%s)" % [
 			p.name, cost, p.effect_text(), level, p.level_capped(), state]
 		row.add_child(lbl)
-		UI.hoverable(row, _row_tip(p, owned, open))
+		UI.hoverable(row, _row_tip(owned, open, fallback))
 
 		if not owned:
 			if not open:
@@ -238,7 +269,7 @@ func _row(pid: String, owned: bool, open: bool) -> void:
 			up.pressed.connect(_on_upgrade.bind(pid))
 			row.add_child(up)
 
-		# The Equip button stood here and is GONE (D277). It called `MetaState.equip_power`, which
+		# The Equip button stood here and is GONE (D289). It called `MetaState.equip_power`, which
 		# no longer decides anything a player can see: the run's power comes from the three the
 		# door deals (D245/D253). A button reading "Equipped" beside one row, on a screen whose
 		# question is which power you take in, answered that question wrongly and louder than
@@ -246,14 +277,16 @@ func _row(pid: String, owned: bool, open: bool) -> void:
 		# `set_run_power("")` falls through to them and the tools and suites rely on it — but the
 		# fallback is not a decision, so it does not get a control.
 
-func _row_tip(p: PowerData, owned: bool, open: bool) -> String:
+func _row_tip(owned: bool, open: bool, fallback: bool) -> String:
 	if not open:
-		return ("Sealed. Clear more dungeons and this whole rarity opens at once — the gate is "
-			+ "the rarity's, not this power's (D255).")
+		return ("Sealed. Clear more dungeons and this whole rarity opens at once — the gate belongs "
+			+ "to the rarity, not to this power.")
 	if owned:
 		return "In the deal. The door can offer you this one, and it leans toward the deck you built."
-	return ("Not bought. Buy it and it joins the deal for good. Until you own three, the door "
-		+ "tops the deal up from everything unlocked, so it can still turn up.")
+	if fallback:
+		return ("In the deal only because you own too few. Buy it and it stays in for good, "
+			+ "whatever you own later.")
+	return "Not bought, so the door cannot deal it. Buy it and it joins the deal."
 
 func _on_buy(pid: String) -> void:
 	if MetaState.buy_power(pid):

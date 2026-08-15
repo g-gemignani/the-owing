@@ -3627,7 +3627,7 @@ const SHOP_CARD_OFFERS := 3
 const REWARD_CARD_OFFERS := 3
 ## How many powers the door deals at the start of a run, of which the player takes one (D245).
 ##
-## A SEPARATE constant from the card one above even though both are 3 today (D277). They answer
+## A SEPARATE constant from the card one above even though both are 3 today (D289). They answer
 ## different questions — one is how wide a fight's reward is, the other how wide a run's opening
 ## choice is — and tuning either to 2 or 4 must not silently move the other. The powers screen
 ## reads this to say when the offer is topping itself up from unowned powers, and it was written

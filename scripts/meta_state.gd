@@ -548,7 +548,7 @@ func power_available(id: String) -> bool:
 ## `deck` empty means no tilt — `deck_lean` of nothing is all zeros, so every affinity comes back at
 ## 1.0 and the draw is the flat one this used to be. That is what the tools and the tests get, and it
 ## is the honest answer when there is no deck to fit.
-func power_offer(n: int = 3, deck: Array = []) -> Array:
+func power_offer(n: int = Balance.POWER_OFFERS, deck: Array = []) -> Array:
 	var pool: Array = []
 	for id in Balance.POWERS:
 		if power_available(id) and owns_power(id):
