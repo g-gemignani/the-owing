@@ -273,6 +273,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D287** | [A commit carried the caller and left the callee behind, and only CI could see it](#d287--a-commit-carried-the-caller-and-left-the-callee-behind-and-only-ci-could-see-it) |
 | **D288** | [Every size on the floor was a canvas height, and only the hero filled her canvas](#d288--every-size-on-the-floor-was-a-canvas-height-and-only-the-hero-filled-her-canvas) |
 | **D289** | [The powers screen was describing the game from before the power was dealt](#d289--the-powers-screen-was-describing-the-game-from-before-the-power-was-dealt) |
+| **D290** | [Gold stops buying a power, and a place hands it over instead](#d290--gold-stops-buying-a-power-and-a-place-hands-it-over-instead) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -19795,3 +19796,108 @@ the capture rather than guessed, which is D95's rule.
 No gate moved, no price moved, and `power_offer` is untouched. Every fix here is the screen catching
 up with what the game has done since D245 — which is the same debt D262 found in AGENTS.md and the
 README, on the surface where a player meets it rather than on the surface where an agent does.
+
+---
+
+### D290 — Gold stops buying a power, and a place hands it over instead
+
+Asked for, in two steps: *"We should start with three powers already unblocked"*, then *"Let's start
+with six and do not ask for money to unblock them but unblock other powers when beating certain
+dungeons."*
+
+The first ask did not survive a measurement, and the second replaced the whole economy.
+
+#### Three is not a pool
+
+Own exactly `POWER_OFFERS` powers and the pool IS the offer: the door deals all of them, so the same
+three faces turn up every run and `power_affinity` has nothing to choose between. That is D250's
+finding — *"an offer of three from ten shows the same faces every run"* — arriving at pool size
+three, and `test_power`'s tilt check said so before the design did.
+
+| starters owned | attack powers dealt to the attack deck / to the block deck, 400 deals | verdict |
+|---|---|---|
+| 3 | 400 / 400 | dead heat, no tilt at all |
+| 4 | 710 / 558, ratio 1.27 | under the 1.3 margin |
+| 5 | — | passes |
+| 6 | — | passes |
+
+**A starter set is a pool, and a pool the size of the offer is not a pool.** Six is what was asked
+for after that was reported, and it spans the axes the tilt needs: Bulwark leans defence, Siphon and
+Sweep Wide lean attack, Expose, Knit and Kindle read neutral.
+
+#### The economy the ask replaced
+
+Gold bought a power outright (`power_price` = `card_price(rarity) * 2`) and a clears count indexed
+by rarity said when it could be bought at all (`POWER_UNLOCK` = `[0, 1, 3, 6, 10]`, D255).
+
+Both are deleted. **Two objections, and the second is the one that changes the game.**
+
+* Gold was already spent on fusion and on levels, so a purchase was a THIRD claim on one purse
+  competing with two better ones.
+* **It made the pool a function of income rather than of play.** A patient player farming the Crypt
+  could own the deep powers without ever going deep. A place cannot be farmed from somewhere else:
+  it can only be paid for by playing the thing the power is meant to reward.
+
+What replaces both: **six at the start, and two per dungeon on a first clear.**
+
+#### The map is derived, and the arithmetic is exact
+
+30 powers less 6 starters is 24, over 12 dungeons at `POWERS_PER_DUNGEON` = 2, with nothing left
+over and nothing unreachable. Ordered by rarity and then catalogue position, dealt over `DUNGEONS`
+shallow to deep, so the deepest places hand over the rarest powers.
+
+That keeps what D255's gate was FOR — rarity paces depth — and drops the part a player could not
+read. *"Needs 3 more clears"* names a number, and a number is not somewhere you can go. The row now
+says **`clear The Ossuary`**.
+
+`powers_for_dungeon` and `dungeon_for_power` are two views of ONE sorted list, because the D250 rule
+is that a definition with two copies has already started disagreeing. `sort_custom` is not stable in
+Godot, so the catalogue index is part of the sort key rather than left to chance — an unstable map
+would hand a save powers the screen then explains wrongly.
+
+#### The screen got simpler by deleting a rule, not by explaining one
+
+D289 gave the powers screen four row states and a paragraph under the header, because ownership and
+the clears gate were separate questions and `power_offer`'s top-up branch made a third answer out of
+the pair. All of that is gone. **A power is held or it is not**, and a locked row names its dungeon.
+
+The top-up branch went with it. It existed because a new save owned ONE power and an offer of one is
+not a choice, so it dealt from everything unlocked, bought or not — which meant the opening offer
+ignored what the player owned. With six starters and a suite that fails if `STARTER_POWERS` is under
+`POWER_OFFERS`, it had no reachable state left.
+
+**The fix for a confusing screen turned out to be one fewer rule in the game behind it.**
+
+#### Saves, and the refund that is not paid
+
+Version 11 → **12**. The migration grants the starter six plus the powers of every dungeon the save
+has already cleared, additively, keeping every level already bought. Same rule and the same words
+this file used for the rope at v2 and for powers at v5: *grant the same starter every new save gets,
+so an existing player is not worse off than someone starting today.*
+
+**Gold spent on powers under the old rule is NOT refunded.** The save records what is owned and
+never recorded what was paid, so any refund would be a number this function invented. D205 refused
+the same trade in the same words — *"refunding today's fee would invent gold out of a version
+bump."*
+
+#### The guards
+
+`tests/test_power.gd` asserts the arithmetic rather than trusting it: every non-starter has exactly
+one granting dungeon, no starter is also a grant, and a dungeon's powers are never rarer than the
+next dungeon's. A power added later with no home is a power no save can ever hold, and nothing else
+in the tree would notice.
+
+It also asserts the deleted names are absent from `balance.gd` and `meta_state.gd` — D235's rule
+that the strongest statement about a removed mechanic is a test that fails if it comes back. A
+re-added `buy_power` would restore a second route to a power and quietly undo this entry.
+
+The grant is asserted through `mark_cleared`, where the game calls it, and not through
+`grant_dungeon_powers` directly: a grant that works and is never wired up is D180's silent pass.
+
+#### What is NOT measured
+
+**The gold economy lost a sink and nothing here re-prices it.** Powers were one of three homes for
+spare gold and are now one of two — fusion and levels. Whether that leaves late-game gold with
+nothing to do is a question for `sim_balance.gd`, which does not model shopping at all, so the
+honest answer is that the instrument cannot see it yet. Flagged rather than guessed, which is D79's
+order.

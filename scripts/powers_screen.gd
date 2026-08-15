@@ -16,22 +16,18 @@
 ## place to press a decision that already had a first one"* — and this is the same box on
 ## a different screen.
 ##
-## What a player actually needs here is which powers the door can deal, and the pool rule
-## in `MetaState.power_offer` has FOUR states, not two:
+## What a player actually needs here is which powers the door can deal, and since D290 that is ONE
+## question. A power is held or it is not. Gold does not buy one — beating a dungeon hands it over —
+## and the clears gate that used to sit beside ownership is deleted.
 ##
-## * **unlocked and owned** — in the deal.
-## * **unlocked, not owned, and the save owns fewer than `Balance.POWER_OFFERS`** — in the
-##   deal anyway, because the pool tops itself up rather than offer a choice of one.
-## * **unlocked, not owned, once the save owns enough** — buyable, and not dealt.
-## * **sealed by clears** — cannot be dealt at all.
+## That collapses the four row states D289 had to invent back down to two, and the paragraph of
+## apology under the header with them. **The fix for a confusing screen turned out to be one fewer
+## rule in the game behind it.**
 ##
-## The old label collapsed all of that into `(owned)` / `(locked)`, so a power that was
-## unlocked and merely unbought read as **locked**. That is the reported confusion, and it
-## was the label rather than the gate.
-##
-## Grouped by RARITY for the reason the relics screen is (D223): the clears gate is
-## `Balance.POWER_UNLOCK` indexed by rarity, so a whole group is sealed or open together
-## and the header can say it once instead of every row saying it again.
+## Still grouped by RARITY, and the reason changed with the gate. It is no longer that a whole
+## rarity opens at once — nothing opens by rarity any more. It is that rarity is the axis a player
+## reads a power's strength off (D224), and a locked row now names its own dungeon, which is a fact
+## per row rather than per group.
 extends Control
 
 var info_label: Label
@@ -72,8 +68,6 @@ func _back_to() -> String:
 	return "res://scenes/Overworld.tscn"
 
 func _refresh() -> void:
-	var reach: int = MetaState.clear_count()
-
 	# One pass builds the groups AND the counts, so the number in the header is not a second
 	# sum of the same thing — the mistake `collection.gd` documents.
 	var groups := {}
@@ -87,41 +81,27 @@ func _refresh() -> void:
 		if not groups.has(p.rarity):
 			groups[p.rarity] = []
 		var owned: bool = MetaState.owns_power(pid)
-		var open: bool = MetaState.power_available(pid)
-		if owned and open:
+		if owned:
 			in_deal += 1
-		groups[p.rarity].append({"id": pid, "owned": owned, "open": open})
-
-	# `power_offer` tops the pool up from everything unlocked while the save owns fewer than the
-	# offer needs, because an offer of one is not a choice. So while that is true, an UNOWNED
-	# unlocked power can be dealt right now, and the strict owned-and-unlocked count is not the
-	# number the player is asking for.
-	#
-	# The first version of this screen printed the strict count and then a line underneath saying
-	# the door tops up anyway — a photograph showed "1 of 30 can be dealt" above "it tops the deal
-	# up from everything unlocked", which is two numbers arguing in three lines of each other. The
-	# headline is now what the pool ACTUALLY holds, and the line below says why it is bigger.
-	var need: int = Balance.POWER_OFFERS
-	var fallback: bool = in_deal < need
-	var dealable := in_deal
-	if fallback:
-		dealable = 0
-		for rarity in groups:
-			for e in groups[rarity]:
-				if bool(e["open"]):
-					dealable += 1
+		groups[p.rarity].append({"id": pid, "owned": owned})
 
 	# The count the player came here for, and the one the old header never printed. "Equipped:
 	# Bulwark" is gone with the button under it: it named a power the door does not read.
-	info_label.text = "Gold %d    Clears %d    %d of %d can be dealt" % [
-		MetaState.gold, MetaState.clear_count(), dealable, slots]
+	#
+	# ONE number now. It used to need a second line explaining that the door topped the pool up
+	# from unbought powers, and that top-up branch is deleted (D290) — so the headline and the
+	# group headers below it are the same count by construction rather than by care.
+	info_label.text = "Gold %d    Clears %d    %d of %d in the deal" % [
+		MetaState.gold, MetaState.clear_count(), in_deal, slots]
 
-	if fallback:
-		rule_label.text = ("You own %s. The door needs %d, so until then it deals from every "
-			+ "unlocked power, bought or not.") % [Wording.count(in_deal, "power"), need]
-		rule_label.visible = true
-	else:
-		rule_label.visible = false
+	# Where the rest come from, said once. Silent at the end, because a line that congratulates
+	# you on a finished set every time you open the screen stops being read (D240).
+	var left := slots - in_deal
+	rule_label.visible = left > 0
+	if rule_label.visible:
+		rule_label.text = ("The other %d are held by the places that own them. Beat a dungeon and it "
+			+ "hands over %s — no gold, and nothing to buy.") % [
+			left, Wording.count(Balance.POWERS_PER_DUNGEON, "power")]
 
 	for c in list_box.get_children():
 		c.queue_free()
@@ -130,28 +110,22 @@ func _refresh() -> void:
 		if not groups.has(rarity):
 			continue
 		var entries: Array = groups[rarity]
-		# The gate is per RARITY, so it goes on the group header and nowhere else — the same rule
-		# the relics screen follows (D223). A sealed group says what would open it and how far off
-		# that is, because "sealed" on its own is the "???" row D116 was built to stop printing.
-		var to_go: int = Balance.power_clears_to_go(rarity, reach)
-		# Counted by the SAME rule the headline uses, fallback included. A group header saying
-		# "1 of 9 in the deal" over nine rows each saying "in the deal" is the screen disagreeing
-		# with itself, which is what the first capture showed.
+		# No SEALED marker on the header any more (D290). Nothing opens by rarity — a locked power
+		# names the dungeon that holds it, on its own row, which is a different fact for each row
+		# in the group and cannot be said once above them.
 		var held := 0
 		for e in entries:
-			if bool(e["open"]) and (bool(e["owned"]) or fallback):
+			if bool(e["owned"]):
 				held += 1
-		var head := UI.label(list_box, "%s  %d of %d in the deal%s" % [
-			CardData.rarity_badge(rarity), held, entries.size(),
-			"" if to_go == 0 else "   SEALED — %s to go (%d clears in all)" % [
-				Wording.count(to_go, "clear"), int(Balance.POWER_UNLOCK[rarity])]])
+		var head := UI.label(list_box, "%s  %d of %d in the deal" % [
+			CardData.rarity_badge(rarity), held, entries.size()])
 		head.add_theme_color_override("font_color", Icons.rarity_colour(rarity)
-			if to_go == 0 else Icons.rarity_colour(rarity).darkened(SEALED_DIM))
+			if held > 0 else Icons.rarity_colour(rarity).darkened(SEALED_DIM))
 
 		for e in entries:
-			_row(String(e["id"]), bool(e["owned"]), bool(e["open"]), fallback)
+			_row(String(e["id"]), bool(e["owned"]))
 
-func _row(pid: String, owned: bool, open: bool, fallback: bool) -> void:
+func _row(pid: String, owned: bool) -> void:
 		var p := Balance.power(pid)
 		if p == null:
 			return
@@ -211,48 +185,28 @@ func _row(pid: String, owned: bool, open: bool, fallback: bool) -> void:
 		# the group header above it. `darkened` keeps the rarity hue, so a dim row still says
 		# which tier it belongs to (D96).
 		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity)
-			if open else Icons.rarity_colour(p.rarity).darkened(SEALED_DIM))
+			if owned else Icons.rarity_colour(p.rarity).darkened(SEALED_DIM))
 		var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
-		# FOUR states, not two. The old text printed `(owned)` or `(locked)`, so a power that was
-		# unlocked and merely unbought said "locked" — the one word a player reads as "the door
-		# cannot deal me this", and it was wrong about every buyable row. The fourth state is the
-		# fallback: while the save owns too few, an unbought unlocked power IS in the deal, and
-		# saying only "not bought" there would be the same error with a politer word.
-		var state := "sealed"
-		if open and owned:
-			state = "in the deal"
-		elif open and fallback:
-			state = "in the deal for now"
-		elif open:
-			state = "not bought"
+		# TWO states (D290). D289 needed four because ownership and a clears gate were separate
+		# questions and the top-up branch made a third answer out of the pair. One rule, one word.
+		var state := "in the deal" if owned else "locked"
 		lbl.text = "%s  [%s]  %s   Lv%d/%d   (%s)" % [
 			p.name, cost, p.effect_text(), level, p.level_capped(), state]
 		row.add_child(lbl)
-		UI.hoverable(row, _row_tip(owned, open, fallback))
+		UI.hoverable(row, _row_tip(pid, owned))
 
 		if not owned:
-			if not open:
-				var gate := Button.new()
-				UITheme.style_button(gate)
-				# Two powers unlock at exactly one clear, so this button read
-				# "needs 1 clears" for the whole life of the screen (D125).
-				#
-				# The number is what is STILL TO GO rather than the gate itself (D255), which is
-				# what a player wants from a locked row and is what the relics screen already
-				# prints. It is derived from rarity now, so a retune of `power_value` moves this
-				# line without anybody editing it.
-				gate.text = "needs %s" % Wording.count(
-					Balance.power_clears_to_go(p.rarity, MetaState.clear_count()), "more clear")
-				gate.disabled = true
-				row.add_child(gate)
-			else:
-				var price := MetaState.power_price(pid)
-				var buy := Button.new()
-				UITheme.style_button(buy)
-				buy.text = "Buy  (%dg)" % price
-				buy.disabled = MetaState.gold < price
-				buy.pressed.connect(_on_buy.bind(pid))
-				row.add_child(buy)
+			# The Buy button stood here and is GONE (D290). Gold does not buy a power: the place
+			# that holds it does, and the row says WHICH place. That is what the old button could
+			# never say — "needs 3 more clears" names a number, and a number is not somewhere you
+			# can go. `Balance.dungeon_for_power` is the one owner of that mapping.
+			var from := Balance.dungeon_for_power(pid)
+			var dd := Balance.dungeon(from)
+			var gate := Button.new()
+			UITheme.style_button(gate)
+			gate.text = "clear %s" % (dd.name if dd != null else from)
+			gate.disabled = true
+			row.add_child(gate)
 			return
 
 		if p.at_max():
@@ -277,23 +231,14 @@ func _row(pid: String, owned: bool, open: bool, fallback: bool) -> void:
 		# `set_run_power("")` falls through to them and the tools and suites rely on it — but the
 		# fallback is not a decision, so it does not get a control.
 
-func _row_tip(owned: bool, open: bool, fallback: bool) -> String:
-	if not open:
-		return ("Sealed. Clear more dungeons and this whole rarity opens at once — the gate belongs "
-			+ "to the rarity, not to this power.")
+func _row_tip(pid: String, owned: bool) -> String:
 	if owned:
 		return "In the deal. The door can offer you this one, and it leans toward the deck you built."
-	if fallback:
-		return ("In the deal only because you own too few. Buy it and it stays in for good, "
-			+ "whatever you own later.")
-	return "Not bought, so the door cannot deal it. Buy it and it joins the deal."
-
-func _on_buy(pid: String) -> void:
-	if MetaState.buy_power(pid):
-		Audio.play("gold")
-		_refresh()
-	else:
-		Audio.play("ui_denied")
+	var dd := Balance.dungeon(Balance.dungeon_for_power(pid))
+	if dd == null:
+		return "Locked."
+	return ("Held by %s. Beat that place once and it is yours for good — there is nothing to buy "
+		+ "and no gold to save up.") % dd.name
 
 func _on_upgrade(pid: String) -> void:
 	if MetaState.upgrade_power(pid):

@@ -90,7 +90,11 @@ The loop:
    chose to risk and never what you already owned (D231, D235):** the escrow pays back a
    share set by depth, the door stake stays forfeit because it is the one cost you placed
    yourself, and the collection pays *nothing* — `penalize_death` is deleted. Between runs
-   you fuse duplicates into levels, buy and level Powers, and unlock deeper zones.
+   you fuse duplicates into levels, level Powers, and unlock deeper zones. **Gold does not buy
+   a Power (D290): a character starts owning six, and each of the twelve dungeons hands over two
+   more the first time you beat it.** A price is a gate a patient player pays without going
+   anywhere, and it made the pool a function of income rather than of play. A place can only be
+   paid for by playing the thing the power is meant to reward.
    **Relics are not in that list, because a relic does not persist (D238).** It is found on
    a run — three offered by an elite, three by a chest — and it leaves when the run does,
    won or lost. What survives is `MetaState.relics_seen`, a record of what the character
@@ -105,12 +109,17 @@ The loop:
    Powers alike (D225) — the bands may not overlap, and the rarity suite fails a
    catalogue where a common outranks an uncommon. It is not a colour: it sets the level
    cap, the growth rate, the drop weight, the shop price, how many clears a relic waits
-   for, what a Power costs to buy and to level, **and since D255 how many clears a Power
-   waits for too** — `Balance.POWER_UNLOCK`, indexed by rarity, replacing a hand-set field on
-   each of the thirty files. Those two disagreed about the same power: Short Change was
-   LEGENDARY behind a gate of 2 clears while Hold Fast waited 10 as a middling RARE. **A number
-   that is authored and a number that is derived from the same subject will disagree, and the
-   derived one is right.**
+   for, what a Power costs to level, **and which dungeon hands a Power over** — the grant map is
+   ordered by rarity and dealt over the twelve dungeons shallow to deep (D290), so the deepest
+   places give the rarest powers.
+
+   D255 put that pacing behind `Balance.POWER_UNLOCK`, a clears count indexed by rarity, and
+   D290 deleted it along with `power_price`: **two gates on one thing is what made the powers
+   screen need four row states and a paragraph of apology (D289).** What D255 FOUND survives the
+   deletion and is why the new map is still ordered by rarity — an authored gate and a derived
+   price disagreed about the same power, Short Change LEGENDARY behind 2 clears while Hold Fast
+   waited 10 as a middling RARE. **A number that is authored and a number that is derived from
+   the same subject will disagree, and the derived one is right.**
 
    **And the suite only ever checked the CARDS, for two hundred entries (D250).** Relics and
    powers wore a derived rarity with nothing asserting it, and it went wrong silently: the
@@ -140,7 +149,8 @@ nothing else, 2 flat energy or draw (D233/D237/D243/D257). The predicate reads 3
 is not the same claim — it went blind to the four pure triggers until D262 added the term, and it
 still counts a lone flat percent as a rule ·
 30 powers (13 lean attack, 7 lean defence, 10 neutral; three dealt to suit the deck, on their own
-screen, D253/D256) · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
+screen, D253/D256 — six owned from the start and two handed over per dungeon beaten, never bought,
+D290) · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 45 errands and 16 debts over 44 counters · 3 aspects ·
 24 sound effects · 5 score tracks · 46 test suites. All content is `.tres` data

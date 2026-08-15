@@ -89,7 +89,7 @@ static func delete_slot(s: int) -> void:
 			DirAccess.remove_absolute(ProjectSettings.globalize_path(p))
 ## Bump when the save shape changes, and add a step to _migrate().
 ## Saves written before versioning existed have no "version" key and read as 0.
-const SAVE_VERSION := 11
+const SAVE_VERSION := 12
 ## The run lives in its own file beside the meta save. They change at wildly
 ## different rates — meta only when the player gains something permanent, the run
 ## on every card played — so writing them together meant rewriting the whole
@@ -454,10 +454,15 @@ func new_save(kit: String = "blade", persist: bool = true) -> void:
 	seen_hints = []
 	relics = []
 	consumables = {"escape_rope": 1}   # one rope to learn what it is for
-	# One power from the start, at level 1: the mechanic has to be visible in the
-	# first fight or nobody discovers it. The rest are bought.
-	powers = {"bulwark": 1}
-	equipped_power = "bulwark"
+	# SIX powers from the start, at level 1 (D290). The mechanic has to be visible in the first
+	# fight or nobody discovers it, and the opening offer has to be a real choice — a pool the
+	# size of the offer deals the same faces every run. `Balance.STARTER_POWERS` says which six
+	# and why. The other twenty-four are handed over by the dungeons that own them.
+	powers = {}
+	for pid in Balance.STARTER_POWERS:
+		powers[String(pid)] = 1
+	# The fallback `set_run_power("")` reads, and nothing else — no player can see it (D289).
+	equipped_power = String(Balance.STARTER_POWERS[0])
 	cleared_dungeons = []
 	clear_counts = {}
 	depth_records = {}
@@ -511,14 +516,17 @@ func power_data() -> PowerData:
 func owns_power(id: String) -> bool:
 	return powers.has(id)
 
-## Gated on clears so powers arrive across the campaign rather than all at once.
+## Can the door deal this power? Since D290 that is ONE question and not two.
 ##
-## The gate comes from the power's RARITY (D255), not from a number on its file. Rarity is itself
-## derived from `power_value()`, so the depth a power waits at now follows its measured strength —
-## the same chain the price already ran on, and the same one relics have used since D223.
+## It used to mean "unlocked by clear count", a second gate beside ownership: a power could be
+## unlocked and unbought, or bought and — never, in practice — sealed. Two gates on one thing is
+## what made the powers screen need four row states and a paragraph of apology (D289).
+##
+## Now a power is either held or it is not, and the only way to hold one is to start with it or to
+## beat the dungeon that grants it. **The clears gate is deleted rather than set to zero**, so
+## nothing can quietly reintroduce a second condition, and `Balance.POWER_UNLOCK` went with it.
 func power_available(id: String) -> bool:
-	var p := Balance.power(id)
-	return p != null and Balance.power_unlocked(p.rarity, clear_count())
+	return owns_power(id)
 
 ## Three powers to choose from at the start of a run (D245).
 ##
@@ -549,17 +557,16 @@ func power_available(id: String) -> bool:
 ## 1.0 and the draw is the flat one this used to be. That is what the tools and the tests get, and it
 ## is the honest answer when there is no deck to fit.
 func power_offer(n: int = Balance.POWER_OFFERS, deck: Array = []) -> Array:
+	# What the character HOLDS, and nothing else. The top-up branch that stood here is deleted
+	# (D290): it existed because a new save owned one power and an offer of one is not a choice, so
+	# it dealt from everything unlocked, bought or not. A save now starts with
+	# `STARTER_POWERS.size()` and the suite fails if that is under `POWER_OFFERS`, so the branch had
+	# no reachable state left — and while it lived, the opening offer ignored what the player owned
+	# and the powers screen needed a fourth row state to explain it (D289).
 	var pool: Array = []
 	for id in Balance.POWERS:
-		if power_available(id) and owns_power(id):
+		if owns_power(id):
 			pool.append(id)
-	# Fall back to everything unlocked when the save owns too few to fill an offer. A new character
-	# owns one power, and an offer of one is not a choice — better to show what the campaign has
-	# opened than to show a single button and call it a decision.
-	if pool.size() < n:
-		for id in Balance.POWERS:
-			if power_available(id) and not (id in pool):
-				pool.append(id)
 	var lean := Balance.deck_lean(deck)
 	var weights: Array = []
 	for id in pool:
@@ -585,22 +592,32 @@ func power_offer(n: int = Balance.POWER_OFFERS, deck: Array = []) -> Array:
 		weights.remove_at(pick)
 	return out
 
-func power_price(id: String) -> int:
-	var p := Balance.power(id)
-	return Balance.power_price(p.rarity) if p != null else 0
+## `power_price` and `buy_power` are GONE (D290). Gold does not buy a power any more; beating a
+## dungeon hands one over. A price is a gate a patient player can pay without going anywhere, and
+## it put a third claim on the purse that fusion and levels already share. The one thing gold still
+## does to a power is LEVEL it, which is below and is untouched.
+##
+## Deleted rather than left disabled, for D235's reason: the strongest statement about a removed
+## mechanic is a test that fails if it comes back, and `tests/test_power.gd` asserts both names are
+## absent from this file.
 
-func buy_power(id: String) -> bool:
-	if owns_power(id) or not power_available(id) or not (id in Balance.POWERS):
-		return false
-	var price := power_price(id)
-	if gold < price:
-		return false
-	gold -= price
-	powers[id] = 1
-	if equipped_power == "":
-		equipped_power = id
-	mark_meta_dirty()
-	return true
+## Hand over what this dungeon owes, the first time it is beaten (D290). Idempotent by construction
+## — a power already held is skipped — so a second clear grants nothing and a re-clear after a
+## rename cannot double up.
+##
+## Returns the ids actually granted, so the victory screen can name them. An empty array is the
+## normal case from the second clear onward.
+func grant_dungeon_powers(dungeon_id: String) -> Array:
+	var got: Array = []
+	for pid in Balance.powers_for_dungeon(dungeon_id):
+		var id := String(pid)
+		if powers.has(id) or not (id in Balance.POWERS):
+			continue
+		powers[id] = 1
+		got.append(id)
+	if not got.is_empty():
+		mark_meta_dirty()
+	return got
 
 func power_upgrade_price(id: String) -> int:
 	var p := Balance.power(id)
@@ -729,6 +746,10 @@ func mark_cleared(id: String) -> void:
 	clear_counts[id] = int(clear_counts.get(id, 0)) + 1
 	if id != "" and not has_cleared(id):
 		cleared_dungeons.append(id)
+	# What the place owed you for beating it (D290). Called on EVERY clear rather than guarded by
+	# `has_cleared` above, because `grant_dungeon_powers` is idempotent and a guard here would be a
+	# second copy of that rule — and the two would disagree the first time one was edited (D34).
+	grant_dungeon_powers(id)
 	# Beating it settles what it was owed (D285).
 	grudges.erase(id)
 	save_game()
@@ -1402,6 +1423,34 @@ func _backup_save(text: String, from_version: int) -> void:
 ## idempotent: missing keys get defaults, unknown ids are dropped on apply.
 func _migrate(data: Dictionary, from_version: int) -> Dictionary:
 	var d := data.duplicate(true)
+	if from_version < 12:
+		# v11 saves own ONE power and bought the rest with gold. D290 gives every character six
+		# to start and hands the other twenty-four over for beating dungeons, so an old save gets
+		# both halves of what it would have today: the starter six, and the grant of every place
+		# it has already beaten.
+		#
+		# The same rule and the same words this file used for the rope at v2 and for powers
+		# themselves at v5 — *grant the same starter every new save gets, so an existing player is
+		# not worse off than someone starting today.*
+		#
+		# ADDITIVE, never a reset. A power already owned keeps the level it was bought up to. A
+		# version bump that returned a Lv7 Bulwark to Lv1 would take gold that was spent, and no
+		# other step in this function takes anything.
+		#
+		# **The gold spent on powers under the old rule is NOT refunded**, and that is a decision
+		# rather than an oversight: the save records what is owned and never recorded what was
+		# paid, so any refund would be a number this function invented. D205 refused the same
+		# trade for the same reason — *"refunding today's fee would invent gold out of a version
+		# bump"*.
+		var owned: Dictionary = d.get("powers", {})
+		for pid in Balance.STARTER_POWERS:
+			if not owned.has(String(pid)):
+				owned[String(pid)] = 1
+		for did in d.get("cleared_dungeons", []):
+			for pid2 in Balance.powers_for_dungeon(String(did)):
+				if not owned.has(String(pid2)):
+					owned[String(pid2)] = 1
+		d["powers"] = owned
 	if from_version < 11:
 		# v10 stored three rolled offers and paid a settled debt in GATE CREDIT (D191). D205
 		# derives the offer from the dungeon and pays packs and gold instead.

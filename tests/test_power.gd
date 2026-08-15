@@ -88,9 +88,11 @@ func _init() -> void:
 	m5.path_prefix = SANDBOX
 	m5.slot = 8
 	m5.new_save()
-	# Every power open, so the pool holds both poles. A fresh save has cleared nothing and sees only
-	# commons, and a pool with no defensive power in it cannot show a tilt either way.
-	m5.cleared_dungeons = Balance.DUNGEONS.duplicate()
+	# Every power HELD, so the pool holds both poles. A fresh save owns the starter six, and a tilt
+	# read off six is a tilt read off a sixth of the set. Ownership is the only gate since D290, so
+	# clearing every dungeon is no longer the way to say this — granting is.
+	for pid0 in Balance.POWERS:
+		m5.powers[String(pid0)] = 1
 
 	var pure_atk: CardData = null
 	var pure_def: CardData = null
@@ -213,6 +215,45 @@ func _init() -> void:
 			fails += 1
 			print("FAIL the deck builder rolls its own power offer — re-opening it would re-deal (D252)")
 
+	# --- the starter set has to fill an offer, and every member has to be dealable (D290) ---
+	#
+	# Three properties, and each one has a silent failure behind it.
+	#
+	# TOO FEW: `power_offer` tops its pool up from everything unlocked when the save owns fewer
+	# than `POWER_OFFERS`. A starter set of two would put a new save straight back into that
+	# branch, which is the state D290 exists to leave — and nothing would say so, because the
+	# fallback produces a perfectly good offer of three.
+	#
+	# NOT COMMON: nothing gates a power by rarity any more (D290), so this is a power-level rule
+	# rather than a gate rule. A Legendary firing from turn one of the first fight is the opening
+	# the whole ladder is tuned against, handed out for free.
+	#
+	# ONE AXIS: `power_affinity` tilts the offer by `deck_lean` (D256). If every starter read
+	# neutral, that tilt would be a no-op on the one offer every player is guaranteed to see, and
+	# the deck-weighting feature would be invisible for the whole of the early game.
+	if Balance.STARTER_POWERS.size() < Balance.POWER_OFFERS:
+		fails += 1
+		print("FAIL only %d starter powers against an offer of %d — a new save falls back to the unowned pool (D290)" % [
+			Balance.STARTER_POWERS.size(), Balance.POWER_OFFERS])
+	var axes := {}
+	for spid in Balance.STARTER_POWERS:
+		var sp := Balance.power(String(spid))
+		if sp == null:
+			fails += 1
+			print("FAIL starter power %s is not in the catalogue" % spid)
+			continue
+		if sp.rarity != CardData.Rarity.COMMON:
+			fails += 1
+			print("FAIL starter power %s is %s — a rare power firing from turn one of the first fight" % [
+				spid, CardData.rarity_badge(sp.rarity)])
+		var sl := Balance.deck_lean([sp])
+		var sa := float(sl["attack"])
+		var sd := float(sl["defence"])
+		axes["neutral" if sa + sd <= 0.0 else ("attack" if sa > sd else "defence")] = true
+	if axes.size() < 2:
+		fails += 1
+		print("FAIL every starter power leans the same way (%s) — the offer's deck tilt cannot show (D256/D290)" % ", ".join(axes.keys()))
+
 	# --- the clears gate is DERIVED from rarity, and rises with it (D255) ---
 	#
 	# It was a hand-set field on each of the thirty files while `rarity` is written from
@@ -224,17 +265,43 @@ func _init() -> void:
 	# Asserted on the TABLE rather than per power, because that is where the fact now lives. A test
 	# that walked the thirty files would be asserting the derivation had happened rather than that it
 	# is right.
-	for r2 in range(1, CardData.Rarity.size()):
-		if Balance.POWER_UNLOCK[r2] < Balance.POWER_UNLOCK[r2 - 1]:
+	# Every power must be reachable, and reachable EXACTLY ONCE (D290). The grant map is derived —
+	# 30 powers less 6 starters over 12 dungeons at 2 each — so the failure it can have is
+	# arithmetic: add a power without a home and no save can ever hold it, and nothing else in the
+	# tree would say so. This is D223's rule for relics ("a gate must never strand content"),
+	# asserted against the campaign's own length rather than against a number somebody typed.
+	var seen_grant := {}
+	for did in Balance.DUNGEONS:
+		var got: Array = Balance.powers_for_dungeon(String(did))
+		for gid in got:
+			if seen_grant.has(String(gid)):
+				fails += 1
+				print("FAIL %s is granted by two dungeons (%s and %s)" % [
+					gid, seen_grant[String(gid)], did])
+			seen_grant[String(gid)] = String(did)
+	for pid3 in Balance.POWERS:
+		if pid3 in Balance.STARTER_POWERS:
+			if seen_grant.has(String(pid3)):
+				fails += 1
+				print("FAIL %s is a starter AND a dungeon grant — it would be granted to a save that already holds it" % pid3)
+			continue
+		if not seen_grant.has(String(pid3)):
 			fails += 1
-			print("FAIL %s opens before %s (%d clears vs %d) — a rarer power must not arrive sooner" % [
-				CardData.rarity_badge(r2), CardData.rarity_badge(r2 - 1),
-				int(Balance.POWER_UNLOCK[r2]), int(Balance.POWER_UNLOCK[r2 - 1])])
-	# COMMON at zero, or a new character reaches the Power Pick screen with nothing on it: the offer
-	# falls back to everything UNLOCKED when the save owns too few to fill three (D245).
-	if Balance.POWER_UNLOCK[CardData.Rarity.COMMON] != 0:
-		fails += 1
-		print("FAIL commons are gated — a zero-clear save would be offered no power at all")
+			print("FAIL %s is granted by no dungeon and is not a starter — no save can ever hold it (D290)" % pid3)
+	# ...and the deepest places hand over the rarest powers, which is what D255's clears gate was
+	# FOR. The gate is a place now, so the property is asserted on the ORDER rather than on a table
+	# of counts: a dungeon's grants must never be rarer than the next dungeon's.
+	var last_rarity := -1
+	for did2 in Balance.DUNGEONS:
+		for gid2 in Balance.powers_for_dungeon(String(did2)):
+			var gp := Balance.power(String(gid2))
+			if gp == null:
+				continue
+			if gp.rarity < last_rarity:
+				fails += 1
+				print("FAIL %s (%s) is granted after a rarer power — depth must not hand back down" % [
+					gid2, CardData.rarity_badge(gp.rarity)])
+			last_rarity = maxi(last_rarity, gp.rarity)
 	var fresh = Meta_.new()
 	fresh.path_prefix = SANDBOX
 	fresh.slot = 7
@@ -242,12 +309,25 @@ func _init() -> void:
 	if fresh.power_offer(3).size() < 3:
 		fails += 1
 		print("FAIL a fresh save is offered %d powers, not three" % fresh.power_offer(3).size())
-	# ...and every power is reachable eventually, which is what a gate must never break (D223's rule
-	# for relics, and the reason the deepest gate is checked against the campaign's own length).
-	if int(Balance.POWER_UNLOCK[CardData.Rarity.LEGENDARY]) > Balance.DUNGEONS.size():
-		fails += 1
-		print("FAIL the deepest power gate (%d) is past a full clear of the game (%d dungeons)" % [
-			int(Balance.POWER_UNLOCK[CardData.Rarity.LEGENDARY]), Balance.DUNGEONS.size()])
+	# The old economy is GONE and must not come back (D290, D235's rule). Both names, asserted as
+	# source, because a re-added `buy_power` would make gold a second route to a power and quietly
+	# undo the whole change.
+	var mssrc := FileAccess.open("res://scripts/meta_state.gd", FileAccess.READ)
+	if mssrc != null:
+		var mstxt := mssrc.get_as_text()
+		mssrc.close()
+		for dead in ["func buy_power", "func power_price"]:
+			if mstxt.find(dead) != -1:
+				fails += 1
+				print("FAIL `%s` is back — gold must not buy a power (D290)" % dead)
+	var blsrc := FileAccess.open("res://scripts/balance.gd", FileAccess.READ)
+	if blsrc != null:
+		var bltxt := blsrc.get_as_text()
+		blsrc.close()
+		for dead2 in ["const POWER_UNLOCK", "func power_unlocked", "func power_price"]:
+			if bltxt.find(dead2) != -1:
+				fails += 1
+				print("FAIL `%s` is back — ownership is the only gate on a power (D290)" % dead2)
 	# The field is gone, and a hand-set one would silently win over the table if it came back.
 	var pdsrc := FileAccess.open("res://scripts/power_data.gd", FileAccess.READ)
 	if pdsrc != null:
@@ -348,21 +428,37 @@ func _init() -> void:
 	if eng4.can_use_power():
 		fails += 1; print("FAIL a power with an HP cost can kill its owner")
 
-	# --- economy: buy, level, equip ---
+	# --- economy: granted by a place, levelled with gold (D290) ---
 	var m = Meta_.new()
 	m.new_save()
 	if m.power_data() == null:
 		fails += 1; print("FAIL a new save has no power — nobody would discover the mechanic")
-	var target := "overwhelm"
-	m.gold = 0
-	if m.buy_power(target):
-		fails += 1; print("FAIL bought a power with no gold")
+	if m.powers.size() != Balance.STARTER_POWERS.size():
+		fails += 1
+		print("FAIL a new save owns %d powers, not the %d starters" % [
+			m.powers.size(), Balance.STARTER_POWERS.size()])
+	# A dungeon hands its powers over on a first clear, and only once. Asserted through
+	# `mark_cleared`, which is where the game calls it, rather than through `grant_dungeon_powers`
+	# directly — a grant that works and is never wired up is D180's silent pass.
+	var giver := String(Balance.DUNGEONS[0])
+	var owed: Array = Balance.powers_for_dungeon(giver)
+	if owed.is_empty():
+		fails += 1; print("FAIL %s grants no power — the map left a dungeon empty" % giver)
+	for oid3 in owed:
+		if m.owns_power(String(oid3)):
+			fails += 1; print("FAIL a new save already owns %s, which %s is meant to grant" % [oid3, giver])
+	m.mark_cleared(giver)
+	for oid4 in owed:
+		if not m.owns_power(String(oid4)):
+			fails += 1; print("FAIL beating %s did not hand over %s" % [giver, oid4])
+	var after_first: int = m.powers.size()
+	m.mark_cleared(giver)
+	if m.powers.size() != after_first:
+		fails += 1; print("FAIL a second clear of %s granted more powers" % giver)
+	# Gold still LEVELS a power. That half of the purse is untouched, and it is the only claim
+	# powers have on gold now.
+	var target := String(owed[0])
 	m.gold = 999999
-	m.cleared_dungeons = Balance.DUNGEONS.duplicate()   # clear the unlock gate
-	if not m.buy_power(target):
-		fails += 1; print("FAIL cannot buy an unlocked power with ample gold")
-	if m.buy_power(target):
-		fails += 1; print("FAIL bought the same power twice")
 	var before_gold: int = m.gold
 	if not m.upgrade_power(target):
 		fails += 1; print("FAIL cannot level an owned power")

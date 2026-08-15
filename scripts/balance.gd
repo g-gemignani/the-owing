@@ -559,6 +559,95 @@ const POWERS := ["bulwark", "foresight", "scythe", "blight", "expose", "bramble"
 	"ash_count", "sweep_wide", "twice_over", "sure_footing", "hedge",
 	"empty_the_purse", "look_twice", "hold_fast", "even_out", "settle_up"]
 
+## The powers a character starts owning (D290). SIX, and the number was measured rather than picked.
+##
+## A new save used to own ONE, so `MetaState.power_offer` fell through to its top-up branch for the
+## whole early game and dealt from every unlocked power, bought or not — the offer ignored what the
+## player owned because the player owned nothing, and the powers screen had to apologise for it
+## (D289).
+##
+## **Three does not work, and the test said so before the design did.** Own exactly `POWER_OFFERS`
+## and the pool IS the offer: the door deals all of them, so the same three faces turn up every run
+## and `power_affinity` has nothing left to choose between. That is D250's finding — *"an offer of
+## three from ten shows the same faces every run"* — arriving at pool size three. Measured on
+## `test_power`'s tilt check over 400 deals: at 3 the attack deck and the block deck were offered
+## 400 attack powers each, a dead heat; at 4 it read 710/558, ratio 1.27 against a 1.3 margin; 5 and
+## 6 pass. **A starter set is a pool, and a pool the size of the offer is not a pool.**
+##
+## Six spans the axes, which the tilt needs (D256). `Balance.deck_lean` reads a power's own damage
+## and Block the way it reads a card's: Bulwark leans defence, Siphon and Sweep Wide lean attack,
+## and Expose, Knit and Kindle read neutral so they keep weight 1.0 whatever deck is built.
+##
+## Kept COMMON, and the reason CHANGED with D290. It used to be that `POWER_UNLOCK[0]` was 0 clears,
+## so a rarer starter was a power the door refused to deal. That gate is gone. Common now because a
+## Legendary firing from turn one of the first fight is a power level problem, not a gate problem.
+const STARTER_POWERS := ["bulwark", "siphon", "expose", "sweep_wide", "knit", "kindle"]
+
+## How many powers a dungeon hands over the first time you beat it (D290).
+##
+## DERIVED to fit exactly: 30 powers less 6 starters is 24, over 12 dungeons, which is 2 each with
+## nothing left over and nothing unreachable. `tests/test_power.gd` asserts the arithmetic rather
+## than trusting it, because a power added later without a dungeon to come from is a power no save
+## can ever hold — the silent failure this whole scheme has.
+const POWERS_PER_DUNGEON := 2
+
+## Which powers a dungeon grants, and where each power comes from. Two views of ONE derivation, so
+## they cannot disagree — the D250 rule, after `changes_a_rule()` was fixed in the tool and left
+## wrong in the suite.
+##
+## **Gold no longer buys a power (D290).** It bought them since the mechanic shipped, and the
+## objection is that gold is a currency the player already spends on fusion and levels, so buying a
+## power was a THIRD claim on one purse that competed with two better ones. Worse, it made the pool
+## a function of income rather than of play: a patient player farming the Crypt could own the deep
+## powers without ever going deep. **A place is a better gate than a price, because a place can only
+## be paid for by playing the thing the power is meant to reward.**
+##
+## The order is by rarity and then by catalogue position, dealt out over `DUNGEONS` shallow to deep,
+## so the deepest places hand over the rarest powers. That keeps what D255's clears gate was FOR —
+## rarity paces depth — while replacing a number nobody could see with a dungeon that has a name.
+static var _power_grants := {}
+static var _power_sources := {}
+
+static func _build_power_grants() -> void:
+	if not _power_grants.is_empty():
+		return
+	var rest: Array = []
+	for pid in POWERS:
+		if not (pid in STARTER_POWERS):
+			rest.append(String(pid))
+	# Sorted by rarity, ties broken by catalogue order — `sort_custom` is not stable in Godot, so
+	# the index is part of the key rather than left to chance. Two runs of this must produce the
+	# same map or a save's powers stop matching the screen that explains them.
+	var keyed: Array = []
+	for i in rest.size():
+		var p := power(String(rest[i]))
+		keyed.append({"id": String(rest[i]), "rarity": p.rarity if p != null else 0, "i": i})
+	keyed.sort_custom(func(a, b):
+		if int(a["rarity"]) != int(b["rarity"]):
+			return int(a["rarity"]) < int(b["rarity"])
+		return int(a["i"]) < int(b["i"]))
+	for d in DUNGEONS.size():
+		var did := String(DUNGEONS[d])
+		var got: Array = []
+		for k in POWERS_PER_DUNGEON:
+			var at := d * POWERS_PER_DUNGEON + k
+			if at >= keyed.size():
+				break
+			var pid2 := String(keyed[at]["id"])
+			got.append(pid2)
+			_power_sources[pid2] = did
+		_power_grants[did] = got
+
+## The powers this dungeon hands over on a first clear. Empty for an unknown id.
+static func powers_for_dungeon(dungeon_id: String) -> Array:
+	_build_power_grants()
+	return (_power_grants.get(dungeon_id, []) as Array).duplicate()
+
+## Which dungeon grants this power, or "" when it is a starter and comes with the character.
+static func dungeon_for_power(power_id: String) -> String:
+	_build_power_grants()
+	return String(_power_sources.get(power_id, ""))
+
 
 # --- resource caches ---------------------------------------------------------
 #
@@ -610,44 +699,23 @@ static func all_powers() -> Array:
 			out.append(p)
 	return out
 
-## Gold to buy a power outright. Priced off rarity like a shop card, then doubled:
-## a power is permanent, fires every turn of every fight, and is never drawn — it
-## is worth strictly more than one copy of a card of the same rarity.
-static func power_price(rarity: int) -> int:
-	return card_price(rarity) * 2
-
-## Dungeon clears before a power of each RARITY can be offered at all (D255).
+## `power_price`, `POWER_UNLOCK`, `power_unlocked` and `power_clears_to_go` are GONE (D290).
 ##
-## **Derived from rarity, like the price above it and like `RELIC_UNLOCK` (D223) — not authored.**
-## `PowerData.unlock_after_clears` was a hand-set number on each of the thirty files, and rarity is
-## written from `power_value()` afterwards by `tools/rerarify.gd`, so the two were never reconciled:
-## Short Change came out LEGENDARY, the second-strongest power in the set, behind a gate of 2 clears,
-## while Hold Fast sat at 10 clears as a middling RARE. **The gate said one thing about a power's
-## strength and the price said another, off the same catalogue.**
+## Together they were the old power economy: gold bought a power outright, and a clears count
+## indexed by rarity decided when it could be bought at all. Both are replaced by one rule — a
+## dungeon hands its powers over when you beat it (`powers_for_dungeon`).
 ##
-## Shallower than `RELIC_UNLOCK` [0, 3, 7, 11, 16] on purpose, and the difference is what the two
-## things are. A relic is FOUND, and the gate paces a set you complete after the game (D223). A power
-## is the run's own lens and one is carried every single run, so a pool that opens as slowly as the
-## relics would leave the first ten runs choosing between the same three commons.
+## **Two gates on one thing was the defect.** A power could be unlocked and unbought, or bought and
+## sealed, and the screen needed four row states plus a paragraph to explain which (D289). It is now
+## held or not held.
 ##
-## COMMON must stay 0. `MetaState.power_offer` falls back to everything unlocked when the save owns
-## too few to fill an offer, so a zero-clear save with nothing open would be handed an empty screen
-## on the way into its first dungeon.
-const POWER_UNLOCK := [0, 1, 3, 6, 10]
-
-## Whether a power of this rarity is in the pool yet. Out of range is UNLOCKED, for the reason
-## `relic_unlocked` gives: a rarity with no row is content that outran its tuning, and the failure
-## that should follow is a power arriving early rather than one that can never arrive at all.
-static func power_unlocked(rarity: int, clears: int) -> bool:
-	if rarity < 0 or rarity >= POWER_UNLOCK.size():
-		return true
-	return clears >= int(POWER_UNLOCK[rarity])
-
-## Clears still to go before this rarity opens, or 0 if it is already open.
-static func power_clears_to_go(rarity: int, clears: int) -> int:
-	if rarity < 0 or rarity >= POWER_UNLOCK.size():
-		return 0
-	return maxi(0, int(POWER_UNLOCK[rarity]) - clears)
+## D255's finding survives the deletion and is why the new map is ordered by rarity: *a number that
+## is authored and a number that is derived from the same subject will disagree, and the derived one
+## is right.* The gate is still derived from rarity. It is now a place rather than a count, so the
+## player can read it off a dungeon's name instead of counting clears.
+##
+## Deleted rather than left unused, because `tests/test_power.gd` asserts their absence — D235's
+## rule that the strongest statement about a removed mechanic is a test that fails if it returns.
 
 ## Gold to take a power from `level` to `level + 1`. Reuses the fusion gold curve
 ## so the two upgrade tracks compete on equal terms rather than one being the
