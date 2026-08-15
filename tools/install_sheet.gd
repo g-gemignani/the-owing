@@ -160,6 +160,7 @@ func _init() -> void:
 	var cells: Array[int] = []
 	var only: Array[String] = []
 	var inset := 0
+	var crop := Rect2i()
 	for a in args:
 		var s := String(a)
 		if s.begins_with("--only="):
@@ -170,6 +171,17 @@ func _init() -> void:
 			# the image, because what makes it true is that the PROMPT promised the colour
 			# appears nowhere in the subject.
 			Cut.assume_keyed = true
+		elif s.begins_with("--crop="):
+			# The sheet is a SCREEN CAPTURE and the picture is not the whole frame.
+			# A browser capture of a 16:9 sheet on a 2:1 viewport carries a band of
+			# black down one side, and that band lands inside the right-hand column of
+			# cells — where the matte reads it as "the background is not flat" and the
+			# whole column fails. Given, never searched, for the reason
+			# `install_iso_material.gd` gives: autocrop trims a picture's own dark edges
+			# and the only symptom is an aspect ratio nobody checks.
+			var f := s.trim_prefix("--crop=").split(",", false)
+			if f.size() == 4:
+				crop = Rect2i(int(f[0]), int(f[1]), int(f[2]), int(f[3]))
 		elif s.begins_with("--inset="):
 			inset = maxi(0, int(s.trim_prefix("--inset=")))
 		elif s.begins_with("--cols="):
@@ -182,7 +194,7 @@ func _init() -> void:
 		elif not s.begins_with("--"):
 			positional.append(s)
 	if positional.size() < 2 or not SETS.has(positional[0]):
-		print("usage: -- <%s> <sheet.png> [--only=a,b] [--cols=N] [--rows=N] [--cells=i,j,k...] [--inset=N] [--key] [--dry]" % "|".join(SETS.keys()))
+		print("usage: -- <%s> <sheet.png> [--only=a,b] [--cols=N] [--rows=N] [--cells=i,j,k...] [--crop=x,y,w,h] [--inset=N] [--key] [--dry]" % "|".join(SETS.keys()))
 		quit(2)
 		return
 
@@ -217,6 +229,16 @@ func _init() -> void:
 		print("cannot read %s" % sheet_path)
 		quit(2)
 		return
+	if crop.size.x > 0 and crop.size.y > 0:
+		var full := Rect2i(0, 0, sheet.get_width(), sheet.get_height())
+		var box := crop.intersection(full)
+		if box.size.x <= 0 or box.size.y <= 0:
+			print("--crop %s falls outside the %dx%d sheet" % [
+				crop, sheet.get_width(), sheet.get_height()])
+			quit(2)
+			return
+		print("crop %s of %dx%d" % [box, sheet.get_width(), sheet.get_height()])
+		sheet = sheet.get_region(box)
 
 	if cols <= 0 and rows <= 0:
 		cols = int(ceil(sqrt(float(targets.size()))))
