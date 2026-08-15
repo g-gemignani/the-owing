@@ -46,7 +46,7 @@ static func screen(root: Control, title: String, art: String = "",
 		# it, because every other `screen()` call names a scene or a zone. So for as long
 		# as this branch went straight to the tiling pixel pattern, the screen the player
 		# spends the most turns on was the one screen still wearing the Kenney dialect,
-		# and the comment above the call in `iso_run` said the opposite (D263).
+		# and the comment above the call in `iso_run` said the opposite (D267).
 		var here := _context_zone()
 		if not crawl_backdrop(root, here):
 			# tiling pixel backdrop, themed by wherever the player currently is
@@ -348,7 +348,7 @@ static func zone_backdrop(root: Control, zone_id: String, foot: bool = false) ->
 const CRAWL_DIM := 0.78
 
 ## The painted room behind a screen that draws its own lit scene over it — which is
-## the isometric crawl, and only the crawl (D263).
+## the isometric crawl, and only the crawl (D267).
 ##
 ## The DUNGEON's own battle backdrop is preferred over the zone establishing shot, and
 ## that order is the point rather than a fallback chain that happened to come out this

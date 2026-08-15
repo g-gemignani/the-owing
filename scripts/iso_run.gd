@@ -90,7 +90,7 @@ const LIGHT_COLD := Color(0.86, 0.95, 1.16)
 ## palette here is a second palette to drift from the first.
 const PROP_DARK := 0.62
 const PROP_PALE := 1.28
-## How many floor tiles one repeat of the ground material spans (D263). See `_draw_ground`.
+## How many floor tiles one repeat of the ground material spans (D267). See `_draw_ground`.
 ##
 ## It is the SCALE KNOB for every painted floor: a feature drawn at a fraction f of the
 ## material is drawn at f x N tiles on the floor, so at 3 a stone painted a third of the way
@@ -106,7 +106,7 @@ const GROUND_UV_TILES := 3
 ## sliver where a floor diamond is 116px wide, so the same number would draw the wall's
 ## masonry at half the size of the floor's and the two would stop being the same rock.
 const WALL_UV_TILES := 2
-## Ink (D263). The painted rooms carry a 2-3px dark outline on every foreground object,
+## Ink (D267). The painted rooms carry a 2-3px dark outline on every foreground object,
 ## and until now nothing the floor drew carried one — so the painted hero standing on a
 ## computed floor read as a sticker laid on a texture rather than as a figure in a room.
 ##
@@ -118,7 +118,7 @@ const WALL_UV_TILES := 2
 ## fog was already describing, now stated in line as well as in value.
 const COL_INK := Color(0.05, 0.05, 0.08, 0.80)
 const INK_W := 2.5
-## The shadow a figure drops on the tile it stands on. Also D263, and the other half of
+## The shadow a figure drops on the tile it stands on. Also D267, and the other half of
 ## the same complaint: D202 told the generator not to paint a drop shadow and
 ## `tools/demagenta.gd` lifts whatever survived, which is right for the FILE and left
 ## every figure in the game hovering a few pixels over the stone.
@@ -478,7 +478,7 @@ func _build_ui() -> void:
 	# It is the only screen in the game that names neither a scene nor a zone, and for
 	# a long time that meant it got the tiling PIXEL pattern while every other screen
 	# got a painting — the crawl was the last live user of the Kenney dialect, on the
-	# screen with the most turns in it (D263). `UI.crawl_backdrop` is what that branch
+	# screen with the most turns in it (D267). `UI.crawl_backdrop` is what that branch
 	# reaches now: this dungeon's own battle backdrop, at CRAWL_DIM.
 	var root := UI.screen(self, "")
 
@@ -783,7 +783,7 @@ func _occludes_player(x: int, y: int, tv: TraversalIso) -> bool:
 ## piece of rock is a wall worth drawing or just unexplored nothing. Diagonals count,
 ## so an outside corner does not come out notched.
 ## Ground the ground pass actually draws a diamond for: not rock, and either lit or on
-## the frontier. Written once here rather than inline, because D263's ink asks the same
+## the frontier. Written once here rather than inline, because D267's ink asks the same
 ## question of the four NEIGHBOURS that pass 1 asks of the tile itself, and two spellings
 ## of one predicate is the D34 trap in miniature — the day one of them learns about a new
 ## cell type the slab gets inked along a seam that is not there.
@@ -882,7 +882,7 @@ func _draw_floor() -> void:
 			if reach.has(i):
 				floor_view.draw_polyline(quad + PackedVector2Array([quad[0]]),
 					COL_REACH, UITheme.px(3.0))
-			# The slab's own outline (D263) — and it is NOT the lattice D87 deleted,
+			# The slab's own outline (D267) — and it is NOT the lattice D87 deleted,
 			# because it is drawn on the four edges with no ground on the far side of
 			# them and on no others. Two tiles of stone side by side share an edge that
 			# never gets a line; the shape that does get one is the whole known floor.
@@ -1041,7 +1041,7 @@ func _diamond(centre: Vector2, t: Vector2) -> PackedVector2Array:
 ## mass rather than as separate stones.
 ##
 ## Faces are parallelograms, so the same exact UV trick as the floor applies — and since
-## D263 that means the same GRID UV, for the same reason and with one extra step of
+## D267 that means the same GRID UV, for the same reason and with one extra step of
 ## working out. A block used to take the whole material on each of its three faces, so a
 ## painted course of masonry arrived at a fifth of its size and was cut off at every block.
 ##
@@ -1109,7 +1109,7 @@ func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
 			floor_view.draw_colored_polygon(poly, tint * 0.5)
 		else:
 			floor_view.draw_colored_polygon(poly, tint, f[2], tex)
-	# The block's silhouette, inked (D263). Drawn after the faces and before the dressing,
+	# The block's silhouette, inked (D267). Drawn after the faces and before the dressing,
 	# so a ring hanging on the rock sits inside its outline rather than under it.
 	#
 	# Which edges are silhouette and which are interior is worked out from the four
@@ -1270,7 +1270,7 @@ func _draw_key(centre: Vector2, t: Vector2, scale: float = 1.0, alpha: float = 1
 ## approximate (a diamond is a parallelogram, so the affine UV interpolation across
 ## the two triangles has no seam).
 ##
-## **The material flows ACROSS the tiles, not once per tile (D263).** Each diamond used to
+## **The material flows ACROSS the tiles, not once per tile (D267).** Each diamond used to
 ## take the whole unit square with a per-cell offset, so one repeat of a 256px material was
 ## squeezed into one 116x58 diamond and every feature in it came out about a fifth of the
 ## size it was painted at. That is survivable for noise, which is what the computed
@@ -1767,7 +1767,7 @@ func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
 	var lift: Vector2 = IsoFooting.gait_lift(t, walk_t) if walking else Vector2.ZERO
 	var stretch: float = IsoFooting.gait_stretch(walk_t) if walking else 1.0
 	# Under the sprite, and NOT lifted with it: a gait raises the body off the ground and
-	# the shadow is the thing that says so (D263).
+	# the shadow is the thing that says so (D267).
 	_contact_shadow(centre, t, alpha)
 	floor_view.draw_texture_rect(tex,
 		_footed_rect(tex, centre + lift, t, key, role, stretch), false, ink)
@@ -1863,7 +1863,7 @@ func _ink_line(a: Vector2, b: Vector2, alpha: float) -> void:
 	floor_view.draw_line(a, b,
 		Color(COL_INK.r, COL_INK.g, COL_INK.b, COL_INK.a * alpha), UITheme.px(INK_W))
 
-## The contact shadow under one standing figure (D263). See `SHADOW_R`.
+## The contact shadow under one standing figure (D267). See `SHADOW_R`.
 ##
 ## `alpha` is the caller's own fade, so a wall drawn translucent over the player takes
 ## its shadow down with it and an occluded figure does not leave a hard black patch

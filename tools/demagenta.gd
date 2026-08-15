@@ -32,7 +32,7 @@ extends SceneTree
 const KEY_GAP := 0.22
 ## ...and the pixel has to be bright enough to be the key rather than a dark shadow that
 ## happens to lean blue-red. **Was 0.35, and that is the number the whole remaining defect
-## was hiding behind (D263.)**
+## was hiding behind (D267.)**
 ##
 ## The key is pure (1, 0, 1), so a rim that is key BLENDED WITH A DARK SUBJECT keeps the hue
 ## and loses the brightness. Measured over the 110 installed iso files: every leaning pixel

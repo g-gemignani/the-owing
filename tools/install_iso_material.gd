@@ -1,4 +1,4 @@
-## Installs a PAINTED ground or wall material for the isometric floor (D263).
+## Installs a PAINTED ground or wall material for the isometric floor (D267).
 ##
 ##   godot --headless --script tools/install_iso_material.gd -- \
 ##       <source.png|jpg> <role> [--crop=x,y,w,h] [--band=0.30] [--luma=0.49] [--dry]

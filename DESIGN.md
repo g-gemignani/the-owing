@@ -255,6 +255,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D264** | [The endpoint generator is deleted, and two of its rules outlived it](#d264--the-endpoint-generator-is-deleted-and-two-of-its-rules-outlived-it) |
 | **D265** | [Fights got a shape, and the reason the 5x never assembles is the price list](#d265--fights-got-a-shape-and-the-reason-the-5x-never-assembles-is-the-price-list) |
 | **D266** | [A metric that measures the player, and it says the 5x was there all along](#d266--a-metric-that-measures-the-player-and-it-says-the-5x-was-there-all-along) |
+| **D267** | [The floor was drawn at a fifth of its size, so nothing painted on it could survive](#d267--the-floor-was-drawn-at-a-fifth-of-its-size-so-nothing-painted-on-it-could-survive) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -18270,3 +18271,125 @@ per energy and this is a draw-quality effect.
 
 That is a reward that makes you worse, and until now there was no number in this tool that could
 show one.
+
+### D267 — The floor was drawn at a fifth of its size, so nothing painted on it could survive
+
+Asked: *"I have the feeling that the art of this game does not follow one single style. I like
+the backgrounds but not the iso game."*
+
+Both halves are right, and the second half had a mechanical cause nobody had looked for.
+
+#### Six dialects, and the crawl was wearing the wrong one
+
+Fresh captures first, because `docs/screenshots/` was from 2 August and predates D202 and D260.
+What the game speaks, counted off them:
+
+| dialect | where |
+|---|---|
+| painted, inked, dark | 12 dungeon backdrops, the scene and zone shots, the title screen, 35 enemy plates, ~100 card faces |
+| painted, but high key | 38 relic icons |
+| flat vector clip art | 30 power sigils |
+| computed noise and geometry | the iso floors, walls and props |
+| painted cutouts | the iso hero and 70 creature fronts |
+| Kenney 16x16 pixel | 5 zone patterns, 1 card sheet |
+
+The last row was supposed to be a dormant fallback. It was not. **`iso_run.gd` is the only
+`UI.screen()` caller in the game that names neither a scene nor a zone**, so it fell through to
+`PixelArt.backdrop()` — and the comment two lines above the call said the opposite. The screen
+with the most turns in it was the last live user of the pixel dialect, on a clear colour, while
+every other screen in the game had a painting behind it. It now gets its own dungeon's battle
+backdrop at `UI.CRAWL_DIM` = 0.78: the walk and the fight happen in the same room.
+
+#### The scale bug, which is why the materials had to be noise
+
+`gen_iso_art.gd` samples each terrain's ramp from the floor band of the backdrops that use it,
+so the computed materials agree with the paintings on COLOUR by construction. They agree on
+nothing else — no ink, no brush, no stonework — and that had been invisible for a reason that is
+arithmetic rather than taste.
+
+**Every diamond took the whole material.** `_draw_ground` mapped UV 0..1 across one tile with a
+per-cell offset, so one repeat of a 256px texture was crushed into 116x58 and every feature in
+it arrived at about a fifth of the size it was drawn at. A flagstone painted a third of the way
+across its texture arrived five to a tile and read as gravel. The offset was deliberately
+DISCONTINUOUS between neighbours as well, so every feature was also cut off at every tile edge.
+
+That is survivable for noise. It is fatal for anything painted, and it is why the first painted
+crypt floor came back looking WORSE than the computed one it replaced — the picture was good
+and the projection destroyed it.
+
+So the UV comes off the grid instead. A diamond's corners are the grid points
+`(x±0.5, y±0.5)`, so dividing by `GROUND_UV_TILES` = 3 gives one repeat every three tiles,
+continuous across every shared edge. A stone crossing a tile boundary continues on the other
+side. The per-cell offset is gone and its job — stopping the floor reading as wallpaper — goes
+to the period, which is now three tiles long instead of one.
+
+**The walls needed the same fix and their axes are not obvious.** A block's top face is in the
+floor's plane and takes the floor's UV. Its left face stands on the grid line `y + 0.5` running
+along X, and the left face of `(x+1, y)` starts exactly where it ends; its right face stands on
+`x + 0.5` running along Y, joined the same way to `(x, y+1)`. So the two side faces draw one
+unbroken course of masonry along whichever axis the wall runs. `WALL_UV_TILES` is 2 rather than
+3 because a side face is a 58px sliver where a floor diamond is 116px wide, and the same number
+would draw the wall's stone at half the size of the floor's.
+
+#### Ink and shadow, which the style rule had always asked for
+
+The paintings put a 2-3px dark outline on every foreground object and nothing the floor drew had
+one, so the painted hero read as a sticker laid on a texture. Two rules keep the new ink from
+becoming the lattice D87 deleted: **it is drawn on silhouettes, never on tiles** — a floor edge
+only where the neighbour is not ground, a rock edge only where the neighbour is not rock — so a
+run of blocks is one inked mass and a room is one inked slab.
+
+And every figure was hovering. D202 told the generator not to paint a drop shadow and
+`demagenta.gd` lifts whatever survived, which is right for the FILE. The shadow is now drawn by
+the view, so it lands on the ground the figure is standing on and stays put while a walking
+figure's gait lifts the body off it.
+
+#### A pink hairline on 93 of 110 files, on the day D202 reported none
+
+Zooming in on a standing stone to judge the ink found a magenta rim around it. `demagenta.gd`
+required `max(r,b) > KEY_MIN` and `KEY_MIN` was 0.35. **Measured across all 110 installed iso
+files, every surviving key pixel tops out between 0.30 and 0.349 and not one reaches 0.35** —
+because the rim is the key BLENDED WITH A DARK SUBJECT, which keeps the hue and loses the
+brightness. The gap rule and the brightness rule were reading the same rim from opposite ends
+and 14,556 pixels walked out between them. D202 reported zero because it measured with this
+threshold.
+
+The floor is now 0.12, and what makes that safe is a rule the brightness one was always a proxy
+for: the key is `(1, 0, 1)`, so what survives of it keeps green near zero in ABSOLUTE terms.
+Of the 14,556 pixels that pass the hue test, every one has green under 0.15 and 13,259 under
+0.05, and not one with a gap over 0.30 reaches 0.06. Painted violet fails the other way round —
+the mycelial lord's cap is high in green and low in gap — so it misses both halves rather than
+one. **22,606 pixels repainted across 93 files, 0 cleared, and a second run finds nothing.**
+
+#### The materials, and what a painting has done to it before it is installed
+
+The API route is shut (every image model reports a free-tier quota of zero), so these came
+through the Gemini web app. `tools/install_iso_material.gd` is what turns a browser capture into
+a material, and each of its three steps is a measurement rather than a taste:
+
+* **Seamless by offset-and-blend.** B is the source shifted half a period in both axes, so it is
+  continuous exactly where the source's seam is; a mask falling to zero at the border makes the
+  border entirely B and the middle entirely A, and B's own seam lands where it contributes
+  nothing. Scored with `gen_iso_art`'s own metric so the numbers are comparable.
+* **Normalised to a target mean luminance.** Not cosmetic. `TINT_OPEN`, `TINT_WALKED`,
+  `LIGHT_DIM` and `LIGHT_LIT` are all MULTIPLIERS on the material, tuned against a generated one
+  near 0.47. The first painted crypt floor measured 0.39 and its lit tiles came out within a few
+  percent of the walls. The painting is brought to the number rather than the four constants
+  being retuned per painting.
+* **The crop is given, never searched.** Autocrop trims a full-bleed material's own dark edges
+  and the only symptom is an aspect ratio nobody checks.
+
+**Installed: `floor_stone`, `floor_earth`, `floor_moss`, `floor_sand`, `rock_stone`,
+`rock_moss`, and the two generic fallbacks `floor` and `rock`.** `rock_earth` and `rock_sand`
+are still the generated materials, and that is a consistent state rather than a half-drawn one —
+the generator is the documented fallback and it is still the palette authority for all eight.
+The Warrens is the one floor where the difference is visible: its walls are flat where its floor
+is painted.
+
+Two things learned in the browser that are not in the skill. The daily image cap was never
+reached; what happens instead after about eight prompts is that **the composer keeps its text
+and the enabled Send button stops responding to clicks**, for minutes at a time, with no banner
+and no greyed model rows. And **a hex palette pushes the generator to the light end of it**: the
+earth ramp `#452f2e`..`#e3b2b0` is dusty rose, and asking for it by number produced two
+successive floors that read as skin. Naming the dark end and forbidding the light one by word —
+"never pink, never salmon, never rose" — is what fixed it.
