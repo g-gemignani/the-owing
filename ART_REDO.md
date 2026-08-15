@@ -16,7 +16,7 @@ regenerated, so a set that has been re-rolled leaves the table on its own. The
 | `enemies/`  ← **the bible** | 35 | 0.30 | 31.4% | 1.7% |
 | `iso/foe/` | 70 | 0.34 | 27.3% | 3.4% |
 | `powers/` | 30 | 0.35 | 25.2% | 2.8% |
-| `relics/` | 38 | 0.58 | 4.9% | 19.9% |
+| `relics/` | 38 | 0.56 | 7.2% | 19.5% |
 
 The bible measures **0.30 mean luminance and 31.4% ink**. A set that is far
 from both is not a matter of taste — it is a set drawn to a different brief.
@@ -72,7 +72,7 @@ Install: `godot --headless --script tools/install_sheet.gd -- powers <sheet.png>
 ## 2. The 38 relic icons — right brush, wrong value
 
 The technique is correct and the VALUE is wrong by a measured margin:
-**0.58 / 4.9% ink / 19.9% blown**. They are also all lit from the upper left
+**0.56 / 7.2% ink / 19.5% blown**. They are also all lit from the upper left
 with a bright rim, which fights the one-saturated-source rule the rooms are
 built on.
 
