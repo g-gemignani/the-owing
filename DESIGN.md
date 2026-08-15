@@ -262,6 +262,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D271** | [A panel that redraws may not roll dice](#d271--a-panel-that-redraws-may-not-roll-dice) |
 | **D272** | [A green suite on a dirty tree says nothing about what was pushed](#d272--a-green-suite-on-a-dirty-tree-says-nothing-about-what-was-pushed) |
 | **D275** | [The floor becomes the unit, and depth starts buying something](#d275--the-floor-becomes-the-unit-and-depth-starts-buying-something) |
+| **D276** | [The driver took every card it was dealt, and a third of them were cards the game calls worse](#d276--the-driver-took-every-card-it-was-dealt-and-a-third-of-them-were-cards-the-game-calls-worse) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -18841,3 +18842,113 @@ five combats, the most in the game, which is what its own description says: *"Ov
 fights alone."* It still offers relics from four chests. Reported here as a content bug, checked,
 and it is a variation. `mix_minimum` preserves it: a zero stays zero, and only a site the dungeon
 authored above zero is guaranteed to survive scaling.
+
+---
+
+### D276 — The driver took every card it was dealt, and a third of them were cards the game calls worse
+
+Asked for: *"Are the proposed powers and cards done based on the deck?"*, then *"Start with the driver."*
+
+The answer to the question was: powers yes, relics yes, cards no. `power_offer` weights by
+`Balance.deck_lean` (D256) and `relic_offer` by `Balance.run_lean` (D265), so both offers sharpen on
+the build. `_roll_rewards` weights by rarity band and dungeon pool and reads nothing about the deck.
+
+**Three offer systems read the build. The one that does not is the one that changes the deck.**
+
+That is a content question and it is not this entry. This entry is the instrument, because the tool
+could not have measured the answer.
+
+#### The driver was not making the decision the game makes
+
+The reward screen lays out `REWARD_CARD_OFFERS` cards and puts a **Skip** under them
+(`combat.gd:2178`). `tools/sim_balance.gd` dealt ONE card, rarity-weighted, and the call site kept
+it unconditionally. No offer, no comparison, no skip.
+
+D239 named this exact fault on the other reward surface — *"a driver that does not make the
+decision the game offers is measuring a different game"* — and measured it there at **+0.14x of
+`esc`**, more than the entire rule-breaker content rewrite had bought on a random draw. The same
+hole was left open on cards, which is the larger surface: a run takes one card per won fight and at
+most eight relics with `--spoils=8`.
+
+It matters more here than it did on relics, because **a card is the one reward that can make a run
+worse.** D266 found two cells where `cap` came back below 1.0 and named the mechanism: `earn_card`
+appends, and a weak card in a 20-card deck means the good cards come up less often.
+
+#### Scored with the screen's own function, and skipped at the screen's own band
+
+`_choose_card` deals `Balance.REWARD_CARD_OFFERS` without replacement, scores each with
+**`Balance.card_vs_deck`** and takes the best, or skips when the best is under **0.80**.
+
+Neither number is invented here, and that is the point. `card_vs_deck` is what D270's reward-screen
+verdict reads, and 0.80 is the band at which that verdict already tells the player *"WEAKER than
+what you hold — taking it thins your draw."* **The driver now skips exactly when the game says to
+skip.** A scoring function written fresh in the tool would have been D250's bug with the screen as
+the other copy — the tool's `changes_a_rule()` and the suite's disagreed the moment one was fixed,
+which is why that definition moved onto `CardData`.
+
+`REWARD_CARD_OFFERS` is new in `balance.gd` for the same reason: the count was a literal `3` in
+`combat.gd` and was about to become a second literal `3` in the tool. `test_balance` rejects private
+copies of shared data (D34) and this would have been one.
+
+#### What it measures, and the first reading was wrong
+
+51 cells, 200 trials, `--no-calibration`, the same route both times:
+
+| | `--card-blind` (the old driver) | choosing |
+|---|---|---|
+| `cap` median | 1.13x | **1.33x** |
+| `cap` mean | 1.25x | **1.41x** |
+| `esc` median | 1.02x | **1.17x** |
+| `esc@3` median | 1.06x | **1.19x** |
+| RUN completion | 17% | 16% |
+
+**Choosing is worth +0.20x of `cap` and +0.15x of `esc`**, against a noise floor of about ±0.05x at
+400 trials (D120/D229). Completion did not move. That is the shape the whole D231 sequence has been
+asking for and failing to get: the deck grows more without the game getting easier.
+
+**A first smoke run said the skip rule never fires, and that was wrong.** 111 offers on the Crypt at
+20 trials showed `skipped 0%`, and this entry was nearly written saying the skip was redundant and
+the value was all in the choosing. The full sweep says **`35447 offers of 3 | skipped 21% | chose
+past the first 51%`**. A fifth of offers are worth refusing. The smoke run was one shallow dungeon
+with weak decks, which is where the pool still keeps up with the deck. AGENTS.md already says
+`--noise` is the only thing that tells a delta from a reading; **one cell is not a sample, and a
+firing rate read off one cell is a guess wearing a percentage.**
+
+#### A third of what the driver used to accept was a card the game calls worse
+
+`_repro/card_skip.gd`, 2000 offers against a 12-card and a 20-card deck:
+
+| | mean ratio | under 0.80 |
+|---|---|---|
+| one card at random | 1.22 / 1.14 | **35% / 34%** |
+| best of three | 1.80 / 1.66 | 4.5% / 4.6% |
+
+The probe draws uniformly and holds both sides at level 1, so its rates are not the driver's — the
+driver's own count is the 21% above. What the two agree on is the direction and the size: **every
+report this tool has ever produced was paying a dilution cost the player would refuse**, and that
+is now the second thing after D208 that made a profile a player the game cannot produce.
+
+#### The guard
+
+`tests/test_balance.gd` asserts the CALL, `_choose_card(dungeon_id, reward_level, run_deck)`, and
+not the function. A chooser present in the file with the call site still asking `_reward_card`
+directly would satisfy a function-level check and change nothing — which is D180's silent pass,
+where writing ABOUT the fix satisfied a check meant to see the code do it.
+
+One defect found by using the tool rather than by reading it: the card line never printed under
+`--card-blind`, because the counter sat in the other branch. So the baseline run said nothing about
+the thing it was the baseline for, and the line carried a `--card-blind` suffix no run could reach.
+**A report that only describes the new behaviour cannot be compared with the old one.**
+
+#### What this does NOT do
+
+No content changed and no card offer in the GAME reads the deck. The driver can now see such a
+change, which is the whole of it. The content question is still open, and D239's number is the
+argument for taking it seriously: on relics, making the offer suit the build was worth more than
+rewriting the relics.
+
+The obvious next step is a card affinity in `_roll_rewards`, and the obvious argument against it is
+in AGENTS.md's own pillar — *"you commit a deck, earn cards that dilute it"*. An offer that always
+suits you deletes that. The measured fact to design against is that 21% of offers are already worth
+refusing, so the decision exists today and the player has no help making it except D270's verdict
+line.

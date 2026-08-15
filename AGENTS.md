@@ -275,6 +275,21 @@ effects are drawn at runtime by `scripts/fx.gd`.
    energy. A full report agreed it changed nothing, which is exactly what a correct
    no-op looks like too.
 
+   **And count it over the whole report, because one cell is not a sample (D276).** The
+   card driver's new skip rule read `skipped 0%` on 111 offers from one shallow dungeon, and
+   the entry was nearly written calling it redundant. Across 51 cells it is **21%**. A
+   firing rate read off one cell is a guess wearing a percentage.
+
+   **D239's fault was still open on the larger reward surface, and it cost more (D276).** The
+   game lays out three cards with a Skip under them and the driver dealt ONE and kept it, so
+   it was not making the decision the game makes — on the surface a run touches once per won
+   fight, against at most eight relics. A third of the cards it accepted were ones the reward
+   screen itself calls *"WEAKER than what you hold"*. Choosing from the three, scored by
+   `Balance.card_vs_deck` — **the screen's own function, not a second opinion** — is worth
+   **+0.20x of `cap` and +0.15x of `esc` with completion unmoved**, which is D231's shape at
+   last: the deck grows more without the game getting easier. Every report before it was
+   paying a dilution cost the player would refuse.
+
 ---
 
 ## Design pillars (the goals we keep returning to)

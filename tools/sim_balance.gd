@@ -19,6 +19,20 @@ static var SPOILS_RULES := false
 ## tries to" produce the same flat report.
 static var GREEDY_SPOILS := false
 
+## Restore the pre-D276 card driver: draw ONE reward at random and always take it. Kept for the
+## same reason `--spoil-greedy` is — a flat report from a driver that never chose and a flat report
+## from content that cannot deliver look identical, and only running both tells them apart.
+static var BLIND_CARDS := false
+
+## How the card reward went, over the whole report. Counted because AGENTS.md says to: the first
+## draw gate "looked principled and declined nothing at all", and a rule that never fires measures
+## the same nothing as a rule that is not there.
+static var _card_seen := 0
+static var _card_skipped := 0
+## Times the chosen card was NOT the first one dealt. With three on the table a blind driver is
+## right one time in three by luck, so this is the share of choices where choosing changed the deck.
+static var _card_moved := 0
+
 ## Deal the run's power from three rather than using the profile's. See `--roll-power`.
 static var ROLL_POWER := false
 
@@ -122,6 +136,9 @@ static func _read_args() -> void:
 		# Pick each relic on its own merit, the way the driver did before D265.
 		elif arg == "--spoil-greedy":
 			GREEDY_SPOILS = true
+		# Take one card at random, the way the driver did before D276.
+		elif arg == "--card-blind":
+			BLIND_CARDS = true
 		# Roll the run's power from three candidates instead of using the profile's fixed one (D245).
 		# The game deals three at the deck builder and the player picks; a profile carrying one power
 		# for every trial models the player the game had BEFORE that, and could not see the change at
@@ -305,6 +322,16 @@ func _init() -> void:
 	# 0.4 points already (D120); a route change is a much larger difference wearing the same
 	# clothes, and the header is the only place that can tell them apart afterwards.
 	print("Route: %s" % _route_line())
+	# How often the card rule fired (D276). AGENTS.md asks for this by name: the first draw gate
+	# "looked principled and declined nothing at all -- 1,498 opportunities, zero refusals", and a
+	# full report agreed it changed nothing, which is what a correct no-op looks like too. A skip
+	# rate near 0% means the driver is still taking everything and this change measured nothing.
+	if _card_seen > 0:
+		print("Cards: %d offers of %d | skipped %.0f%% | chose past the first %.0f%%%s" % [
+			_card_seen, Balance.REWARD_CARD_OFFERS,
+			100.0 * float(_card_skipped) / float(_card_seen),
+			100.0 * float(_card_moved) / float(_card_seen),
+			"   (--card-blind: one card, always taken)" if BLIND_CARDS else ""])
 	if CALIBRATE:
 		_avoid_calibration()
 	else:
@@ -666,7 +693,7 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 					# what an authored profile still declares, `spoils` is what the floor lent.
 					var untaxed: Array = relics.duplicate()
 					untaxed.append_array(spoils)
-					# The run's own depth, so the sim ramps exactly as the game does (D267).
+					# The run's own depth, so the sim ramps exactly as the game does (D270).
 					eng.setup(run_deck, hp, max_hp, difficulty, tier,
 						String(node.get("enemy", "")), [], roster,
 						trial_power, dd.boss if dd != null else "", untaxed, tv.progress())
@@ -758,7 +785,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 							* float(Balance.relic_field_sum(relics, "gold_percent")) / 100.0))
 						gold += g
 						var t_rw := Time.get_ticks_usec()
-						var won_card := _reward_card(dungeon_id, reward_level)
+						# The offer, scored against the deck that would take it, with a skip
+						# available (D276). `run_deck` is passed because the value of a card is a
+						# fact about the deck it joins, never about the card alone.
+						var won_card := _choose_card(dungeon_id, reward_level, run_deck)
 						_tick("rewards", t_rw)
 						if won_card != null:
 							run_deck.append(won_card)
@@ -1503,6 +1533,72 @@ func _reward_card(dungeon_id: String, level: int) -> CardData:
 	var card := Balance.card(String(ids[pick])).duplicate() as CardData
 	card.level = level
 	return card
+
+## The reward the run actually takes, out of the offer the screen actually lays out (D276).
+##
+## `_reward_card` above deals ONE card and the caller always kept it. The game deals
+## `Balance.REWARD_CARD_OFFERS` and puts a Skip button under them (`combat.gd:2178`). So the driver
+## was not making the decision the game offers, which is D239's fault on the other reward surface:
+## *"a driver that does not make the decision the game offers is measuring a different game."*
+## D239 measured that same gap on relics at **+0.14x of `esc`**, more than the entire rule-breaker
+## content rewrite bought on a random draw.
+##
+## It matters more here than it did there, because a card is the one reward that can make a run
+## WORSE. D266 found two cells where `cap` came back below 1.0 — a run ending less capable than it
+## began — and named the mechanism: `earn_card` appends, and a weak card in a 20-card deck means the
+## good cards come up less often. A player reads that off the screen and presses Skip. **The driver
+## could not skip, so every cell in every report has been paying dilution the player would refuse.**
+##
+## Scored with `Balance.card_vs_deck`, which is the function the reward screen's own verdict reads
+## (D270). Not a second opinion about what a card is worth: D250 moved `changes_a_rule()` onto
+## `CardData` because a tool's copy and a suite's copy disagreed the moment one was fixed, and a
+## scoring function invented here would be that bug with the screen as the other copy.
+##
+## The skip threshold is the screen's own lower band, 0.80 — the ratio at which it already tells the
+## player "WEAKER than what you hold — taking it thins your draw". Taking the band rather than
+## picking a number means the driver skips exactly when the game says to skip, so the two cannot
+## drift apart, and a tuning change to the band moves both at once.
+const CARD_SKIP_BELOW := 0.80
+
+func _choose_card(dungeon_id: String, level: int, deck: Array) -> CardData:
+	if BLIND_CARDS:
+		# Counted here too, or the report's card line never prints under `--card-blind` and the
+		# baseline run says nothing about the thing it is the baseline FOR. The first version of
+		# this function left the counter out of this branch, so the line carried a
+		# "(--card-blind: one card, always taken)" suffix that no run could ever reach.
+		_card_seen += 1
+		return _reward_card(dungeon_id, level)
+	var offer: Array = []
+	var seen := {}
+	# Dealt without replacement, like `_roll_rewards`: it removes each pick from the pool, so the
+	# screen never shows the same card twice. Drawing with replacement would make a three-card offer
+	# worth less than three cards and understate exactly the thing being measured.
+	for _i in Balance.REWARD_CARD_OFFERS:
+		var c := _reward_card(dungeon_id, level)
+		if c == null:
+			break
+		if seen.has(c.id):
+			continue
+		seen[c.id] = true
+		offer.append(c)
+	if offer.is_empty():
+		return null
+	_card_seen += 1
+	var best: CardData = null
+	var best_score := -1.0
+	for c in offer:
+		var score := Balance.card_vs_deck(c, deck)
+		if score > best_score:
+			best_score = score
+			best = c
+	# Skip rather than dilute. The run keeps the deck it has, which is a legal play the game offers
+	# and the driver has never once made.
+	if best_score < CARD_SKIP_BELOW:
+		_card_skipped += 1
+		return null
+	if best != offer[0]:
+		_card_moved += 1
+	return best
 
 ## The ability the player carries. Every save has one — the starter kit grants
 ## Bulwark — and the sim measured runs without it: less throughput than the player

@@ -183,6 +183,16 @@ func _init() -> void:
 		if sim.find("func _worn_relics") != -1:
 			fails += 1
 			print("FAIL _worn_relics is back — profiles must not wear relics they cannot own (D238)")
+		# D276, and the same shape as the two above: the tool must make the decision the GAME makes,
+		# and the failure mode is a report that reads fine. The reward screen lays out
+		# `REWARD_CARD_OFFERS` cards with a Skip under them. The driver took one at random and kept
+		# it, so a third of the cards it accepted were ones the screen calls "WEAKER than what you
+		# hold". Asserting the CALL rather than the function, because `_choose_card` present in the
+		# file while the call site still asks `_reward_card` directly is D180's silent pass again —
+		# the fix written down and not wired up.
+		if sim.find("_choose_card(dungeon_id, reward_level, run_deck)") == -1:
+			fails += 1
+			print("FAIL the simulator does not choose its card reward against the run deck (D276)")
 
 	# --- reward must climb at least as fast as risk ---
 	#

@@ -3502,6 +3502,14 @@ const ESCALATION_MAX := 1.6
 ## than linear on purpose — linear would price a legendary at ~4000g, roughly 20
 ## runs of income, which reads as unobtainable rather than aspirational.
 const SHOP_CARD_OFFERS := 3
+## How many cards a fight's reward screen lays out, of which the player takes one or skips.
+##
+## HERE because it had been a literal `3` inside `combat.gd` and a second literal `3` about to be
+## written into `tools/sim_balance.gd` (D276). Two copies of one number that must agree is the D34
+## shape, and `test_balance` rejects private copies of shared data for exactly this reason. The
+## driver has to lay out the same number of cards the screen does, or it is choosing from a
+## different offer than the player sees.
+const REWARD_CARD_OFFERS := 3
 ## Healing sold as a fraction of max HP.
 const SHOP_HEAL_FRAC := 0.35
 

@@ -2175,7 +2175,7 @@ func _win() -> void:
 	# Rolled HERE, once, beside the relic offer this function already rolls once (D271). Both are
 	# the same kind of thing — what this fight is offering — and both are decided when the fight
 	# ends, not when the panel happens to be drawn.
-	card_offer = _roll_rewards(3)
+	card_offer = _roll_rewards(Balance.REWARD_CARD_OFFERS)
 	_offer_rewards()
 
 ## Build the reward panel: the relic offer if there is one, then the three cards, then the skip.
