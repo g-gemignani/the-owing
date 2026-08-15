@@ -141,6 +141,30 @@ func remove_from_run_deck(card: CardData) -> bool:
 func can_remove_from_run_deck() -> bool:
 	return run_deck.size() > Balance.MIN_DECK_SIZE
 
+## Raise one card of the run deck by a level (D270). The camp's third option.
+##
+## Run-scoped, like `remove_from_run_deck` and for the same reason: the collection is never touched,
+## so a temper cannot be farmed and cannot cost the player something permanent.
+##
+## It is SMALL and that is measured, not assumed: one card up one level moves `power_ratio` by
+## x1.011, and a camp is offered once per run. The camp's worth is the choice between healing,
+## thinning and sharpening — three things a run wants at once and can have one of. It is not a
+## growth lever, and D266 says where growth actually comes from.
+func temper_run_card(card: CardData) -> bool:
+	if card == null or not (card in run_deck):
+		return false
+	if card.level >= card.level_cap():
+		return false
+	card.level += 1
+	return true
+
+## Is there anything in the run deck a temper could still raise?
+func can_temper_run_card() -> bool:
+	for c in run_deck:
+		if c.level < c.level_cap():
+			return true
+	return false
+
 func earn_gold(n: int) -> void:
 	escrow_gold += maxi(0, n)
 

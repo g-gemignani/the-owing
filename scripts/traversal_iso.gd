@@ -344,7 +344,21 @@ func generate(p_dungeon) -> void:
 	w = Balance.ISO_GRID
 	h = Balance.ISO_GRID
 
-	var budget := standard_encounters(dungeon)
+	# The floor count comes FIRST now, because the budget is scaled to it (D275). It used to be
+	# decided thirty lines below, after a fixed budget had already been chosen — which is how the
+	# floor came to shrink with depth.
+	var diff: int = dungeon.difficulty if dungeon != null else 1
+	var full_floors := Balance.iso_floors_for(diff)
+	floors = full_floors
+	# The back door takes a floor off and the budget COMES WITH YOU (D190). Never below the
+	# minimum — a one-floor dungeon has no descent, and descent is the model.
+	if deep:
+		floors = maxi(Balance.ISO_FLOORS_MIN, floors - Balance.DEEP_ENTRY_FLOORS)
+	# Scaled against `full_floors`, NOT against the deepened count. This is the whole of D190: a
+	# deep entry is the same dungeon dealt more densely, not a smaller one. Scaling against
+	# `floors` here would quietly make the shortcut a discount, which is the difficulty change
+	# D88 is the scar for.
+	var budget := standard_encounters(dungeon, full_floors)
 	# EVERY fight walks (D197). Nothing in this model waits on a tile to be walked into any
 	# more, so the budget is split in two here — what the floor stands still (rests, shops,
 	# events, chests, the stair, the boss) and what hunts you — rather than a fraction of the
@@ -359,15 +373,6 @@ func generate(p_dungeon) -> void:
 			standing.append(int(e))
 	budget = standing
 
-	var diff: int = dungeon.difficulty if dungeon != null else 1
-	floors = Balance.iso_floors_for(diff)
-	# The back door takes a floor off and gives nothing back (D190). The budget below is not
-	# touched, so the same encounters are dealt over fewer floors and `iso_tiles_per_floor`
-	# divides the same tile allowance fewer ways: a shorter, denser dungeon that costs exactly
-	# what its difficulty says. Never below the minimum — a one-floor dungeon has no descent,
-	# and descent is the model.
-	if deep:
-		floors = maxi(Balance.ISO_FLOORS_MIN, floors - Balance.DEEP_ENTRY_FLOORS)
 	# The budget is SPLIT across the floors, not repeated on each. Dealing it round
 	# robin after a shuffle keeps every floor mixed — dealing it in order would put
 	# all the combats on floor one and all the shops on the last.

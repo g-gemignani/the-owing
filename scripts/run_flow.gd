@@ -101,6 +101,20 @@ static func _rest_choice(view: Node, node: Dictionary, on_resolved: Callable) ->
 	else:
 		UI.button(col, "Sharpen  —  deck already at the minimum")
 
+	# The third option (D270). Recover and Sharpen were the two the camp shipped with, and two
+	# options is a coin flip — the genre's campfire is a three-way decision and this is the leg it
+	# was missing. Neither of the others was replaced: `REST_HEAL_FRAC` is tuned against the damage
+	# a run accumulates, and Sharpen is the only in-run thinning the game has.
+	if GameState.can_temper_run_card():
+		UI.button(col, "Temper  —  raise one card a level, for this run", func():
+			UI.card_picker(host, GameState.run_deck, "Put which card to the stone?",
+				func(card):
+					GameState.temper_run_card(card)
+					veil.queue_free()
+					_finish_rest(node, on_resolved)))
+	else:
+		UI.button(col, "Temper  —  every card is already at its cap")
+
 	UI.button(col, "Move on", func():
 		veil.queue_free()
 		_finish_rest(node, on_resolved))

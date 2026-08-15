@@ -99,7 +99,9 @@ static func from_state(d: Dictionary, dungeon_data) -> Traversal:
 ## Takes the dungeon because the mix is per-place (DungeonData.encounter_mix): every
 ## dungeon spends the same budget, but a swarm dungeon and a treasure dungeon do not
 ## feel like the same walk.
-static func standard_encounters(dungeon_data = null) -> Array:
+## `floors` scales the mix to the dungeon's own depth (D275). Zero means "do not scale", which is
+## what a caller asking about the mix in the abstract wants — the budget estimators among them.
+static func standard_encounters(dungeon_data = null, floors: int = 0) -> Array:
 	var mix := {
 		"combat": Balance.ENCOUNTER_COMBATS, "elite": Balance.ENCOUNTER_ELITES,
 		"rest": Balance.ENCOUNTER_RESTS, "shop": Balance.ENCOUNTER_SHOPS,
@@ -107,6 +109,8 @@ static func standard_encounters(dungeon_data = null) -> Array:
 	}
 	if dungeon_data != null and dungeon_data.has_method("encounter_mix"):
 		mix = dungeon_data.encounter_mix()
+	if floors > 0:
+		mix = Balance.scale_mix_to_floors(mix, floors)
 	var out: Array = []
 	for i in int(mix["combat"]):
 		out.append(Enc.COMBAT)

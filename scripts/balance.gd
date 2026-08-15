@@ -1039,6 +1039,90 @@ const REST_HEAL_FRAC := 0.18
 ## Every traversal model must cost the player a comparable amount, or "difficulty
 ## 4" means different things in different dungeons. Models build their layout from
 ## these counts (plus one boss) rather than inventing their own mix.
+## **How many encounters one floor holds, at every depth (D275).**
+##
+## The encounter mix used to be an ABSOLUTE count per dungeon, dealt round robin over a floor count
+## that grows with difficulty. Both halves were authored sensibly and the product was not: totals sat
+## at about 12 everywhere while floors went 2 to 4, so the floor SHRANK as the player descended —
+## 6.0 encounters a floor in the Crypt against 3.0 in the Maw. The tutorial dungeon had the biggest
+## floors in the game.
+##
+## Two things follow from that and both are wrong. A floor stops being a unit the player can hold in
+## their head, because its size depends on which dungeon they are in. And depth stops buying
+## anything: the Maw was the same length as the Crypt, 5 to 6 fights either way, with the extra
+## difficulty arriving entirely as bigger numbers.
+##
+## So the FLOOR is the constant now and depth adds floors. `scale_mix_to_floors` keeps each
+## dungeon's authored character — its own ratio of fights to chests to shops — and scales the total
+## to `floors * ENCOUNTERS_PER_FLOOR`. The Crypt is about 10 encounters and the Maw about 20.
+##
+## Five, not the six the shallow dungeons had: six was the top of a range nobody chose, and the run
+## length that matters is the whole dungeon rather than one floor of it.
+const ENCOUNTERS_PER_FLOOR := 5
+
+## The fewest of one site type a run of this many floors must hold.
+##
+## **A rest per floor but the last, and this is the half the first version of the scaler got wrong.**
+## Proportional scaling gave the growth to whichever categories were already large — the Slag Pits
+## went from 5 fights to 7 while its rests stayed at one, because one of thirteen scaled to 1.15 and
+## floored back to one. Attrition scales with fights. Healing has to scale with it or a longer
+## dungeon is only a more punishing one, which is what the measurement said: completion 41% to 32%
+## and the deepest runs no longer reaching the capability they used to.
+##
+## Everything else keeps the old floor of one, so a dungeon that authored a site type still has it.
+static func mix_minimum(key: String, floors: int) -> int:
+	if key == "rest":
+		return maxi(1, floors - 1)
+	return 1
+
+## Scale an authored encounter mix to a floor count, keeping its shape.
+##
+## Largest-remainder, so the total lands exactly on the target instead of drifting by the rounding of
+## six independent divisions. **Anything the dungeon authored above zero stays above zero**: the Maw
+## authors 2 elites and must not round to none, and a mix that can delete a site type would silently
+## turn a dungeon into a different one. A zero stays zero for the same reason — the warrens authors
+## no elite on purpose (*"Nothing here fights alone"*), and that is a decision, not a gap.
+static func scale_mix_to_floors(mix: Dictionary, floors: int) -> Dictionary:
+	var total := 0
+	for k in mix:
+		total += int(mix[k])
+	if total <= 0 or floors <= 0:
+		return mix
+	var want := floors * ENCOUNTERS_PER_FLOOR
+	var scale := float(want) / float(total)
+	var out := {}
+	var rema: Array = []
+	var used := 0
+	for k in mix:
+		var raw := float(int(mix[k])) * scale
+		var n := int(floor(raw))
+		if int(mix[k]) > 0:
+			n = maxi(mix_minimum(String(k), floors), n)
+		out[k] = n
+		used += n
+		rema.append([raw - floor(raw), String(k)])
+	rema.sort_custom(func(a, b): return float(a[0]) > float(b[0]))
+	var i := 0
+	while used < want and not rema.is_empty():
+		var k2: String = String(rema[i % rema.size()][1])
+		out[k2] = int(out[k2]) + 1
+		used += 1
+		i += 1
+	# And give back an overshoot, never below the floor each key is entitled to.
+	while used > want:
+		var best := ""
+		var bestn := 0
+		for k3 in out:
+			var lowest: int = mix_minimum(String(k3), floors) if int(mix[k3]) > 0 else 0
+			if int(out[k3]) > bestn and int(out[k3]) > lowest:
+				bestn = int(out[k3])
+				best = String(k3)
+		if best == "":
+			break
+		out[best] = int(out[best]) - 1
+		used -= 1
+	return out
+
 const ENCOUNTER_COMBATS := 3
 const ENCOUNTER_ELITES := 1
 const ENCOUNTER_RESTS := 1
@@ -3420,7 +3504,7 @@ static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn:
 ## the sweep actually found. **A tuning flag that SUBSTITUTES for a value cannot be read as a delta
 ## on it** — and the tell was a completion figure seven points below a target that had just been
 ## measured exactly.
-const ENEMY_DAMAGE_BASE_MULT := 1.05
+const ENEMY_DAMAGE_BASE_MULT := 0.97
 
 ## Enemy damage grows this much per turn elapsed (compounding pressure), up to
 ## ESCALATION_MAX. The cap matters: stronger decks face more enemy HP, so their

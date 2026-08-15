@@ -119,7 +119,7 @@ var exhausted_this_combat: int = 0
 ## kills the player made before quitting, which is a small save-scum and a wrong number either way.
 var kills_this_combat: int = 0
 ## How deep the run was when this fight began, 0.0 at the mouth and 1.0 at the boss. Negative means
-## the caller is not in a run and wants no ramp (D267). Held so `enemy_damage` can read it on every
+## the caller is not in a run and wants no ramp (D270). Held so `enemy_damage` can read it on every
 ## turn, not only at setup.
 var run_progress: float = -1.0
 ## Energy the X-cost card currently being played will spend, stashed before the pool
@@ -250,7 +250,7 @@ func _spawn_enemies(forced_archetype: String) -> void:
 		arch = EnemyData.new()
 
 	var count: int = arch.spawn_count()
-	# `run_progress` is how deep the RUN is, 0 at the mouth and 1 at the boss (D267). Negative means
+	# `run_progress` is how deep the RUN is, 0 at the mouth and 1 at the boss (D270). Negative means
 	# no ramp, which is what every caller that is asking about the dungeon rather than about one
 	# moment in one run gets by default.
 	var hp_budget := Balance.enemy_max_hp(dungeon, tier, ratio, run_progress) \

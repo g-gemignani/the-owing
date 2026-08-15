@@ -148,7 +148,13 @@ func _init() -> void:
 		for trial4 in 8:
 			var iso := TraversalIso.new()
 			iso.generate(dd5)
-			var budget4: int = Traversal.standard_encounters(dd5).size() + 1  # + the boss
+			# The budget is scaled to the dungeon's own floor count now (D275): the FLOOR is the
+			# constant and depth adds floors, so a deep dungeon is a longer dungeon. This guard
+			# used to read `standard_encounters(dd5)` unscaled and assert "floors must SPLIT the
+			# budget, not multiply it" — which was the right rule when the total was fixed and is
+			# the bug now. It still asserts the same PROPERTY, that the walk holds exactly what the
+			# budget said, against the budget the dungeon is actually built from.
+			var budget4: int = Traversal.standard_encounters(dd5, iso.floors).size() + 1  # + boss
 			if iso.quota != budget4:
 				fails += 1
 				print("FAIL ISO %s: quota %d for a dungeon that budgeted %d — floors must SPLIT the budget, not multiply it" % [
@@ -1251,7 +1257,10 @@ func _init() -> void:
 	var deep_encs := 0.0
 	for didd in Balance.DUNGEONS:
 		var ddd := Balance.dungeon(didd)
-		var want_qd: int = Traversal.standard_encounters(ddd).size() + 1
+		# Scaled to the dungeon's FULL depth (D275), which is the depth its budget is built from
+		# even when the back door shortens the walk — that is the property below.
+		var want_qd: int = Traversal.standard_encounters(ddd,
+			Balance.iso_floors_for(ddd.difficulty)).size() + 1
 		var plain := TraversalIso.new()
 		plain.generate(ddd)
 		var deep := TraversalIso.new()
@@ -1374,7 +1383,10 @@ func _init() -> void:
 	var aspect_budget := {}
 	for dida in Balance.DUNGEONS:
 		var dda := Balance.dungeon(dida)
-		var want_q: int = Traversal.standard_encounters(dda).size() + 1
+		# Scaled to the dungeon's floor count (D275). An aspect must add exactly what it says and
+		# nothing else, and that is measured against the budget the dungeon is actually built from.
+		var want_q: int = Traversal.standard_encounters(dda,
+			Balance.iso_floors_for(dda.difficulty)).size() + 1
 		for asp in [Balance.ASPECT_NONE] + Balance.ASPECTS:
 			var at2 := TraversalIso.new()
 			at2.aspect = String(asp)
