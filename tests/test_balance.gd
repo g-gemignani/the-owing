@@ -191,20 +191,20 @@ func _init() -> void:
 		# file while the call site still asks `_reward_card` directly is D180's silent pass again —
 		# the fix written down and not wired up.
 		# The call moved from `_choose_card` to `_choose_bundle` when the reward became a bundle of
-		# cards rather than one (D296). The ASSERTION is unchanged in what it is about: the driver
+		# cards rather than one (D297). The ASSERTION is unchanged in what it is about: the driver
 		# must choose its reward against the deck that would take it. Only the name of the thing
 		# doing the choosing moved, and a guard that kept the old name would have gone quiet on the
 		# exact turn the surface it guards was rewritten — which is D88's harness selecting by name.
 		if sim.find("_choose_bundle(dungeon_id, reward_level, run_deck)") == -1:
 			fails += 1
-			print("FAIL the simulator does not choose its card reward against the run deck (D276, D296)")
+			print("FAIL the simulator does not choose its card reward against the run deck (D276, D297)")
 		# ...and that it takes the WHOLE bundle. A driver that appended one card of the two would
 		# be measuring half a reward, and the deck-growth number is the one this change exists for.
 		if sim.find("for wc in won:") == -1:
 			fails += 1
-			print("FAIL the simulator does not take the whole bundle it chose (D296)")
+			print("FAIL the simulator does not take the whole bundle it chose (D297)")
 
-		# --- every profile must be a deck the game can actually be brought (D208, D296) ---
+		# --- every profile must be a deck the game can actually be brought (D208, D297) ---
 		#
 		# D208's rule, made mechanical: *"is this profile a player the game can produce?"* It cost
 		# 42 cells a mean of +17 points the last time it was answered by hand, and the failure is

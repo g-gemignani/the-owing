@@ -288,7 +288,7 @@ const STARTER_KIT_SIZE := 12
 ## floor there is one legal deck and nothing to fuse. Both open as soon as the first
 ## reward lands, because rewards grow the collection mid-run (D1).
 const MIN_DECK_SIZE := STARTER_KIT_SIZE
-## Largest deck you may BRING. 20 until D296.
+## Largest deck you may BRING. 20 until D297.
 ##
 ## The number is a claim about who builds the deck. At 20 against a floor of 12 the player
 ## assembled eight cards of toolbox out of a hundred owned, and the run then added six or eight
@@ -3736,7 +3736,7 @@ const SHOP_CARD_OFFERS := 3
 ## different offer than the player sees.
 const REWARD_CARD_OFFERS := 3
 
-## How many cards one reward bundle holds (D296).
+## How many cards one reward bundle holds (D297).
 ##
 ## The reward was ONE card of three, and one card in a sixteen-card deck is a six percent change
 ## the player cannot feel. Over eight won fights that is eight cards picked one at a time,
@@ -3824,7 +3824,7 @@ static func reward_bundles(dungeon_id: String, deck: Array, tier: int, difficult
 		# what it was offered — against 10% for the single card it replaced. Bundle size was not
 		# the cause and the measurement said so: at a bundle of ONE the skip rate was still 80%.
 		# What the shuffle had thrown away was `reward_weights`, the rarity tilt that makes a
-		# reward better in a deeper dungeon (D296), so every bundle was dealing a build's cheap
+		# reward better in a deeper dungeon (D297), so every bundle was dealing a build's cheap
 		# enablers as often as its payoffs. **An even roll over a curated list is not a neutral
 		# choice — it is a different, flatter reward table**, and the only thing that said so was
 		# a firing count the report prints for exactly this reason.

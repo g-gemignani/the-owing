@@ -474,7 +474,7 @@ moves.
   (D38, D41). Block cannot be a complete answer at depth — piercing damage keeps
   defensive play honest (D45).
 
-- **A reward is a direction, not a card (D296).** A fight paid one card of three, which in a
+- **A reward is a direction, not a card (D297).** A fight paid one card of three, which in a
   fourteen-card deck is a change the player cannot feel — eight won fights meant eight cards
   picked one at a time, pointing eight ways. It pays one BUNDLE of three now: two cards named
   after the build they come from, so eight wins point mostly one way. The bundles ARE the eight

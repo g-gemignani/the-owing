@@ -1617,7 +1617,7 @@ func _reward_card(dungeon_id: String, level: int) -> CardData:
 ## drift apart, and a tuning change to the band moves both at once.
 const CARD_SKIP_BELOW := 0.80
 
-## The bundle the run actually takes, out of the offer the screen actually lays out (D296).
+## The bundle the run actually takes, out of the offer the screen actually lays out (D297).
 ##
 ## Replaces `_choose_card`. Same argument as D276 made for the single card, one size up: the game
 ## lays out three BUNDLES and a Skip, so a driver that deals one bundle and keeps it is measuring
@@ -1625,7 +1625,7 @@ const CARD_SKIP_BELOW := 0.80
 ## screen's own function and the screen's own band, never a second opinion.
 func _choose_bundle(dungeon_id: String, level: int, deck: Array) -> Array:
 	if BLIND_CARDS:
-		# The pre-D296 baseline: one loose card, always taken. Kept because a flat report from a
+		# The pre-D297 baseline: one loose card, always taken. Kept because a flat report from a
 		# driver that never chose and a flat report from content that cannot deliver look
 		# identical, and only running both tells them apart.
 		var one := _choose_card(dungeon_id, level, deck)

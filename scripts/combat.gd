@@ -78,7 +78,7 @@ var reward_box: VBoxContainer
 ## The three relics an elite is offering, if any (D234/D238). Held on the node rather than passed,
 ## because the reward panel is built in one place and read in another.
 var relic_offer: Array = []
-## The three BUNDLES on offer (D296), held for exactly the same reason the relics are — and it took
+## The three BUNDLES on offer (D297), held for exactly the same reason the relics are — and it took
 ## a bug to notice that they were not. `_offer_rewards` is called twice at an elite, once to draw
 ## and once after a relic is taken, and the cards were rolled INSIDE it: so taking a relic dealt a
 ## new hand of three cards underneath. See D271.
@@ -2318,7 +2318,7 @@ func _on_relic_picked(rid: String) -> void:
 		c.queue_free()
 	_offer_rewards()
 
-## One offered card, at the level the COLLECTION already holds it at (D296).
+## One offered card, at the level the COLLECTION already holds it at (D297).
 ##
 ## The level is the whole reason this function exists rather than `Balance.card(id)` at the call
 ## site. `GameState.earn_card` joins the run deck at the collection's level, and the catalogue
@@ -2339,7 +2339,7 @@ func _reward_face(id: String) -> CardData:
 		offer.level = int(MetaState.collection[id]["level"])
 	return offer
 
-## A whole bundle taken, or `{}` for Skip (D296).
+## A whole bundle taken, or `{}` for Skip (D297).
 func _on_bundle_picked(bundle: Dictionary) -> void:
 	for cid in bundle.get("cards", []):
 		# usable immediately, permanent only if this dungeon is completed (D20)
@@ -2347,7 +2347,7 @@ func _on_bundle_picked(bundle: Dictionary) -> void:
 	_after_reward()
 
 ## Everything a resolved reward does, whichever surface resolved it. Split out when the card
-## reward became a bundle (D296): the boss's whole commit sequence lived inside the single-card
+## reward became a bundle (D297): the boss's whole commit sequence lived inside the single-card
 ## handler — the pack, the escrow, the aspect bonus, the rope roll and `mark_cleared` — so a
 ## second entry point would have been a second copy of the one place a dungeon is marked cleared.
 func _after_reward() -> void:

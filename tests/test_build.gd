@@ -197,7 +197,7 @@ func _init() -> void:
 	quit()
 
 ## A fight's reward is three BUNDLES now, and a bundle is a build intersected with what this
-## dungeon can drop (D296). Two things have to hold in EVERY dungeon, and neither is true by
+## dungeon can drop (D297). Two things have to hold in EVERY dungeon, and neither is true by
 ## construction — both depend on how the build lists and the zone pools happen to overlap:
 ##
 ##   * three bundles can actually be laid out. Measured before building, the Drowned Market

@@ -281,7 +281,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D294** | [The magenta the de-keyer said was gone, on thirteen of thirty-five fights](#d294--the-magenta-the-de-keyer-said-was-gone-on-thirteen-of-thirty-five-fights) |
 | **D295** | [A boss bends a rule of the card game, and three of the first seven were cliffs](#d295--a-boss-bends-a-rule-of-the-card-game-and-three-of-the-first-seven-were-cliffs) |
 | **D296** | [The landmarks had a table of names all along, one screen below the one D282 read](#d296--the-landmarks-had-a-table-of-names-all-along-one-screen-below-the-one-d282-read) |
-| **D296** | [The reward becomes a direction, and a level-1 face nearly hid it](#d296--the-reward-becomes-a-direction-and-a-level-1-face-nearly-hid-it) |
+| **D297** | [The reward becomes a direction, and a level-1 face nearly hid it](#d297--the-reward-becomes-a-direction-and-a-level-1-face-nearly-hid-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -20578,7 +20578,7 @@ until they do. A checkout today looks exactly as it did yesterday.
 
 ---
 
-### D296 — The reward becomes a direction, and a level-1 face nearly hid it
+### D297 — The reward becomes a direction, and a level-1 face nearly hid it
 
 A fight paid **one card of three**. One card in a fourteen-card deck is a seven percent change
 the player cannot feel, and over eight won fights it is eight cards picked one at a time,
