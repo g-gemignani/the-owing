@@ -248,6 +248,8 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D257** | [The last flat relics became conditional rules, and it closed the composition gap without moving `esc`](#d257--the-last-flat-relics-became-conditional-rules-and-it-closed-the-composition-gap-without-moving-esc) |
 | **D258** | [The front door moves into the woods, and the colour work carried over intact](#d258--the-front-door-moves-into-the-woods-and-the-colour-work-carried-over-intact) |
 | **D259** | [The last 28 icons, and four ways a generator lies about what it drew](#d259--the-last-28-icons-and-four-ways-a-generator-lies-about-what-it-drew) |
+| **D260** | [The agreed palette was never the game's palette, and dropping it was the fix](#d260--the-agreed-palette-was-never-the-games-palette-and-dropping-it-was-the-fix) |
+| **D261** | [Commit on main, and say so once instead of asking every time](#d261--commit-on-main-and-say-so-once-instead-of-asking-every-time) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -17773,3 +17775,36 @@ cause of all of this and it is NOT changed here: it governs 28 files across reli
 cutouts, a batch another session is working through right now, and swapping the reference under
 that work would be a change nobody asked for. **The finding is recorded; the scene tier uses the
 range sheet; the item tiers are somebody's next decision.**
+
+---
+
+### D261 — Commit on main, and say so once instead of asking every time
+
+Asked for: *"add a rule to always commit on main and push"*.
+
+A small entry, written because the rule it records contradicts a default, and a rule that
+contradicts a default with no reasoning attached is the kind that gets "helpfully" reverted by
+whoever reads it next.
+
+**The default an agent carries is to branch before committing to a default branch.** That is
+correct for a repository with review, or with more than one person pushing. This one has
+neither: the history is linear on `main`, and the branch would exist only to be merged back by
+the same session that made it. The rule now lives in AGENTS.md's Working rules.
+
+**Scoped to this repository on purpose.** The choice offered was this repo, every repo, or every
+repo with pushing still gated — and narrow won. The same rule applied globally would reach a
+work account, where pushing straight to a shared `main` is not a convenience but a problem. **A
+preference that is safe because of what this project IS does not travel with the person who
+holds it.**
+
+#### Two things went in beside it, because the rule removes a safety net
+
+* **The suite is the gate, and it gets stricter, not looser.** With no branch there is nowhere
+  to park a red commit while it is fixed. `test_content` shipped red once already and that
+  commit was recorded rather than amended, precisely so this failure mode stays visible.
+* **This checkout is shared, and the tree lies about authorship.** Two sessions have run against
+  it at once more than once. One of them committed another's work under an unrelated message,
+  and the tree has since held three unrelated decisions at the same time. So: read
+  `git diff --cached --stat` before committing, and when the tree carries work this session did
+  not do, say that in the message rather than inventing an account of it. The commit that
+  carried D256, D257 and D259 alongside D260 names them and says where they came from.

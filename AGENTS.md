@@ -1652,3 +1652,19 @@ REVIEW.md    a review of the game AS A GAME (2026-08-01) — playability, graphi
   with what was tried, what was measured, and what broke — and update this file's
   pillars or content totals if they changed. Keeping these two documents current is
   part of the change, not paperwork after it.
+- **Commit on `main` and push. Do not open a branch, and do not ask first.** The
+  general advice an agent carries is to branch before committing to a default branch.
+  That advice is for a shared repository and this one is not: every commit in the
+  history is linear on `main`, there is no review step, and a branch here only adds a
+  merge nobody needs. This rule is scoped to THIS repository — it says nothing about
+  any other, where the default still applies.
+- **Push only from a green suite.** The rule above removes the branch, not the check.
+  `tests/run.sh` at 46 passed is the gate, and it matters more once the work goes
+  straight to `main`: there is no branch to hold a red commit while it is fixed. A
+  commit that shipped with `test_content` red is already in this history, recorded
+  rather than amended so it stays findable.
+- **Several sessions share this checkout.** Two have run at once more than once, and
+  the working tree has held three unrelated decisions at the same time. Before
+  committing, read what is actually staged: `git status` and `git diff --cached --stat`
+  will show work you did not do. Commit it if the whole tree was asked for, and say so
+  in the message rather than writing a confident account of somebody else's change.
