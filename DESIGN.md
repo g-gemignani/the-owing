@@ -263,6 +263,8 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D272** | [A green suite on a dirty tree says nothing about what was pushed](#d272--a-green-suite-on-a-dirty-tree-says-nothing-about-what-was-pushed) |
 | **D275** | [The floor becomes the unit, and depth starts buying something](#d275--the-floor-becomes-the-unit-and-depth-starts-buying-something) |
 | **D276** | [The driver took every card it was dealt, and a third of them were cards the game calls worse](#d276--the-driver-took-every-card-it-was-dealt-and-a-third-of-them-were-cards-the-game-calls-worse) |
+| **D280** | [The plan after D241, and the archetypes that cannot be played](#d280--the-plan-after-d241-and-the-archetypes-that-cannot-be-played) |
+| **D281** | [The pre-stretch works, and a shape rule is only obeyed when it comes first](#d281--the-pre-stretch-works-and-a-shape-rule-is-only-obeyed-when-it-comes-first) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -18952,3 +18954,163 @@ in AGENTS.md's own pillar — *"you commit a deck, earn cards that dilute it"*. 
 suits you deletes that. The measured fact to design against is that 21% of offers are already worth
 refusing, so the decision exists today and the player has no help making it except D270's verdict
 line.
+
+---
+
+### D280 — The plan after D241, and the archetypes that cannot be played
+
+D241 is discharged. Its five items are done or closed:
+
+| D241 item | state |
+|---|---|
+| 1. Play it before anything else | **in progress** — the player is playing, and this is where "the dungeons feel off" came from |
+| 2. Rewrite the remaining numeric relics | done, D257 |
+| 3. Re-fit the ladder | done three times over, D265, D270, D275 |
+| 4. Guarantee a decision on every floor | **closed** — 0 of 1320 sampled floors lack one, D275 |
+| 5. Art | done, D259 |
+
+There has been no written plan since, and the work has run item to item off measurements. This is
+the successor.
+
+#### What changed under the plan while it was being worked
+
+The project now has `cap` (D266), which measures the PLAYER rather than the fight. Everything D241
+steered by was `esc`, and D265 established that `esc` reads enemy HP growth once the deck can kill
+inside the fight — five separate player-side changes left it flat at ~1.6. A plan written against
+`esc` was steering by an instrument pointed at the wrong side of the equation.
+
+The three things the player asked for this session stand as:
+
+* **A deck that grows about 5x** — partly. `cap` mean 3.50x, max 11.53x, median 2.83x. It happens,
+  and it is gated behind surviving.
+* **Fights with more turns in them** — done. 2.69 / 5.97 / 8.87 turns for normal, elite and boss,
+  against a flat 3.70 / 4.46 / 4.56 before.
+* **A death worth having** — deaths moved from fight 2.7 to 3.3 of a longer run, and **nothing has
+  been built about what a death gives you.** This is the one with no work in it.
+
+#### 1. Archetype parity, and it is the largest fault on the board
+
+Measured per build at the dungeon it is matched to:
+
+| build | ratio | completion | `cap` |
+|---|---|---|---|
+| Draw | 9.84 | 62% | 11.53x |
+| Deep (fused Lv40) | 10.44 | 62% | 2.62x |
+| Relic | 6.21 | 47% | 2.76x |
+| Mid (fused Lv15) | 6.72 | 30% | 6.49x |
+| Combo | 13.11 | 26% | 2.91x |
+| Status | 4.87 | 22% | 3.10x |
+| Thorns | 8.12 | 16% | 3.51x |
+| Vampire | 13.56 | 10% | 7.92x |
+| **Barricade** | 6.33 | **1%** | 1.30x |
+| **Exhaust** | 14.27 | **1%** | 1.11x |
+
+**Six of the ten named archetypes finish under a third of their runs, and the two worst are the
+defensive ones.** Barricade is priced at ratio 6.33, so enemies scale to it as a strong deck, and it
+finishes one run in a hundred. Exhaust carries the second-highest ratio in the game and does the
+same.
+
+Two things make this the first item rather than a tuning note.
+
+**It is a pricing failure, not a difficulty one.** `power_ratio` charges these decks for power they
+do not deliver. A deck that survives but cannot kill is priced as strong and plays as weak, and the
+`cap` column says so independently: Barricade 1.30x and Exhaust 1.11x are decks that barely grow
+across a whole run, next to Draw at 11.53x.
+
+**D275 made it worse and the measurement is the admission.** Longer fights favour killing over
+surviving: a boss at 8.87 turns with `ESCALATION_PER_TURN` compounding punishes a deck that cannot
+end it. Half the relic pool is `block_pct` and it is being bought by decks that then lose anyway.
+
+The half of the game that says "or you could defend" is currently decoration.
+
+#### 2. Death has to give something
+
+The one ask with nothing built. Deaths now land deeper, which was the prerequisite, and the run
+still ends with a subtraction and a screen.
+
+The fiction is already there and unused. The game is called The Owing, its opening wager is a debt
+(D211), and `forfeit_escrow` pays out by depth. A death that RAISES what you owe, and a next run
+that opens carrying it as both a burden and an edge, is the game's own vocabulary. Nothing about it
+needs new systems — `MetaState.take_debt` and the escrow already exist.
+
+#### 3. The median run's growth, which item 1 may already fix
+
+`cap` median 2.83x against a mean of 3.50x and a max of 11.53x. The distribution is the finding:
+six cells under 2x and three over 5x. Growth is gated behind surviving, and item 1 says a large part
+of surviving is currently "did you happen to pick a damage build". Re-measure after item 1 before
+spending anything here.
+
+#### Why this order
+
+Item 1 is first because it is the only one where the game is measurably broken rather than
+imperfect: 1% completion is not a difficulty setting. It also feeds item 3, and it is the one thing
+on this list a player can hit by accident — they pick Barricade off the build screen because the
+game offers it, and the run cannot be won.
+
+Item 2 is second because it is a feature rather than a repair, and because the thing it needed —
+deaths landing deep enough to be worth something — only arrived in D270.
+
+---
+
+### D281 — The pre-stretch works, and a shape rule is only obeyed when it comes first
+
+D268 wrote down the arithmetic and did not test it. This is the test. All four wall
+materials are painted now, and `assets/art/iso/` holds no generated file that a
+terrain still reaches.
+
+#### What was asked for, and what came back
+
+The brief is D268's, plus one sentence: **draw the courses about two and a half times
+taller than they are wide**, because a wall face is squashed 2.49x more vertically than
+horizontally and a course drawn square arrives as a letterbox.
+
+| material | seam before | seam after | mean luma | gain the installer needed |
+|---|---|---|---|---|
+| `rock_stone` | 1.34x | **1.38x** | 0.42 | 1.41x |
+| `rock_moss` | 1.33x | **1.22x** | 0.42 | 1.44x |
+| `rock_earth` | generated | **0.87x** | 0.42 | **2.35x** |
+| `rock_sand` | generated | **0.76x** | 0.42 | 1.37x |
+
+The measurement that matters is not in that table, because it is arithmetic rather than a
+number the tools print. A block drawn 64 texels wide and 160 tall arrives on a wall face
+at **32 x 32.6 screen pixels**: square, which is what the pre-stretch is for. The joints
+are drawn lines again rather than soft grooves, and `IsoRunExplored`, `IsoMoss` and
+`IsoSand` all show individual blocks.
+
+#### The shape rule was ignored exactly once, and where it sat is why
+
+`rock_sand`'s first attempt came back as **wide horizontal bricks** — the one thing the
+whole pass exists to correct. Nothing about the prompt was wrong: it carried the same
+"IMPORTANT SHAPE RULE: ... about two and a half times taller than it is wide" clause the
+three that worked carried.
+
+What differed on the re-roll, which came back correct:
+
+* The rule went **first**, before the subject, in capitals.
+* It named **the shape to avoid**: *"Do NOT draw wide horizontal bricks. Do NOT draw
+  square blocks."*
+
+That is the same finding the browser skill records for subject bleed — naming the thing
+to avoid is what does the work, and a generic instruction does not. It is worth stating
+here as well, because this was not bleed: it was a fresh chat with one prompt in it.
+
+#### `gen_iso_art.gd` had a trap in it, and it fired
+
+The file that prints each terrain's sampled ramp is the file that a painting prompt is
+written from. It is also the generator, so **a plain run overwrites every painted
+material with the computed fallback**. Running it to read the earth ramp destroyed six
+paintings; `git checkout` restored them, and the eight-file diff was the only warning.
+
+`--dry` now prints the ramps and measures **what is installed** rather than what it would
+have written. That is the more useful report anyway: the two never-painted materials
+showed a luminance spread of 0.03 against 0.12-0.16 for the six painted ones, so the flag
+also says which is which without opening a file.
+
+#### One number the daily cap is not responsible for
+
+Two generations sat on *"Creating your image"* for over twenty minutes and never landed,
+in separate chats and separate tabs. The model picker was open at the time and showed
+**3.5 Flash-Lite, 3.6 Flash and 3.1 Pro all selectable, with no greyed row and no reset
+time**, and a re-send in a fresh tab returned an image in six minutes. So the stall is not
+the image cap, and D267's note about the composer jam is one symptom of a wider
+flakiness rather than the whole of it. Budget for the re-send; do not diagnose a quota.

@@ -681,6 +681,10 @@ is left. The order below is **visible damage per image generated**, not file cou
 Roughly 110 images in all, which is five or six days of the free tier — so the ordering is
 the part of this section that matters most.
 
+**Done so far: §8c and §8d, the four wall materials (D281).** What is left, in order: the
+26 dressing drawings (§8a), the 30 power sigils (§8b), the 38 relic icons (§8e), and two
+single files (§8f).
+
 **Read the numbers, not the adjectives.** Two measurements decide whether a set belongs
 to this game, and both come off `tools/` scripts rather than off an opinion:
 
@@ -759,9 +763,25 @@ Ask for painted objects rather than symbols — the thing the power IS, drawn th
 relic is drawn — and hold them to mean 0.30 with a 2-3px ink outline. Thirty images, and
 they can go four or six to a sheet.
 
-### 8c — The four wall materials  ·  the ink cannot survive the projection
+### 8c — The four wall materials  ·  DONE (D281)
 
-**This is arithmetic, and it is the reason the walls look soft while the floor looks
+All four are painted and installed. The arithmetic below is kept because it is the brief
+for any wall material asked for after this one, and because the pre-stretch it argues for
+is the only reason the joints are drawn lines again.
+
+| material | seam | mean luma | note |
+|---|---|---|---|
+| `rock_stone` | 1.38x | 0.42 | replaces a painting whose courses were crushed |
+| `rock_moss` | 1.22x | 0.42 | grey stone, dull green lichen out of the joints |
+| `rock_earth` | 0.87x | 0.42 | dug soil, embedded stones, was never painted |
+| `rock_sand` | 0.76x | 0.42 | drowned cut stone, was never painted |
+
+**Put the shape rule FIRST and name the shape to avoid.** `rock_sand`'s first attempt came
+back as wide horizontal bricks with the same rule buried mid-paragraph. What worked:
+*"EVERY BLOCK IS A TALL PORTRAIT RECTANGLE STANDING ON END ... Do NOT draw wide horizontal
+bricks. Do NOT draw square blocks."*
+
+**This is arithmetic, and it is the reason the walls looked soft while the floor looked
 painted.** With `TILE_W` 116, `TILE_H` 58 and `WALL_LIFT` 0.9:
 
 | surface | screen size | texels shown | texels per pixel |
@@ -787,15 +807,18 @@ A second, smaller disagreement rides along: the block's **top** face takes the g
 a cap of flagstones is not a course of masonry, and drawing it as one is arguably the more
 correct answer — or bring the two numbers together.
 
-Re-roll all four with that brief: `rock_stone`, `rock_moss`, and the two that were never
-painted at all —
+The wall CAP is still open and is the one thing left in this section. It is recorded above
+rather than fixed.
 
-### 8d — `rock_earth` and `rock_sand`  ·  never painted
+### 8d — `rock_earth` and `rock_sand`  ·  DONE (D281)
 
-Still the generated noise, because the daily image cap closed before they were reached.
-The Warrens is where it shows: a painted floor under flat walls, and it is the one screen
-in the four terrains that still looks unfinished. Install with `--luma=0.42`, which is
-what `TINT_WALL_TOP` / `_R` / `_L` were tuned against.
+Both were the generated noise, because the earlier batch stopped before it reached them.
+The Warrens was where it showed: a painted floor under a flat wall. Both are painted now,
+installed at `--luma=0.42`, which is what `TINT_WALL_TOP` / `_R` / `_L` were tuned against.
+
+**Read a terrain's ramp with `--dry`.** `tools/gen_iso_art.gd` prints the sampled palette
+AND writes the generated materials, so a plain run overwrites the paintings with the
+fallback. The flag prints the ramps and measures what is installed instead.
 
 ### 8e — The 38 relic icons  ·  right brush, wrong value
 
