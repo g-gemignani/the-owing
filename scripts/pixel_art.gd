@@ -619,6 +619,42 @@ const BATTLE_ART_DIR := "res://assets/art/"
 ## archetype reshuffled everyone downstream of it (D89).
 const ENEMY_ART_DIR := "res://assets/art/enemies/"
 
+## The file stem for one of `Balance.ISO_PROPS`, derived from its `name` (D282).
+##
+## **One derivation, in one place, on purpose.** `iso_run.gd` has to know which file to
+## load and `tools/art_manifest.gd` has to know which file to ask for, and if those two
+## spell the rule separately they drift the day somebody renames a prop — the D34 trap, and
+## the same shape that briefed twenty-six files for traversal models that had been deleted
+## (D111). Both call this.
+##
+## It lives here rather than beside the table in `Balance` because this file already owns
+## "where art lives and what it is called" for the plates, the scenes and the zones. The
+## table owns the names; this owns the filenames.
+##
+## The article is dropped because "an iron ring" and "iron ring" must not be two files.
+const ISO_PROP_DIR := "res://assets/art/iso/"
+static func iso_prop_id(prop_name: String) -> String:
+	var s := prop_name.strip_edges().to_lower()
+	for article in ["a ", "an ", "the "]:
+		if s.begins_with(article):
+			s = s.substr(article.length())
+			break
+	var out := ""
+	for i in s.length():
+		var c := s[i]
+		out += c if (c >= "a" and c <= "z") or (c >= "0" and c <= "9") else "_"
+	return out
+
+## The painting for one named prop, or null while nobody has drawn it — in which case
+## `iso_run.gd` keeps the computed shape it has always drawn (D282).
+static func iso_prop_art(prop_name: String) -> Texture2D:
+	if prop_name == "":
+		return null
+	var p := ISO_PROP_DIR + "prop_" + iso_prop_id(prop_name) + ".png"
+	if ResourceLoader.exists(p):
+		return load(p) as Texture2D
+	return null
+
 ## Two different lines, and conflating them put the enemies at the wrong depth.
 ##
 ## `HORIZON_LINE` is where the BACK WALL meets the floor — a property of the
