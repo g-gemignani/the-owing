@@ -105,6 +105,26 @@ var last_defeat: Dictionary = {}
 ## Slot a new game is being started in, handed to the kit-choice screen.
 var pending_new_slot: int = 0
 
+## The door the last run went through, and the deck it carried (D292).
+##
+## Deliberately OUTSIDE both teardowns. `clear_run()` throws `dungeon_id` away and
+## `reset_run_progress()` throws the deck away, and by the time the Defeat screen is
+## drawn both have already run — so a retry that read the live run state would find
+## nothing. These three are written once, when a run begins, and are only ever
+## overwritten by the next run beginning.
+##
+## A LOADOUT rather than the deck itself, for the reason `build_deck` exists: the
+## cards a run holds at the end are not the cards it brought. Rewards joined them,
+## a rest may have thinned them, and a Temper raised one of them for that run only.
+## "The same deck" means the twelve you chose at the door, at the levels your
+## collection has NOW.
+var again_dungeon: String = ""
+var again_loadout: Dictionary = {}
+## Whether that run took the back door (D190). Kept because it is part of which door
+## was used, and safe to keep because the neighbour's clear that opens it is permanent
+## — the condition can only have become more true since.
+var again_deep: bool = false
+
 func _ready() -> void:
 	reset_run_progress()
 
@@ -599,6 +619,55 @@ func reset_run_progress() -> void:
 var power_offer: Array = []
 var chosen_power: String = ""
 
+## Can the last run be attempted again from here, same door and same deck (D292)?
+##
+## Three ways it can be no, and all three are states the game can actually reach:
+## no run has been played this session, the dungeon has been re-locked by an
+## Ascension, or the collection can no longer build that loadout.
+##
+## The last one is `deck_valid` and not a check of its own, because `loadout_size`
+## already clamps every entry to what is owned — a loadout that has lost copies is a
+## deck of eleven, and the size rule is the thing that has to catch it. Asking the
+## one function that owns "is this a legal deck" is also what keeps this honest when
+## `MIN_DECK_SIZE` moves, which it is about to (D293).
+func can_go_again() -> bool:
+	if again_dungeon == "" or again_loadout.is_empty():
+		return false
+	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+	if meta == null:
+		return false
+	if not meta.dungeon_unlocked(Balance.dungeon(again_dungeon)):
+		return false
+	return meta.deck_valid(again_loadout)
+
+## Start the same dungeon again with the same deck. Returns false, having changed
+## nothing, when `can_go_again()` would have said no (D292).
+##
+## What it deliberately does NOT carry over is the debt. A debt is a wager placed at
+## the door, and it costs gold the moment a run begins (D211) — so a retry that
+## re-took it would spend the player's purse on a screen whose whole promise is that
+## it saves them a walk. The grudge is the other way round and IS carried, because
+## nothing here grants it: `enter_dungeon` reads it off the place, which is where
+## D285 put it, and a place that has just killed you is exactly the subject it is
+## about.
+func go_again() -> bool:
+	if not can_go_again():
+		return false
+	var id := again_dungeon
+	var deep := again_deep
+	var loadout := again_loadout.duplicate()
+	var meta := get_node_or_null("/root/MetaState")
+	# The full opening, in the order the deck builder does it: a fresh run, then the door,
+	# then the deck. `reset_run_progress` re-reads max HP off the clears, which is the one
+	# thing about the player that a lost run can have changed.
+	reset_run_progress()
+	select_dungeon(id)
+	deep_entry = deep
+	pending_debt = false
+	enter_dungeon(meta.build_deck(loadout))
+	autosave()
+	return true
+
 func select_dungeon(id: String) -> void:
 	dungeon_id = id
 	var d := Balance.dungeon(id)
@@ -617,6 +686,15 @@ func select_dungeon(id: String) -> void:
 ## one call, and they are not wrong to.
 func enter_dungeon(deck: Array[CardData], power_id: String = "") -> void:
 	run_deck = deck
+	# What a retry would need, recorded at the one moment every run passes through (D292).
+	# Here rather than in the deck builder's Start, for the reason `clear_run` logs the depth
+	# here: this is where all the callers meet. A screen that recorded it itself would be
+	# right until the second screen learned to start a run.
+	again_dungeon = dungeon_id
+	again_deep = deep_entry
+	again_loadout = {}
+	for c in deck:
+		again_loadout[c.id] = int(again_loadout.get(c.id, 0)) + 1
 	# The offer is rolled HERE and nowhere else (D256). It used to be rolled by `select_dungeon`, and
 	# before that by the deck-builder SCREEN — which is reachable from the overworld, the pause menu
 	# and the crawl, so walking out and back in dealt three new powers (D252).

@@ -78,9 +78,54 @@ func _ready() -> void:
 	# is to say what a loss did NOT take was opening that reassurance with a zero.
 	UI.label(col, "and every relic you have ever met (%d)." % MetaState.relics_seen.size())
 	UI.spacer(col)
+
+	# The way back in, on the screen the loss is read on (D292). Without it, going again meant
+	# the overworld, the region, the door, the deck builder and the power screen — five screens
+	# and a deck to re-assemble, to attempt the thing the player is already looking at. The
+	# offer is FIRST, above the way out, because it is the one the screen is arguing for: this
+	# is the game that keeps its collection through a death, and a loss it makes cheap to
+	# answer is the point of that.
+	if GameState.can_go_again():
+		var dd := Balance.dungeon(GameState.again_dungeon)
+		UI.button(col, "Go again — %s, the same deck" % [
+			dd.name if dd != null else "the same door"], func(): _again(), 44.0)
+		# What is DIFFERENT about the attempt, said before it is taken, for the reason the
+		# boss and the aspect are named on the dungeon row (D41, D187). Two things move: the
+		# power is dealt again from three, and the place is now owed something (D285).
+		var owed: int = MetaState.grudge_on(GameState.again_dungeon)
+		if owed > 0:
+			# "it is holding N", not "N are waiting" — `Wording.count` returns the noun already
+			# inflected, so any verb after it has to agree with a number this line does not know
+			# at write time. The capture is what found it: the screen read "2 relics of yours IS
+			# waiting down there", and no assertion in the suite can see a sentence.
+			UI.label(col, "   It is owed %s. The enemies are harder for it, and it is holding %s of yours." % [
+				Wording.count(owed, "death"),
+				Wording.count(owed * Balance.GRUDGE_RELICS_PER, "relic")])
+		UI.label(col, "   No debt is taken, and the power is dealt again.")
+		# The offer's terms belong to the offer. Without this gap they sat between the two
+		# buttons at the same left edge, so the capture read them as conditions on "Back to the
+		# world" — which is the one button on this screen they say nothing about.
+		UI.spacer(col)
+
 	UI.exit_button(col, "Back to the world", func():
 		GameState.last_defeat = {}
 		UI.goto(self, "res://scenes/Overworld.tscn"))
+
+## Straight back down. `go_again` rebuilds the whole opening — a fresh run, the same door, the
+## same loadout at today's levels — and the Power Pick screen is the next step for the same
+## reason it is on the normal path (D253): the run exists and the last thing it asks is what
+## you brought to fire.
+##
+## Reported rather than swallowed if it refuses. `can_go_again` was true when the button was
+## drawn, so a false here means the state moved underneath it, and a button that silently does
+## nothing is worse than one that is not there.
+func _again() -> void:
+	if not GameState.go_again():
+		UI.goto(self, "res://scenes/Overworld.tscn")
+		return
+	GameState.last_defeat = {}
+	Audio.play("enter")
+	get_tree().change_scene_to_file("res://scenes/PowerPick.tscn")
 
 func _tier_word(tier: int) -> String:
 	match tier:

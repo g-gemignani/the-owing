@@ -525,6 +525,30 @@ func _setup(need: String, dungeon: String = "") -> void:
 				"penalty_gold": 25, "penalty_cards": ["hack"],
 				"forfeited_packs": 2,
 			}
+			# ...and a run behind it, so the retry offer is in the frame (D292). Without
+			# this the capture is of a screen that CANNOT show the new half, which is the
+			# fault D254 was written about pointing the other way: a photograph that has
+			# been set up to miss its subject reassures exactly as much as no photograph.
+			# Two deaths, so the grudge line is in shot too.
+			# The loadout is derived from what this save actually owns rather than written
+			# out, for the reason the same loop in `tests/go_again_test.gd` is: a hand-listed
+			# twelve is a deck that stops being legal the moment `MIN_DECK_SIZE` moves.
+			var legal := {}
+			var held := 0
+			for cid in MetaState.collection:
+				var take: int = mini(MetaState.owned(cid), Balance.MIN_DECK_SIZE - held)
+				if take <= 0:
+					continue
+				legal[cid] = take
+				held += take
+				if held >= Balance.MIN_DECK_SIZE:
+					break
+			GameState.select_dungeon(Balance.DUNGEONS[0])
+			GameState.enter_dungeon(MetaState.build_deck(legal))
+			MetaState.note_grudge(Balance.DUNGEONS[0])
+			MetaState.note_grudge(Balance.DUNGEONS[0])
+			GameState.reset_run_progress()
+			GameState.clear_run()
 		_:
 			GameState.pending = {"type": GameState.NodeType.COMBAT, "row": 1, "col": 0, "cleared": false}
 

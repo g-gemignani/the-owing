@@ -276,6 +276,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D290** | [Gold stops buying a power, and a place hands it over instead](#d290--gold-stops-buying-a-power-and-a-place-hands-it-over-instead) |
 | **D290b** | [The map was sorted by the label instead of by the number the label came from](#d290b--the-map-was-sorted-by-the-label-instead-of-by-the-number-the-label-came-from) |
 | **D291** | [The dungeon answers only the first ten levels of your fusing](#d291--the-dungeon-answers-only-the-first-ten-levels-of-your-fusing) |
+| **D292** | [The way back down is on the screen the loss is read on](#d292--the-way-back-down-is-on-the-screen-the-loss-is-read-on) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -20105,3 +20106,87 @@ D290 has just taken powers off gold and put them on the dungeons that hold them.
 argument from the other side: **the meta layer buys access and variety well, and buys numbers
 badly.** D291 does not reverse it. It says that a number the player did pay for has to be felt, and
 that today it is not.
+
+---
+
+### D292 — The way back down is on the screen the loss is read on
+
+Losing cost five screens. The overworld, the region, the door, the deck builder and the power
+pick, plus a deck to re-assemble, to attempt the thing the player was already looking at. The
+Defeat screen's own argument is that a death takes nothing from the collection (D231, D235) —
+and then it sent the player on a five-screen walk to act on that.
+
+There is now a **Go again** button on it: the same door, the same deck, one press.
+
+#### Where the three facts had to live
+
+Both teardowns run before the Defeat screen is drawn. `combat.gd::_lose` calls
+`reset_run_progress()` and then `clear_run()`, and between them they throw away the deck and the
+dungeon. So a retry that read the live run state would find nothing.
+
+`again_dungeon`, `again_loadout` and `again_deep` are therefore written in `enter_dungeon` — the
+one place every run opening meets, the same seam `clear_run` logs the depth at — and are touched
+by neither teardown.
+
+**A LOADOUT and not the deck**, for the reason `build_deck` exists at all. The cards a run holds
+at the end are not the cards it brought: rewards joined them, a rest may have thinned them, and a
+Temper raised one of them for that run only. "The same deck" means the twelve you chose at the
+door, at the levels your collection has **now**.
+
+#### What is carried and what is not
+
+**The grudge is carried.** Nothing here grants it — `enter_dungeon` reads it off the place, which
+is where D285 put it — and a place that has just killed you is the exact subject it is about. The
+screen says so before the press, for the reason the boss and the aspect are named on the dungeon
+row (D41, D187): the enemies are harder, and a relic per death is waiting down there.
+
+**The debt is not.** A debt is a wager placed at the door and its stake leaves the purse the
+moment a run begins (D211). A retry that re-took it would spend the player's gold on a screen
+whose whole promise is that it saves them a walk.
+
+#### Only Defeat, and that is the whole of the item
+
+A boss clear does not have a screen — it goes straight to the overworld — and `Victory.tscn` is
+the end of the WORLD, where the offer is an Ascension. There is nowhere on a win to put this, and
+after a win the player usually wants a different door anyway: the one they just cleared has
+rotated its aspect and opened its debt. **The friction this removes is the friction after a
+loss**, which is the one the design is trying to make cheap.
+
+#### The capture found what the suite could not
+
+Every assertion passed on a screen that read *"2 relics of yours **is** waiting down there"*.
+`Wording.count` returns the noun already inflected, so any verb after it has to agree with a
+number the line does not know when it is written. The sentence is now *"it is holding 2 relics of
+yours"*, which works at one and at two.
+
+The same capture found the offer's two terms sitting **between** the buttons at the same left
+edge, so they read as conditions on "Back to the world" — the one button on the screen they say
+nothing about. A spacer closes the group. **D254 again: no assertion in the suite can see a
+sentence or a grouping.** The screenshot fixture was extended to open a run first, because a
+capture set up to miss its subject reassures exactly as much as no capture.
+
+#### The guard, and the four mutations that prove it
+
+`tests/GoAgainTest.tscn` is a SCENE test, not by preference — `go_again` reaches MetaState through
+`/root/MetaState` for the door, the loadout, the grudge relics and the power offer, and a
+`--script` run has no autoloads.
+
+Its load-bearing assertion is that `can_go_again()` is still true **after both teardowns**, in the
+order `_lose` runs them. A test that recorded the three fields and read them straight back would
+pass on a build where the button never appears.
+
+Checked by breaking it four ways, per D47 and D99:
+
+| broken | caught by |
+|---|---|
+| stop recording the door | 6 assertions, including the button being absent |
+| let the retry re-take the debt | `the retry is still carrying a pending debt` |
+| stop checking the unlock gate | `a re-locked dungeon is still offered` |
+| remove the button from the screen | `no Go again button when one is available` |
+
+**The locked-dungeon assertion was vacuous when first written**, and that is worth recording. On a
+fresh save the Maw is locked already, so "a locked dungeon is refused" passed against a
+`can_go_again` that had never learned to ask. It opens every other door first and asserts the Maw
+IS offered, then strips the clears **and** the depth records — both, because a gate takes depth in
+places that beat you as well as clears (D178). D86's trap, walked into and backed out of inside
+one suite.

@@ -153,7 +153,7 @@ screen, D253/D256 — six owned from the start and two handed over per dungeon b
 D290) · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 45 errands and 16 debts over 44 counters · 3 aspects ·
-24 sound effects · 5 score tracks · 46 test suites. All content is `.tres` data
+24 sound effects · 5 score tracks · 47 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
 **Art: 414 files wanted, 414 present, 0 to provide — the list is CLOSED again (D259).**
