@@ -681,9 +681,16 @@ is left. The order below is **visible damage per image generated**, not file cou
 Roughly 110 images in all, which is five or six days of the free tier — so the ordering is
 the part of this section that matters most.
 
-**Done so far: the four wall materials (§8c, §8d — D281) and the sixteen dressing props
-(§8a — D286).** What is left, in order: the ten remaining dressing drawings (§8a), the 30
-power sigils (§8b), the 38 relic icons (§8e), and two single files (§8f).
+**Done so far: the four wall materials (§8c, §8d — D281), the sixteen dressing props (§8a —
+D286) and the four landmark caps (§8a — D296).** What is left, in order: **the 30 power
+sigils (§8b)**, the 38 relic icons (§8e), two single files (§8f), and the six remaining
+dressing drawings (§8a).
+
+The sigils moved to the front once the props landed, and the reason is arithmetic rather
+than taste. They are thirty files on a screen the player opens every run, they measure
+0.49 against the bible's 0.30 with 13.1% ink against 31.4%, and they are the only set left
+that is **not painted at all**. The six dressing drawings went to the back for the mirror
+of that reason: one drawing each, on one tile, seen when the floor happens to lay one out.
 
 **Read the numbers, not the adjectives.** Two measurements decide whether a set belongs
 to this game, and both come off `tools/` scripts rather than off an opinion:
@@ -703,20 +710,24 @@ rather than paintings, and no measurement is needed to see it.
 
 ---
 
-### 8a — The dressing  ·  the 16 PROPS are DONE (D286); 10 single drawings remain
+### 8a — The dressing  ·  16 PROPS (D286) and 4 LANDMARKS (D296) are DONE; 6 drawings remain
 
-The sixteen named props are painted and installed, off one sheet, and the manifest reads
-**430 wanted, 430 present, 0 to provide** (D286). `PROP_WALL` came down from 0.52 to 0.30
-with them: a constant chosen against a computed placeholder is a guess about art that does
-not exist yet, and one capture was enough to see it.
+Twenty of the twenty-six are painted. The manifest reads **434 wanted, 434 present, 0 to
+provide**. `PROP_WALL` split into a ring and a drape constant along the way (D288): a size
+constant chosen against a computed placeholder is a guess about art that does not exist
+yet, and one capture was enough to see it.
 
-**What is left in this section is the ten drawings that have no table of names to key on**
-— the four landmark caps, the mark on a pushable wall, the back door, the shrine, the
-ledger, the way down and the key on the floor. Briefing them means inventing the filenames
-first, which is why D282 left them off.
+**Six drawings are left, and they are the ones with no id table to key on** — the mark on a
+pushable wall, the back door, the shrine, the ledger, the way down, and the key lying on
+the floor. Briefing them means choosing the filenames first, which is why D282 left them
+off. The landmarks looked like the same problem and were not: `Balance.ISO_LANDMARKS`
+already named them (D296), so **check for a table before assuming there is none.**
+
+These six are also the least of it. They are one drawing each, on one tile, where §8b is
+thirty files on a screen the player opens every run.
 
 The rest of this section is the argument that put the props on the list. It is kept because
-those ten are still in it.
+those six are still in it.
 
 **This was the largest item on the list and it was the last one found.** Everything that
 varies one floor from the next — the clutter on the ground, the things nailed to the walls,
