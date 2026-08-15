@@ -78,11 +78,11 @@ var reward_box: VBoxContainer
 ## The three relics an elite is offering, if any (D234/D238). Held on the node rather than passed,
 ## because the reward panel is built in one place and read in another.
 var relic_offer: Array = []
-## The three cards on offer, held for exactly the same reason the relics are — and it took a bug to
-## notice that they were not. `_offer_rewards` is called twice at an elite, once to draw the panel
+## The three BUNDLES on offer (D296), held for exactly the same reason the relics are — and it took
+## a bug to notice that they were not. `_offer_rewards` is called twice at an elite, once to draw
 ## and once after a relic is taken, and the cards were rolled INSIDE it: so taking a relic dealt a
 ## new hand of three cards underneath. See D271.
-var card_offer: Array[CardData] = []
+var bundle_offer: Array = []
 var end_btn: Button
 var power_btn: Button
 var menu_btn: Button
@@ -2196,7 +2196,9 @@ func _win() -> void:
 	# Rolled HERE, once, beside the relic offer this function already rolls once (D271). Both are
 	# the same kind of thing — what this fight is offering — and both are decided when the fight
 	# ends, not when the panel happens to be drawn.
-	card_offer = _roll_rewards(Balance.REWARD_CARD_OFFERS)
+	bundle_offer = Balance.reward_bundles(GameState.dungeon_id, GameState.run_deck, tier,
+		GameState.dungeon if MetaState.times_cleared(GameState.dungeon_id) == 0
+		else maxi(1, GameState.dungeon - 2))
 	_offer_rewards()
 
 ## Build the reward panel: the relic offer if there is one, then the three cards, then the skip.
@@ -2248,43 +2250,57 @@ func _offer_rewards() -> void:
 	# permanent side was not stated anywhere — so "is this a card I have never owned" and
 	# "is this the last copy before a level" were questions the player had to leave the
 	# fight to answer, which in practice meant not answering them.
-	for card in card_offer:
+	for bundle in bundle_offer:
 		var col := VBoxContainer.new()
 		col.add_theme_constant_override("separation", UITheme.sep(4))
-		# The card holder is SHRINK_CENTER and carries its own minimum size, so the column
-		# is exactly as wide as the card and the note under it wraps to that width.
 		col.custom_minimum_size.x = rw
 		row.add_child(col)
-		var standing := UI.collection_standing(card)
-		UI.card_button(col, card, Vector2(rw, rbase.y), _on_reward_picked.bind(card),
-			"", null, String(standing["tip"]))
-		UI.collection_line(col, standing)
-		# Whether THIS card is better or worse than the deck taking it (D270). The dilution line
-		# below prices taking *a* card and says the same thing about the best offer and the worst;
-		# this is the half that was missing, and D266 measured runs that ended weaker than they
-		# started because of it.
-		var verdict := Balance.card_verdict(card, GameState.run_deck)
+		# The bundle's NAME first, because the name is the decision. Three cards laid out with no
+		# heading is three cards; "The Long Death" over the same three is a direction, and a
+		# direction is what a run is supposed to acquire.
+		var bn := UI.label(col, String(bundle.get("name", "A mixed lot")))
+		bn.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		bn.add_theme_color_override("font_color", Color(0.95, 0.87, 0.62))
+		var ids: Array = bundle.get("cards", [])
+		var cards: Array[CardData] = []
+		for cid in ids:
+			var c := _reward_face(String(cid))
+			if c != null:
+				cards.append(c)
+		# The cards stack DOWN the column rather than across, because the row is already three
+		# bundles wide and a 3x2 grid of card faces does not fit the 1280 frame at any size the
+		# text stays readable. Half height each, so a bundle occupies the same band a single
+		# card used to.
+		var ch := rbase.y * 0.62
+		for c in cards:
+			UI.card_button(col, c, Vector2(rw, ch), _on_bundle_picked.bind(bundle),
+				"", null, String(UI.collection_standing(c)["tip"]))
+		# One verdict for the WHOLE bundle, off `Balance.bundle_vs_deck` — the mean, because the
+		# bundle is taken whole and scoring it by its best card would hide the filler.
+		var verdict := Balance.bundle_verdict(cards, GameState.run_deck)
 		if verdict != "":
 			var vl := UI.label(col, verdict)
 			vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			vl.add_theme_color_override("font_color",
 				Color(0.90, 0.55, 0.45) if verdict.begins_with("WEAKER") else Color(0.62, 0.86, 0.58))
 	# What taking one COSTS. Dilution is real — a bigger deck draws each card less
 	# often — but it was invisible, so "take one of three" was an automatic click
 	# rather than a decision. Skipping is a legitimate play and should read as one.
 	var now: int = GameState.run_deck.size()
+	var take: int = Balance.REWARD_BUNDLE_CARDS
 	var cost := Label.new()
 	cost.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	cost.add_theme_color_override("font_color", Color(0.85, 0.80, 0.62))
 	cost.text = "Taking one makes your deck %d cards: you would see any given card every %.1f turns instead of %.1f." % [
-		now + 1, Balance.draw_interval(now + 1), Balance.draw_interval(now)]
+		now + take, Balance.draw_interval(now + take), Balance.draw_interval(now)]
 	reward_box.add_child(cost)
 	UI.hoverable(cost, "Every card you add makes the rest come up less often. Shops and rests can thin the deck back down.")
 
 	var skip := Button.new()
 	UITheme.style_button(skip)
 	skip.text = "Skip  —  keep the deck at %d" % now
-	skip.pressed.connect(_on_reward_picked.bind(null))
+	skip.pressed.connect(_on_bundle_picked.bind({}))
 	reward_box.add_child(skip)
 	reward_box.visible = true
 
@@ -2302,55 +2318,39 @@ func _on_relic_picked(rid: String) -> void:
 		c.queue_free()
 	_offer_rewards()
 
-## Reward offers come from the dungeon's card pool (so exclusives are real), with
-## rarity weights tilted by the dungeon's difficulty (harder place, better loot).
-func _roll_rewards(n: int) -> Array[CardData]:
-	var out: Array[CardData] = []
-	var pool: Array = GameState.card_pool()
-	if pool.is_empty():
-		pool = DEFAULT_POOL.duplicate()
-	pool = pool.filter(func(id): return MetaState.CATALOG.has(id))
-	# rarity tilts back toward commons on ground already taken, for the same reason
-	var wtbl: Array = Balance.reward_weights(tier,
-		GameState.dungeon if MetaState.times_cleared(GameState.dungeon_id) == 0
-		else maxi(1, GameState.dungeon - 2))
-	for i in n:
-		if pool.is_empty():
-			break
-		var loaded: Array = []
-		var weights: Array = []
-		var total := 0
-		for id in pool:
-			# Balance.card, not load(): the same shared instance, without paying
-			# ResourceLoader's path resolution nineteen times per reward screen
-			var c := Balance.card(id)
-			loaded.append(c)
-			var w: int = wtbl[clampi(c.rarity, 0, wtbl.size() - 1)]
-			weights.append(w)
-			total += w
-		var r := randi() % maxi(1, total)
-		var pick := 0
-		for j in weights.size():
-			r -= int(weights[j])
-			if r < 0:
-				pick = j
-				break
-		# Quoted at the level the COLLECTION already holds this card at, because that is
-		# the level it joins the run deck at (`GameState.earn_card`). The catalogue
-		# resource is the level-1 one, so a Bash fused to Lv4 was offered as "Deals 8"
-		# and then dealt 14 the moment it was taken — D50's drift, on the one surface
-		# where the player is choosing between cards on those very numbers.
-		var offer := (loaded[pick] as CardData).duplicate() as CardData
-		if MetaState.collection.has(offer.id):
-			offer.level = int(MetaState.collection[offer.id]["level"])
-		out.append(offer)
-		pool.remove_at(pick)
-	return out
+## One offered card, at the level the COLLECTION already holds it at (D296).
+##
+## The level is the whole reason this function exists rather than `Balance.card(id)` at the call
+## site. `GameState.earn_card` joins the run deck at the collection's level, and the catalogue
+## resource is the level-1 one — so a Bash fused to Lv4 was offered as "Deals 8" and dealt 14 the
+## moment it was taken. D50's drift, on the one surface where the player is choosing between cards
+## on those very numbers.
+##
+## The ROLL that used to live here is `Balance.reward_bundles` now, because the simulator has to
+## deal the same offer the screen does and two copies of that rule would not stay equal.
+func _reward_face(id: String) -> CardData:
+	if not MetaState.CATALOG.has(id):
+		return null
+	var base := Balance.card(id)
+	if base == null:
+		return null
+	var offer := base.duplicate() as CardData
+	if MetaState.collection.has(id):
+		offer.level = int(MetaState.collection[id]["level"])
+	return offer
 
-func _on_reward_picked(card) -> void:
-	if card != null:
+## A whole bundle taken, or `{}` for Skip (D296).
+func _on_bundle_picked(bundle: Dictionary) -> void:
+	for cid in bundle.get("cards", []):
 		# usable immediately, permanent only if this dungeon is completed (D20)
-		GameState.earn_card(card.id)
+		GameState.earn_card(String(cid))
+	_after_reward()
+
+## Everything a resolved reward does, whichever surface resolved it. Split out when the card
+## reward became a bundle (D296): the boss's whole commit sequence lived inside the single-card
+## handler — the pack, the escrow, the aspect bonus, the rope roll and `mark_cleared` — so a
+## second entry point would have been a second copy of the one place a dungeon is marked cleared.
+func _after_reward() -> void:
 	GameState.clear_node(GameState.pending)
 	GameState.flush_save()   # a resolved encounter is worth writing at once
 	if tier == Balance.Tier.BOSS:

@@ -281,6 +281,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D294** | [The magenta the de-keyer said was gone, on thirteen of thirty-five fights](#d294--the-magenta-the-de-keyer-said-was-gone-on-thirteen-of-thirty-five-fights) |
 | **D295** | [A boss bends a rule of the card game, and three of the first seven were cliffs](#d295--a-boss-bends-a-rule-of-the-card-game-and-three-of-the-first-seven-were-cliffs) |
 | **D296** | [The landmarks had a table of names all along, one screen below the one D282 read](#d296--the-landmarks-had-a-table-of-names-all-along-one-screen-below-the-one-d282-read) |
+| **D296** | [The reward becomes a direction, and a level-1 face nearly hid it](#d296--the-reward-becomes-a-direction-and-a-level-1-face-nearly-hid-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -20574,3 +20575,94 @@ and one account driven by two browsers at once is the one new variable.
 **The state this leaves behind is deliberate and it is the D282 shape.** The list asks for
 four files, `iso_run.gd` loads them if they exist, and the computed marks are still drawn
 until they do. A checkout today looks exactly as it did yesterday.
+
+---
+
+### D296 — The reward becomes a direction, and a level-1 face nearly hid it
+
+A fight paid **one card of three**. One card in a fourteen-card deck is a seven percent change
+the player cannot feel, and over eight won fights it is eight cards picked one at a time,
+pointing eight different ways. The deck that fought the boss was the deck that walked in, plus
+noise.
+
+A fight now pays **one BUNDLE of three**: two cards, named after the build they come from — *The
+Long Death*, *The Burnt Hand*, *The Quick Hand*. Taking one is taking a direction.
+
+Measured, one loose card against a themed pair:
+
+| | before | after |
+|---|---|---|
+| `cap` median | 1.25x | **1.80x** |
+| `cap` mean | 1.31x | **1.94x** |
+| `cap` max | 2.72x | **4.18x** |
+| RUN completion | — | **−0.1 points over 36 cells** |
+
+**The deck grows half again as much and the game does not get easier**, which is the shape D231
+asked for and D276 last found at a fifth of the size. The two cells that moved most are the ones
+that needed it: Status at the Ember Road 11% → 37%, Mid 78% → 89%.
+
+#### The bundles are the builds, and that is not a new vocabulary
+
+`resources/builds/*.tres` already held eight named archetypes with a card list each, already
+shown to the player, and `test_build.gd` already enforced that their cards are **scattered across
+zones** (D96). So a bundle is a build intersected with what this dungeon can drop, and the rule
+that stops a bundle turning a dungeon into a place you farm one archetype at was written years
+before the bundle was.
+
+Builds are weighted by how much of one the deck already holds, +1 so a build the deck has nothing
+of stays reachable. A weight of zero would make the first bundle taken decide every bundle after
+it — a run with one decision in it rather than eight.
+
+#### The thing that nearly shipped, and the count that caught it
+
+The first build measured **`skipped 88%`** — the driver refusing seven bundles in eight, against
+10% for the single card it replaced. `cap` went DOWN. Everything about the report looked like a
+feature that did not work.
+
+Two wrong diagnoses came first, and both were disproved by measurement rather than argument:
+
+* *"a bundle of two dilutes more than one card."* Set the bundle to ONE and the skip rate was
+  still 80%. Not the size.
+* *"the build lists ignore the rarity tilt."* Routed the pick through the same weighted roll the
+  loose card uses; still 85%. Not the pool.
+
+It was `bundle_vs_deck` looking its cards up with `Balance.card(id)`, **which hands back the
+level-1 catalogue instance**. Every bundle was being scored as level-1 cards against a deck fused
+to Lv15. The screen was doing it too: the player was told every single offer was *"WEAKER than
+what you hold"*. D50's drift, on the one surface where the player chooses between cards on those
+very numbers — and `_roll_rewards` had carried the fix for it since D50, which moved into
+`combat._reward_face` here **without the scoring moving with it**.
+
+Scoring the faces rather than the ids: **1% skipped, 56% chose past the first**.
+
+**A number that is right in the panel and wrong in the score is a decision the player and the tool
+make differently, and nothing about an 85% skip rate looks like a bug in a report.** It is only
+there at all because AGENTS.md says to count how often a rule fires.
+
+#### The cap on what you may bring, and the instrument that had to move with it
+
+`MAX_DECK_SIZE` was 20 against a floor of 12: eight cards of toolbox chosen out of a hundred
+owned, so the archetype was decided at the deck builder. That is what D280's table is a picture
+of — Combo clearing 100% of its runs at the Foundry and Status 4%, at the same card levels.
+
+It is **14** now. Two cards of slack over the floor is still a real bring-in decision; the rest of
+the deck comes from the dungeon. `MIN_DECK_SIZE` is untouched, so D249 holds.
+
+**And the cap does not reach the simulator at all** — profiles are built from literals and never
+pass `deck_valid` — so its whole effect there was that seventeen of nineteen profiles became
+decks the deck builder would now refuse. D208's question, exactly: *is this profile a player the
+game can produce?* They are trimmed to 14 by cutting the generic starter cards first and never
+the archetype's own, and `tests/test_balance.gd` now parses the profile literals and fails on any
+that goes over. That guard asserts what it FOUND as well as what it checked, because a regex that
+silently matches nothing is D86's vacuous invariant.
+
+#### Two faults only a capture could find
+
+**Kick was on the screen twice.** Builds overlap on purpose, so deduping by build put the same
+card in two of the three bundles and made a three-way choice read as narrower than it was.
+`test_build.gd` rolls every dungeon 200 times and fails on a repeat now — and on a dungeon that
+cannot lay out three bundles, which is not free: the Drowned Market can fill exactly two from
+builds, so the fallback loose bundle is load-bearing rather than defensive.
+
+The other is why the capture was taken at all. Nothing in 48 suites can see that three columns of
+card faces fit a 1280 frame, or that the bundle's NAME is what the eye lands on first.

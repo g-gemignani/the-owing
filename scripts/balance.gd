@@ -288,7 +288,25 @@ const STARTER_KIT_SIZE := 12
 ## floor there is one legal deck and nothing to fuse. Both open as soon as the first
 ## reward lands, because rewards grow the collection mid-run (D1).
 const MIN_DECK_SIZE := STARTER_KIT_SIZE
-const MAX_DECK_SIZE := 20
+## Largest deck you may BRING. 20 until D296.
+##
+## The number is a claim about who builds the deck. At 20 against a floor of 12 the player
+## assembled eight cards of toolbox out of a hundred owned, and the run then added six or eight
+## more one at a time — so the deck that fought the boss was mostly the deck that walked in, and
+## its archetype was decided at the deck builder. That is what D280's table is a picture of:
+## Combo clears 100% of its runs at the Foundry and Status 4%, at the same card levels, because
+## the choice that decided both was made before the run started. D231 already names this as the
+## thing to avoid — *"both mean the outcome was decided before the run started"*.
+##
+## 14 leaves the bring-in decision alive (two cards of slack over the floor, which is a lean or a
+## tech card) and hands the rest of the deck to the dungeon: with `REWARD_BUNDLE_CARDS` at 2 and
+## six to nine fights won, a run now ends around 26 cards of which half were found. Neither
+## Hearthstone mode this is shaped after lets you bring more — Dungeon Run hands you a fixed ten
+## and Duels caps the starter at fifteen and bans the strong cards.
+##
+## `MIN_DECK_SIZE` is untouched, so D249 still holds: the deck you are handed is the smallest one
+## the game accepts, and no deck is ever weaker than the one it taught you with.
+const MAX_DECK_SIZE := 14
 ## How many loadouts may be saved at once (D212). Not a storage bound — the save file
 ## would not notice a hundred of them, and the picker they live in is one fixed-width
 ## control however many there are. It is a bound on the LIST you read: a saved deck
@@ -3717,6 +3735,181 @@ const SHOP_CARD_OFFERS := 3
 ## driver has to lay out the same number of cards the screen does, or it is choosing from a
 ## different offer than the player sees.
 const REWARD_CARD_OFFERS := 3
+
+## How many cards one reward bundle holds (D296).
+##
+## The reward was ONE card of three, and one card in a sixteen-card deck is a six percent change
+## the player cannot feel. Over eight won fights that is eight cards picked one at a time,
+## pointing eight different ways, and the deck a run ends with is the deck it started with plus
+## noise. What makes a Dungeon Run deck become a THING by the last boss is that each win hands
+## over a themed handful, so eight wins point mostly one way.
+##
+## Two and not three, because the offers are cumulative and the deck is small: at three, eight
+## wins add 24 cards to a deck of 12 and `draw_interval` doubles, which spends the whole gain
+## on dilution. Two is measured below.
+const REWARD_BUNDLE_CARDS := 2
+
+## The bundles a fight is offering: `[{"build": id, "name": String, "cards": [ids]}, ...]`.
+##
+## HERE and not in `combat.gd`, because the simulator has to lay out the same offer the screen
+## does or it is measuring a different game — the D72/D74/D77 trap, and the one D276 found still
+## open on this exact surface. `_roll_rewards` and `sim_balance._reward_card` were already two
+## copies of "roll a reward card" that happened to agree; a bundle has enough rules in it that
+## two copies would not.
+##
+## A bundle is a **build** (`resources/builds/*.tres`) intersected with what this dungeon can
+## drop. That is not a new vocabulary: the eight builds already exist, already have names the
+## player is shown, and `test_build.gd` already enforces that their cards are SCATTERED across
+## zones (D96) — which is what stops a bundle turning a dungeon into a place you farm one
+## archetype at. A dungeon offers what it holds of a build and no more.
+##
+## Builds are weighted by how much of them the deck already holds, so the offer follows the run
+## rather than starting it somewhere else. That is the snowball on purpose: a deck that has begun
+## to be about poison should be offered more poison, because a run that ends pointing one way is
+## the entire thing this replaces the single card to buy.
+##
+## **The last offer falls back to a loose bundle** — cards rolled from the pool by rarity, the way
+## the single card always was. Measured, every dungeon can fill at least two build bundles and the
+## Drowned Market can fill exactly two, so without a fallback the deepest dungeons would quietly
+## lay out fewer offers than the shallow ones and nothing would say so.
+static func reward_bundles(dungeon_id: String, deck: Array, tier: int, difficulty: int,
+		n: int = REWARD_CARD_OFFERS, size: int = REWARD_BUNDLE_CARDS) -> Array:
+	var pool: Array = card_pool_for(dungeon_id)
+	if pool.is_empty():
+		return []
+	# What the deck already holds of each build, which is what the weighting reads.
+	var held := {}
+	for c in deck:
+		if c != null:
+			held[c.id] = int(held.get(c.id, 0)) + 1
+	var cands: Array = []
+	for b in all_builds():
+		var here: Array = []
+		var affinity := 0
+		for cid in b.cards:
+			if cid in pool:
+				here.append(cid)
+			if held.has(cid):
+				affinity += int(held[cid])
+		if here.size() >= size:
+			# +1 so a build the deck holds nothing of is still reachable. A weight of zero would
+			# make the first bundle taken decide every bundle after it, which is a run that has
+			# one decision in it rather than eight.
+			cands.append({"build": b.id, "name": b.name, "here": here, "w": affinity + 1})
+	var out: Array = []
+	# Cards already laid out, across ALL the bundles. Builds overlap on purpose — Kick is in both
+	# the Quick Hand and the Burnt Hand — so deduping by BUILD alone put the same card on the
+	# screen twice, which makes a three-way choice read as narrower than it is. Found in a
+	# capture, because nothing about a repeated id is wrong enough to assert on.
+	var taken := {}
+	while out.size() < n and not cands.is_empty():
+		var total := 0
+		for c in cands:
+			total += int(c["w"])
+		var r := randi() % maxi(1, total)
+		var pick := 0
+		for i in cands.size():
+			r -= int(cands[i]["w"])
+			if r < 0:
+				pick = i
+				break
+		var chosen: Dictionary = cands[pick]
+		# Without replacement: two bundles of the same build would be one offer wearing two
+		# buttons, and the whole point of three is three directions.
+		cands.remove_at(pick)
+		# Rolled through `_loose_bundle` over the build's own cards, so a bundle is "this build,
+		# dealt the way a reward is dealt" and not "any two cards of this build".
+		#
+		# The first version shuffled and took the first `size`, and the driver then SKIPPED 83% of
+		# what it was offered — against 10% for the single card it replaced. Bundle size was not
+		# the cause and the measurement said so: at a bundle of ONE the skip rate was still 80%.
+		# What the shuffle had thrown away was `reward_weights`, the rarity tilt that makes a
+		# reward better in a deeper dungeon (D296), so every bundle was dealing a build's cheap
+		# enablers as often as its payoffs. **An even roll over a curated list is not a neutral
+		# choice — it is a different, flatter reward table**, and the only thing that said so was
+		# a firing count the report prints for exactly this reason.
+		var free: Array = (chosen["here"] as Array).filter(func(c): return not taken.has(c))
+		if free.size() < size:
+			continue   # what is left of this build is already on the screen
+		var picked: Array = _loose_bundle(free, tier, difficulty, size)
+		for cid in picked:
+			taken[cid] = true
+		out.append({"build": String(chosen["build"]), "name": String(chosen["name"]),
+			"cards": picked})
+	# ...and top up with loose bundles where the dungeon has too few builds to fill three.
+	while out.size() < n:
+		var free_pool: Array = pool.filter(func(c): return not taken.has(c))
+		var loose := _loose_bundle(free_pool, tier, difficulty, size)
+		if loose.size() < size:
+			break
+		for cid in loose:
+			taken[cid] = true
+		out.append({"build": "", "name": "A mixed lot", "cards": loose})
+	return out
+
+## `size` cards rolled from `pool` by rarity weight, without replacement. The old single-card
+## roll, kept as the fallback and as the one place that weighting still lives.
+static func _loose_bundle(pool: Array, tier: int, difficulty: int, size: int) -> Array:
+	var wtbl: Array = reward_weights(tier, difficulty)
+	var left: Array = pool.duplicate()
+	var out: Array = []
+	while out.size() < size and not left.is_empty():
+		var weights: Array = []
+		var total := 0
+		for id in left:
+			var c := card(String(id))
+			var w: int = wtbl[clampi(c.rarity, 0, wtbl.size() - 1)] if c != null else 1
+			weights.append(w)
+			total += w
+		var r := randi() % maxi(1, total)
+		var pick := 0
+		for i in weights.size():
+			r -= int(weights[i])
+			if r < 0:
+				pick = i
+				break
+		out.append(String(left[pick]))
+		left.remove_at(pick)
+	return out
+
+## The reward screen's verdict on a whole bundle, in the same bands `card_verdict` uses.
+##
+## The SAME thresholds and not a second pair, for the reason `card_verdict` has one owner: the
+## driver skips on the screen's lower band (`sim_balance.CARD_SKIP_BELOW`), so a bundle band
+## invented here would let the tool and the screen disagree about what "worse than what you hold"
+## means — and D276 measured that exact gap costing 0.20x of `cap`.
+static func bundle_verdict(faces: Array, deck: Array) -> String:
+	var r := bundle_vs_deck(faces, deck)
+	if r >= 1.25:
+		return "Stronger than what you hold."
+	if r <= 0.80:
+		return "WEAKER than what you hold — taking it thins your draw."
+	return ""
+
+## What a whole bundle is worth against the deck taking it: the MEAN of its cards' `card_vs_deck`.
+##
+## The mean and not the best card, because the bundle is taken whole — scoring it by its strongest
+## member would tell the player that a bundle of one excellent card and one filler is as good as
+## two excellent cards, which is the dilution the verdict line exists to warn about.
+## Takes the FACES — `CardData` at the level each card will join the deck at — and not the
+## bundle's ids. The first version took ids and looked them up with `card()`, which hands back the
+## level-1 catalogue instance: so every bundle was scored as a level-1 card against a deck fused
+## to Lv15, the screen told the player every offer was "WEAKER than what you hold", and the
+## simulator's driver skipped **85% of what it was dealt** against 10% for the single card it
+## replaced. D50's drift, on the one surface where the player is choosing between cards on those
+## very numbers — the same fault `_roll_rewards` had been carrying its own fix for since D50, and
+## which was moved into `combat._reward_face` here without the scoring being moved with it.
+##
+## **A number that is right in the panel and wrong in the score is a decision the player and the
+## tool make differently**, and only a firing count could see it: nothing about an 85% skip rate
+## looks like a bug in a report.
+static func bundle_vs_deck(faces: Array, deck: Array) -> float:
+	if faces.is_empty():
+		return 0.0
+	var sum := 0.0
+	for c in faces:
+		sum += card_vs_deck(c, deck)
+	return sum / float(faces.size())
 ## How many powers the door deals at the start of a run, of which the player takes one (D245).
 ##
 ## A SEPARATE constant from the card one above even though both are 3 today (D289). They answer

@@ -474,6 +474,33 @@ moves.
   (D38, D41). Block cannot be a complete answer at depth — piercing damage keeps
   defensive play honest (D45).
 
+- **A reward is a direction, not a card (D296).** A fight paid one card of three, which in a
+  fourteen-card deck is a change the player cannot feel — eight won fights meant eight cards
+  picked one at a time, pointing eight ways. It pays one BUNDLE of three now: two cards named
+  after the build they come from, so eight wins point mostly one way. The bundles ARE the eight
+  builds (`resources/builds/`), intersected with what this dungeon can drop, so `test_build.gd`'s
+  old rule that a build's cards are scattered across zones (D96) is already the rule that stops a
+  bundle turning a dungeon into a farm. Measured: `cap` median **1.25x to 1.80x** with completion
+  unmoved at −0.1 points over 36 cells — the deck grows half again as much and the game does not
+  get easier, which is D231's shape at four times D276's size.
+
+  **And what you may BRING is 14, down from 20.** Eight cards of toolbox out of a hundred owned is
+  an archetype decided at the deck builder, which is what D280's table is a picture of. The cap
+  never reaches the simulator — profiles are literals and never pass `deck_valid` — so its whole
+  effect there was that seventeen of nineteen profiles became decks the game would refuse. They
+  are trimmed, and `test_balance` parses the literals and fails on any that goes over (D208's
+  question, made mechanical).
+
+  **The first build measured as a failure and it was a level-1 face.** `bundle_vs_deck` looked its
+  cards up with `Balance.card(id)`, which returns the level-1 catalogue instance, so every bundle
+  was scored as level-1 against a Lv15 deck: the driver skipped **88%** and the screen told the
+  player every offer was "WEAKER than what you hold". Two other diagnoses were tried and
+  disproved by measurement first (a bundle of ONE still skipped 80%, so not the size; a
+  rarity-weighted roll still skipped 85%, so not the pool). D50's drift, and `_roll_rewards` had
+  carried the fix for it since D50 — it moved into `combat._reward_face` without the scoring
+  moving with it. **A number that is right in the panel and wrong in the score is a decision the
+  player and the tool make differently**, and only a firing count could see it.
+
 - **A run is a risk with an arc.** You commit a deck, earn cards that dilute it, and
   can thin or sharpen it at shops and rests (D46). Death forfeits the run's takings;
   the meta layer is what survives.

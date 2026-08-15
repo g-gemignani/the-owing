@@ -190,9 +190,46 @@ func _init() -> void:
 		# hold". Asserting the CALL rather than the function, because `_choose_card` present in the
 		# file while the call site still asks `_reward_card` directly is D180's silent pass again —
 		# the fix written down and not wired up.
-		if sim.find("_choose_card(dungeon_id, reward_level, run_deck)") == -1:
+		# The call moved from `_choose_card` to `_choose_bundle` when the reward became a bundle of
+		# cards rather than one (D296). The ASSERTION is unchanged in what it is about: the driver
+		# must choose its reward against the deck that would take it. Only the name of the thing
+		# doing the choosing moved, and a guard that kept the old name would have gone quiet on the
+		# exact turn the surface it guards was rewritten — which is D88's harness selecting by name.
+		if sim.find("_choose_bundle(dungeon_id, reward_level, run_deck)") == -1:
 			fails += 1
-			print("FAIL the simulator does not choose its card reward against the run deck (D276)")
+			print("FAIL the simulator does not choose its card reward against the run deck (D276, D296)")
+		# ...and that it takes the WHOLE bundle. A driver that appended one card of the two would
+		# be measuring half a reward, and the deck-growth number is the one this change exists for.
+		if sim.find("for wc in won:") == -1:
+			fails += 1
+			print("FAIL the simulator does not take the whole bundle it chose (D296)")
+
+		# --- every profile must be a deck the game can actually be brought (D208, D296) ---
+		#
+		# D208's rule, made mechanical: *"is this profile a player the game can produce?"* It cost
+		# 42 cells a mean of +17 points the last time it was answered by hand, and the failure is
+		# silent — a 20-card starting deck under a cap of 14 measures fine and models nobody.
+		#
+		# Parsed out of the source rather than by running the tool, because `_profiles()` is an
+		# instance method on a SceneTree script and this suite cannot instantiate one. The regex
+		# reads the same `_deck({...})` literals a reader does; a profile written some other way
+		# would go unchecked, which is why the count of what it FOUND is asserted too — a pattern
+		# that silently matches nothing is the vacuous guard D86 was written about.
+		var found := 0
+		var re := RegEx.create_from_string("_deck\\(\\{([^}]*)\\}")
+		var num := RegEx.create_from_string(":\\s*(\\d+)")
+		for m in re.search_all(sim):
+			found += 1
+			var n := 0
+			for q in num.search_all(m.get_string(1)):
+				n += int(q.get_string(1))
+			if n > Balance.MAX_DECK_SIZE:
+				fails += 1
+				print("FAIL a simulator profile brings %d cards, over MAX_DECK_SIZE %d — it models a player the deck builder would refuse (D208)" % [
+					n, Balance.MAX_DECK_SIZE])
+		if found < 15:
+			fails += 1
+			print("FAIL only %d profile decks found in the simulator — the guard has stopped matching them" % found)
 
 	# --- reward must climb at least as fast as risk ---
 	#

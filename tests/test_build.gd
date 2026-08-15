@@ -187,6 +187,7 @@ func _init() -> void:
 		shape.append("%d:%d" % [g4, int(tier_size[g4])])
 	print("  (info: gate tiers %s — %d of them offer a choice)" % [", ".join(shape), forks])
 
+	fails = _bundles(fails)
 	if fails == 0:
 		print("BUILD TEST: PASS (%d builds, gated behind %d+ dungeons in %d+ zones, and properly tiered)" % [
 			builds.size(), MIN_DUNGEONS, MIN_ZONES])
@@ -194,6 +195,53 @@ func _init() -> void:
 		print("BUILD TEST: FAIL (%d)" % fails)
 	_cleanup_sandbox()
 	quit()
+
+## A fight's reward is three BUNDLES now, and a bundle is a build intersected with what this
+## dungeon can drop (D296). Two things have to hold in EVERY dungeon, and neither is true by
+## construction — both depend on how the build lists and the zone pools happen to overlap:
+##
+##   * three bundles can actually be laid out. Measured before building, the Drowned Market
+##     could fill exactly two from builds, so the fallback loose bundle is load-bearing rather
+##     than defensive — without this assertion the deep dungeons would quietly offer a narrower
+##     choice than the shallow ones and the report would not say so;
+##   * no card appears in two of them. Builds overlap on purpose (Kick is in the Quick Hand and
+##     the Burnt Hand), so deduping by build alone put the same card on screen twice and made a
+##     three-way choice read as narrower than it was. Found in a capture, which is the only
+##     place it was visible, and asserted here so it stays found.
+##
+## Rolled 200 times per dungeon because the pick is random: one roll that happens to come out
+## clean is not the claim being made.
+func _bundles(fails_in: int) -> int:
+	var fails := fails_in
+	for did in Balance.DUNGEONS:
+		for _t in 200:
+			var bs: Array = Balance.reward_bundles(did, [], Balance.Tier.NORMAL, 3)
+			if bs.size() != Balance.REWARD_CARD_OFFERS:
+				fails += 1
+				print("FAIL %s lays out %d reward bundles, not %d" % [
+					did, bs.size(), Balance.REWARD_CARD_OFFERS])
+				break
+			var seen := {}
+			var dup := false
+			for b in bs:
+				if (b["cards"] as Array).size() != Balance.REWARD_BUNDLE_CARDS:
+					fails += 1
+					print("FAIL %s dealt a bundle of %d, not %d" % [
+						did, (b["cards"] as Array).size(), Balance.REWARD_BUNDLE_CARDS])
+					dup = true
+					break
+				for c in b["cards"]:
+					if seen.has(c):
+						fails += 1
+						print("FAIL %s put %s in two bundles at once" % [did, c])
+						dup = true
+						break
+					seen[c] = true
+				if dup:
+					break
+			if dup:
+				break
+	return fails
 
 ## Remove this test's sandboxed files so a test run leaves no residue in the
 ## player's data directory.

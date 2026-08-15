@@ -808,10 +808,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						# The offer, scored against the deck that would take it, with a skip
 						# available (D276). `run_deck` is passed because the value of a card is a
 						# fact about the deck it joins, never about the card alone.
-						var won_card := _choose_card(dungeon_id, reward_level, run_deck)
+						var won := _choose_bundle(dungeon_id, reward_level, run_deck)
 						_tick("rewards", t_rw)
-						if won_card != null:
-							run_deck.append(won_card)
+						for wc in won:
+							run_deck.append(wc)
 						tv.clear_pending()
 		fights_total += fights
 		var won_run := alive and tv.is_complete()
@@ -1252,35 +1252,35 @@ func _profiles() -> Array:
 	out.append({
 		"name": "Mid (fused Lv15)",
 		"clears": 3, "power_level": 2,
-		"deck": _deck({"hack": 5, "cover": 4, "stave_in": 3, "shoulder": 3, "clear_mind": 2}, 15),
+		"deck": _deck({"hack": 3, "cover": 3, "stave_in": 3, "shoulder": 3, "clear_mind": 2}, 15),
 		"dungeons": ["warrens", "foundry", "ember_road"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Status build (Lv15)",
 		"clears": 3, "power_level": 2,
-		"deck": _deck({"hack": 5, "cover": 4, "stave_in": 2, "put_the_fear": 2, "work_up": 2, "light_on_it": 1}, 15),
+		"deck": _deck({"hack": 3, "cover": 4, "stave_in": 2, "put_the_fear": 2, "work_up": 2, "light_on_it": 1}, 15),
 		"dungeons": ["warrens", "foundry", "ember_road"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Barricade build (Lv15, legend Lv5)",
 		"clears": 3, "power_level": 2,
-		"deck": _deck({"hack": 5, "cover": 6, "light_on_it": 2, "shoulder": 3}, 15) + _deck({"set_stone": 1}, 5),
+		"deck": _deck({"hack": 4, "cover": 5, "light_on_it": 2, "shoulder": 3}, 15) + _deck({"set_stone": 1}, 5),
 		"dungeons": ["warrens", "foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Poison build (Lv15)",
 		"clears": 4, "power_level": 2,
-		"deck": _deck({"hack": 3, "cover": 4, "venom_fang": 3, "split": 3, "noxious_cloud": 1, "smoke_bomb": 2}, 15),
+		"deck": _deck({"hack": 2, "cover": 3, "venom_fang": 3, "split": 3, "noxious_cloud": 1, "smoke_bomb": 2}, 15),
 		"dungeons": ["fungal_deep", "rot_gardens"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "AoE build (Lv15)",
 		"clears": 5, "power_level": 2,
-		"deck": _deck({"hack": 2, "cover": 4, "reap": 3, "clear_the_room": 2, "hex": 1, "take_it": 3}, 15),
+		"deck": _deck({"hack": 2, "cover": 3, "reap": 3, "clear_the_room": 2, "hex": 1, "take_it": 3}, 15),
 		"dungeons": ["rot_gardens", "drowned_market"],
 		"hp_mult": 1.0,
 	})
@@ -1289,7 +1289,7 @@ func _profiles() -> Array:
 		"clears": 5, "power_level": 2,
 		# Bramble Armour rather than Survival Instinct (D204): the thorns build's own
 		# payoff, and the row has to hold the mechanic or it cannot price it.
-		"deck": _deck({"hack": 3, "cover": 4, "riposte": 3, "sharp_ground": 2, "bristle": 1, "iron_will": 2, "bramble_armour": 2}, 15),
+		"deck": _deck({"hack": 2, "cover": 2, "riposte": 3, "sharp_ground": 2, "bristle": 1, "iron_will": 2, "bramble_armour": 2}, 15),
 		"dungeons": ["slag_pits", "abyssal_stair", "the_maw"],
 		"hp_mult": 1.0,
 	})
@@ -1308,7 +1308,7 @@ func _profiles() -> Array:
 		# assemble. The cheap cards are the point rather than filler — they are what
 		# Grinding Down and Last Word are counting.
 		"deck": _deck({"nick": 3, "jab": 2, "read_ahead": 2, "whetted_edge": 2,
-			"grinding_down": 2, "rally": 2, "last_word": 1, "cover": 2}, 15),
+			"grinding_down": 2, "rally": 1, "last_word": 1, "cover": 1}, 15),
 		"dungeons": ["foundry", "sunken_vault", "drowned_market"],
 		"hp_mult": 1.0,
 	})
@@ -1329,7 +1329,7 @@ func _profiles() -> Array:
 		# to be the strongest axis in the instrument by a distance, and one copy of it in
 		# here is one variable too many. This row exists to answer what `per_exhausted` and
 		# `exhaust_hand` are worth, so it holds those and nothing that would answer for them.
-		"deck": _deck({"hack": 3, "cover": 3, "cull": 2, "red_mind": 1, "decapitate": 1,
+		"deck": _deck({"hack": 2, "cover": 2, "cull": 2, "red_mind": 1, "decapitate": 1,
 			"focus": 2, "see_it_coming": 1, "kick": 1, "bandage": 2}, 15),
 		"dungeons": ["slag_pits", "sunken_vault", "the_maw"],
 		"hp_mult": 1.0,
@@ -1345,7 +1345,7 @@ func _profiles() -> Array:
 		# lifesteal, so it gets its own row rather than living inside somebody else's.
 		"name": "Vampire build (Lv15)",
 		"clears": 5, "power_level": 2,
-		"deck": _deck({"hack": 3, "cover": 4, "leech": 3, "lifedrain": 2, "bite": 2,
+		"deck": _deck({"hack": 2, "cover": 3, "leech": 3, "lifedrain": 2, "bite": 2,
 			"iron_lung": 1, "second_heart": 1}, 15),
 		"dungeons": ["sunken_vault", "drowned_market", "the_maw"],
 		"hp_mult": 1.0,
@@ -1353,14 +1353,14 @@ func _profiles() -> Array:
 	out.append({
 		"name": "Maxed commons (Lv100)",
 		"clears": 6, "power_level": 3,
-		"deck": _deck({"hack": 8, "cover": 8, "shoulder": 4}, 100),
+		"deck": _deck({"hack": 5, "cover": 5, "shoulder": 4}, 100),
 		"dungeons": ["foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 	})
 	out.append({
 		"name": "Relic build (Lv15 + 4 relics)",
 		"clears": 4, "power_level": 2,
-		"deck": _deck({"hack": 5, "cover": 5, "stave_in": 3, "shoulder": 3}, 15),
+		"deck": _deck({"hack": 4, "cover": 4, "stave_in": 3, "shoulder": 3}, 15),
 		"dungeons": ["warrens", "foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 		"relics": _relics(["iron_heart", "kite_shield", "whetstone", "ancient_battery"]),
@@ -1397,7 +1397,7 @@ func _profiles() -> Array:
 		# 53 points once is worth watching.
 		"name": "Draw build (Lv15 + 2 lenses)",
 		"clears": 4, "power_level": 2,
-		"deck": _deck({"hack": 5, "cover": 3, "stave_in": 2, "in_and_out": 3,
+		"deck": _deck({"hack": 2, "cover": 3, "stave_in": 2, "in_and_out": 3,
 			"take_it": 1, "clear_mind": 2, "read_ahead": 1}, 15),
 		"dungeons": ["foundry", "sunken_vault", "drowned_market"],
 		"hp_mult": 1.0,
@@ -1448,7 +1448,7 @@ func _profiles() -> Array:
 		# HP actually falls far enough to cross a threshold.
 		"name": "Triggered relics (Lv40 + 6)",
 		"clears": 8, "power_level": 3,
-		"deck": _deck({"hack": 6, "cover": 4, "stave_in": 4, "shoulder": 3,
+		"deck": _deck({"hack": 2, "cover": 3, "stave_in": 3, "shoulder": 3,
 			"black_tide": 3}, 40),
 		# The Maw was here and came out at 3% with the driver dodging 1.6 of its fights —
 		# "a row that reads zero measures nothing", the same trap the Draw profile above
@@ -1477,7 +1477,7 @@ func _profiles() -> Array:
 		# per-fight column will read the same as an unrelic'd deck and only RUN moves.
 		"name": "Between-fights relics (Lv15)",
 		"clears": 4, "power_level": 2,
-		"deck": _deck({"hack": 5, "cover": 5, "stave_in": 3, "shoulder": 3}, 15),
+		"deck": _deck({"hack": 4, "cover": 4, "stave_in": 3, "shoulder": 3}, 15),
 		"dungeons": ["foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 		"relics": _relics(["healing_idol", "surgeons_thread", "iron_ration"]),
@@ -1491,7 +1491,7 @@ func _profiles() -> Array:
 	out.append({
 		"name": "Late (Lv40 + 6 relics)",
 		"clears": 8, "power_level": 3,
-		"deck": _deck({"hack": 4, "cover": 4, "stave_in": 3, "shoulder": 3, "dead_weight": 3,
+		"deck": _deck({"hack": 2, "cover": 2, "stave_in": 2, "shoulder": 2, "dead_weight": 3,
 			"take_it": 3}, 40),
 		"dungeons": ["drowned_market", "abyssal_stair", "the_maw"],
 		"hp_mult": 1.0,
@@ -1503,7 +1503,7 @@ func _profiles() -> Array:
 		# its relics: a strictly stronger loadout, so its win rate must not be lower.
 		"name": "Endgame (Late deck, Lv100)",
 		"clears": 10, "power_level": 4,
-		"deck": _deck({"hack": 4, "cover": 4, "stave_in": 3, "shoulder": 3, "dead_weight": 3,
+		"deck": _deck({"hack": 2, "cover": 2, "stave_in": 2, "shoulder": 2, "dead_weight": 3,
 			"take_it": 3}, 100),
 		"dungeons": ["abyssal_stair", "the_maw"],
 		"hp_mult": 1.0,
@@ -1513,7 +1513,7 @@ func _profiles() -> Array:
 	out.append({
 		"name": "Deep (fused Lv40)",
 		"clears": 6, "power_level": 3,
-		"deck": _deck({"hack": 6, "cover": 5, "stave_in": 4, "shoulder": 3, "clear_mind": 2}, 40),
+		"deck": _deck({"hack": 3, "cover": 3, "stave_in": 3, "shoulder": 3, "clear_mind": 2}, 40),
 		"dungeons": ["foundry", "sunken_vault"],
 		"hp_mult": 1.0,
 	})
@@ -1617,12 +1617,56 @@ func _reward_card(dungeon_id: String, level: int) -> CardData:
 ## drift apart, and a tuning change to the band moves both at once.
 const CARD_SKIP_BELOW := 0.80
 
+## The bundle the run actually takes, out of the offer the screen actually lays out (D296).
+##
+## Replaces `_choose_card`. Same argument as D276 made for the single card, one size up: the game
+## lays out three BUNDLES and a Skip, so a driver that deals one bundle and keeps it is measuring
+## a different game. Scored with `Balance.bundle_vs_deck` and skipped on `CARD_SKIP_BELOW` — the
+## screen's own function and the screen's own band, never a second opinion.
+func _choose_bundle(dungeon_id: String, level: int, deck: Array) -> Array:
+	if BLIND_CARDS:
+		# The pre-D296 baseline: one loose card, always taken. Kept because a flat report from a
+		# driver that never chose and a flat report from content that cannot deliver look
+		# identical, and only running both tells them apart.
+		var one := _choose_card(dungeon_id, level, deck)
+		return [one] if one != null else []
+	var dd := Balance.dungeon(dungeon_id)
+	var offer: Array = Balance.reward_bundles(dungeon_id, deck, Balance.Tier.NORMAL,
+		dd.difficulty if dd != null else 1)
+	if offer.is_empty():
+		return []
+	_card_seen += 1
+	# Built at `level` BEFORE scoring, because the score is a comparison against a fused deck and
+	# a level-1 face loses it every time (see `Balance.bundle_vs_deck`). This is the same
+	# levelling `combat._reward_face` does for the panel, and the two have to agree or the tool
+	# and the screen are making different decisions about the same offer.
+	var faces: Array = []
+	for b in offer:
+		var f: Array = []
+		for cid in b.get("cards", []):
+			var c := Balance.card(String(cid))
+			if c == null:
+				continue
+			var dup := c.duplicate() as CardData
+			dup.level = level
+			f.append(dup)
+		faces.append(f)
+	var best := -1
+	var best_score := -1.0
+	for i in offer.size():
+		var score := Balance.bundle_vs_deck(faces[i], deck)
+		if score > best_score:
+			best_score = score
+			best = i
+	if best < 0 or best_score < CARD_SKIP_BELOW:
+		_card_skipped += 1
+		return []
+	if best != 0:
+		_card_moved += 1
+	return faces[best]
+
 func _choose_card(dungeon_id: String, level: int, deck: Array) -> CardData:
 	if BLIND_CARDS:
-		# Counted here too, or the report's card line never prints under `--card-blind` and the
-		# baseline run says nothing about the thing it is the baseline FOR. The first version of
-		# this function left the counter out of this branch, so the line carried a
-		# "(--card-blind: one card, always taken)" suffix that no run could ever reach.
 		_card_seen += 1
 		return _reward_card(dungeon_id, level)
 	var offer: Array = []
