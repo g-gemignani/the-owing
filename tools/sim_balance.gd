@@ -14,6 +14,10 @@ static var SPOILS := 0
 
 ## Restrict the spoil pool to rule-breakers. See `--spoils-rules`.
 static var SPOILS_RULES := false
+## Restore the pre-D265 driver: pick the biggest `power_value()`, ignoring the build. Kept so the
+## planning driver can be measured against it — "the content cannot reach 5x" and "the driver never
+## tries to" produce the same flat report.
+static var GREEDY_SPOILS := false
 
 ## Deal the run's power from three rather than using the profile's. See `--roll-power`.
 static var ROLL_POWER := false
@@ -115,6 +119,9 @@ static func _read_args() -> void:
 		# mode — no version of the game draws from this pool.
 		elif arg == "--spoils-rules":
 			SPOILS_RULES = true
+		# Pick each relic on its own merit, the way the driver did before D265.
+		elif arg == "--spoil-greedy":
+			GREEDY_SPOILS = true
 		# Roll the run's power from three candidates instead of using the profile's fixed one (D245).
 		# The game deals three at the deck builder and the player picks; a profile carrying one power
 		# for every trial models the player the game had BEFORE that, and could not see the change at
@@ -185,7 +192,10 @@ func _init() -> void:
 	print("Per-fight rates are full-HP diagnostics only.")
 	# Named here rather than left to be inferred, because four of these have no precedent in
 	# this tool and one of them (esc) is the acceptance test for a whole design (D226/D229).
-	print("fun  = esc: median damage-per-turn of the last NORMAL fight a run won, over its first.")
+	print("fun  = CAP: how much stronger the DECK got, end of run over start. Measured against a")
+	print("           target that cannot die, so nothing about the enemy truncates it. This is the")
+	print("           one that answers \"did the deck get 5x stronger\" (D266).")
+	print("       esc: median damage-per-turn of the last NORMAL fight a run won, over its first.")
 	print("           Lost fights measure the enemy, and elites and bosses hold a different number")
 	print("           of enemies, which moves damage-per-turn on its own. @3 is the same ratio at")
 	print("           the third won normal fight: that is where 'early' lives (D231).")
@@ -416,7 +426,10 @@ func _fun_line(run: Dictionary) -> String:
 	# an escalation of zero. Five cells read `@3 0.00x` on the first full report — the Maw among
 	# them, where runs die at the third fight — and a zero beside a healthy `esc` reads as a
 	# collapse rather than as an absence. Each side carries its own count for the same reason.
-	return "      fun    esc %s(n%d) @3 %s(n%d) tk %s | hp p10/p50/p90 %.0f/%.0f/%.0f%% | fights %.0f-%.0f | div %.2f | real %.0f%% forced %.0f%% solved %.0f%%" % [
+	# `cap` sits FIRST, because it is the one number here that answers "did the deck get stronger"
+	# and `esc` is the one that was asked to and could not (D266).
+	return "      fun    CAP %s(n%d) esc %s(n%d) @3 %s(n%d) tk %s | hp p10/p50/p90 %.0f/%.0f/%.0f%% | fights %.0f-%.0f | div %.2f | real %.0f%% forced %.0f%% solved %.0f%%" % [
+		_esc_or_blank(run["cap"], int(run["cap_n"])), int(run["cap_n"]),
 		_esc_or_blank(run["escalation"], int(run["esc_n"])), int(run["esc_n"]),
 		_esc_or_blank(run["esc3"], int(run["esc3_n"])), int(run["esc3_n"]),
 		_esc_or_blank(run["tk"], int(run["tk_n"])),
@@ -471,6 +484,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 	var fights_seen: Array = []   # fights survived, which separates dying on the boss from floor 1
 	var esc_ratios: Array = []    # last won fight's damage-per-turn over the first won fight's
 	var tk_ratios: Array = []     # ...and how much FASTER the last one died, which is not the same
+	# CAPABILITY at the end of a run over capability at the start (D266). Unlike `esc` this is not
+	# read off a real fight, so nothing about the enemy can truncate it — it is the answer to "did
+	# the deck get five times stronger", which `esc` cannot give.
+	var cap_ratios: Array = []
 	var esc3_ratios: Array = []   # ...and the THIRD won fight's, which is where "early" lives
 	var deck_sigs: Array = []     # the SET of card ids each run finished with
 	# Split by outcome (D231). The claim this whole plan rests on is that a LOST run must be
@@ -550,6 +567,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		var turns_first := -1
 		var turns_last := -1
 		var won_fights := 0
+		# Capability at both ends of the run (D266). Sampled BEFORE the first fight, so the first
+		# reading is the deck the player brought and nothing else.
+		var cap_first := _capability(run_deck, relics.duplicate(), trial_power, difficulty, roster)
+		var cap_last := cap_first
 		# The iso floor is mostly open ground now (D77), so a run is tens of MOVES for
 		# the same handful of fights. At 60 this truncated every iso run mid-floor and
 		# reported the model as costing a third of its budget.
@@ -749,6 +770,14 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		# defaulted, because a default would drag the mean toward a number nobody measured.
 		# Turns-to-kill needs two won normal fights, the same as `esc`, and is reported as the
 		# SPEED-UP: first over last, so bigger is faster and the direction matches `esc`.
+		# Capability at the END of the run, against the same probe (D266). Taken here rather than
+		# beside the last fight so it counts every spoil the run ever held, including one taken from
+		# the boss's own reward — and so a run that died still reports the build it died holding.
+		var end_untaxed: Array = relics.duplicate()
+		end_untaxed.append_array(spoils)
+		cap_last = _capability(run_deck, end_untaxed, trial_power, difficulty, roster)
+		if cap_first > 0.0 and cap_last > 0.0:
+			cap_ratios.append(cap_last / cap_first)
 		if turns_first > 0 and turns_last > 0 and won_fights >= 2:
 			tk_ratios.append(float(turns_first) / float(turns_last))
 		if dpt_first > 0.0 and dpt_last > 0.0 and won_fights >= 2:
@@ -813,6 +842,8 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 		"esc3_n": esc3_ratios.size(),
 		"tk": _median(tk_ratios),
 		"tk_n": tk_ratios.size(),
+		"cap": _median(cap_ratios),
+		"cap_n": cap_ratios.size(),
 		"esc_won": _median(esc_won),
 		"esc_lost": _median(esc_lost),
 		"esc3_won": _median(esc3_won),
@@ -1540,6 +1571,7 @@ func _choose_spoil(pool: Array, deck: Array, held: Array) -> RelicData:
 			continue
 		cand_ids.append(r)
 		weights.append(Balance.relic_affinity(r, lean))
+	var held_worth := _run_throughput(held)
 	var best: RelicData = null
 	var best_score := -1.0
 	for _k in mini(3, cand_ids.size()):
@@ -1558,7 +1590,24 @@ func _choose_spoil(pool: Array, deck: Array, held: Array) -> RelicData:
 		var cand: RelicData = cand_ids[pick]
 		cand_ids.remove_at(pick)
 		weights.remove_at(pick)
-		var score: float = cand.power_value() * Balance.relic_affinity(cand, lean)
+		# What this relic adds to the BUILD, not what it is worth alone (D265).
+		#
+		# `power_value()` is additive and per-relic, and the power that matters is multiplicative and
+		# per-stack: five `damage_pct` relics compound to x6.49 in combat while the pricing model
+		# scores the best of them fifth, below three relics that do not stack with anything. A driver
+		# maximising each pick therefore collects five unrelated strong things and never builds
+		# anything — and it is not being stupid, it is reading the price list correctly.
+		#
+		# This models a player who plans. `--spoil-greedy` restores the old driver so the two can be
+		# compared, because "the content cannot reach 5x" and "the driver never tries" look identical
+		# in a report.
+		var score: float
+		if GREEDY_SPOILS:
+			score = cand.power_value() * Balance.relic_affinity(cand, lean)
+		else:
+			var with_it: Array = held.duplicate()
+			with_it.append(cand)
+			score = (_run_throughput(with_it) - held_worth) * Balance.relic_affinity(cand, lean)
 		if score > best_score:
 			best_score = score
 			best = cand
@@ -1571,6 +1620,53 @@ func _choose_spoil(pool: Array, deck: Array, held: Array) -> RelicData:
 				return r
 		return pool[0]
 	return best
+
+## What a SET of relics does to a turn, as a multiple of a bare turn (D265).
+##
+## Deliberately not `power_value()`. That function prices one relic against the enemy-scaling ratio,
+## which is the right question for rarity and for the shop and the wrong one for a draft: it is
+## additive, so it says five `damage_pct` relics are worth their sum when the engine multiplies them
+## and `_mod_mult` makes them worth their product.
+##
+## Modelled on what `combat_engine` actually does, not on a second opinion about it: percents that
+## `_mod_mult` compounds are compounded here, conditional percents are discounted by the same
+## fire-rates `RelicData.modifier_power` uses, energy and cost reduction raise cards played per turn,
+## and Block is worth half its multiplier because surviving is not winning.
+##
+## The `flat` term is small on purpose. It keeps a draw or trigger relic from scoring exactly zero
+## and being invisible to the driver, without letting the additive price list back in through a side
+## door.
+func _run_throughput(set: Array) -> float:
+	var dmg := 1.0
+	var blk := 1.0
+	var energy := float(Balance.MAX_ENERGY)
+	var cut := 0.0
+	var flat := 0.0
+	for r in set:
+		if r == null:
+			continue
+		if r.damage_pct > 0:
+			dmg *= 1.0 + float(r.damage_pct) / 100.0
+		if r.block_pct > 0:
+			blk *= 1.0 + float(r.block_pct) / 100.0
+		# The conditional batch, discounted by how often each one fires.
+		dmg *= 1.0 + float(r.lone_damage_pct) / 100.0 * 0.45
+		dmg *= 1.0 + float(r.wounded_damage_pct) / 100.0 * 0.30
+		dmg *= 1.0 + float(r.opener_damage_pct) / 100.0 * 0.20
+		dmg *= 1.0 + float(r.kill_damage_pct) / 100.0 * 0.65
+		if r.attacks_hit_all:
+			dmg *= 1.0 + (CardData.AOE_SPREAD - 1.0)
+		if r.repeat_first_attack:
+			dmg *= 1.25
+		energy += float(r.bonus_energy) + float(r.energy_per_kill) * 1.3
+		cut += float(r.cost_reduction)
+		if r.free_first_card:
+			cut += 0.5
+		flat += r.power_value()
+	# A card costs about 1.6 on average, and cost reduction buys turns rather than damage.
+	var cards := energy / maxf(0.6, 1.6 - cut)
+	var survive := 1.0 + 0.5 * (blk - 1.0)
+	return cards * dmg * survive + flat * 0.02
 
 ## Does this relic change a RULE rather than a number (D233)?
 ##
@@ -1643,6 +1739,65 @@ func _measure(deck: Array[CardData], dungeon: int, tier: int, hp_mult: float,
 ## powers first (they pay off every later turn), then finish the enemy if lethal
 ## is available, then buy off the incoming hit with block, then convert whatever
 ## energy is left into damage or a debuff.
+## Turns a capability probe plays. Enough to get past the opening hand and average the draw;
+## short enough that two probes per trial do not double the run time.
+const CAP_TURNS := 6
+
+## **Damage per turn the deck COULD deliver, against a target that cannot die (D266).**
+##
+## This is the metric `esc` was asked to be and structurally is not. `esc` is damage per turn
+## OBSERVED in a real fight, and a real fight ends — so once the deck can kill in the turns the
+## fight lasts, the number it reports is the enemy's HP divided by those turns and stops being about
+## the player at all. Five separate player-side changes left it flat at ~1.6 for exactly that
+## reason, which is the whole of D265.
+##
+## Here the target cannot die and the player cannot die, so nothing truncates the reading. What
+## comes back is capability: what this deck, these relics and this power do to a turn.
+##
+## Both samples in a run are taken against an IDENTICAL probe — same depth, same tier, same single
+## enemy, same HP — so the only thing that differs between them is what the player is holding. That
+## is what makes the ratio a statement about the run and not about the dungeon.
+##
+## Played with `_take_turn`, the same driver the real fights use, rather than with a formula. A
+## formula would be a second opinion about what the engine does, and this file has paid for that
+## four times (D124, D208, D233, D265). It costs the defensive tax — the driver blocks before it
+## spends the rest — and that is correct: the tax is in both samples, so it divides out.
+func _capability(deck: Array, untaxed: Array, power, dungeon: int, roster: Array) -> float:
+	var eng := CombatEngine.new()
+	var deck_typed: Array[CardData] = []
+	for c in deck:
+		deck_typed.append(c)
+	# A vast HP pool on both sides. The player must not die and the enemy must not die, or the
+	# sample is a measurement of how the probe ended rather than of what the deck does.
+	eng.setup(deck_typed, 1 << 22, 1 << 22, dungeon, Balance.Tier.NORMAL,
+		"", [], roster, power, "", untaxed)
+	# ONE living enemy, always. Damage per turn rises with the number of enemies because an AoE card
+	# hits all of them, so a probe that rolled a swarm one time and a single foe the next would
+	# report the roll rather than the deck — the same distribution fault D231 found inside `esc`.
+	for i in range(1, eng.enemies.size()):
+		eng.enemies[i].hp = 0
+	if eng.enemies.is_empty():
+		return 0.0
+	eng.enemies[0].max_hp = 1 << 26
+	eng.enemies[0].hp = 1 << 26
+	var turns := 0
+	for _t in CAP_TURNS:
+		if eng.over():
+			break
+		# Topped up every turn, so the probe cannot end early and cannot start blocking because it
+		# is afraid. Capability is what the deck does, not what it does while losing.
+		eng.enemies[0].hp = 1 << 26
+		eng.player.hp = 1 << 22
+		_take_turn(eng)
+		turns += 1
+		if eng.over():
+			break
+		eng.end_turn()
+	if turns <= 0:
+		return 0.0
+	var t := eng.fight_tally()
+	return float(int(t.get(Balance.TALLY_DAMAGE, 0))) / float(turns)
+
 func _take_turn(eng: CombatEngine) -> void:
 	_pick_target(eng)
 	_play_powers(eng)

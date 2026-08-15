@@ -18102,6 +18102,47 @@ number.
 
 That is the next decision and it is a design one, not a tuning one.
 
+#### The planning driver was built, and it settles the question the other way
+
+`_choose_spoil` now scores a candidate by what it adds to the BUILD — `_run_throughput(held + cand)
+- _run_throughput(held)` — modelled on what `combat_engine` does rather than on `power_value()`:
+percents that `_mod_mult` compounds are compounded, conditional percents carry the same fire-rates
+`RelicData.modifier_power` uses, energy and cost reduction raise cards per turn. `--spoil-greedy`
+keeps the old driver, because *"the content cannot reach 5x"* and *"the driver never tries to"*
+produce the same flat report.
+
+| | `esc` | `esc@3` | RUN |
+|---|---|---|---|
+| greedy driver | 1.60 | 1.67 | 33% |
+| **planning driver** | 1.64 | 1.72 | 32% |
+| planning driver, **50% more relics** (`--spoils=12`) | **1.61** | 1.67 | 33% |
+
+A player who plans the stack gains 0.04. Handing that player half again as many relics **loses**
+0.03. So it is not the price list, and it is not the pool's depth either.
+
+#### `esc` measures the ENEMY, and that is why nothing has ever moved it
+
+Five separate changes to the player have now left it flat: D257's content pass (1.65 → 1.65),
+D243's enemy-damage sweep (1.62 → 1.58 across x1.0 to x2.2), the commitment tilt, the planning
+driver, and 50% more relics. **When every change to one side of an equation leaves a number
+unmoved, the number is about the other side.**
+
+The mechanism is fight length. `esc` is damage per turn late against early. While a normal fight
+lasts about the same number of turns at both ends of a run, damage per turn is
+`enemy_HP / turns` at both ends — so the ratio reads the growth in ENEMY HP with depth, which is
+about 1.6, no matter what the player is holding. The player's extra damage is spent finishing
+sooner, and finishing sooner is exactly what the measurement divides out.
+
+This is the same instrument fault as D233's unmeasurable gate and D237's profiles, at the top of
+the metric rather than inside it, and it invalidates the target rather than the work: **`esc` cannot
+answer "did the deck get five times stronger", and no amount of content will make it.**
+
+What answers it is CAPABILITY, not outcome — the damage per turn the player's deck and relics COULD
+deliver against an unbounded target, sampled at fight one and at the boss. That number is not in the
+report yet and is the next thing to build. Until it is there, the 5x has no instrument, and this
+entry is the fifth in this file to end that way.
+
+
 ---
 
 ### D264 — The endpoint generator is deleted, and two of its rules outlived it
