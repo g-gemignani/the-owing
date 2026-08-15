@@ -91,6 +91,16 @@ const SETS := {
 	# sprites by their bottom edge, so the standing point would float.
 	"iso_figures": [0, false],
 	"iso_furniture": [0, false],
+	# The dressing (Tier 8d). Square, because a thing lying on the floor has no standing
+	# height to preserve — what it has is a footprint, and the camera flattens it.
+	#
+	# It is in FOOTED for a reason that is not obvious. Twelve of the sixteen lie on the
+	# ground and `_draw_prop` anchors a painting by its BOTTOM edge, so padding under the
+	# subject lifts it off the tile. The other four hang on a wall face and are drawn
+	# centred, which makes bottom-anchoring wrong for them by half of whatever padding
+	# their trim left — small, because a ring drawn head-on is about as tall as it is
+	# wide, where a drift seen from above is not.
+	"iso_props": [192, false],
 	# The per-archetype BACK views, one per enemy in `resources/enemies/`. Always driven
 	# with `--only`, like `enemies`: thirty-five will not fit one sheet, and the whole
 	# point of a sheet is that the subjects on it are drawn against each other.
@@ -136,7 +146,7 @@ const TALL := {
 ## `install_cutouts.gd` already passes `true` for this family; a sheet has to agree with
 ## the per-file installer or the same archetype lands differently depending on which
 ## tool took it in.
-const FOOTED := ["iso_figures", "iso_furniture", "iso_foes", "enemies"]
+const FOOTED := ["iso_figures", "iso_furniture", "iso_foes", "enemies", "iso_props"]
 
 var _dry := false
 
@@ -367,6 +377,17 @@ func _ids(set_name: String) -> Array:
 				out.append(["iso/foe/%s_n.png" % aid, "%s, away (up-right)" % nm])
 		# The three fight tiers come FIRST, so the three that have to read as escalating
 		# sit next to each other on the sheet and are drawn against each other.
+		# Walked terrain by terrain, four to a terrain, which is the order `art_manifest.gd`
+		# prints Tier 8d in and therefore the order the sheet is asked for. One list, so the
+		# row the generator drew and the file it lands in cannot disagree.
+		"iso_props":
+			for terrain in Balance.ISO_TERRAINS:
+				for entry in Balance.iso_props(String(terrain)):
+					var pd: Dictionary = entry
+					var pname := String(pd.get("name", ""))
+					if pname == "":
+						continue
+					out.append(["iso/prop_%s.png" % PixelArt.iso_prop_id(pname), pname])
 		"iso_furniture":
 			for e in [["combat", "ordinary fight"], ["elite", "harder fight"],
 					["boss", "the floor's boss"], ["shop", "merchant's stall"],
