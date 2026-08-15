@@ -101,6 +101,11 @@ const PROP_PALE := 1.28
 ## Raising it shrinks the stonework and lengthens the period; lowering it magnifies both.
 ## Below about 2 the repeat is short enough to read as wallpaper in an open room.
 const GROUND_UV_TILES := 3
+## The same knob for the two SIDE faces of a rock block, along whichever axis the wall runs
+## (see `_draw_wall`). Lower than the ground's, and not by taste: a side face is a 58px
+## sliver where a floor diamond is 116px wide, so the same number would draw the wall's
+## masonry at half the size of the floor's and the two would stop being the same rock.
+const WALL_UV_TILES := 2
 ## Ink (D263). The painted rooms carry a 2-3px dark outline on every foreground object,
 ## and until now nothing the floor drew carried one — so the painted hero standing on a
 ## computed floor read as a sticker laid on a texture rather than as a figure in a room.
@@ -1035,8 +1040,26 @@ func _diamond(centre: Vector2, t: Vector2) -> PackedVector2Array:
 ## does not — because with a single flat tint a run of blocks reads as one shapeless
 ## mass rather than as separate stones.
 ##
-## Faces are parallelograms, so the same exact UV trick as the floor applies: four
-## corners to the four corners of the material, no seam and no distortion.
+## Faces are parallelograms, so the same exact UV trick as the floor applies — and since
+## D263 that means the same GRID UV, for the same reason and with one extra step of
+## working out. A block used to take the whole material on each of its three faces, so a
+## painted course of masonry arrived at a fifth of its size and was cut off at every block.
+##
+## The three faces have three different continuous axes, and they are not obvious:
+##
+## * The **top** face is a diamond in the floor's own plane, so it takes the floor's UV.
+## * The **left** face is the vertical quad standing on the grid line `y + 0.5`, running
+##   from `x - 0.5` to `x + 0.5`. So its horizontal axis is grid X — and the left face of
+##   the block at `(x+1, y)` starts exactly where this one ends, at this block's `bottom`
+##   vertex. A run of blocks along +X is one unbroken wall.
+## * The **right** face stands on the grid line `x + 0.5` and runs along grid Y, the same
+##   way, joined to `(x, y+1)`'s right face at the same vertex.
+##
+## So the two side faces are drawn from the same material as one continuous course of
+## masonry along whichever axis the wall runs, and the corner where the two meet is the
+## corner of a real block. The vertical axis stays 0..1 per block: a block IS one course
+## high, and stretching the material over `WALL_LIFT` would make the top of a wall a
+## different stone from the bottom of it.
 ## `wash` multiplies all three faces, which is how a sealed vault is drawn: the same
 ## stone block in a warmer colour, so it reads as masonry that belongs to the dungeon
 ## rather than as a UI marker sitting on top of it.
@@ -1058,12 +1081,26 @@ func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
 	# a wall beside a brazier is masonry in firelight rather than a black edge to a lit room.
 	if tv != null:
 		wash = wash * _lit(tv, x, y, Color(1, 1, 1))
-	var square := PackedVector2Array([Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)])
+	var kw: float = 1.0 / float(WALL_UV_TILES)
+	var kg: float = 1.0 / float(GROUND_UV_TILES)
+	var gx := float(x)
+	var gy := float(y)
+	# Vertex order per face matches the polygon below it, so each UV lands on its corner.
+	var uv_left := PackedVector2Array([
+		Vector2((gx - 0.5) * kw, 0), Vector2((gx + 0.5) * kw, 0),
+		Vector2((gx + 0.5) * kw, 1), Vector2((gx - 0.5) * kw, 1)])
+	var uv_right := PackedVector2Array([
+		Vector2((gy + 0.5) * kw, 0), Vector2((gy - 0.5) * kw, 0),
+		Vector2((gy - 0.5) * kw, 1), Vector2((gy + 0.5) * kw, 1)])
+	var uv_top := PackedVector2Array([
+		Vector2(gx - 0.5, gy - 0.5) * kg, Vector2(gx + 0.5, gy - 0.5) * kg,
+		Vector2(gx + 0.5, gy + 0.5) * kg, Vector2(gx - 0.5, gy + 0.5) * kg])
 	# left face, then right face, then the top — painter's order within one block
 	var faces := [
-		[PackedVector2Array([left + lift, bottom + lift, bottom, left]), TINT_WALL_L],
-		[PackedVector2Array([bottom + lift, right + lift, right, bottom]), TINT_WALL_R],
-		[PackedVector2Array([top + lift, right + lift, bottom + lift, left + lift]), TINT_WALL_TOP],
+		[PackedVector2Array([left + lift, bottom + lift, bottom, left]), TINT_WALL_L, uv_left],
+		[PackedVector2Array([bottom + lift, right + lift, right, bottom]), TINT_WALL_R, uv_right],
+		[PackedVector2Array([top + lift, right + lift, bottom + lift, left + lift]),
+			TINT_WALL_TOP, uv_top],
 	]
 	for f in faces:
 		var poly: PackedVector2Array = f[0]
@@ -1071,7 +1108,7 @@ func _draw_wall(centre: Vector2, t: Vector2, x: int, y: int,
 		if tex == null:
 			floor_view.draw_colored_polygon(poly, tint * 0.5)
 		else:
-			floor_view.draw_colored_polygon(poly, tint, square, tex)
+			floor_view.draw_colored_polygon(poly, tint, f[2], tex)
 	# The block's silhouette, inked (D263). Drawn after the faces and before the dressing,
 	# so a ring hanging on the rock sits inside its outline rather than under it.
 	#
