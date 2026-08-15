@@ -44,3 +44,7 @@ tools/__pycache__/
 # repository's secrets and in a backup that is not this checkout.
 *.keystore
 *.jks
+
+# Handoff files are working notes for an agent picking the thread back up, not
+# repository documentation — the decision log is DESIGN.md.
+.claude/handoffs/
