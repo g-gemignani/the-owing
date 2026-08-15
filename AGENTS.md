@@ -153,24 +153,36 @@ screen, D253/D256 — six owned from the start and two handed over per dungeon b
 D290) · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 45 errands and 16 debts over 44 counters · 3 aspects ·
-24 sound effects · 5 score tracks · 47 test suites. All content is `.tres` data
+24 sound effects · 5 score tracks · 48 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
-**Art: 414 files wanted, 414 present, 0 to provide — the list is CLOSED again (D259).**
+**Art: 430 files wanted, 430 present, 0 to provide — the list is CLOSED again (D286).**
 was 205/205/0 at D129, then D131 opened Tier 3b (one illustration per card) and took it to
 205/305; the hundred were painted four to a picture, a 2x2 grid of 4:3 cells tiling one
 4:3 image, which turned a hundred browser requests into twenty-five (D136). It closed at
 386/386/0, was reopened to 386/414 by the 8 relics and 20 powers that D233, D237 and D250
 added, and D259 closed it: every relic and every power now has its own icon and no power
-falls back to a drawn letter. The shopping
+falls back to a drawn letter. It reopened once more to 414/430 for the sixteen isometric
+props D282 put on it — the dressing that varies one floor from the next, drawn in code
+until then — and D286 closed it off one sheet. The shopping
 list is
 generated — `tools/art_docs.sh`, which writes ART_ASSETS.md and ART_PROMPTS.md together
-— so it cannot fall out of step with the catalogues **once it is re-run**, and nothing
-re-runs it. It has a `--check` mode and no caller: the file said 386/386/0 for three
-content passes while the manifest underneath it had known better all along. A generated
-document with no check is a document that is true on the day it is written. Two things in it are not paintings and
+— so it cannot fall out of step with the catalogues **once it is re-run**. It went three
+content passes saying 386/386/0 while the manifest underneath it had known better all
+along, because `--check` existed and nothing called it. A generated
+document with no check is a document that is true on the day it is written, so
+`tests/run.sh` is the caller now (D262): the run fails after the suites pass if either
+generated document is out of step with what generated it. Two things in it are not paintings and
 never will be: the frame kit is computed by `tools/gen_ui_kit.gd`, and the six combat
 effects are drawn at runtime by `scripts/fx.gd`.
+
+**Not everything generated is checked, and the gap is on purpose.** The README's seven
+screenshots (`tools/screenshots.gd`, then `tools/readme_shots.gd`) are a claim about what
+the game looks like now, and no test can tell a stale picture from a current one — re-run
+both after anything visual lands. `tools/readme_downloads.sh` is left out of the gate
+deliberately: it reads the GitHub releases API, and a test run that needs the network
+fails on a train. Run it by hand before a release, which is the only time its subject
+moves.
 
 ## The two ideas that run through everything
 
