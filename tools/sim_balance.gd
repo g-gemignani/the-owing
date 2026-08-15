@@ -294,7 +294,12 @@ func _init() -> void:
 	# string as written and `%%` reached the terminal literally.
 	print("Constraint: RUN completion must be neither ~0% nor ~100% — both mean the dungeon,")
 	print("            not the run, decided it. Historic band was 40-60% at matched progression.")
-	print("Steer by: esc, esc@3 and the won/lost split. Not the mean, and not completion.")
+	print("Steer by: CAP first — it is the only number here that measures the PLAYER (D266). esc")
+	print("          reads damage per turn out of a fight that ends, so it reports enemy HP growth")
+	print("          once the deck can kill inside the fight, and five player-side changes left it")
+	print("          flat at ~1.6. Then esc@3 and the won/lost split. Not the mean, and not")
+	print("          completion — though CAP tracks completion at r=0.53, because a run has to")
+	print("          survive to grow.")
 	# Said out loud, because a report that does not name its route is a report whose numbers
 	# cannot be compared with another one (D179). Two runs of this tool differ by a mean of
 	# 0.4 points already (D120); a route change is a much larger difference wearing the same
