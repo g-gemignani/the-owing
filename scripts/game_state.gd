@@ -627,6 +627,16 @@ func enter_dungeon(deck: Array[CardData], power_id: String = "") -> void:
 	# deck exists — one line above — which is the entire reason the roll is at this seam and not the
 	# earlier one.
 	var meta := (get_node_or_null("/root/MetaState") if is_inside_tree() else null)
+	# What the last attempt left down there (D285). A place that has killed you hands back a relic
+	# per death when you come back for it — the other half of the burden `grudge_enemy_mult` puts on
+	# its enemies. Rolled here, with the deck known, so the offer suits what you brought.
+	if meta != null:
+		var owed: int = meta.grudge_on(dungeon_id) * Balance.GRUDGE_RELICS_PER
+		for _i in owed:
+			var pick: Array = meta.relic_offer(Balance.Tier.ELITE, run_deck, 1, run_relics)
+			if pick.is_empty():
+				break
+			earn_relic(String(pick[0]))
 	power_offer = meta.power_offer(3, run_deck) if meta != null else []
 	chosen_power = String(power_offer[0]) if not power_offer.is_empty() else ""
 	# Always ends holding SOMETHING. `set_run_power("")` falls through to whatever the save has

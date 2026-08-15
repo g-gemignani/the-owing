@@ -128,7 +128,8 @@ func _ready() -> void:
 			# How deep this run is, which is what the dungeon now ramps against (D270). A fight
 			# outside a run — there is no such thing today, but `traversal` can be null on a
 			# rebuilt save — passes -1 and gets the un-ramped dungeon.
-			GameState.traversal.progress() if GameState.traversal != null else -1.0)
+			GameState.traversal.progress() if GameState.traversal != null else -1.0,
+			MetaState.grudge_on(GameState.dungeon_id))
 		_snapshot()
 	_refresh()
 	# rects only exist after a frame, and the fan is measured against them
@@ -2425,6 +2426,10 @@ func _lose() -> void:
 		hp_bar.visible = false
 	if orb_row != null:
 		orb_row.visible = false
+	# The place remembers (D285). BEFORE `clear_run`, which throws `dungeon_id` away with the run —
+	# and the whole point is that the debt is owed to a PLACE, so it has to be read while the run
+	# still knows which one killed it.
+	MetaState.note_grudge(GameState.dungeon_id)
 	GameState.reset_run_progress()
 	GameState.clear_run()
 	GameState.flush_save()   # death is final; do not risk losing the penalty

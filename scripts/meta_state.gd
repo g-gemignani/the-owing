@@ -388,6 +388,19 @@ var clear_counts: Dictionary = {}
 ## the cleared ones out when it prices the credit, so this stays a plain honest log of where
 ## you have been rather than a scoreboard that has to be kept consistent with the other one.
 var depth_records: Dictionary = {}
+## **What each place is owed, from dying in it (D285).** dungeon id -> deaths, capped.
+##
+## The player asked for a death worth having, and until now a death was a subtraction and a screen:
+## the escrow paid out by depth (D235) and the run ended. Nothing carried.
+##
+## This is the game's own vocabulary rather than a new one. It is called The Owing, its opening
+## wager is a debt (D211), and dying in a place is the most obvious way to end up owing it
+## something. So a death RAISES what that dungeon is owed, and the next attempt at it carries the
+## debt both ways — the place is angrier, and you come back holding what you left behind.
+##
+## Cleared on a clear. Settling the debt is what beating it means, and a grudge that survived the
+## boss would be a permanent difficulty tax on the dungeon a player is best at.
+var grudges: Dictionary = {}
 ## The one debt taken, or {} when nothing is owed (D191, D205).
 ## {"kind": String, "dungeon": String, "stake": int} — the stake rides along so what is handed
 ## back on settling is what was actually paid, rather than what the table says it would cost
@@ -716,7 +729,20 @@ func mark_cleared(id: String) -> void:
 	clear_counts[id] = int(clear_counts.get(id, 0)) + 1
 	if id != "" and not has_cleared(id):
 		cleared_dungeons.append(id)
+	# Beating it settles what it was owed (D285).
+	grudges.erase(id)
 	save_game()
+
+## Died here. The place remembers (D285).
+func note_grudge(id: String) -> void:
+	if not (id in Balance.DUNGEONS):
+		return
+	grudges[id] = mini(Balance.GRUDGE_MAX, int(grudges.get(id, 0)) + 1)
+	mark_meta_dirty()
+
+## How many times this place has killed you since you last beat it.
+func grudge_on(id: String) -> int:
+	return clampi(int(grudges.get(id, 0)), 0, Balance.GRUDGE_MAX)
 
 func clear_count() -> int:
 	return cleared_dungeons.size()
@@ -1307,6 +1333,7 @@ func _write_meta() -> void:
 		"difficulty": difficulty,
 		"cleared_dungeons": cleared_dungeons, "clear_counts": clear_counts,
 		"depth_records": depth_records,
+		"grudges": grudges,
 		"debt_taken": debt_taken,
 		"debt_credits": debt_credits,
 		"packs": packs,
@@ -1549,6 +1576,10 @@ func _apply(parsed: Dictionary) -> void:
 	# for a dungeon that no longer exists would keep paying a gate for a place nobody can
 	# go — the same reason every other id in this function is checked rather than trusted.
 	depth_records = {}
+	grudges = {}
+	for gid in parsed.get("grudges", {}):
+		if gid in Balance.DUNGEONS:
+			grudges[gid] = clampi(int(parsed["grudges"][gid]), 0, Balance.GRUDGE_MAX)
 	for id in parsed.get("depth_records", {}):
 		if id in Balance.DUNGEONS:
 			depth_records[id] = maxi(0, int(parsed["depth_records"][id]))

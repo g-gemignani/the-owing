@@ -14,6 +14,11 @@ static var SPOILS := 0
 
 ## Restrict the spoil pool to rule-breakers. See `--spoils-rules`.
 static var SPOILS_RULES := false
+## Probes averaged per profile in the price audit. Eight holds a profile's reading inside a few
+## percent between runs; one swung it by a third.
+const AUDIT_SAMPLES := 8
+## `--price-audit`: report ratio against capability per profile, and run nothing.
+static var PRICE_AUDIT := false
 ## Restore the pre-D265 driver: pick the biggest `power_value()`, ignoring the build. Kept so the
 ## planning driver can be measured against it — "the content cannot reach 5x" and "the driver never
 ## tries to" produce the same flat report.
@@ -118,6 +123,9 @@ static func _read_args() -> void:
 		# weather — D120 measured a mean of 0.4 points with one cell swinging 15, and every
 		# number the fun block adds has its own band that nobody has measured yet. Narrow
 		# with --only= first; this doubles the wall clock.
+		# Print what each profile is CHARGED against what it DELIVERS, and stop. No runs.
+		elif arg == "--price-audit":
+			PRICE_AUDIT = true
 		elif arg == "--noise":
 			NOISE = true
 		# Hand every run N relics as it walks, exempt from enemy scaling, and see what the
@@ -235,6 +243,10 @@ func _init() -> void:
 	if NOISE:
 		print("--noise: every cell measured twice; believe no delta smaller than the gap.")
 	print("")
+	if PRICE_AUDIT:
+		_price_audit()
+		quit()
+		return
 	for profile in _profiles():
 		var deck: Array[CardData] = profile["deck"]
 		var prof_power := _power_of(profile)
@@ -1175,6 +1187,43 @@ func _tier_short(tier: int) -> String:
 		_: return "N"
 
 ## Player profiles: representative decks at different progression stages.
+## What each profile is CHARGED for against what it DELIVERS (D280).
+##
+## `power_ratio` is what enemies scale to. `_capability` is what the deck actually does to a turn.
+## If the pricing model were honest those two would track, and a deck priced twice as strong as
+## another would hit about twice as hard. Where they diverge, the game is scaling enemies to power
+## the player does not have — which is a deck that cannot be played, not a deck that is difficult.
+##
+## Reported as `charged / delivered`, normalised so the median profile reads 1.00. Above 1 means
+## overcharged.
+func _price_audit() -> void:
+	var rows: Array = []
+	for profile in _profiles():
+		var deck: Array[CardData] = profile["deck"]
+		var pw := _power_of(profile)
+		var ratio := Balance.power_ratio(deck, [], pw)
+		# AVERAGED over several probes. One probe plays one random draw, and a single reading
+		# swung a profile's number from 1.85x to 2.53x between runs — enough to tune on and be
+		# tuning on nothing. The first version of this audit did exactly that.
+		var cap := 0.0
+		for _s in AUDIT_SAMPLES:
+			cap += _capability(deck, [], pw, 3, [])
+		cap /= float(AUDIT_SAMPLES)
+		rows.append([String(profile["name"]), ratio, cap, ratio / maxf(0.001, cap)])
+	var mids: Array = []
+	for r in rows:
+		mids.append(float(r[3]))
+	mids.sort()
+	var mid: float = mids[mids.size() / 2]
+	rows.sort_custom(func(a, b): return float(a[3]) > float(b[3]))
+	print("PRICE AUDIT — charged (ratio) against delivered (capability, damage per turn)")
+	print("%-34s %8s %10s %10s" % ["profile", "ratio", "dmg/turn", "overcharge"])
+	for r in rows:
+		print("%-34s %8.2f %10.1f %10.2fx" % [
+			String(r[0]).substr(0, 34), float(r[1]), float(r[2]), float(r[3]) / mid])
+	print("")
+	print("1.00x is the median profile. Above 1 means enemies scale to power the deck does not have.")
+
 func _profiles() -> Array:
 	var out: Array = []
 

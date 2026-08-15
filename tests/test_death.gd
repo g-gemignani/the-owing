@@ -137,8 +137,52 @@ func _init() -> void:
 	m3.load_game()
 	if m3.gold != m.gold: fails += 1; print("FAIL gold not persisted ", m3.gold, " vs ", m.gold)
 
+	# --- the place remembers, and settles when you beat it (D285) ---
+	#
+	# The player asked for a death worth having. A grudge is what a death leaves: the dungeon that
+	# killed you is owed something, its enemies come back harder, and you come back holding relics.
+	# Both halves are asserted, because either alone is a different feature — burden without edge is
+	# a difficulty tax the player did not choose, and edge without burden is a reward for losing.
+	var mg = Meta_.new()
+	mg.path_prefix = SANDBOX
+	mg.slot = 9
+	mg.new_save()
+	var place := String(Balance.DUNGEONS[0])
+	if mg.grudge_on(place) != 0:
+		fails += 1; print("FAIL a fresh save already owes %s something" % place)
+	mg.note_grudge(place)
+	mg.note_grudge(place)
+	if mg.grudge_on(place) != 2:
+		fails += 1; print("FAIL two deaths left a grudge of %d" % mg.grudge_on(place))
+	# The BURDEN rises with it, and the EDGE is counted off the same number.
+	if Balance.grudge_enemy_mult(2) <= Balance.grudge_enemy_mult(0):
+		fails += 1; print("FAIL a grudge does not make the place harder")
+	if Balance.GRUDGE_RELICS_PER <= 0:
+		fails += 1; print("FAIL a grudge hands back nothing — that is a difficulty tax, not a debt")
+	# Capped, or a player who bounces off the Maw six times faces a dungeon nothing can beat.
+	for _k in 10:
+		mg.note_grudge(place)
+	# Read off the STORED value, not through `grudge_on` — that clamps on the way out, so a cap
+	# missing from `note_grudge` would be invisible here while the save grew without bound.
+	if int(mg.grudges.get(place, 0)) != Balance.GRUDGE_MAX:
+		fails += 1; print("FAIL the stored grudge is not capped: %d" % int(mg.grudges.get(place, 0)))
+	# Beating it settles the debt. Without this a grudge is permanent, and the dungeon a player is
+	# best at becomes the one they can never clear cleanly again.
+	mg.mark_cleared(place)
+	if mg.grudge_on(place) != 0:
+		fails += 1; print("FAIL clearing %s did not settle what it was owed" % place)
+	# ...and it survives a save, or the whole thing is a session-long mood.
+	mg.note_grudge(place)
+	mg.save_game()
+	var mg2 = Meta_.new()
+	mg2.path_prefix = SANDBOX
+	mg2.slot = 9
+	mg2.load_game()
+	if mg2.grudge_on(place) != 1:
+		fails += 1; print("FAIL the grudge did not survive a save: %d" % mg2.grudge_on(place))
+
 	if fails == 0:
-		print("DEATH TEST: PASS (no collection penalty, depth salvage, monotonic curve, discovery log)")
+		print("DEATH TEST: PASS (no collection penalty, depth salvage, monotonic curve, discovery log, grudge)")
 	else:
 		print("DEATH TEST: FAIL (%d)" % fails)
 	_cleanup_sandbox()

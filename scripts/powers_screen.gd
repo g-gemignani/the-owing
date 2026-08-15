@@ -1,13 +1,46 @@
-## Powers screen — buy a power, level it, choose which one you take into a run.
+## Powers screen — buy a power, level it, and see which ones the door can deal you.
 ##
 ## The meta layer's second progression axis. Fusion turns copies plus gold into
 ## card levels; this turns gold alone into an ability that fires every single turn.
 ## They compete for the same purse on purpose (see Balance.power_upgrade_cost,
 ## which reuses the fusion gold curve), so spare gold always has two homes.
+##
+## **The screen used to describe the game as it was before D245, and that is what this
+## rewrite is for.** Its title said *"one equipped per run"*, its header said
+## *"Equipped: Bulwark"*, and every owned row carried an **Equip** button. None of that
+## decides anything any more: the run deals three powers at the door and the player picks
+## one (D245/D253), weighted by the deck (D256). `equipped_power` survives only as the
+## fallback `set_run_power("")` reads, which no player can see. **A button that says
+## "Equipped" is the strongest possible claim about which power you take in, and it was
+## false.** D256 removed the deck builder's power box for this exact reason — *"a second
+## place to press a decision that already had a first one"* — and this is the same box on
+## a different screen.
+##
+## What a player actually needs here is which powers the door can deal, and the pool rule
+## in `MetaState.power_offer` has three states, not two:
+##
+## * **unlocked and owned** — in the deal.
+## * **unlocked, not owned** — buyable, and dealt anyway while you own fewer than three,
+##   because an offer of one is not a choice.
+## * **sealed by clears** — cannot be dealt at all.
+##
+## The old label collapsed all of that into `(owned)` / `(locked)`, so a power that was
+## unlocked and merely unbought read as **locked**. That is the reported confusion, and it
+## was the label rather than the gate.
+##
+## Grouped by RARITY for the reason the relics screen is (D223): the clears gate is
+## `Balance.POWER_UNLOCK` indexed by rarity, so a whole group is sealed or open together
+## and the header can say it once instead of every row saying it again.
 extends Control
 
 var info_label: Label
+var rule_label: Label
 var list_box: VBoxContainer
+
+## How far a sealed row recedes. By INK and never by `modulate`, the same rule and the same
+## number as the relics screen: a translucent label reads against the backdrop rather than
+## against the colour chosen for it (D96).
+const SEALED_DIM := 0.32
 
 func _ready() -> void:
 	_build_ui()
@@ -16,10 +49,15 @@ func _ready() -> void:
 func _build_ui() -> void:
 	# `reliquary`, shared with the Relics screen: both are the list of what you have
 	# earned and cannot lose, so they are one place (D123).
-	var root := UI.screen(self, "Powers — one equipped per run, fires once every turn",
+	var root := UI.screen(self, "Powers — the door deals three, you take one",
 		"", "reliquary")
 	info_label = Label.new()
 	root.add_child(info_label)
+	# The pool rule, stated once for the whole screen rather than on thirty rows. Written only
+	# when it is doing something: a line that is always there stops being read (D240).
+	rule_label = Label.new()
+	rule_label.add_theme_color_override("font_color", Color(0.95, 0.78, 0.45))
+	root.add_child(rule_label)
 	list_box = UI.scroll(root)
 	UI.exit_button(root, "Back", func(): UI.goto(self, _back_to()))
 
@@ -33,23 +71,73 @@ func _back_to() -> String:
 	return "res://scenes/Overworld.tscn"
 
 func _refresh() -> void:
-	# The equipped power by its NAME. `MetaState.equipped_power` is an id, so this
-	# read "Equipped: bulwark" — a lowercase database key on a screen whose whole
-	# subject is that power, one row below the same thing written "Bulwark" (D128).
-	# Same leak as the `[RARE]` badges D115 gave one owner, in a different table.
-	var worn := Balance.power(MetaState.equipped_power)
-	info_label.text = "Gold %d    Clears %d    Equipped: %s" % [
-		MetaState.gold, MetaState.clear_count(),
-		worn.name if worn != null else "none"]
+	var reach: int = MetaState.clear_count()
 
-	for c in list_box.get_children():
-		c.queue_free()
-
+	# One pass builds the groups AND the counts, so the number in the header is not a second
+	# sum of the same thing — the mistake `collection.gd` documents.
+	var groups := {}
+	var in_deal := 0
+	var slots := 0
 	for pid in Balance.POWERS:
 		var p := Balance.power(pid)
 		if p == null:
 			continue
+		slots += 1
+		if not groups.has(p.rarity):
+			groups[p.rarity] = []
 		var owned: bool = MetaState.owns_power(pid)
+		var open: bool = MetaState.power_available(pid)
+		if owned and open:
+			in_deal += 1
+		groups[p.rarity].append({"id": pid, "owned": owned, "open": open})
+
+	# The count the player came here for, and the one the old header never printed. "Equipped:
+	# Bulwark" is gone with the button under it: it named a power the door does not read.
+	info_label.text = "Gold %d    Clears %d    %d of %d can be dealt" % [
+		MetaState.gold, MetaState.clear_count(), in_deal, slots]
+
+	# `power_offer` tops the pool up from everything unlocked while the save owns fewer than the
+	# offer needs, because an offer of one is not a choice. That makes an unowned power dealable
+	# RIGHT NOW, which contradicts every other row on the screen — so it is said out loud, and
+	# only while it is true.
+	var need: int = Balance.REWARD_CARD_OFFERS
+	if in_deal < need:
+		rule_label.text = ("You own %s that can be dealt, and the door needs %d. "
+			+ "Until then it tops the deal up from everything unlocked below.") % [
+			Wording.count(in_deal, "power"), need]
+		rule_label.visible = true
+	else:
+		rule_label.visible = false
+
+	for c in list_box.get_children():
+		c.queue_free()
+
+	for rarity in CardData.Rarity.size():
+		if not groups.has(rarity):
+			continue
+		var entries: Array = groups[rarity]
+		# The gate is per RARITY, so it goes on the group header and nowhere else — the same rule
+		# the relics screen follows (D223). A sealed group says what would open it and how far off
+		# that is, because "sealed" on its own is the "???" row D116 was built to stop printing.
+		var to_go: int = Balance.power_clears_to_go(rarity, reach)
+		var held := 0
+		for e in entries:
+			if bool(e["owned"]) and bool(e["open"]):
+				held += 1
+		var head := UI.label(list_box, "%s  %d of %d in the deal%s" % [
+			CardData.rarity_badge(rarity), held, entries.size(),
+			"" if to_go == 0 else "   SEALED — %s to go (%d clears in all)" % [
+				Wording.count(to_go, "clear"), int(Balance.POWER_UNLOCK[rarity])]])
+		head.add_theme_color_override("font_color", Icons.rarity_colour(rarity)
+			if to_go == 0 else Icons.rarity_colour(rarity).darkened(SEALED_DIM))
+
+		for e in entries:
+			_row(String(e["id"]), bool(e["owned"]), bool(e["open"]))
+
+func _row(pid: String, owned: bool, open: bool) -> void:
+		var p := Balance.power(pid)
+		if p == null:
+			return
 		var level: int = int(MetaState.powers.get(pid, 1))
 		p = p.duplicate()
 		p.level = level
@@ -95,16 +183,24 @@ func _refresh() -> void:
 
 		var lbl := Label.new()
 		lbl.custom_minimum_size.x = UITheme.px(520)
-		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity))
+		# A sealed row recedes by ink, which is what says "not yet" without a badge repeating
+		# the group header above it. `darkened` keeps the rarity hue, so a dim row still says
+		# which tier it belongs to (D96).
+		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity)
+			if open else Icons.rarity_colour(p.rarity).darkened(SEALED_DIM))
 		var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
+		# THREE states, not two. The old text printed `(owned)` or `(locked)`, so a power that
+		# was unlocked and merely unbought said "locked" — which is the one word a player reads
+		# as "the door cannot deal me this", and it was wrong about every buyable row.
+		var state := "in the deal" if (owned and open) else (
+			"not bought" if open else "sealed")
 		lbl.text = "%s  [%s]  %s   Lv%d/%d   (%s)" % [
-			p.name, cost, p.effect_text(), level, p.level_capped(),
-			"owned" if owned else "locked"]
+			p.name, cost, p.effect_text(), level, p.level_capped(), state]
 		row.add_child(lbl)
-		UI.hoverable(row, Icons.card_tooltip(p))
+		UI.hoverable(row, _row_tip(p, owned, open))
 
 		if not owned:
-			if not MetaState.power_available(pid):
+			if not open:
 				var gate := Button.new()
 				UITheme.style_button(gate)
 				# Two powers unlock at exactly one clear, so this button read
@@ -126,7 +222,7 @@ func _refresh() -> void:
 				buy.disabled = MetaState.gold < price
 				buy.pressed.connect(_on_buy.bind(pid))
 				row.add_child(buy)
-			continue
+			return
 
 		if p.at_max():
 			var maxed := Button.new()

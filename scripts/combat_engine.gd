@@ -122,6 +122,9 @@ var kills_this_combat: int = 0
 ## the caller is not in a run and wants no ramp (D270). Held so `enemy_damage` can read it on every
 ## turn, not only at setup.
 var run_progress: float = -1.0
+## How many times this dungeon has killed the player since they last beat it (D285). Raises enemy
+## HP and damage; the player comes back holding relics to answer it.
+var run_grudge: int = 0
 ## Energy the X-cost card currently being played will spend, stashed before the pool
 ## moves so the face and the resolution read one number. -1 when nothing is mid-play.
 var x_energy: int = -1
@@ -162,12 +165,13 @@ var enemy_intent: int:
 func setup(deck: Array[CardData], hp: int, max_hp: int, p_dungeon: int, p_tier: int,
 		forced_archetype: String = "", p_relics: Array = [],
 		p_roster: Array = [], p_power: PowerData = null, p_boss: String = "",
-		p_untaxed: Array = [], p_progress: float = -1.0) -> void:
+		p_untaxed: Array = [], p_progress: float = -1.0, p_grudge: int = 0) -> void:
 	dungeon = p_dungeon
 	tier = p_tier
 	# Everything below this line — per-turn bonuses, combat-start effects, `_fire_relics` —
 	# reads `relics`, so an untaxed relic is a relic in every respect except the one.
 	run_progress = p_progress
+	run_grudge = p_grudge
 	relics = p_relics.duplicate()
 	relics.append_array(p_untaxed)
 	power = p_power
@@ -253,10 +257,10 @@ func _spawn_enemies(forced_archetype: String) -> void:
 	# `run_progress` is how deep the RUN is, 0 at the mouth and 1 at the boss (D270). Negative means
 	# no ramp, which is what every caller that is asking about the dungeon rather than about one
 	# moment in one run gets by default.
-	var hp_budget := Balance.enemy_max_hp(dungeon, tier, ratio, run_progress) \
+	var hp_budget := Balance.enemy_max_hp(dungeon, tier, ratio, run_progress, run_grudge) \
 		* Balance.multi_hp_factor(count)
-	var dmg_budget := float(Balance.enemy_damage(dungeon, tier, ratio, 1, 1, run_progress)) \
-		* Balance.multi_dmg_factor(count)
+	var dmg_budget := float(Balance.enemy_damage(dungeon, tier, ratio, 1, 1, run_progress,
+		run_grudge)) * Balance.multi_dmg_factor(count)
 
 	for i in count:
 		var c := Combatant.new()

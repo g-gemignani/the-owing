@@ -116,6 +116,14 @@ func _fill(z: ZoneData) -> void:
 		UI.button(box, "%s   difficulty %d%s%s" % [d.name, d.difficulty, wears_tag, tag],
 			(func(): _enter(d.id)) if unlocked else Callable(), 40.0)
 		UI.label(box, "    %s" % d.description)
+		# What this place is owed (D285). Named before you commit, for the same reason the aspect
+		# and the boss are: a term you cannot plan around is one you can only be surprised by.
+		var owed := MetaState.grudge_on(d.id)
+		if owed > 0 and unlocked:
+			var gl := UI.label(box, "    It remembers you. %s, and %s waiting where you fell." % [
+				"Everything here hits harder" if owed == 1 else "Everything here hits much harder",
+				Wording.count(owed * Balance.GRUDGE_RELICS_PER, "relic")])
+			gl.add_theme_color_override("font_color", Color(0.92, 0.62, 0.52))
 		if wears != Balance.ASPECT_NONE and unlocked:
 			var al := UI.label(box, "    %s: %s. It pays %d%% more for the trouble." % [
 				Balance.aspect_name(wears), Balance.aspect_line(wears),

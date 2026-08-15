@@ -310,8 +310,14 @@ const MAX_DECK_NAME := 16
 ##   - a bigger deck of the same cards is not "stronger" (only more consistent)
 ##   - an expensive card is only stronger if it beats the cost-efficiency curve
 ## Reference deck (4 Strike @6 dmg + 4 Defend @5 block) with Block valued at
-## CardData.BLOCK_VALUE: (4x6 + 4x5x0.65) / 8 energy = 4.625 per energy.
+## CardData.BLOCK_VALUE: (4x6 + 4x5x0.50) / 8 energy = 4.250 per energy.
 ## Recomputed whenever the weighting changes, so the reference deck stays ratio 1.0.
+##
+## It moved with `BLOCK_VALUE` in D285, and `test_content` is what said so — every ratio in the
+## game had collapsed to exactly 1.000 because `soften_ratio` floors there, and three suites
+## reported it as three different faults ("the ratchet is gone", "power is punished", "block/damage
+## pricing wrong"). **A divisor left behind by its own numerator does not fail loudly; it makes
+## every quotient wrong by the same factor and every guard downstream blames its own subject.**
 const BASELINE_CARD_POWER := 4.625
 # --- the ratio axis was rescaled by D109, and everything measured against it moved
 #
@@ -3402,6 +3408,28 @@ const OFFENSE_SHARE := 0.5
 ## HP ramps further than damage. A tougher enemy makes a fight longer, which the player can answer
 ## with a better deck; more damage makes it shorter and less answerable, and D209's depth inversion
 ## is what happens when that is pushed.
+## **What dying in a place costs you and gives you, next time (D285).**
+##
+## A death used to be a subtraction and a screen. This makes it a term: the dungeon that killed you
+## is owed something, and the next attempt at it carries the debt in both directions.
+##
+## The BURDEN is enemy HP and damage, per death. The EDGE is relics you start holding — what the
+## last attempt left down there, waiting. Deliberately asymmetric in the player's favour per step:
+## a grudge should read as "this is going to be a real fight and I am going in armed", not as a
+## difficulty setting the player did not choose.
+##
+## Capped at three because it clears on a clear. Uncapped, a player who bounces off the Maw six
+## times would face a dungeon nothing can beat, and the run that finally breaks the streak is the
+## one the whole mechanic exists to produce.
+const GRUDGE_MAX := 3
+## Enemy HP and damage per death owed.
+const GRUDGE_ENEMY_STEP := 0.08
+## Relics you begin holding, per death owed.
+const GRUDGE_RELICS_PER := 1
+
+static func grudge_enemy_mult(grudge: int) -> float:
+	return 1.0 + GRUDGE_ENEMY_STEP * float(clampi(grudge, 0, GRUDGE_MAX))
+
 const RUN_RAMP_HP := Vector2(0.75, 1.70)
 const RUN_RAMP_DMG := Vector2(0.80, 1.30)
 
@@ -3416,7 +3444,8 @@ static func run_ramp(progress: float, band: Vector2) -> float:
 		return 1.0
 	return lerpf(band.x, band.y, clampf(progress, 0.0, 1.0))
 
-static func enemy_max_hp(dungeon: int, tier: int, ratio: float, progress: float = -1.0) -> int:
+static func enemy_max_hp(dungeon: int, tier: int, ratio: float, progress: float = -1.0,
+		grudge: int = 0) -> int:
 	# damage a baseline deck lands per turn while also blocking
 	var dps := MAX_ENERGY * BASELINE_CARD_POWER * OFFENSE_SHARE
 	# The tier's own turn budget (D265). The depth term rides the same ratio, so a boss at depth
@@ -3428,6 +3457,7 @@ static func enemy_max_hp(dungeon: int, tier: int, ratio: float, progress: float 
 		+ HP_POWER_K_HIGH * maxf(0.0, sr - HIGH_POWER_FLOOR)
 	base *= ascension_mult() * difficulty_hp_mult()
 	base *= run_ramp(progress, RUN_RAMP_HP)
+	base *= grudge_enemy_mult(grudge)
 	return int(round(base))
 
 ## How hard each tier answers the player's OWN power (D265).
@@ -3460,7 +3490,7 @@ static func tier_hp_power_k(tier: int) -> float:
 ## what they must, and commit the rest to ending the fight. It is also what makes
 ## persistent block (Barricade) valuable rather than merely convenient.
 static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn: int = 1,
-		progress: float = -1.0) -> int:
+		progress: float = -1.0, grudge: int = 0) -> int:
 	var d := 7.5 + roll + 0.6 * dungeon
 	d += float(TIER_DMG_BONUS[tier])
 	# The chosen rung multiplies the ratio INSIDE scaling_ratio, so the dungeon's own
@@ -3472,6 +3502,7 @@ static func enemy_damage(dungeon: int, tier: int, ratio: float, roll: int, turn:
 	d *= ascension_mult() * difficulty_dmg_mult()
 	d *= ENEMY_DAMAGE_BASE_MULT
 	d *= run_ramp(progress, RUN_RAMP_DMG)
+	d *= grudge_enemy_mult(grudge)
 	return int(round(d))
 
 ## Where the whole ladder SITS, as against how steeply each rung leans (D244).

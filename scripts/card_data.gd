@@ -719,6 +719,19 @@ func _power_value_uncached() -> float:
 	# Pricing them equally charged block-heavy decks for power that never shortened
 	# a fight — measured as a stronger endgame deck winning LESS than a weaker one
 	# (51% vs 73%) while its fights ran 50% longer.
+	#
+	# **0.65 was measured against and kept (D285).** Lowering it to 0.50 does help the decks it
+	# should — at the Foundry over 200 trials, Barricade 17% to 24%, Mid 24% to 32%, AoE 44% to
+	# 54%, Exhaust 61% to 74%, with nothing falling. It cannot be taken, and the reason is worth
+	# more than the change: this number is the numerator of `Balance.BASELINE_CARD_POWER`, which is
+	# the DIVISOR of every ratio in the game. Move it and the reference deck moves, so every power
+	# is re-priced against a cheaper deck — `bulwark` stops raising the ratio at all, which is the
+	# unpriced-throughput hole the whole ratchet exists to close.
+	#
+	# The guards bracket it tightly: 0.62 passes, 0.60 fails on a damage power at 1.604 against a
+	# 1.6 cap, and 0.50 opens the Bulwark hole. 0.62 is reachable and buys nothing measurable.
+	# **Block cannot be re-priced on its own** — it is one number wearing two jobs, and separating
+	# them is the change that would make this tunable.
 	var v := dmg + float(eff_block()) * BLOCK_VALUE
 	# ~4 other cards in a typical hand, at the same discount Block gets everywhere
 	v += float(block_per_card_in_hand) * 4.0 * BLOCK_VALUE
