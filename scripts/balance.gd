@@ -3299,7 +3299,7 @@ const TARGET_NORMAL_TURNS := 4.0
 ## Share of the energy budget a player can commit to damage while still defending.
 const OFFENSE_SHARE := 0.5
 
-## **How much harder the dungeon gets as a run goes down it (D267).**
+## **How much harder the dungeon gets as a run goes down it (D270).**
 ##
 ## Nothing did this before. `GameState.dungeon` is set once by `select_dungeon` and never moves, and
 ## relics have been untaxed since D230, so `ratio` barely moves either — enemy strength was a
@@ -3606,6 +3606,37 @@ static func removal_price(already_removed: int, difficulty: int = 0) -> int:
 	var fights := SHOP_REMOVAL_IN_FIGHTS \
 		+ SHOP_REMOVAL_STEP_IN_FIGHTS * float(maxi(0, already_removed))
 	return int(round(fights * float(fight_income(d))))
+
+## How this card stands against the deck that would take it, as a ratio of power per energy (D270).
+##
+## Above 1.0 raises the deck's average and below 1.0 lowers it — and **a card below 1.0 makes the
+## player weaker**, which nothing in the game said. `draw_interval` quotes the cost of taking any
+## card as "one card seen every 4.2 turns instead of 4.0", which reads as trivial and is the same
+## sentence whether the card is the best in the pool or the worst.
+##
+## D266's capability probe is what found this: two cells came back with `cap` BELOW 1.0, meaning a
+## run ended less capable than it started. A reward screen presenting every card as a gain is a
+## reward screen that lies about half its offers.
+##
+## Power per ENERGY rather than raw power, because that is what `power_ratio` measures and what a
+## turn is bounded by. A 0-cost card is floored at half an energy rather than divided by zero.
+static func card_vs_deck(card: CardData, deck: Array) -> float:
+	if card == null or deck.is_empty():
+		return 1.0
+	var deck_pe := deck_power(deck) / maxf(0.001, deck_cost(deck))
+	var card_pe := card.power_value() / maxf(0.5, float(card.eff_cost()))
+	return card_pe / maxf(0.001, deck_pe)
+
+## The reward screen's verdict on one offer, or "" when it is neither notably better nor worse.
+## Banded rather than printed as a number: the ratio is an estimate, and a player reading "0.94x"
+## would take it for a precision the model does not have.
+static func card_verdict(card: CardData, deck: Array) -> String:
+	var r := card_vs_deck(card, deck)
+	if r >= 1.25:
+		return "Stronger than what you hold."
+	if r <= 0.80:
+		return "WEAKER than what you hold — taking it thins your draw."
+	return ""
 
 ## How often a deck of this size shows you any particular card, in turns.
 ##
