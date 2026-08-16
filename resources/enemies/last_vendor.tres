@@ -14,6 +14,7 @@ pattern = PackedInt32Array(0, 2, 0, 3)
 debuff_stacks = 2
 block_amount = 11
 strength_gain = 2
+stature = 1.05
 rule_trigger = PackedInt32Array(3)
 rule_threshold = PackedInt32Array(4)
 rule_action = PackedInt32Array(7)

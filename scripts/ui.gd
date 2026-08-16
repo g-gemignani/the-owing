@@ -737,15 +737,23 @@ static func _relic_tile(row: HBoxContainer, rd: RelicData, reader: Label,
 	var b := relic_face(row, rd)
 
 	# Met or not is the interesting half of a relic you are being offered, and the collection screen
-	# is two menus away from this decision (D205b). It rides the reader line as well as the hover,
-	# because a hover is the one thing on this row a phone cannot show.
+	# is two menus away from this decision (D205b).
 	var met := "You have met this one before." if MetaState.seen_relic(rd.id) \
 		else "You have never seen this one."
 	var say := func() -> void:
 		reader.text = "%s — %s  (%s%s)" % [rd.name, rd.description, met, tail]
-	hoverable(b, "%s\n%s\n%s%s" % [rd.name, rd.description, met, tail])
-	if not touch_ui():
-		b.mouse_entered.connect(say)
+	# The PRESS says it, and nothing else does (D319).
+	#
+	# It used to be said three ways at once: a tooltip, a hover that wrote the reader, and the
+	# press. Three deliveries of one sentence is not redundancy, it is a race — the reader is a
+	# single line and the last writer wins, so after choosing a relic the player only had to
+	# move the mouse for the line under their choice to start describing a different one. The
+	# reader then disagreed with the highlight, on the screen where the decision is made.
+	#
+	# The press is the one that survives because it is the one that is also the CHOICE (D307):
+	# pressing a tile reads it and selects it, so the line and the highlight cannot come apart.
+	# It is also the only one a phone has, which is what made the hover a second implementation
+	# of the same sentence rather than a shortcut to it.
 	# Idempotent, on purpose: pressing a tile reads it and selects it, and pressing it again does
 	# exactly the same thing. There is no "second press" to get wrong, which is the whole of D307.
 	b.pressed.connect(func() -> void:

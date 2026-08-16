@@ -2887,6 +2887,22 @@ static func iso_family(enemy_id: String) -> String:
 		return "brute"
 	return "caster"
 
+## How tall a creature stands, as a multiple of the hero (D320).
+##
+## The family above answers what KIND of fight it is and is derived from the stats, which is
+## right: how it behaves is what the stats are. Size is not, and reading it off the same
+## answer drew the Ossuary Wretch — a human skeleton that happens to come in threes — at
+## knee height. So the size is authored on the archetype and only read here.
+##
+## A person when the archetype is unknown, matching `EnemyData.stature`'s own default rather
+## than restating it as a number in a second place.
+static func iso_stature(enemy_id: String) -> float:
+	var e := enemy(enemy_id)
+	return maxf(0.05, e.stature) if e != null else ISO_STATURE_DEFAULT
+
+## What a creature with nothing to read is drawn at: a person.
+const ISO_STATURE_DEFAULT := 1.0
+
 ## Steps on one floor after which its hunters take TWO steps to your one. Pressure that
 ## rises with greed, and — unlike spawning extra monsters — it cannot inflate the
 ## encounter budget, because it hurries what is already counted.

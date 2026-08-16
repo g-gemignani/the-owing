@@ -300,6 +300,8 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D316** | [One key, two locks, and nothing checking the addition](#d316--one-key-two-locks-and-nothing-checking-the-addition) |
 | **D317** | [Her walk was measured one frame at a time, so every frame moved her](#d317--her-walk-was-measured-one-frame-at-a-time-so-every-frame-moved-her) |
 | **D318** | [Five of the eight hero files are painted the wrong way round](#d318--five-of-the-eight-hero-files-are-painted-the-wrong-way-round) |
+| **D319** | [One sentence, said three ways, and the last one to speak won](#d319--one-sentence-said-three-ways-and-the-last-one-to-speak-won) |
+| **D320** | [Creature size came off the stat block, and the skeleton came out knee-high](#d320--creature-size-came-off-the-stat-block-and-the-skeleton-came-out-knee-high) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -22148,3 +22150,130 @@ on the old table too.
 "which way it looks" — and stayed correct exactly as long as those were the same question. Adding
 six files to the set separated them, and nothing complained, because the thing that would have
 complained was the entry itself.
+
+### D319 — One sentence, said three ways, and the last one to speak won
+
+The relic offer says what a relic does in a reader line under the row. It said it three
+times: a tooltip on the tile, a `mouse_entered` handler that wrote the reader, and the press
+that both writes the reader and selects the tile.
+
+Three deliveries of one sentence is not redundancy. The reader is a SINGLE LINE, so the three
+are writing to the same place and the last one to speak wins — and the hover speaks last,
+because moving the mouse is what you do after clicking. So the player chose a relic, the tile
+lit up, and then the line under it described whichever relic the cursor drifted across on its
+way to the Take button. **The reader disagreed with the highlight, on the screen where the
+decision is made.**
+
+The press is the one that survives, and not by seniority:
+
+* it is also the CHOICE (D307), so the line and the highlight are written by one event and
+  cannot come apart;
+* it is the only one a phone has, which is what made the hover a second implementation of the
+  same sentence rather than a shortcut to it.
+
+The same pair was on the relics collection screen, and there it is worse for being bigger: a
+wall of forty owned relics, and a cursor crossing it on the way somewhere else rewrites the
+reader four times. The tooltip stays on the UNMET tiles there, because those are disabled and
+have no press to explain themselves with — which is the test for whether a hover is a
+duplicate or the only door.
+
+The card hover is NOT this and was left alone. Hovering a card enlarges it and pressing it
+plays it: two different actions on one control, not two ways to do one.
+
+#### The rule
+
+**Redundant input is fine; redundant OUTPUT to a single slot is a race.** Two controls that
+both open a card are a convenience. Two events that both write one label are a bug waiting for
+the day a player uses them in the wrong order — and the order that breaks it is usually the
+common one, because hover follows click.
+
+### D320 — Creature size came off the stat block, and the skeleton came out knee-high
+
+The report: *"I am fighting with the ossuary wretch and the size of the char in the iso
+dungeon is yet again too small. Get rid of the rules of small for normal encounters and bigger
+for epics and bosses but just make them proportional to the hero in a logical way: a rat is
+fine smaller but a human like skeleton, should be big as the hero."*
+
+**Yet again** is the important word. This is the third pass over creature size (D306, D309),
+and the first two tuned the numbers. This one deletes the rule they were tuning.
+
+#### What the size was made of
+
+    SPRITE_H[tier] x FAMILY_H[family] / fill / length_ratio,  capped by BEAST_H_MAX
+
+Four terms, and not one of them was a fact about the creature.
+
+`Balance.iso_family()` sorts an archetype into swarm / caster / brute from `count_max` and
+`hp_mult`. That is an honest answer to *how does this fight behave* — and it is the wrong
+question. The Ossuary Wretch is a human skeleton that arrives in threes, so `count_max` is 3,
+so it was a `swarm`, so `FAMILY_H` drew it at 0.38 of a wanderer's height:
+
+    1.70 x 0.38 / (2.20 x 0.98) = 0.30 x the hero
+
+A human skeleton at thirty percent of the woman fighting it. Every archetype with
+`count_max > 1` had the same defect and there are nine of them.
+
+`SPRITE_H[tier]` was the other half of the ask, and measuring it produced the odder finding:
+**the tier had already stopped reaching the screen.** Since D197 no fight stands on a tile —
+they all walk — so every creature in the game was drawn with the `wander` entry, and
+`combat` 2.20 / `elite` 2.51 / `boss` 2.95 were three numbers nothing read. Probed over 1,650
+floors: 0 COMBAT tiles, 0 ELITE tiles, 96 BOSS tiles. The rule the report asked to be rid of
+was already dead except on the boss tile, and it was **the family**, not the tier, that made
+the skeleton small.
+
+#### What replaced it
+
+`EnemyData.stature`: how tall this creature stands, as a multiple of the hero. Authored per
+archetype, defaulting to 1.0.
+
+    h = hero's subject height x stature / the file's own fill
+
+Two rules on the floor now, and which applies is decided by whether the thing is ALIVE.
+Furniture — a campfire, a stall, a chest — is sized by its tile through `SPRITE_H`, and those
+numbers were each measured against the hero by hand (D288). A creature is sized against the
+hero directly, and nothing about the encounter reaches it.
+
+`BEAST_H_MAX` went with the family table and is the clearest sign the old axis was wrong. It
+capped anything painted wider than tall, because `FAMILY_H` sized the LONGEST axis and a hound
+came back `brute`. A stature is a HEIGHT, so a long body is simply short: one number replaced
+two rules and the correction they needed.
+
+The **default is a person**. An archetype nobody wrote a line for is hero-sized, because wrong
+by a head reads as style and wrong by a factor of three reads as a bug — which is the report
+this entry starts with.
+
+#### The boss tile, which was the only place the tier still spoke
+
+`_cast_fights` deliberately skips the boss — a dungeon's finale is named on the dungeon, not
+rolled — so the boss tile had nothing cast on it and fell through to the generic `boss.png`
+slab at `SPRITE_H` 2.95. It reads `DungeonData.boss` now and draws that creature's own
+painting, at that creature's own stature. The Warrens' boss is a spider and the Abyssal Stair's
+is a mouth on a body, and they are big because of what they are.
+
+#### Two of the paintings are busts, and only a picture could say so
+
+`stature` sizes the SUBJECT IN THE FILE, and for thirty-three of thirty-five archetypes that is
+the creature's height. `warden_s/n` and `tomb_guard_s/n` are half-length portraits, cut at the
+hip. Sized as though the visible half were the whole figure they drew at roughly double, and
+the numbers gave no hint: their fills, 0.53, look exactly like a small creature in a big canvas.
+Theirs are set to the painted part (0.78) with the crop noted here as an art defect to fix, not
+a number to keep tuning.
+
+#### The instrument, because the sample is what failed all three times
+
+D306, D309 and this were each judged against two or three creatures, and each time the sample
+looked right and the roster did not. `tools/iso_size_check.gd` renders **every** archetype
+standing next to the hero, through the real crawl renderer, sorted shortest to tallest —
+three pages stitched into one image. It is what caught the two busts, and it is the check to
+run before touching a stature.
+
+`tools/iso_scale.gd` prints the same set as numbers and now includes a `wide/tall` column: a
+stature is a claim about a painting, and the painting can disagree.
+
+#### The rule
+
+**A creature's size is a fact about the creature, not about the fight.** The tier it is rated
+at and the group it arrives in are properties of the ENCOUNTER; a skeleton is a skeleton in
+any of them. Deriving a visual fact from a mechanical one is cheap, always plausible, and
+wrong the first time a creature is mechanically unusual and visually ordinary — which is what
+an archetype that comes in threes is.

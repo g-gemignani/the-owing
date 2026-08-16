@@ -158,34 +158,39 @@ func _stage(tv: TraversalIso) -> void:
 			tv.enc[c2] = int(roles[i])
 			tv.seen[c2] = true
 
-	# One wanderer per silhouette family, plus one facing away, so all three readings and
-	# both facings are in a single frame. Cast explicitly rather than left to the roster:
-	# this rig exists to prove the FAMILY art is wired, and a random roster draw might
-	# hand out three of the same kind.
-	var by_family := {}
+	# Four wanderers chosen by SIZE, standing in a row beside the hero (D320).
+	#
+	# It used to be one per silhouette family, which was the right sample while the family
+	# decided how big a creature was drawn. It does not any more — `EnemyData.stature` does —
+	# so a family sample photographs three creatures that may all be the same height and
+	# proves nothing about the only rule that is now in play. The shortest archetype, the
+	# tallest, and two in between put the whole range beside the woman it is measured
+	# against, which is the one comparison a picture can settle and a number cannot.
+	var by_size: Array = []
 	for tier in [Balance.Tier.NORMAL, Balance.Tier.ELITE]:
 		for eid in Balance.ROSTER[tier]:
-			var fam := Balance.iso_family(String(eid))
-			if not by_family.has(fam):
-				by_family[fam] = String(eid)
+			if not (String(eid) in by_size):
+				by_size.append(String(eid))
+	by_size.sort_custom(func(a, b): return Balance.iso_stature(a) < Balance.iso_stature(b))
 	tv.mons = []
-	var fams: Array = Balance.ISO_FAMILIES
 	for k in 4:
 		var c3: int = mid + 1 * w + (k - 2)
 		if c3 == tv.pos:
 			c3 += 1
-		var fam2: String = String(fams[k % fams.size()])
+		# ends and quarters of the sorted list, so the row reads shortest to tallest
+		var pick: int = 0 if by_size.is_empty() else \
+			int(round(float(k) * float(by_size.size() - 1) / 3.0))
 		tv.mons.append({"cell": c3, "type": Traversal.Enc.COMBAT, "pen": -1,
 			"design": k, "south": k % 2 == 0,
-			"enemy": String(by_family.get(fam2, ""))})
+			"enemy": "" if by_size.is_empty() else String(by_size[pick])})
 	# ...and the two stationary fights get cast too, so the tile art and the wanderer art
 	# can be compared against each other in the same picture.
 	for i in tv.enc.size():
 		var e := int(tv.enc[i])
 		if e == Traversal.Enc.COMBAT:
-			tv.enemy_of[i] = String(by_family.get("brute", ""))
+			tv.enemy_of[i] = "" if by_size.is_empty() else String(by_size[by_size.size() - 1])
 		elif e == Traversal.Enc.ELITE:
-			tv.enemy_of[i] = String(by_family.get("swarm", ""))
+			tv.enemy_of[i] = "" if by_size.is_empty() else String(by_size[0])
 	# The stairs are DRAWN rather than sprited — there is no stair art in any pack — so
 	# this rig is the only place they can be judged against the sprites they share a floor
 	# with.

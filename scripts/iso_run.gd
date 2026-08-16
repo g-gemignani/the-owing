@@ -245,48 +245,40 @@ const SPRITE_H := {
 	# fact that she is drawn last and so never occluded.
 	"hero": 2.20,
 }
-## What a creature's own SIZE is, as a multiple of its tier's height, by the family
-## `Balance.iso_family()` derives from its stats (D306).
+## The family sizes were HERE, and they were the wrong axis (D320).
 ##
-## The floor already tells you what kind of danger you are looking at before you read a
-## word — a swarm is spiders, a brute is an armoured thing — and until now it told you that
-## with the silhouette alone, because every creature on a fight tile was drawn at the same
-## number. What the player actually saw was that number times the file's own fill, which
-## runs from 0.40 to 0.98 across the 70 paintings. So the size said nothing, and it said it
-## inconsistently: `plague_rat` measured 0.61x the hero facing her and 0.89x walking away,
-## because its two paintings fill their canvases differently. **The same rat, half again as
-## tall, for turning round.**
+## A creature is drawn at `EnemyData.stature` times the hero's own height now, and nothing
+## about the tile it stands on or the tier it fights at reaches its size. The three numbers
+## below are what that replaced; they are kept as the record of what went wrong, because the
+## shape of the mistake is easy to make again.
 ##
-## Sizing by the SUBJECT rather than by the canvas fixes the pair for free — both facings
-## land on the same height whatever their fills are — and then these three numbers put the
-## size back in the reading: a swarm is knee-high, a caster is a person, a brute is bigger
-## than you.
-## The hero reads as a person, so the rest is arithmetic against a person: a robed figure
-## is her height, an armoured brute is a head taller, and vermin come up to her knee. The
-## swarm number is what a hunched scuttling body measures TALL once its length is divided
-## out, which is why it is smaller than it looks -- 0.38 along the length of a body 1.18x
-## longer than tall is 0.32x her height (D309).
-const FAMILY_H := {"swarm": 0.38, "caster": 1.00, "brute": 1.15}
-## What a creature with no family answer is drawn at. `Balance.ISO_FAMILY_DEFAULT` is
-## `brute`, and this matches it rather than restating the fallback as a number.
-const FAMILY_H_DEFAULT := 1.15
-## The most a creature ON FOUR LEGS is drawn at, along its length (D309).
+## `Balance.iso_family()` sorts an archetype into swarm / caster / brute from `count_max` and
+## `hp_mult`, and those are honest answers to *how does this fight behave*. Read as a size
+## they are nonsense: the Ossuary Wretch is a human skeleton that comes in threes, so it was
+## a `swarm`, so it was drawn at 0.30x the hero. A skeleton the size of a rat, reported by
+## the player as "the char in the iso dungeon is yet again too small", and the third time
+## these numbers were tuned rather than replaced (D306, D309).
 ##
-## `Balance.iso_family()` answers "how dangerous, and in what shape" from the enemy's own
-## stats, and a hound comes back `brute` because it hits hard and often. That is the right
-## answer to the question it asks and the wrong size: 1.15 is the size of something that
-## STANDS, and applied to a body that is 1.17x longer than it is tall it drew a dog as tall
-## as the hero and wider than she is tall.
+## **A creature's size is a fact about the creature, not about the fight.** The tier a fight
+## is rated at and the group it arrives in are both properties of the encounter; a skeleton
+## is a skeleton in any of them.
 ##
-## The art already says which creatures are on four legs — every creature painting fills its
-## canvas width, so a subject wider than it is tall is a body on the horizontal. Those are
-## capped here. It only ever shrinks: a rat swarm at `swarm` 0.55 is already under it and is
-## untouched.
-## 0.65 rather than something rounder: a dungeon hound's shoulder should sit at roughly
-## half a person, and its art is 1.17x longer than tall, so 0.65 along the length puts the
-## shoulder at 0.56x the hero. At the 0.85 this started as it stood 0.74x her -- a dog the
-## size of a pony.
-const BEAST_H_MAX := 0.65
+##     const FAMILY_H := {"swarm": 0.38, "caster": 1.00, "brute": 1.15}
+##     const FAMILY_H_DEFAULT := 1.15
+##     const BEAST_H_MAX := 0.65
+##
+## `BEAST_H_MAX` went with them and is worth its own sentence. It capped anything painted
+## wider than tall, because the family number sized the longest axis and a hound came back
+## `brute`. A stature is a HEIGHT, so a long body is simply short and there is nothing to
+## cap: one number replaced two rules and the correction they needed.
+##
+## The one number the family tables became: the hero's own SUBJECT height, in tile heights.
+##
+## `SPRITE_H["hero"]` names her CANVAS and she fills 98% of it, so this is what a creature
+## with `stature` 1.0 is drawn at. Measured at load rather than written down, because the
+## hero's painting can be repainted and a typed copy of its fill would then be a second
+## definition of how tall a person is (D34).
+var hero_subject_h: float = float(SPRITE_H["hero"])
 
 ## Wanderer design count lives in `Balance.ISO_WANDERERS` — the manifest lists one
 ## painted file per design and cannot preload this script to read it (D122).
@@ -309,13 +301,13 @@ var stand := {}
 ## role -> how much of its canvas that art's subject fills (D306). Cached beside `stand`
 ## and for the same reason: it is a per-file measurement that must not run per redraw.
 var fill := {}
-## role -> the size multiplier its family earns. Empty for anything that is not a creature,
-## which is how `_footed_rect` tells the two apart.
-var family_h := {}
-## role -> how much longer than tall that creature is, 1.0 for anything upright (D309).
-var length_ratio := {}
+## role -> how tall that creature stands, as a multiple of the hero (D320). Empty for
+## anything that is not a creature, which is how `_footed_rect` tells the two apart: a
+## campfire and a market stall are furniture and are sized by their tile, not against a
+## person.
+var creature_h := {}
 ## role -> what to multiply a POSE FRAME's height by so that it draws the same character at
-## the same size as the standing painting it is a frame of (D316). 1.0, i.e. absent, for
+## the same size as the standing painting it is a frame of (D317). 1.0, i.e. absent, for
 ## everything that is not one frame of an animation.
 var pose_scale := {}
 ## The last step taken, kept as a grid vector because FOUR directions have to come out
@@ -518,13 +510,13 @@ func _load_art() -> void:
 				if r != "floor" and r != "rock":
 					stand[r] = IsoFooting.offset(tex)
 				# The family fallbacks are creatures too, and they are sized the same way
-				# the per-archetype paintings are (D306). `mon_<family>_<face>` carries its
-				# family in the role name, which is the only place it exists here.
+				# the per-archetype paintings are (D320). They stand in for an archetype whose
+				# own painting is missing, so they are drawn at a PERSON's height: a
+				# placeholder should not make a claim about size that the thing it stands in
+				# for would contradict.
 				if String(r).begins_with("mon_"):
 					fill[r] = IsoFooting.fill(tex)
-					length_ratio[r] = IsoFooting.length_ratio(tex)
-					family_h[r] = float(FAMILY_H.get(
-						String(r).split("_")[1], FAMILY_H_DEFAULT))
+					creature_h[r] = Balance.ISO_STATURE_DEFAULT
 				# The hero is the only art the floor mirrors, and the mirror is a TEXTURE
 				# rather than a flipped rect (D154). Built once here: her left-hand facings
 				# then draw through exactly the same code as her right-hand ones, with the
@@ -542,9 +534,16 @@ func _load_art() -> void:
 						stand[r + FLIP] = -float(stand.get(r, 0.0))
 						if fill.has(r):
 							fill[r + FLIP] = float(fill[r])
-							length_ratio[r + FLIP] = float(length_ratio.get(r, 1.0))
-							family_h[r + FLIP] = float(family_h.get(r, FAMILY_H_DEFAULT))
+							if creature_h.has(r):
+								creature_h[r + FLIP] = float(creature_h[r])
 	_pin_poses()
+	# How tall a PERSON is on this floor, which is the unit every creature is drawn in
+	# (D320). Measured off her standing painting, once, after it is loaded: `SPRITE_H` names
+	# her canvas and she does not fill all of it, so the canvas number is a few percent
+	# taller than she is. A creature at `stature` 1.0 has to match the woman standing next to
+	# it, not the empty space over her head.
+	if art.has(HERO_BASES[0]):
+		hero_subject_h = float(SPRITE_H["hero"]) * IsoFooting.fill(art[HERO_BASES[0]])
 	# EVERY terrain's surface, each under its own key, rather than the dungeon's one pair
 	# overwriting the generic one. A dungeon's floors no longer share a terrain (D177): the
 	# surface turns a floor before the architecture does, so the drawing asks the MODEL what
@@ -643,11 +642,9 @@ func _foe_role(enemy_id: String, face: String) -> String:
 		if tex != null:
 			art[role] = tex
 			stand[role] = IsoFooting.offset(tex)
-			# Sized by its SUBJECT and by the family its own stats put it in (D306).
+			# Sized by its SUBJECT, at the height the archetype itself declares (D320).
 			fill[role] = IsoFooting.fill(tex)
-			length_ratio[role] = IsoFooting.length_ratio(tex)
-			family_h[role] = float(FAMILY_H.get(
-				Balance.iso_family(enemy_id), FAMILY_H_DEFAULT))
+			creature_h[role] = Balance.iso_stature(enemy_id)
 			# ...and its mirror, on the same terms as every other figure. Built here rather
 			# than in `_load_art` for the same reason the texture is: a floor uses a handful
 			# of these and building 70 mirrors to draw six is work for nothing.
@@ -656,8 +653,7 @@ func _foe_role(enemy_id: String, face: String) -> String:
 				art[role + FLIP] = flip
 				stand[role + FLIP] = -float(stand.get(role, 0.0))
 				fill[role + FLIP] = float(fill.get(role, 1.0))
-				length_ratio[role + FLIP] = float(length_ratio.get(role, 1.0))
-				family_h[role + FLIP] = float(family_h.get(role, FAMILY_H_DEFAULT))
+				creature_h[role + FLIP] = float(creature_h.get(role, 1.0))
 			return role
 	foe_missing[role] = true
 	return ""
@@ -1164,6 +1160,16 @@ func _draw_floor() -> void:
 				# each step is a weaker claim about what is standing there, and the floor should
 				# never make a stronger one than it can keep.
 				var cast := tv.enemy_at(x, y)
+				# The BOSS tile is the one fight still standing on ground since D197, and
+				# nothing ever cast it: a dungeon's finale is named on the dungeon, not
+				# rolled, so `_cast_fights` leaves it alone and the tile fell through to the
+				# generic slab. Read the name here (D320). It is what makes the boss's SIZE
+				# its own — the Mycelial Lord is a head and a half taller than the hero
+				# because it is a giant mushroom, not because the tile is worth more.
+				if cast == "" and e2 == TraversalIso.Enc.BOSS:
+					var dd := Balance.dungeon(GameState.dungeon_id)
+					if dd != null:
+						cast = String(dd.boss)
 				var foe := _foe_role(cast, "s")
 				if foe != "":
 					role = foe
@@ -2021,14 +2027,22 @@ func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
 ## the geometry and the stand point in `IsoFooting`. Shared by the standing art and by the
 ## player, so the hero cannot end up standing on a subtly different spot than the monster
 ## next to her.
-## A CREATURE is sized by its subject and its family; everything else is sized the way it
-## always was, by the canvas (D306).
+## Two rules, and which one applies is decided by whether the thing is ALIVE (D320).
 ##
-## The split is deliberate rather than tidy. The hero, the furniture and the wanderers were
-## each measured against the hero and tuned by hand (D288), so normalising them now would
-## silently move six numbers that are already right. The creatures were never measured, and
-## they are the set where the canvas rule does the damage: 70 paintings, fills from 0.40 to
-## 0.98, and two facings of one archetype disagreeing by up to 46%.
+## **Furniture is sized by its tile.** A campfire, a market stall, a chest, the way on: they
+## are parts of the floor, `SPRITE_H` says how many tile-heights of canvas each gets, and
+## those numbers were each measured against the hero and tuned by hand (D288).
+##
+## **A creature is sized against the HERO.** `stature` says how tall it stands as a multiple
+## of her, and nothing else reaches its size — not the tile it stands on, not the tier the
+## fight is rated at, not how many of it arrive. That is the whole of D320: a skeleton is a
+## skeleton whether it is a normal fight, an elite or a boss.
+##
+## The fill division is what makes `stature` mean the SUBJECT rather than the canvas. Every
+## painting is 128x192 and bottom-anchored, and the subjects fill 40% to 98% of that, so
+## without it a rat and a knight painted at the same declared height land 2.5x apart — and
+## the two facings of ONE archetype land apart from each other, which is how a rat used to
+## grow half again as tall for turning round.
 func _footed_rect(tex: Texture2D, centre: Vector2, t: Vector2, key: String,
 		role: String, scale: float = 1.0) -> Rect2:
 	# ...and a POSE is sized by the character it is a frame of, not by its own canvas
@@ -2036,19 +2050,9 @@ func _footed_rect(tex: Texture2D, centre: Vector2, t: Vector2, key: String,
 	# for every sprite the floor draws except the hero mid-step.
 	var h: float = t.y * float(SPRITE_H.get(key, 1.8)) * scale \
 		* float(pose_scale.get(role, 1.0))
-	if family_h.has(role):
-		# `SPRITE_H` names the canvas, so divide by the fill to make the number mean the
-		# SUBJECT. Both facings of one creature then land on one height whatever their own
-		# paintings did with the empty space above them.
-		var long_by: float = maxf(1.0, float(length_ratio.get(role, 1.0)))
-		# The family number sizes the creature's LONGEST axis, not its height, and a body on
-		# four legs is capped: a hound is 1.17x longer than tall and a rat swarm 1.63x, so
-		# sizing either by height made it as tall as a standing brute and wider than the
-		# hero is tall (D309).
-		var fam: float = float(family_h[role])
-		if long_by > 1.0:
-			fam = minf(fam, BEAST_H_MAX)
-		h = h * fam / maxf(0.05, float(fill.get(role, 1.0))) / long_by
+	if creature_h.has(role):
+		h = t.y * hero_subject_h * float(creature_h[role]) * scale \
+			/ maxf(0.05, float(fill.get(role, 1.0)))
 	return IsoFooting.rect(tex, centre, t, h, float(stand.get(role, 0.0)))
 
 ## The reverse of `_role_of`, for the glyph fallback only.

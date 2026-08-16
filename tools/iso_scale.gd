@@ -82,24 +82,19 @@ func _init() -> void:
 			drawn * float(img.get_width()) / float(img.get_height()), drawn,
 			subject, subject / hero])
 
-	# The 70 per-archetype creatures, and the column that used to decide their size.
+	# The 70 per-archetype creatures, each against the hero, through the formula the floor
+	# actually uses: `hero subject height x EnemyData.stature` (D320).
 	#
-	# `iso_run` sizes a creature by its SUBJECT now, not by its canvas, so the fill below
-	# DIVIDES OUT and no longer reaches the screen (D306). It is still worth printing: it is
-	# the spread that used to be the size, from 0.40 to 0.98, and the two facings of one
-	# archetype disagreeing inside it is what the old rule turned into a monster that grew
-	# when it turned round.
-	#
-	# The "x hero if it still scaled by canvas" column is therefore a record of the defect
-	# rather than a reading of the game. What the floor draws now is
-	# `SPRITE_H[tier] x FAMILY_H[family]`, and this tool cannot name the family: it comes
-	# from `Balance.iso_family()`, which needs the autoloads a `--script` run does not have.
-	# Guessing it from the filename would be a restated table, which is the habit that has
-	# cost this project four bugs.
+	# The `x hero` column is therefore the stature itself, and printing it is not the point —
+	# the point is the column beside it. A stature is a claim about a PAINTING, and the
+	# painting can disagree: a creature declared 1.0 whose art is 1.6x wider than tall is
+	# being drawn a person tall and a person and a half wide, which is a claim nobody made.
+	# That is what the family tables got wrong from the other side (D309), and the only place
+	# it is visible is here, with the file and the number side by side.
 	var foe_dir := DirAccess.open(ART + "foe/")
 	if foe_dir != null:
-		print("\niso/foe/ — fill no longer sets the size (D306); this is the spread it used to set")
-		print("file                      fill   x hero IF it still scaled by the canvas")
+		print("\niso/foe/ — each creature at `stature` x the hero, and what its painting is shaped like")
+		print("file                      stature   subject WxH px   x hero   wide/tall")
 		var rows: Array = []
 		for f in foe_dir.get_files():
 			var nm := String(f)
@@ -111,45 +106,19 @@ func _init() -> void:
 				continue
 			img.convert(Image.FORMAT_RGBA8)
 			var b := _bbox(img)
-			var fl := float(b.size.y) / float(img.get_height())
-			var sub: float = float(sprite_h.get("combat", 0.0)) * TILE_H * fl
-			rows.append([nm.get_basename(), fl, sub, sub / hero])
-		rows.sort_custom(func(a, b): return float(a[3]) < float(b[3]))
+			# `<id>_s` / `<id>_n`: the facing is the last piece and the id is the rest, so an
+			# archetype with an underscore in its name still reads back whole.
+			var stem := nm.get_basename()
+			var aid := stem.substr(0, stem.rfind("_"))
+			var st := Balance.iso_stature(aid)
+			var sub_h: float = hero * st
+			var wide: float = float(b.size.x) / float(b.size.y)
+			rows.append([stem, st, sub_h * wide, sub_h, wide])
+		rows.sort_custom(func(a, b): return float(a[1]) < float(b[1]))
 		for r in rows:
-			print("%-24s %3.0f%%   %5.2f" % [
-				String(r[0]), float(r[1]) * 100.0, float(r[3])])
-		# The three family sprites, put through the REAL formula. `mon_<family>_<face>`
-		# carries its family in the role name and `iso_run` reads it from there too, so this
-		# is the same parse rather than a second table.
-		print("\nthe family sprites, as the floor actually draws them now:")
-		var cap := _const(src, "BEAST_H_MAX")
-		for fam_name in ["swarm", "caster", "brute"]:
-			var mimg := _load("mon_%s_s" % fam_name)
-			if mimg == null:
-				continue
-			var mb := _bbox(mimg)
-			var mfill := float(mb.size.y) / float(mimg.get_height())
-			var mlong: float = maxf(1.0, float(mb.size.x) / float(mb.size.y))
-			var mfam := _family_h(src, fam_name)
-			if mlong > 1.0:
-				mfam = minf(mfam, cap)
-			var mh: float = float(sprite_h.get("combat", 0.0)) * TILE_H * mfam \
-				/ maxf(0.05, mfill) / mlong
-			var msub: float = mh * mfill
-			print("  %-7s longer-than-tall %.2f   subject %3.0f tall x %3.0f long   %.2f x hero tall" % [
-				fam_name, mlong, msub, msub * mlong, msub / hero])
-
-		var fam_re := RegEx.new()
-		fam_re.compile('"([a-z]+)"\\s*:\\s*([0-9]+\\.[0-9]+)')
-		var fam_start := src.find("const FAMILY_H := {")
-		if fam_start >= 0:
-			var fam_body := src.substr(fam_start, src.find("}", fam_start) - fam_start)
-			print("\nwhat the floor draws now, per family, on a COMBAT tile:")
-			for m in fam_re.search_all(fam_body):
-				var hh: float = float(sprite_h.get("combat", 0.0)) * TILE_H \
-					* float(m.get_string(2))
-				print("  %-8s %.2f x combat = %5.1f px = %.2f x hero" % [
-					m.get_string(1), float(m.get_string(2)), hh, hh / hero])
+			print("%-24s %5.2f     %4.0fx%-4.0f       %5.2f    %5.2f" % [
+				String(r[0]), float(r[1]), float(r[2]), float(r[3]),
+				float(r[3]) / hero, float(r[4])])
 
 	print("\nprops, sized by the tile's WIDTH rather than by a canvas")
 	var ring := _const(src, "PROP_WALL_RING")

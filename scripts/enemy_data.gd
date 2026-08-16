@@ -48,6 +48,25 @@ enum Trigger {
 @export var block_amount: int = 6
 @export var strength_gain: int = 2
 
+## How TALL this creature is, as a multiple of the hero (D320).
+##
+## The crawl draws the hero and the thing hunting her on the same floor, so the only useful
+## unit for a creature's size is the hero herself. 1.0 is a person: a skeleton, a cultist, a
+## thrall. A rat is 0.3, a hound about 0.6, an ogre 1.25, and the thing at the bottom of the
+## Abyssal Stair is 1.6.
+##
+## Stated per archetype because there is nowhere else it can be read from. It was inferred
+## from `count_max` and `hp_mult` before, through `Balance.iso_family`, and those answer
+## "how does this fight behave", which is a different question with the same shape: the
+## Ossuary Wretch comes in threes, so it was a `swarm`, so it was drawn at knee height — a
+## human skeleton the size of a rat. **A creature's size is not a function of its stats and
+## cannot be derived from them.**
+##
+## The default is a PERSON, so an archetype whose line nobody wrote is hero-sized rather
+## than vermin-sized. Wrong by a head reads as a stylistic choice; wrong by a factor of
+## three reads as a bug, which is what the report that started this said.
+@export var stature: float = 1.0
+
 @export_group("Conditional behaviour")
 ## Rules belong on SINGLE-spawn archetypes only. Three copies of an enemy that
 ## empowers itself on a drumbeat compound into a difficulty the dungeon rating

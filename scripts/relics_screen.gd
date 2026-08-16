@@ -233,10 +233,12 @@ func _slot(grid: Container, r: RelicData, owned: bool) -> void:
 		# answer: not "why can I not press it" but "what is it".
 		UI.hoverable(b, "%s — not met yet. What it does is learned by holding it." % r.name)
 		return
+	# Said by the PRESS, and by nothing else (D319). The tooltip above stays on the UNMET tile,
+	# which has no press to explain itself with; an owned tile has one, and a hover that wrote
+	# the same line into the same reader was a second way to say one thing. On a wall of forty
+	# tiles that reads as the line changing on its own — the cursor crosses a tile on the way
+	# somewhere else and the reader answers a question nobody asked.
 	var line := "%s — %s" % [r.name, r.description]
-	UI.hoverable(b, line)
-	if not UI.touch_ui():
-		b.mouse_entered.connect(func() -> void: _reader.text = line)
 	b.pressed.connect(func() -> void:
 		_reader.text = line
 		Audio.play("ui_select"))
