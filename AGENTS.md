@@ -153,7 +153,7 @@ screen, D253/D256 — six owned from the start and two handed over per dungeon b
 D290) · 20 events · 12 dungeons across 5 zones · 4 difficulty rungs · 1 traversal
 model · 7 floor architectures × 4 surfaces × 6 chamber roles × 16 props × 4 landmarks ·
 4 pocket prizes · 3 pocket mouths · 3 toll questions · 45 errands and 16 debts over 44 counters · 3 aspects ·
-24 sound effects · 5 score tracks · 49 test suites. All content is `.tres` data
+24 sound effects · 5 score tracks · 50 test suites. All content is `.tres` data
 plus one catalogue line; adding more is a data task, not a code task.
 
 **Art: 434 files wanted, 434 present, 0 to provide — the list is CLOSED again (D296).**
@@ -763,6 +763,15 @@ moves.
   cannot. Ask of any generated control: does the thing in this position mean the same thing
   it meant a moment ago?
 
+- **Taking a control off a screen does not give the space to anything. Name what claims it.**
+  D307 removed two bars from the foot of the crawl and said the floor got the height back. A
+  spacer got it, and the floor kept the 1040x400 window it had been given when it shared the
+  screen with those bars — 96px of dead column under it and 208px beside it, for sixteen
+  commits (D325). Then claim it with a *minimum plus expand*, not with a bigger number: a
+  measured size is correct for one window and one arrangement of the column above it, and it
+  has to be retuned every time a line up there wraps. Ask after any control is deleted: which
+  control is bigger now, and did anything measure it?
+
 - **The moment of payment decides where "before" is, and a control that names a place should
   go there.** The debt offer sat on the dungeon's own row (D205) and then behaved like nothing
   else on that row: every other control there is a door, and this one was a purchase — it spent
@@ -1192,6 +1201,15 @@ These are failure modes that have actually bitten this project. Treat each as a 
 - **Booting is not playability.** A scene that loads can still be a black screen. 34
   suites once passed while the first dungeon was unplayable. `tests/test_compile.gd`
   and `tests/PlayableTest.tscn` exist because of this — run them.
+- **Nor is a widget being wired up the same as a press reaching it.** Targeting an enemy
+  was dead on every platform for three weeks: a full-rect `MarginContainer` added after
+  `enemy_box` sat over the whole cast, and a `Container` defaults to
+  `MOUSE_FILTER_PASS` — which forwards to that node's own ANCESTORS and does NOT let a
+  press through to anything drawn behind it. Only `IGNORE` does. Nothing said so,
+  because the engine auto-targets and the game plays itself (D326). **A full-rect node
+  that is not the thing being pressed is `MOUSE_FILTER_IGNORE`**, and a test for a
+  clickable thing pushes the event at the VIEWPORT — `emit_signal("pressed")` passes on
+  a screen nobody can press. `tests/TargetTapTest.tscn`.
 - **Nor is passing a test *looking* right.** Rendering every screen to PNG (D56)
   found a dice board with zero height, seven screens with no backdrop and a button
   frame stretched 14×, none of which any suite noticed and none of which is visible in
@@ -1853,7 +1871,7 @@ resources/   all content as .tres: cards, enemies, relics, powers, events, dunge
 scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      pixel/ (CC0 Kenney), art/ (painted + generated, incl. the computed app icon),
              audio/ (all ours: 5 loops, 24 effects, one instrument in tools/audio_voices.py)
-tests/       48 suites + run.sh; export.sh and export_ready.sh need templates
+tests/       50 suites + run.sh; export.sh and export_ready.sh need templates
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
              screenshots.gd (renders every screen to PNG — drive it under
              `Xvfb -screen 0 1280x720x24`, NOT on the desktop, or a 16:10 monitor

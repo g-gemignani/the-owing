@@ -205,8 +205,24 @@ func _build_ui() -> void:
 	enemy_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(enemy_box)
 
+	# The layout column, and it must KEEP OUT of the mouse (D326).
+	#
+	# This is a full-rect container added AFTER `enemy_box`, so it is drawn over the whole
+	# fight — and a Container defaults to `MOUSE_FILTER_PASS`, which does not mean "let it
+	# through". PASS forwards an event to the container's own ANCESTORS; anything drawn
+	# BEHIND it, which is every enemy on the screen, never sees the press. Targeting an
+	# enemy was dead from the day the enemies were moved out of this column and floated
+	# behind it, on every platform, for three weeks.
+	#
+	# IGNORE is what lets a press through to what is under it, and it costs this node
+	# nothing: it is pure layout with no input of its own, and Godot picks its CHILDREN
+	# (Menu, End Turn, the power orb) independently of what the parent is set to.
+	#
+	# The rule for this screen: a full-rect node that is not the thing being clicked is
+	# IGNORE. `enemy_box`, `hurt_veil` and `fx_layer` already say so; this one did not.
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	UITheme.pad(margin)
 	add_child(margin)
 	var root := VBoxContainer.new()

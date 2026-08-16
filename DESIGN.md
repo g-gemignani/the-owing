@@ -308,6 +308,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D323** | [The fight drew every creature in one box, so a rat was a man](#d323--the-fight-drew-every-creature-in-one-box-so-a-rat-was-a-man) |
 | **D324** | [The walk cycle changed clothes, and a colour grade fixed half of it](#d324--the-walk-cycle-changed-clothes-and-a-colour-grade-fixed-half-of-it) |
 | **D325** | [The foot was cleared for the floor, and the floor never took it](#d325--the-foot-was-cleared-for-the-floor-and-the-floor-never-took-it) |
+| **D326** | [The layout column was on top of the fight, and PASS does not mean pass](#d326--the-layout-column-was-on-top-of-the-fight-and-pass-does-not-mean-pass) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -22733,3 +22734,74 @@ widest the floor can be in this column is 1248 and the tallest is 506, so the ar
 code comments were written in a session that expected the next free number and got a different
 one — the same collision D321 documents, one level down: the number in the comment was checked
 against nothing.
+
+### D326 — The layout column was on top of the fight, and PASS does not mean pass
+
+The report: *"Next is how you can select the target of attacks during battles. I would expect
+that clicking works both for computer and phone but that is not the case"*.
+
+It worked on neither. Targeting the enemy you want has been dead on every platform since
+`4673d41` on 2026-07-26 — three weeks.
+
+#### What was over the enemies
+
+That commit framed the fight head-on and took `enemy_box` out of the layout column: it was an
+`HBoxContainer` inside `root`, and it became a free-floating full-rect layer added BEFORE the
+column so the creatures draw behind the header and the hand. Correct for drawing, and it put
+every enemy behind this:
+
+    var margin := MarginContainer.new()
+    margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+
+A `Container` defaults to `MOUSE_FILTER_PASS`, and **PASS does not let a press through to what
+is behind.** It forwards the event to that container's own ANCESTORS. Only `IGNORE` lets
+anything drawn underneath be picked. So a 1280x720 layout container with nothing in the middle
+of it sat over the whole cast and swallowed every press meant for a creature — and the tooltip
+that says *"Click to target."* with it.
+
+One line fixes it: `margin.mouse_filter = Control.MOUSE_FILTER_IGNORE`. A container told to
+ignore the mouse still has its CHILDREN picked, so Menu, End Turn, the power orb and the hand
+are untouched. That last sentence is a Godot rule nobody should have to remember, which is why
+the test asserts it rather than the comment claiming it.
+
+#### Why three weeks of play did not find it
+
+`current_target()` auto-targets whatever is still standing and moves on when it dies. So the
+fight is never stuck, never errors, and never looks broken: a one-enemy fight — which is most
+of them — plays perfectly, and a group fight quietly hits whoever the engine picked. **The
+symptom of a dead choice is that the game plays itself**, and the only way to see it is to try
+to choose. Nothing on the screen is missing, so a screenshot cannot show it and neither could
+`playable_test.gd`, which asks whether a screen offers a pressable control and got an honest
+yes: the buttons were there, enabled, and connected.
+
+#### The test is the deliverable
+
+`tests/TargetTapTest.tscn` pushes events at the VIEWPORT and reads `eng.target`.
+`Button.emit_signal("pressed")` would have passed on the broken build — it proves the handler
+is connected, which was never in doubt, and says nothing about whether a press can reach it.
+
+Three things it does that are the point:
+
+  * **A mouse press AND an `InputEventScreenTouch`**, because the report was about two
+    platforms. The touch goes in as a touch, so `emulate_mouse_from_touch` — the setting this
+    entire UI stands on — is inside the claim rather than assumed.
+  * **Two frame shapes**, 1280x720 and 854x400. The blocker is a full-rect node, and a column
+    that clears the creatures on a desktop can cover them at a handset's aspect.
+  * **It names what took the press.** A failure reads `over it: @MarginContainer@20
+    (MarginContainer, filter 1)` instead of "the wrong enemy was selected". Finding this by
+    hand took a tree walk; the test now does that walk in its own failure message.
+
+Verified in both directions: 10 failures with the line removed, green with it.
+
+#### The rule
+
+**A press reaching a widget is a separate fact from the widget being wired up, and only one of
+them was ever tested.** Every UI test in this project until now built a screen and asked what
+was on it. This class of bug — something invisible on top — is undetectable that way and is
+created by any full-rect node added after an interactive layer. The screen already knew: three
+of its layers say `MOUSE_FILTER_IGNORE` in a comment about not eating a click meant for a card.
+The one that was pure layout was the one nobody thought to say it about, because it looks like
+it is not in the way.
+
+A sweep for the same shape found no other screen with a layout container over an interactive
+layer. `combat.gd` is the only one that floats art behind its column.
