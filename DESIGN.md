@@ -296,6 +296,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D311** | [One constant was doing two jobs, and the rim kept the half it could not clean](#d311--one-constant-was-doing-two-jobs-and-the-rim-kept-the-half-it-could-not-clean) |
 | **D312** | [Powers were the other list of earned things, drawn as a table](#d312--powers-were-the-other-list-of-earned-things-drawn-as-a-table) |
 | **D313** | [The release published, and the run went red on the page about it](#d313--the-release-published-and-the-run-went-red-on-the-page-about-it) |
+| **D314** | [The organisation name outlived the commit that removed it](#d314--the-organisation-name-outlived-the-commit-that-removed-it) |
 | **D315** | [The key was reported every time, and paid only on the quiet turns](#d315--the-key-was-reported-every-time-and-paid-only-on-the-quiet-turns) |
 | **D316** | [One key, two locks, and nothing checking the addition](#d316--one-key-two-locks-and-nothing-checking-the-addition) |
 | **D317** | [Her walk was measured one frame at a time, so every frame moved her](#d317--her-walk-was-measured-one-frame-at-a-time-so-every-frame-moved-her) |
@@ -21900,6 +21901,62 @@ the platform it runs on should be corrected in the file, where the next reader c
 same reasoning D262 applies to generated documents — a claim nothing checks is a claim that is
 true on the day it is written.
 
+### D314 — The organisation name outlived the commit that removed it
+
+`ac1a09b` ("Own the bundle id") moved the bundle id to `io.github.ggemignani.theowing` and took the
+same organisation out of the CI keystore's `-dname`. That corrected the tip of the tree, and only
+the tip. The 125 commits behind it still held the old strings in their stored trees, where a
+`git log -p` reads them as easily as a file does. **A commit that removes a string does not remove
+it from history — it adds one more copy, in the diff.** A rewrite is the only thing that reaches
+back.
+
+Two strings existed in the whole history and no more: the old reverse-DNS bundle id, and the `O=`
+field of the keystore name. They lived in three files (`export_presets.cfg`,
+`.github/workflows/ci.yml`, `DESIGN.md`) across commits dated 2026-07-26 to 2026-08-02. No commit
+message ever contained either one, so `--replace-text` over blobs was the whole job.
+
+Author identity was never the problem and was never touched. All 287 commits were already
+`g-gemignani <guglielmogemignani@gmail.com>`.
+
+#### The tree hash is the proof
+
+`git-filter-repo` mapped both strings to the values the tip already used, so history now agrees
+with the present instead of contradicting it. HEAD's tree is `7410d2d` before the rewrite and
+`7410d2d` after it.
+
+That equality is the test worth keeping. A history rewrite that also moves the working tree has
+done something nobody asked for, and it is hard to see, because every SHA changed and the diff of
+a rewrite is not a thing git will show you. 287 commit SHAs changed and zero bytes of the
+checked-out project did. A fresh mirror clone from GitHub then scans clean over every object in
+every ref.
+
+#### The tags were the trap, not the branch
+
+The local `latest` and `main-latest` tags were **behind the remote's** by several commits — rolling
+tags that CI moves on the server and nothing pulls back. `git push --tags --force` would have
+rewritten history correctly and moved two published releases backwards in the same command.
+
+The fix is that the rewrite hands you the map. Filter-repo writes `.git/filter-repo/commit-map`,
+so the remote's own SHAs, read off `git ls-remote` before the push, translate to their new values
+directly. Each tag went to its mapped commit, and the subject line of each one matched the
+subject at the SHA the remote had. **Read the refs off the remote, not off the clone**, whenever
+a rolling tag is in the set.
+
+#### What GitHub keeps
+
+Release assets belong to the release, not the tag, so all sixteen survived their tags moving.
+`target_commitish` did not: it still recorded the purged SHAs. GitHub rejects an arbitrary commit
+in that field with a `404` and accepts only a branch name or a branch tip, so all four releases
+say `main` now.
+
+**The limit worth writing down: a force-push does not delete anything.** GitHub keeps unreachable
+commits addressable by full SHA until it garbage-collects, on no published schedule, and only
+GitHub Support can force that. The old SHAs are in this repository's logs and in the CI history.
+Nothing here is a secret — it is a company name in a bundle id — and no fork existed to hold a
+copy, so the residue is acceptable. It would not be if the string had been a credential. **The
+time to keep a name out of a repository is the first commit, because after that the best available
+outcome is "hard to find" rather than "gone".**
+
 ### D315 — The key was reported every time, and paid only on the quiet turns
 
 The report, from v0.2.0: *"even if I have found and taken a key on the floor, it tells me
@@ -22363,9 +22420,6 @@ happened to mention it. Five `.gd` files had pointed at that number for hours be
 them did, and the line said nothing the whole time. Two checks, two sets, and the one that
 reads the code is the one nothing else does.
 
-
-
-
 #### The rule under all of it
 
 **A working copy shared by two authors is not a record of what either of them did.** Every tool
@@ -22373,6 +22427,65 @@ that reads it — `git add`, `grep`, a test run, a generated document — is ans
 about the union. When you need to know what YOUR change is, build a tree that contains only it
 and ask that.
 
+### D322 — The answer was written, rendered and never called
+
+Asked for: *"when in dungeons and visiting the store or choosing a card after a battle, I would
+like to know whether I have a card or not and in case how many I own."*
+
+**Most of this already existed.** `UI.collection_standing()` has answered "where does this card
+stand in your collection" since D174, and both screens call it. `UI.collection_line()` renders
+that answer as a label under the card it is about, sized and centred and coloured for exactly
+that job. It was written at the same time and **never called from anywhere.** Both screens took
+the `tip` and put it in a tooltip.
+
+So on a desktop the answer existed but had to be hunted for, one hover at a time, across three
+stalls or nine reward cards. **On a phone it could not be reached at all** — `UI.touch_ui()` is
+true there and there is no hover — which is the platform the pad and the tap-to-read rules
+(D168, D300) were built for. A feature that ships as a tooltip on a touch screen has not
+shipped.
+
+**The missing half was the deck.** The note answered the collection, which is the between-runs
+axis: how many copies you own, what the next level costs, whether this is a new entry. The
+question at a shelf mid-run is usually the other one — *do I already have one of these in the
+deck I am playing* — and nothing anywhere answered it. The two are independent, which is why
+one cannot stand in for the other: a card can be your third copy this run and absent from a
+collection death has not been paid into, and a card can sit at four copies in the collection
+and not be in this run at all. `UI.deck_copies()` counts by **id**, because a run deck holds
+distinct `CardData` instances and `Array.count` on the card answers 1 for a deck holding three.
+
+**Two shapes, because the two screens have different room.**
+
+| | shop | fight reward |
+|---|---|---|
+| cards on screen | 3, full size | 9, at 62% height, in a frame already reflowed to fit (D307) |
+| what it shows | three lines: deck, collection, next level | one line: `deck 2 · own 4` |
+
+The compact form drops the level, the price and the fusing entirely. Those belong to the hover
+and to the shop, where there is room to read them.
+
+**The alignment the note broke, and the shelf's own idiom that fixed it.** A stall is a column
+and every price sits on one band across the shelf — that is what the layout is for. The note is
+the one part whose height depends on its content, so a legendary quoting two stat changes wraps
+to twice the lines of a common and pushed its own Buy button **32px below** the other two.
+Fixed the way the salve's description already did it: `SIZE_EXPAND_FILL` on the note, so the
+slack is absorbed there and the price band lines up again. Verified by rendering the screen,
+not by reading the code — `tests/test_layout.gd` is static analysis and cannot see a button
+that has slid down a column.
+
+**The test broke, and it was right to.** Two assertions in `reward_note_test.gd` read the note
+by line NUMBER — `begins_with("NEW")` and `get_slice("\n", 1)` — so a third line at the top
+failed them both on a note that was correct. They ask for their line by what it says now
+(`_line_with`), and the section that was added builds a deck that DISAGREES with the collection
+in both directions, which is the only setup where the two numbers cannot pass by being swapped.
+Confirmed by making `deck_copies` return 0: three failures.
+
+#### The rule
+
+**A helper with no caller is not a feature, and the compiler will never say so.** `collection_line`
+was correct, documented, and dead for as long as it existed. What made it invisible is that the
+information *was* on the screen — in a tooltip — so the screen never looked unfinished to anyone
+holding a mouse. Ask which INPUT reaches a thing, not whether the thing is there: `grep` for a
+function's own name is the cheapest check in the project, and nobody ran it.
 ### D324 — The walk cycle changed clothes, and a colour grade fixed half of it
 
 The report: *"Can we do anything for the alternating colour of the clothes of the hero? Can we
@@ -22446,63 +22559,3 @@ will confidently report that region as converged.** Two of the three transforms 
 adopted on improving numbers and rejected on sight. Every one of them was rendered
 side by side with the original before it was believed — which is now written into the tool's own
 header as the condition for changing it.
-
-### D322 — The answer was written, rendered and never called
-
-Asked for: *"when in dungeons and visiting the store or choosing a card after a battle, I would
-like to know whether I have a card or not and in case how many I own."*
-
-**Most of this already existed.** `UI.collection_standing()` has answered "where does this card
-stand in your collection" since D174, and both screens call it. `UI.collection_line()` renders
-that answer as a label under the card it is about, sized and centred and coloured for exactly
-that job. It was written at the same time and **never called from anywhere.** Both screens took
-the `tip` and put it in a tooltip.
-
-So on a desktop the answer existed but had to be hunted for, one hover at a time, across three
-stalls or nine reward cards. **On a phone it could not be reached at all** — `UI.touch_ui()` is
-true there and there is no hover — which is the platform the pad and the tap-to-read rules
-(D168, D300) were built for. A feature that ships as a tooltip on a touch screen has not
-shipped.
-
-**The missing half was the deck.** The note answered the collection, which is the between-runs
-axis: how many copies you own, what the next level costs, whether this is a new entry. The
-question at a shelf mid-run is usually the other one — *do I already have one of these in the
-deck I am playing* — and nothing anywhere answered it. The two are independent, which is why
-one cannot stand in for the other: a card can be your third copy this run and absent from a
-collection death has not been paid into, and a card can sit at four copies in the collection
-and not be in this run at all. `UI.deck_copies()` counts by **id**, because a run deck holds
-distinct `CardData` instances and `Array.count` on the card answers 1 for a deck holding three.
-
-**Two shapes, because the two screens have different room.**
-
-| | shop | fight reward |
-|---|---|---|
-| cards on screen | 3, full size | 9, at 62% height, in a frame already reflowed to fit (D307) |
-| what it shows | three lines: deck, collection, next level | one line: `deck 2 · own 4` |
-
-The compact form drops the level, the price and the fusing entirely. Those belong to the hover
-and to the shop, where there is room to read them.
-
-**The alignment the note broke, and the shelf's own idiom that fixed it.** A stall is a column
-and every price sits on one band across the shelf — that is what the layout is for. The note is
-the one part whose height depends on its content, so a legendary quoting two stat changes wraps
-to twice the lines of a common and pushed its own Buy button **32px below** the other two.
-Fixed the way the salve's description already did it: `SIZE_EXPAND_FILL` on the note, so the
-slack is absorbed there and the price band lines up again. Verified by rendering the screen,
-not by reading the code — `tests/test_layout.gd` is static analysis and cannot see a button
-that has slid down a column.
-
-**The test broke, and it was right to.** Two assertions in `reward_note_test.gd` read the note
-by line NUMBER — `begins_with("NEW")` and `get_slice("\n", 1)` — so a third line at the top
-failed them both on a note that was correct. They ask for their line by what it says now
-(`_line_with`), and the section that was added builds a deck that DISAGREES with the collection
-in both directions, which is the only setup where the two numbers cannot pass by being swapped.
-Confirmed by making `deck_copies` return 0: three failures.
-
-#### The rule
-
-**A helper with no caller is not a feature, and the compiler will never say so.** `collection_line`
-was correct, documented, and dead for as long as it existed. What made it invisible is that the
-information *was* on the screen — in a tooltip — so the screen never looked unfinished to anyone
-holding a mouse. Ask which INPUT reaches a thing, not whether the thing is there: `grep` for a
-function's own name is the cheapest check in the project, and nobody ran it.
