@@ -721,11 +721,25 @@ jobs:
   # Actions** (Settings -> Pages). That is a one-time repository setting and cannot be made
   # from a workflow file; until it is set, this job fails on `configure-pages` and nothing
   # else in the pipeline is affected.
+  # NOT on a tag (D313). `environment: github-pages` is gated by that environment's own branch
+  # policy, and the policy names branches — so a run whose ref is `refs/tags/v0.2.0` is rejected
+  # by GitHub before the first step executes: *"Tag v0.2.0 is not allowed to deploy to
+  # github-pages due to environment protection rules"*. The job goes red with ZERO steps, which is
+  # the tell, and it took the whole v0.2.0 release run red with it after the release itself had
+  # published all four assets successfully.
+  #
+  # The page loses nothing by skipping the tag. `tools/downloads_page.py` asks the API for the
+  # release list when it runs, so ANY later render lists every version — and cutting a version is
+  # already followed by `tools/readme_downloads.sh` and a commit (BUILD.md), which is a push to
+  # main and therefore the render. The alternative is a settings change nobody can see from the
+  # repository, which is the worse half of the same fix: this file would still say the job runs on
+  # tags, and it would be true only for as long as somebody remembers the policy.
   pages:
     needs: [release]
     if: >-
       always()
       && github.repository_owner == 'g-gemignani'
+      && !startsWith(github.ref, 'refs/tags/')
       && (needs.release.result == 'success' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:

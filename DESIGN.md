@@ -295,6 +295,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D310** | [A save you can play an archetype from, and it caught its own first bug](#d310--a-save-you-can-play-an-archetype-from-and-it-caught-its-own-first-bug) |
 | **D311** | [One constant was doing two jobs, and the rim kept the half it could not clean](#d311--one-constant-was-doing-two-jobs-and-the-rim-kept-the-half-it-could-not-clean) |
 | **D312** | [Powers were the other list of earned things, drawn as a table](#d312--powers-were-the-other-list-of-earned-things-drawn-as-a-table) |
+| **D313** | [The release published, and the run went red on the page about it](#d313--the-release-published-and-the-run-went-red-on-the-page-about-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21852,3 +21853,40 @@ oscillated onto it. Fifteen runs of that suite at the same commit passed fifteen
 intermittent failure of the greedy walker and not a regression. **It is left recorded rather than
 fixed**: a suite that gates a release must not fail one run in sixteen, and the next person to see
 it should find this paragraph instead of re-deriving it.
+
+---
+
+### D313 — The release published, and the run went red on the page about it
+
+`v0.2.0` built, exported and published all four binaries, and its CI run reported **failure**. The
+release was complete and correct; the run was red.
+
+The failing job was `pages`, and the tell was that it had **zero steps**. A job that fails before
+its first step has not run any of its own code, so nothing in `tools/downloads_page.py` could be
+the cause — the failure is in what GitHub does *before* handing the job a runner. That is the
+`environment:` gate:
+
+> Tag "v0.2.0" is not allowed to deploy to github-pages due to environment protection rules.
+
+The `github-pages` environment carries `custom_branch_policies`, and a branch policy names
+**branches**. A run whose ref is `refs/tags/v0.2.0` is not a branch, so it is rejected. `pages`
+had therefore been passing on every push to `main` and would have failed on the first version tag
+ever cut — which is exactly what happened, on the first one cut since the job was written.
+
+`pages` does not run on tags now.
+
+**The page loses nothing by skipping the tag**, and that is what makes this the right half of the
+fix rather than the convenient one. `downloads_page.py` asks the API for the release list when it
+runs, so any later render lists every version. Cutting a version is already followed by
+`tools/readme_downloads.sh` and a commit — the sizes come from the published release, so that
+script *cannot* run before the release exists — and that commit is a push to `main`, which is the
+render. The release procedure already contained the fix.
+
+#### Why not the settings change
+
+The environment's policy could have been widened to admit `v*` instead. It is one click and it is
+worse: this file would go on saying the job runs on tags, and that would be true only for as long
+as somebody remembered a setting invisible from the repository. **A workflow that disagrees with
+the platform it runs on should be corrected in the file, where the next reader can see it.** The
+same reasoning D262 applies to generated documents — a claim nothing checks is a claim that is
+true on the day it is written.

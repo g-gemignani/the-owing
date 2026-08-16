@@ -38,6 +38,17 @@ git tag -a v0.2.0 -m "what changed"
 git push origin v0.2.0
 ```
 
+...and then, once that run has published the release:
+
+```bash
+tools/readme_downloads.sh     # sizes come from the PUBLISHED release, so this cannot run earlier
+git commit -am "..."          # and this push is what re-renders the downloads page
+```
+
+That second half is not tidying. `pages` deliberately does not run on a tag (D313) — the
+`github-pages` environment admits branches and rejects a tag ref before the job's first step — so
+the push above is what puts the new version on the downloads page.
+
 | job | runner | why |
 |---|---|---|
 | `build-desktop` | `ubuntu-latest` | Godot cross-exports Windows and macOS from Linux, so one runner does three platforms |
