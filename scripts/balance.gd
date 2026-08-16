@@ -3630,8 +3630,19 @@ static func enemy_max_hp(dungeon: int, tier: int, ratio: float, progress: float 
 ## the fight took the same four turns it always had, so meta progression was invisible too.
 ##
 ## Trash answers weakly, so a strong deck cuts through it — that is where the power fantasy lives.
-## The boss answers fully, so a strong deck still gets a fight. Elites keep the old number, which
-## puts them where they already were.
+## Elites keep the old number, which puts them where they already were.
+##
+## **The boss was 1.00 — "answers fully" — and that inverted the pillar at the one fight that
+## decides a run (D300).** Scaling boss HP 1:1 with the player's output cancels the player's growth
+## exactly: measured at a fixed depth, turns-to-kill was FLAT at 38.8 from ratio 2 to ratio 14
+## while turns-to-die fell 4.4 to 2.1. A stronger deck killed no faster and died twice as fast, so
+## every glass-cannon build lost 100% of its boss fights after winning 100% of its normals — which
+## is what four archetypes clearing nothing anywhere turned out to be.
+##
+## 0.65, swept against `tests/test_balance.gd`'s tier check rather than picked: 1.00 and 0.85 fail
+## it, 0.70 and below pass. The pillar it restores is the oldest one in the file — *HP lost per
+## fight must fall as you get stronger, at any fixed depth* — and it had never been asked of any
+## tier but NORMAL.
 ##
 ## Note this is the META axis, not the within-run one. Relics have not been priced into `ratio`
 ## since D230, so in-run growth is already unanswered by every tier; this decides what a FUSED
@@ -3639,7 +3650,7 @@ static func enemy_max_hp(dungeon: int, tier: int, ratio: float, progress: float 
 static func tier_hp_power_k(tier: int) -> float:
 	match tier:
 		Tier.NORMAL: return 0.30
-		Tier.BOSS: return 1.00
+		Tier.BOSS: return 0.65
 	return HP_POWER_K
 
 ## Enemy attack for turn `turn` (1-based). `roll` in [0,3] keeps randomness

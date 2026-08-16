@@ -132,6 +132,40 @@ func _init() -> void:
 		if _hp_lost_per_fight(deepest, r) <= _hp_lost_per_fight(1, r):
 			fails += 1; print("FAIL depth is not the difficulty axis at ratio %.1f" % r)
 
+	# --- and power must pay at the BOSS too, which is where it did not (D300) ---
+	#
+	# The pillar is *"HP lost per fight must fall as you get stronger, at any fixed depth"*, and
+	# `_hp_lost_per_fight` below has always asked it of `Tier.NORMAL`. The boss is the fight that
+	# decides a run, and it is the tier where the property inverted: `tier_hp_power_k(BOSS)` was
+	# 1.00, which makes boss HP scale exactly with the player's output, so turns-to-kill was FLAT
+	# at 38.8 from ratio 2 to ratio 14 while turns-to-die fell 4.4 to 2.1. **A stronger deck killed
+	# no faster and died twice as fast.**
+	#
+	# Stated as a pure comparison of `enemy_max_hp` against the ratio, because a deck's output is
+	# proportional to its ratio by construction — so `hp / ratio` IS turns-to-kill, up to a
+	# constant that cancels. No model of a deck is needed and none can go stale.
+	# Swept across the range real decks reach rather than two points, because
+	# `HP_POWER_K_HIGH` adds a second term above `HIGH_POWER_FLOOR` and a pair straddling it
+	# reports whatever the pair happened to bracket: at ratio 12 this passed at k=0.85 and at
+	# ratio 18 the same constant fails. The price audit puts live profiles between 1 and 18.
+	for d in [1, 3, 5, 8]:
+		for tier in [Balance.Tier.NORMAL, Balance.Tier.ELITE, Balance.Tier.BOSS]:
+			var t_lo := float(Balance.enemy_max_hp(d, tier, 2.0)) / 2.0
+			for r_any in [4.0, 6.0, 9.0, 12.0, 15.0, 18.0]:
+				var r := float(r_any)
+				var t_hi := float(Balance.enemy_max_hp(d, tier, r)) / r
+				# Strict below `HIGH_POWER_FLOOR`; a bounded regression is allowed above it,
+				# because D52 put `HP_POWER_K_HIGH` there ON PURPOSE to stop the endgame going
+				# soft, and that term is tier-blind. **The allowance is what makes this a check
+				# on the tier constant rather than a demand that D52 be deleted** — at
+				# `tier_hp_power_k(BOSS)` = 1.00 the boss ran 20% over and still fails it.
+				var allow := 1.10 if r > Balance.HIGH_POWER_FLOOR else 1.0
+				if t_hi / t_lo >= allow:
+					fails += 1
+					print("FAIL at d%d a %s takes %.0f%% LONGER to kill at ratio %.0f than at ratio 2 — getting stronger buys nothing at this tier (D300)" % [
+						d, Balance.TIER_NAME[tier], (t_hi / t_lo - 1.0) * 100.0, r])
+					break
+
 	# --- the dungeon answers only part of your fusing (D291) ---
 	#
 	# The shape, not one point on it. A grind that pays nothing until a threshold and then

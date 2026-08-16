@@ -468,6 +468,16 @@ moves.
   never outgrow the Maw. Progression should *feel* like progression — HP lost per
   fight must fall as you get stronger, at any fixed depth.
 
+  **And that pillar had only ever been asked of ONE tier, which is where it inverted (D300).**
+  `tier_hp_power_k(BOSS)` was 1.00 — "the boss answers fully" — and answering fully means scaling
+  boss HP 1:1 with the player's output, cancelling their growth exactly. Measured at a fixed
+  depth: turns-to-kill FLAT at 38.8 from ratio 2 to 14 while turns-to-die fell 4.4 to 2.1. **A
+  stronger deck killed no faster and died twice as fast**, which is what four archetypes clearing
+  nothing anywhere turned out to be — all four read N 100%, E 63-100%, B 0%. It is 0.65 now, swept
+  against a check that asks the property of EVERY tier: matched completion **40% → 52%**, cells at
+  0% **18 → 12**, and the gains land on the decks that got stronger (Deep 26% → 79%, Maxed 7% →
+  69%). Ask a pillar of every tier, or it holds only where somebody once looked.
+
 - **A difficulty knob in THIS game must scale with the player, because the enemies
   already do.** The obvious design — one constant multiplying enemy HP and damage — was
   built, measured and deleted (D175). Enemies scale to `power_ratio`, so a flat number

@@ -285,6 +285,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D298** | [The table looked like a collapse, and three of the four alarms were the instrument](#d298--the-table-looked-like-a-collapse-and-three-of-the-four-alarms-were-the-instrument) |
 | **D299** | [A run is priced on what you brought, and the dungeon's gifts are free](#d299--a-run-is-priced-on-what-you-brought-and-the-dungeons-gifts-are-free) |
 | **D300** | [Seven play reports, and five of them were one screen not fitting its own frame](#d300--seven-play-reports-and-five-of-them-were-one-screen-not-fitting-its-own-frame) |
+| **D300** | [The boss cancelled the player's growth exactly, and the pillar had never been asked](#d300--the-boss-cancelled-the-players-growth-exactly-and-the-pillar-had-never-been-asked) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21089,3 +21090,89 @@ exemption itself by printing `TEST EXPECTS ERRORS`. The knowledge lives in the s
 reason, not in a list in the runner that would go stale. Measured before writing the rule: those
 two are the only ones of the 48 that make a sound. Mutation-checked — a nonexistent method call
 inserted into `RewardNoteTest` turns it red, and naming the missing function.
+
+---
+
+### D300 — The boss cancelled the player's growth exactly, and the pillar had never been asked
+
+Four archetypes completed **0% of their runs at every dungeon they were measured at** — Poison,
+AoE, Combo and Vampire. D298 named that as the oldest open item in the project. The cause was one
+constant, and it inverted the file's oldest pillar at the one fight that decides a run.
+
+Every one of the four read the same shape: **N 100%, E 63-100%, B 0%.** They won every normal
+fight, most elites, and lost every boss — in three to five turns, at −100% HP.
+
+#### The arithmetic, at a fixed depth
+
+`tier_hp_power_k(BOSS)` was **1.00**, described as *"the boss answers fully, so a strong deck still
+gets a fight"*. Answering fully means scaling boss HP 1:1 with the player's output, which cancels
+the player's growth exactly:
+
+| Dungeon Boss, d5 | ratio 2 | ratio 14 |
+|---|---|---|
+| turns to kill | 38.8 | **43.0** |
+| turns to die | 4.4 | **2.1** |
+
+**A stronger deck killed no faster and died twice as fast.** The same table for a Cultist reads 8.4
+→ 4.7 to kill: at `tier_hp_power_k(NORMAL)` = 0.30, power pays.
+
+The pillar is *"HP lost per fight must fall as you get stronger, at any fixed depth"*, and it is
+one of the oldest lines in AGENTS.md. `tests/test_balance.gd` has always asked it of
+`Tier.NORMAL` and of no other tier. **The boss is where it inverted and nothing had ever
+looked.**
+
+`tier_hp_power_k(BOSS)` is **0.65**, swept against the check rather than picked: 1.00 and 0.85
+fail it, 0.70 and below pass.
+
+#### What it bought
+
+| | before | after |
+|---|---|---|
+| matched-progression completion | 40% | **52%** |
+| mean over all cells | 29% | **40%** |
+| cells at 0% | 18 | **12** |
+| cells at 100% | 4 | 6 |
+
+And it lands where the pillar says it should — on the decks that got stronger: **Deep (Lv40) 26% →
+79%, Maxed commons (Lv100) 7% → 69%**, Late 41% → 67%, Draw 28% → 55%, Exhaust 17% → 40%, Thorns
+65% → 83%.
+
+#### The guard, and two ways it lied first
+
+The check compares `enemy_max_hp(d, tier, r) / r` across a ladder of ratios, for every tier. That
+quantity IS turns-to-kill up to a constant, because a deck's output is proportional to its ratio by
+construction — so no model of a deck is needed and none can go stale.
+
+**It reported six clean sweeps of a constant before it ran at all.** A `for r in [4.0, ...]` loop
+gives GDScript an untyped `r`, so `enemy_max_hp` returned an untyped value and the file failed to
+parse — and the sweep counted `FAIL` lines in the output of a script that had never loaded. Six
+values of the constant, all "0 failures". **A grep count of zero reads identically whether the test
+passed or never ran**, which is why the sweep now refuses any run whose report line is missing.
+
+And a two-point comparison picked the wrong answer. At ratio 12 the boss passes at k = 0.85; at
+ratio 18 the same constant fails, because `HP_POWER_K_HIGH` adds a second term above
+`HIGH_POWER_FLOOR` and a pair straddling that floor reports whatever the pair happened to bracket.
+The price audit puts live profiles between 1 and 18, so the check sweeps that range.
+
+Above the floor it allows a bounded 10% regression, and that allowance is load-bearing: D52 put
+`HP_POWER_K_HIGH` there ON PURPOSE to stop the endgame going soft, and the term is tier-blind. The
+allowance is what makes this a check on the tier constant rather than a demand that D52 be deleted
+— at k = 1.00 the boss ran 20% over and still fails.
+
+#### The four, and where their wall moved to
+
+Their BOSS win rates moved a long way — **AoE 2% → 34%, Vampire 29% → 67%** — and their run
+completion did not: 0-6%. The per-fight columns are full-HP diagnostics, so the gap between "wins
+the boss 67% of the time" and "completes 2% of runs" is **attrition across the run**. Vampire
+reaches the Drowned Market boss having spent 29% of its bar per elite; Combo spends 23% per
+NORMAL fight at the Sunken Vault.
+
+That is the same root, one step earlier: these four have no defence, they are priced at ratio 12-14
+for damage they genuinely deliver, and enemy damage rises with the ratio they are correctly charged.
+`DMG_POWER_K` is the knob and lowering it globally would move every cell.
+
+**Part of it is the instrument, and that part should be settled before the game is tuned for it.**
+The driver picks its reward bundle by `Balance.bundle_vs_deck`, which scores power per energy and
+knows nothing about survival — so a profile losing a quarter of its bar per fight will never buy
+the Fortress bundle sitting in front of it, where a player would. D124's shape again: a policy that
+cannot make the choice the game offers reports a confident nothing about it.
