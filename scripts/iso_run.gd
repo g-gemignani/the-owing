@@ -523,7 +523,7 @@ func _load_art() -> void:
 				# for would contradict.
 				if String(r).begins_with("mon_"):
 					fill[r] = IsoFooting.fill(tex)
-					creature_h[r] = Balance.ISO_STATURE_DEFAULT
+					creature_h[r] = Balance.STATURE_DEFAULT
 				# The hero is the only art the floor mirrors, and the mirror is a TEXTURE
 				# rather than a flipped rect (D154). Built once here: her left-hand facings
 				# then draw through exactly the same code as her right-hand ones, with the

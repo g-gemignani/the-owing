@@ -55,6 +55,16 @@ enum Trigger {
 ## thrall. A rat is 0.3, a hound about 0.6, an ogre 1.25, and the thing at the bottom of the
 ## Abyssal Stair is 1.6.
 ##
+## BOTH screens read it (D323). The battle screen has no hero on it, so 1.0 there is the
+## height an ordinary person is drawn at — the same claim, measured against a figure the
+## player remembers rather than one standing beside it. One number, so a creature cannot be
+## a rat in the corridor and a person in the fight it starts.
+##
+## It is the CREATURE and never a correction to a painting. Two iso files are busts cut at
+## the thigh, and D320 hid that in here as a stature of 0.78; the moment a second screen
+## read the number it drew an iron giant four fifths of a person tall. The crop belongs to
+## the file that has it, and it lives in `Balance.ISO_CROP`.
+##
 ## Stated per archetype because there is nowhere else it can be read from. It was inferred
 ## from `count_max` and `hp_mult` before, through `Balance.iso_family`, and those answer
 ## "how does this fight behave", which is a different question with the same shape: the

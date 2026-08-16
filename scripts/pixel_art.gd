@@ -760,6 +760,26 @@ static func enemy_art(archetype_id: String) -> Texture2D:
 		return load(p) as Texture2D
 	return null
 
+## How much of its square canvas an enemy plate's SUBJECT fills, top to bottom (D323).
+##
+## The number that lets `EnemyData.stature` mean the creature rather than the file. Every
+## plate is a 256x256 canvas with the feet on its bottom edge, and how much of it the
+## painting uses is entirely up to the painting: 0.98 for a standing figure, 0.41 for the
+## rat swarm, which is low and wide. Drawing both files at one height is what made a rat as
+## tall as a man in the fight it starts.
+##
+## Cached, and that is the reason this lives here rather than in the two lines of
+## `combat.gd` that want it: the measurement is a per-pixel scan of 65k pixels, and a plate
+## does not change between fights.
+static var _fill_cache: Dictionary = {}
+static func enemy_fill(archetype_id: String) -> float:
+	if _fill_cache.has(archetype_id):
+		return float(_fill_cache[archetype_id])
+	var tex := enemy_art(archetype_id)
+	var f := IsoFooting.fill(tex) if tex != null else 1.0
+	_fill_cache[archetype_id] = f
+	return f
+
 ## Backdrop for a fight: the dungeon's own illustration where one exists.
 ##
 ## Dimmed, and then SCRIMMED where the text goes. Dimming alone is not enough: the

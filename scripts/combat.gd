@@ -1194,6 +1194,16 @@ func _build_slot(i: int) -> Control:
 	slot.set_meta("art", art)
 	slot.set_meta("box", box)
 	slot.set_meta("stand_in", painted == null)
+	# How big this creature is, decided once (D323). `stature` is its height as a multiple
+	# of a person and `plate_fill` is how much of its own square canvas the painting uses,
+	# so that the stature sizes the CREATURE rather than the file it arrived in — the rat
+	# swarm's subject is 41% of its canvas and the cultist's is 98%, and drawing both files
+	# at one size is what made a rat the height of a man.
+	#
+	# Read here and not in `_place_slots` because the fill is a per-pixel scan of a 256x256
+	# image and the layout runs on every refresh, while the plate is loaded once.
+	slot.set_meta("stature", Balance.stature(aid))
+	slot.set_meta("plate_fill", PixelArt.enemy_fill(aid) if painted != null else 1.0)
 	slot.set_meta("vitals", vitals)
 	slot.set_meta("chips", chips)
 	slot.set_meta("intent", intent)
@@ -1317,63 +1327,99 @@ func _place_slots(living: Array[int]) -> void:
 	#
 	# THREE rows above the creature since D117, not two: who it is, what it is carrying,
 	# what it is about to do. The band is 20px taller for it, and that is not free — the
-	# clamp below is `floor_y - top_limit - text_h`, and a boss asks for 366.6px of a
+	# ceiling below is `floor_y - top_limit - text_h`, and a boss asks for 366.6px of a
 	# 720-tall frame, which was inside the old ceiling of 376.4 and is outside the new
 	# one of 356.4. So a boss now draws 2.8% shorter and nothing else moves (an elite
 	# wants 311.9 and an ordinary enemy 273.6, both well clear). Paid knowingly: the
 	# status row it buys is the thing that says why the boss is hitting for 50.
+	#
+	# Since D323 the ceiling bounds the CREATURE and not the tier's person, so the tallest
+	# archetypes are the ones that meet it: an abyss horror wants 1.4 people and gets the
+	# 356.4 the frame has. That is the same height it was drawn at before, and everything
+	# under a stature of about 1.0 is now clear of the ceiling entirely.
 	var text_h := UITheme.px(SLOT_TEXT_BAND)
 	var line_h := text_h / 3.0
 	var top_limit := UITheme.px(96)
 	# A boss should loom. Same corridor, same floor line, more of the frame — this is
 	# the cheapest way for a fight to announce what it is before the numbers do.
+	#
+	# This is the CAMERA and not the creature (D323). It multiplies the whole cast of one
+	# fight by one number, so nothing inside a frame disagrees with anything else in it —
+	# you are standing closer to a boss fight. What it must never do is decide how big a
+	# given creature is, and it used to be the only thing that did.
 	var tier_scale: float = TIER_SIZE.get(tier, 1.0)
-	var body := clampf(vp.y * 0.38 * tier_scale, UITheme.px(48),
-		maxf(UITheme.px(48), floor_y - top_limit - text_h))
+	# How tall an ORDINARY PERSON is drawn here — the unit `stature` is quoted in, and the
+	# minimum width the three text rows get whatever is standing under them.
+	var person := vp.y * 0.38 * tier_scale
+	var ceiling := maxf(UITheme.px(48), floor_y - top_limit - text_h)
 	var n := living.size()
 	for k in n:
 		var i: int = living[k]
 		var slot: Control = enemy_plates[i]
 		var s := 1.0 if n == 1 else lerpf(0.88, 1.0,
 			1.0 - absf(float(k) - float(n - 1) * 0.5) / maxf(1.0, float(n - 1) * 0.5))
-		var w := body * s
-		var h := body * s
+		# The plate is a square canvas with the subject's feet on its bottom edge, so the
+		# rect it is drawn in is square too and the stature lands on the SUBJECT once the
+		# file's own fill is divided out. Same arithmetic as the crawl's `_footed_rect`,
+		# against a remembered person instead of one standing on the next tile.
+		# `sub` is what the player can SEE — the creature — and it is the one the frame's
+		# limits are argued in. Everything but the art itself is placed against it: the
+		# three text rows go over the creature's head and not over the top edge of its
+		# file, the hit target is the creature, and the contact mark is under its feet.
+		# The rat swarm is where the difference shows — its subject is 41% of its canvas,
+		# so anchoring the name to the square hangs it a rat and a half above the rat.
+		var fill: float = maxf(0.05, float(slot.get_meta("plate_fill", 1.0)))
+		var sub := clampf(person * float(slot.get_meta("stature", 1.0)),
+			UITheme.px(48), ceiling) * s
+		var side := sub / fill
+		var w := side
+		var h := side
+		# The text band does NOT shrink with the creature. Three rows over a plague rat is
+		# the same name, the same chips and the same telegraph as three rows over an ogre,
+		# and the chip row is a container: too narrow and it stops centring and spills off
+		# one side. So the SLOT keeps a person's width and the creature is centred in it.
+		var band := maxf(w, person * s)
+		var ox := (band - w) * 0.5
 		var cx := vp.x * (STAGE_INSET + (1.0 - 2.0 * STAGE_INSET)
 			* float(k + 1) / float(n + 1))
-		slot.position = Vector2(cx - w * 0.5, floor_y - h - text_h)
-		slot.size = Vector2(w, h + text_h)
+		slot.position = Vector2(cx - band * 0.5, floor_y - sub - text_h)
+		slot.size = Vector2(band, sub + text_h)
 
 		var vitals: Label = slot.get_meta("vitals")
 		vitals.position = Vector2(0, 0)
-		vitals.size = Vector2(w, line_h)
+		vitals.size = Vector2(band, line_h)
 		var chips: HBoxContainer = slot.get_meta("chips")
 		chips.position = Vector2(0, line_h)
-		chips.size = Vector2(w, line_h)
+		chips.size = Vector2(band, line_h)
 		# The icon and the number travel together, so the ROW takes the third line and
 		# the HBox centres the pair inside it.
 		var intent_row: HBoxContainer = slot.get_meta("intent_row")
 		intent_row.position = Vector2(0, line_h * 2.0)
-		intent_row.size = Vector2(w, line_h)
+		intent_row.size = Vector2(band, line_h)
 		var art: TextureRect = slot.get_meta("art")
 		var box: Panel = slot.get_meta("box")
-		box.position = Vector2(0, text_h)
-		box.size = Vector2(w, h)
+		box.position = Vector2(ox, text_h)
+		box.size = Vector2(w, sub)
 		if bool(slot.get_meta("stand_in", false)):
 			# the stand-in is 16x16 pixel art with transparent margins: at full slot
 			# size its "feet" float halfway up the box. Real art is authored with its
 			# feet on the bottom edge of the canvas and fills the footprint.
 			art.size = Vector2(w * 0.52, h * 0.52)
-			art.position = Vector2(w * 0.24, text_h + h * 0.46)
+			art.position = Vector2(ox + w * 0.24, text_h + h * 0.46)
 		else:
-			art.position = Vector2(0, text_h)
+			# The SQUARE goes back on, and it starts above the slot when the painting left
+			# headroom — the whole canvas has to be drawn to draw the part of it that is
+			# painted, and its bottom edge is the floor line either way.
+			art.position = Vector2(ox, text_h + sub - h)
 			art.size = Vector2(w, h)
 		var hit: Button = slot.get_meta("hit")
-		hit.position = Vector2(0, text_h)
-		hit.size = Vector2(w, h)
+		hit.position = Vector2(ox, text_h)
+		hit.size = Vector2(w, sub)
 		# the contact mark sits ON the floor line, under the feet
 		var mark: Panel = slot.get_meta("mark")
-		mark.size = Vector2(w * 0.62, maxf(4.0, h * 0.10))
-		mark.position = Vector2((w - mark.size.x) * 0.5, text_h + h - mark.size.y * 0.5)
+		mark.size = Vector2(w * 0.62, maxf(4.0, sub * 0.10))
+		mark.position = Vector2(ox + (w - mark.size.x) * 0.5,
+			text_h + sub - mark.size.y * 0.5)
 		# The reticle shares that centre and that floor line, wider and taller (see
 		# RING_WIDEN / RING_SQUASH).
 		#
@@ -1387,7 +1433,7 @@ func _place_slots(living: Array[int]) -> void:
 		var rw := mark.size.x * RING_WIDEN
 		var rh := rw * RING_SQUASH
 		reticle.size = Vector2(rw, rh)
-		reticle.position = Vector2((w - rw) * 0.5, text_h + h - rh * 0.5)
+		reticle.position = Vector2(ox + (w - rw) * 0.5, text_h + sub - rh * 0.5)
 		reticle.texture = _kit_at("target_ring", rh)
 
 ## The hand is diffed, not rebuilt: cards that stayed keep their node (and so can

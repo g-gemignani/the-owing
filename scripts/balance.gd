@@ -2894,14 +2894,43 @@ static func iso_family(enemy_id: String) -> String:
 ## answer drew the Ossuary Wretch — a human skeleton that happens to come in threes — at
 ## knee height. So the size is authored on the archetype and only read here.
 ##
+## Not `iso_stature` any more (D323). It was named for the screen that first needed it, and
+## the battle screen sizes its plates from the same number now; a creature that is a rat in
+## the corridor and a person in the fight is the same defect D320 removed, one screen along.
+##
 ## A person when the archetype is unknown, matching `EnemyData.stature`'s own default rather
 ## than restating it as a number in a second place.
-static func iso_stature(enemy_id: String) -> float:
+static func stature(enemy_id: String) -> float:
 	var e := enemy(enemy_id)
-	return maxf(0.05, e.stature) if e != null else ISO_STATURE_DEFAULT
+	return maxf(0.05, e.stature) if e != null else STATURE_DEFAULT
 
 ## What a creature with nothing to read is drawn at: a person.
-const ISO_STATURE_DEFAULT := 1.0
+const STATURE_DEFAULT := 1.0
+
+## How much of a creature its ISO painting actually shows. **This is an art defect, written
+## down** (D320, D323).
+##
+## `warden_s/n` and `tomb_guard_s/n` are half-length portraits, cut at the thigh, where the
+## other thirty-three are whole figures. D320 papered over it by putting the CROP in the
+## stature — 0.78, the height of the painted part — which worked for exactly as long as one
+## screen read the number. The battle plates are whole figures, so the same 0.78 drew the
+## Forge-Warden, an iron giant and a dungeon's finale, four fifths of a person tall.
+##
+## So `stature` went back to being the CREATURE (warden 1.20, tomb_guard 1.10) and the crop
+## lives here, where it says what it is. The crawl draws `stature x crop`, which is the 0.78
+## it drew before to the pixel; the fight draws the creature.
+##
+## The fix is to repaint the two files whole and delete this table. Until then it is one
+## number in one place instead of a wrong stature that two screens have to agree to misread.
+const ISO_CROP := {
+	"warden": 0.650,
+	"tomb_guard": 0.710,
+}
+
+## How tall the ISO painting's subject stands, as a multiple of the hero: the creature, less
+## whatever the file leaves out. What the crawl draws and what its tools measure.
+static func iso_stature(enemy_id: String) -> float:
+	return stature(enemy_id) * float(ISO_CROP.get(enemy_id, 1.0))
 
 ## Steps on one floor after which its hunters take TWO steps to your one. Pressure that
 ## rises with greed, and — unlike spawning extra monsters — it cannot inflate the

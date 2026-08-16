@@ -305,13 +305,14 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D320** | [Creature size came off the stat block, and the skeleton came out knee-high](#d320--creature-size-came-off-the-stat-block-and-the-skeleton-came-out-knee-high) |
 | **D321** | [`git add` stages the FILE, not the change you wrote](#d321--git-add-stages-the-file-not-the-change-you-wrote) |
 | **D322** | [The answer was written, rendered and never called](#d322--the-answer-was-written-rendered-and-never-called) |
+| **D323** | [The fight drew every creature in one box, so a rat was a man](#d323--the-fight-drew-every-creature-in-one-box-so-a-rat-was-a-man) |
 | **D324** | [The walk cycle changed clothes, and a colour grade fixed half of it](#d324--the-walk-cycle-changed-clothes-and-a-colour-grade-fixed-half-of-it) |
 | **D325** | [The foot was cleared for the floor, and the floor never took it](#d325--the-foot-was-cleared-for-the-floor-and-the-floor-never-took-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
 
-**Cited but never written up:** D48 D93 D100 D110 D234 D304 D323. Each is referenced by number
+**Cited but never written up:** D48 D93 D100 D110 D234 D304. Each is referenced by number
 somewhere in this file and has no entry of its own. D110 is the documented
 case — D112 records it being left alone while a concurrent session held it.
 
@@ -22487,6 +22488,100 @@ was correct, documented, and dead for as long as it existed. What made it invisi
 information *was* on the screen — in a tooltip — so the screen never looked unfinished to anyone
 holding a mouse. Ask which INPUT reaches a thing, not whether the thing is there: `grep` for a
 function's own name is the cheapest check in the project, and nobody ran it.
+
+### D323 — The fight drew every creature in one box, so a rat was a man
+
+The report: *"Now iso sprites have been fixed in size. I would like to also fix the size of the
+images of the monster in battle. They should be proportional to their iso sprites"*, and then
+*"for examples, plague rats are too big"*.
+
+D320 sized the creatures on the crawl and stopped there. The battle screen is the other place
+the same roster is drawn, and it had never been given a rule at all.
+
+#### What the fight was doing
+
+One box, per FIGHT:
+
+    body = viewport height x 0.38 x TIER_SIZE[tier]
+
+Every enemy got that square. The plate went into it with the aspect kept, and every plate is a
+square canvas, so every plate filled it. The archetype was never read. A cultist and a plague
+rat are both painted to 98% of their own file, so both were drawn 268px tall in a 720-tall
+frame — the same defect as D320 and from the opposite direction. D320's creatures were sized by
+a stat block; these were sized by nothing.
+
+#### The number both screens now read
+
+`EnemyData.stature` is how tall a creature stands in people, and it is now the only thing that
+decides how tall it is drawn, on both screens:
+
+    subject height = a person's height x stature
+
+A person is 38% of the frame, which is what a stature-1.0 creature was already drawn at, so
+thirteen archetypes did not move at all. The plague rat went from 268px to 96px. The rat swarm
+went from 113px to 82px. Nothing above 0.95 changed by more than a few percent.
+
+The square is still what gets drawn, because a whole canvas has to be drawn to draw the part of
+it that is painted. It is sized so that the SUBJECT lands on the stature — `side = person x
+stature / fill`, the same division `_footed_rect` does on the floor, with `PixelArt.enemy_fill`
+measuring each plate once and caching it.
+
+#### The tier survived, and the argument for it is that it is a camera
+
+`TIER_SIZE` (1.0 / 1.14 / 1.34) looks like exactly the rule D320 deleted, and it is not. It
+multiplies the WHOLE CAST of one fight by one number. Nothing inside a frame disagrees with
+anything else in it; you are standing closer to a boss. The rule D320 wrote is about what a
+creature IS, and a hexer is the same hexer in a normal fight and an elite one — the fight is
+just framed tighter. Two archetypes are in two rosters (`hexer`, `warden`), and
+`tools/battle_scale.gd` prints them so the doubling stays a decision.
+
+#### Two things only the picture said
+
+The name, the status chips and the intent were anchored to the top of the SQUARE. For 33 of 35
+plates the square is the creature. For the rat swarm it is not — its subject is 41% of its
+canvas — so the name hung a rat and a half above the rat. Everything except the art is placed
+against the subject height now: the text band, the hit target, the contact mark, the reticle.
+
+**And the text band does not shrink with the creature.** Three rows over a plague rat is the
+same name, the same chips and the same telegraph as three rows over an ogre. The chip row is a
+container: too narrow and it stops centring and spills off one side. So the slot keeps a
+person's width and the creature is centred in it.
+
+#### The workaround that only worked while one screen read the number
+
+D320 set `warden` and `tomb_guard` to 0.78 because their iso files are busts cut at the thigh,
+and logged the crop as an art defect. The battle plates are whole figures. Sharing the number
+drew the Forge-Warden — an iron giant, and a dungeon's finale — at four fifths of a person.
+
+That is what a workaround stored in the wrong place costs the moment a second reader arrives.
+The crop moved to `Balance.ISO_CROP`, where it says what it is, and the statures went back to
+the creature (`warden` 1.20, `tomb_guard` 1.10). The crawl draws `stature x crop`, which is the
+0.78 it drew before to the pixel; `tools/iso_scale.gd` confirms it. The fix is still to repaint
+the two files and delete the table.
+
+#### The instrument, again
+
+`tools/battle_scale.gd` prints every archetype's drawn height at all three tiers, beside what it
+was, beside the shape of its painting. D306, D309 and D320 were each judged against two or three
+creatures and each time the sample looked right and the roster did not. This defect was in 22 of
+35 archetypes and a sample of three would have hit it — which is the argument for the tool, not
+against it: nobody looked, for as long as the screen existed.
+
+Three captures through `tools/screenshots.gd`: a plague rat fight, a cultist fight (unchanged,
+which is the one that had to be checked) and the Foundry boss.
+
+#### The rule
+
+**A size rule that reads no property of the thing it sizes is not a rule, it is a default.** The
+crawl's version at least read the wrong property and could be argued with. The fight's read
+nothing, and a screen that treats every creature the same is much harder to see as wrong than
+one that treats them differently and badly — it has no inconsistency to notice. The tell is not
+"these two disagree", it is "what does this number depend on, and should it".
+
+*(D323 sat empty because D321 used the number as an EXAMPLE of a claimed one, and the index's
+cited-but-never-written-up line then reported it as taken. A number quoted in prose is not a
+number in use.)*
+
 ### D324 — The walk cycle changed clothes, and a colour grade fixed half of it
 
 The report: *"Can we do anything for the alternating colour of the clothes of the hero? Can we
