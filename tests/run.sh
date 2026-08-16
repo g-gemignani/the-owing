@@ -53,13 +53,20 @@ TIMEOUT="${TIMEOUT:-120}"
 # drops the `godot/app_userdata/` layer rather than just replacing the last segment.
 USERDATA=~/.local/share/Deckcrawl
 
+# A suite that means to provoke script errors says so, on stdout, and is exempt from the
+# stderr check below. Two do: `test_compile` and `test_layout` both `load()` scripts that
+# name autoloads, and autoloads do not exist in a `--script` run, so a compile error there
+# is the tool working. Every other suite is required to be silent.
+EXPECTS_ERRORS="TEST EXPECTS ERRORS"
+
 run_one() {  # run_one <label> <script|scene> <target>   (results land in $RESULTS)
 	local label="$1" kind="$2" target="$3" dir="$RESULTS"
-	local out code start dur extra=()
+	local out err code start dur extra=()
 	[[ $kind == script ]] && extra=(--quit --script)
 	start=$SECONDS
+	err=$(mktemp)
 	out=$(OWING_SANDBOX="$label" timeout "$TIMEOUT" "$GODOT" --headless \
-		--log-file "user://logs/$label.log" "${extra[@]}" "$target" 2>/dev/null)
+		--log-file "user://logs/$label.log" "${extra[@]}" "$target" 2>"$err")
 	code=$?
 	dur=$((SECONDS - start))
 	# Remove the sandbox this run handed out, now that its engine has exited. Scoped
@@ -69,7 +76,18 @@ run_one() {  # run_one <label> <script|scene> <target>   (results land in $RESUL
 	# set its prefix. Anything left after this is a test writing OUTSIDE its sandbox,
 	# which is exactly what the stray check at the bottom is for.
 	rm -f "$USERDATA/t_${label}_"*
-	if [[ $code -eq 0 ]] && grep -qE "TEST: PASS" <<<"$out"; then
+	# A SCRIPT ERROR is a FAILURE, and it has to be read off stderr because that is the only
+	# place it appears (D300). A runtime error inside an `await`ed function aborts that
+	# function, leaves the exit code at 0 and lets `_ready` go on to print its PASS line — so
+	# a whole section of a suite can stop running and the suite still reports green. It cost
+	# this project twice: `RewardNoteTest` called `_roll_rewards`, deleted at D297, and went on
+	# printing PASS with its largest section dead; then the same file called a constant that had
+	# moved onto `UI` and did it again. Discarding stderr is what made that invisible.
+	local screamed=0
+	if grep -q "SCRIPT ERROR" "$err" && ! grep -qF "$EXPECTS_ERRORS" <<<"$out"; then
+		screamed=1
+	fi
+	if [[ $code -eq 0 && $screamed -eq 0 ]] && grep -qE "TEST: PASS" <<<"$out"; then
 		printf '  ok   %-22s %3ds\n' "$label" "$dur"
 		: >"$dir/$label.pass"
 	else
@@ -77,10 +95,15 @@ run_one() {  # run_one <label> <script|scene> <target>   (results land in $RESUL
 		# The output is the diagnosis. Discarding it is what made a null-deref in
 		# `_init()` read as a bare "exit 124" with nothing to go on.
 		{ printf '=== %s (exit %d) ===\n' "$label" "$code"
+		  if [[ $screamed -eq 1 ]]; then
+			echo "  a SCRIPT ERROR ran during this suite — a section of it did not execute:"
+			grep -E "SCRIPT ERROR|at: " "$err" | head -12
+		  fi
 		  if [[ -n "$out" ]]; then grep -E "FAIL|ERROR|SCRIPT ERROR|at: " <<<"$out" | head -20
-		  else echo "  (no output — the engine died before it could report)"; fi
+		  elif [[ $screamed -eq 0 ]]; then echo "  (no output — the engine died before it could report)"; fi
 		} >"$dir/$label.fail"
 	fi
+	rm -f "$err"
 }
 
 # Workers re-enter this script; everything above this line has already run for them,

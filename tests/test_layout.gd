@@ -353,6 +353,10 @@ func _init() -> void:
 					path, die, String(draw_fns[path])])
 				print("     so the offer changes under the player (D271). Roll it in _win() and read it here.")
 
+	# Declared for `tests/run.sh`, which fails any suite that produced a SCRIPT ERROR (D300).
+	# This one provokes them on purpose: it `load()`s scripts that name autoloads, and autoloads
+	# do not exist in a `--script` run, so a compile error here is the tool working.
+	print("TEST EXPECTS ERRORS")
 	if fails == 0:
 		print("LAYOUT TEST: PASS (actionable content is reachable, no dead ends, no debug text, the debt is paid at the door)")
 	else:

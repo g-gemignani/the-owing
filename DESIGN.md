@@ -21091,6 +21091,24 @@ reason, not in a list in the runner that would go stale. Measured before writing
 two are the only ones of the 48 that make a sound. Mutation-checked — a nonexistent method call
 inserted into `RewardNoteTest` turns it red, and naming the missing function.
 
+#### And then CI went red, because the test shipped without its subject
+
+This entry's TEST reached `main` and this entry's CODE did not. Another session on the same
+checkout staged `tests/reward_note_test.gd` — which asserts the Take buttons, the read-only faces
+and the relic band — while `combat.gd` still drew the old panel. CI ran `HEAD` and got
+`6 of 6 reward cards commit when pressed` and `3 sets offered but 0 Take buttons`.
+
+That is D272's hazard exactly, from the other end: D272 is about a call reaching `main` without
+its definition, and this is a check reaching `main` without its subject. **`git add <path>` takes
+whatever that path holds at that instant, including the half of somebody else's work that is in
+it.** The rule stands and gains a second symptom to recognise it by — a suite that fails on `HEAD`
+naming a feature nobody has committed.
+
+The blind renumber that came with it did the same thing one layer up: the sed that moved a
+neighbouring entry from D300 to D301 also moved four references in AGENTS.md and one in
+`balance.gd` that belonged to this one. **Renumber by reading, not by pattern** — the number is
+not the identifier, the sentence around it is.
+
 ---
 
 ### D301 — The boss cancelled the player's growth exactly, and the pillar had never been asked

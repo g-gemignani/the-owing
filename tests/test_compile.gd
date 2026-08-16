@@ -60,6 +60,10 @@ func _init() -> void:
 			print("FAIL scene %s has a root script that does not compile" % path)
 
 	print("  checked %d scripts and scenes" % checked)
+	# Declared for `tests/run.sh`, which fails any suite that produced a SCRIPT ERROR (D300).
+	# This one provokes them on purpose: it `load()`s scripts that name autoloads, and autoloads
+	# do not exist in a `--script` run, so a compile error here is the tool working.
+	print("TEST EXPECTS ERRORS")
 	if fails == 0:
 		print("COMPILE TEST: PASS (every script and scene root compiles)")
 	else:
