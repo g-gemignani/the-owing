@@ -22325,6 +22325,18 @@ that the other session's entry was uncommitted, so `grep` on `HEAD` said the num
 The three commits in this batch were staged through a HEAD-plus-my-entry copy of the file for
 the same reason as step 3 above, so no other session's uncommitted entry was ever swept.
 
+**So check the WORKING COPY for a free number, never `HEAD`.** The other session reported
+running the check before it took D318, and the check answered correctly and uselessly — the
+number was free in `HEAD` and taken on disk. This is the shared working copy being an
+advantage for once: it holds both sessions' entries, so the file itself knows.
+
+    grep '^### D318' DESIGN.md            # taken, by anyone, committed or not
+    git diff DESIGN.md | grep '^+### D'   # ...and specifically who has claimed what today
+
+The second line is the one to run. It lists every number claimed and not yet committed, which
+is the only set the git history cannot show you.
+
+
 #### The rule under all of it
 
 **A working copy shared by two authors is not a record of what either of them did.** Every tool

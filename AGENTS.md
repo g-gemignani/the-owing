@@ -1095,7 +1095,9 @@ These are failure modes that have actually bitten this project. Treat each as a 
   and commit it first with their name in the body. Append-only files are not safe either, only
   quiet: two sessions never conflict in `DESIGN.md`, they take the same D-number instead, and
   `grep` on `HEAD` calls a number free while another session's entry sits uncommitted beside
-  yours.
+  yours. Claim a D-number off the WORKING COPY, never off `HEAD` —
+  `git diff DESIGN.md | grep '^+### D'` is the only thing that lists what has been claimed
+  today and not yet committed.
 
 - **A function that is called twice may not roll dice (D271).** The elite reward panel is
   drawn once when the fight ends and again after a relic is taken, because the relic row
