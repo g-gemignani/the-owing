@@ -292,11 +292,12 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D307** | [Five more play reports, and the one that had been eating chests](#d307--five-more-play-reports-and-the-one-that-had-been-eating-chests) |
 | **D308** | [An unmet relic answers by being dead, not by saying it has nothing to say](#d308--an-unmet-relic-answers-by-being-dead-not-by-saying-it-has-nothing-to-say) |
 | **D309** | [The four-legged ones were measured by their height, and one capture was a day old](#d309--the-four-legged-ones-were-measured-by-their-height-and-one-capture-was-a-day-old) |
+| **D310** | [A save you can play an archetype from, and it caught its own first bug](#d310--a-save-you-can-play-an-archetype-from-and-it-caught-its-own-first-bug) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
 
-**Cited but never written up:** D48 D93 D100 D110 D234. Each is referenced by number
+**Cited but never written up:** D48 D93 D100 D110 D234 D304. Each is referenced by number
 somewhere in this file and has no entry of its own. D110 is the documented
 case — D112 records it being left alone while a concurrent session held it.
 
@@ -21675,3 +21676,66 @@ swarm   longer-than-tall 1.18   subject  41 tall x  48 long   0.33 x hero
 caster  longer-than-tall 1.00   subject 128 tall x 128 long   1.02 x hero
 brute   longer-than-tall 1.00   subject 147 tall x 147 long   1.17 x hero
 ```
+
+---
+
+### D310 — A save you can play an archetype from, and it caught its own first bug
+
+Everything measured this session came from `tools/sim_balance.gd`. The report can say a deck
+completes 1% of its runs. It cannot say **whether the run was lost to a decision or was never
+survivable**, and it cannot say whether a fight was long and boring. Those two questions decide
+whether a number is a tuning problem or a design problem, and only a person playing answers them.
+
+What stopped that was not the deck builder — it exists, and six loadouts can be saved. It is that
+the cards must be OWNED at a level, and reaching Lv15 across a hundred of them is hours of fusing.
+
+`tools/debug_save.gd` writes a save with the whole collection at a chosen level, the clears that go
+with it, and one loadout per archetype:
+
+```
+godot --headless --script tools/debug_save.gd -- --slot=3 --level=15 --clears=4
+```
+
+#### Three things it does that a smaller version would not
+
+**The decks are read from `resources/builds/*.tres`.** Those are the game's own archetype
+definitions — what the Builds screen shows, what `test_build.gd` guards, and what D297's reward
+bundles are drawn from. Retyping the card lists into a tool would have made a second owner, and the
+next edit would have had the player feeling one deck while the report measured another. That exact
+drift has cost this project four separate days.
+
+**It sets the progression, not only the cards.** The report calls a deck "Poison build (Lv15)" and
+that player has 4 clears and 100 HP. Handing over the poison cards at Lv15 with no clears is a
+different person, and the feedback and the table would not be about the same run. D208, whose
+version of this mistake cost 42 cells a mean of +17 points.
+
+**It clears `MetaState.path_prefix` before writing.** Under a headless display that prefix is
+`t_headless_`, so the save would land in `user://t_headless_save_3.json` while the game — not
+headless — reads `user://save_3.json`. The tool would print success and the slot would be empty.
+
+#### It reads its own save back, and the first run failed
+
+After writing, it loads the file and checks every deck is legal. That is not ceremony: `save_deck`
+clamps each entry to what is owned, so a loadout asking for more copies than were granted comes
+back **short** and the Start button refuses with "deck too small" — on a screen the player opened
+expecting to press it.
+
+The first run granted 4 copies of each card and the check immediately rejected its own output:
+`new_save`'s Starter deck asks for five Hack, and came back as eleven cards. The default is
+`MAX_DECK_SIZE` now, so no legal loadout can be clamped. **The promise is "build anything", and any
+number below that quietly is not.**
+
+#### What it exposes, and it is worth knowing before playing one
+
+Built purely from their own card lists, the archetypes are more extreme than the simulator's
+profiles, which all mix in Hack and Cover:
+
+| deck | ratio | defence |
+|---|---|---|
+| The Closed Door (fortress) | 10.40 | 89% |
+| The Long Death (poison) | 8.43 | **0%** |
+| The Wide Cut (swarm) | 18.57 | **0%** |
+| The Red Ledger (vampire) | **28.21** | **0%** |
+
+The Red Ledger is near the top of the achievable ratio range with nothing to block with, so D303's
+finding should be felt there in its purest form. The Closed Door is the control.
