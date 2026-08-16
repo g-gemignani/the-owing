@@ -288,6 +288,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D301** | [The boss cancelled the player's growth exactly, and the pillar had never been asked](#d301--the-boss-cancelled-the-players-growth-exactly-and-the-pillar-had-never-been-asked) |
 | **D302** | [A missed click is not a no-op, and a check that has lied once must not be trusted](#d302--a-missed-click-is-not-a-no-op-and-a-check-that-has-lied-once-must-not-be-trusted) |
 | **D303** | [Two fixes for the four dead archetypes, both refuted, and the pair of numbers that names the real one](#d303--two-fixes-for-the-four-dead-archetypes-both-refuted-and-the-pair-of-numbers-that-names-the-real-one) |
+| **D306** | [A monster's size was set by how much canvas its painter used](#d306--a-monsters-size-was-set-by-how-much-canvas-its-painter-used) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21382,3 +21383,70 @@ hit and simply has nothing to put in front of it.
 It is a change to the divisor of every difficulty number in the game, so it gets its own entry, its
 own sweep and its own worktree baseline. **Two refuted hypotheses in one day is the argument for
 measuring this one before building it, not after.**
+
+---
+
+### D306 — A monster's size was set by how much canvas its painter used
+
+Asked: *"I still have the feeling that some monsters in the iso dungeons have the wrong
+size compared to the hero."* The feeling was right, and the measurement is worse than the
+feeling.
+
+#### The same rat, half again as tall, for turning round
+
+`iso_run` draws every creature on a fight tile at its TIER's number — `combat` 2.20,
+`elite`, `boss` — and `SPRITE_H` is a table of CANVAS heights, so what the player sees is
+that number times the file's own fill. `tools/iso_scale.gd` now reads all 70 creature
+files, and the fill runs from **0.40 to 0.98**:
+
+| | fill | x hero, at one constant |
+|---|---|---|
+| `rat_swarm_s` | 40% | **0.40** |
+| `bone_picker_s` | 42% | 0.43 |
+| `tomb_guard_s` | 53% | 0.53 |
+| `bellows_brute_s` | 81% | 0.83 |
+| `cultist_s`, `brute_s`, and 20 more | 98% | **1.00** |
+
+That is a monster half the hero's height and a monster exactly her height, from the same
+line of code. And the two facings of one archetype disagree, because they are two
+paintings: **`plague_rat_s` measured 0.61x her and `plague_rat_n` measured 0.89x.** The rat
+grew by half when it walked away. `rat_swarm` moved 22%, `false_step` 26%, `crypt_hound`
+16%.
+
+Nothing chose any of this. It is how much empty space each painter left above the subject.
+
+#### Size by the SUBJECT, and put the reading back
+
+Two changes, and the first one fixes the facing pairs for free:
+
+* **`_footed_rect` divides a creature's height by its fill** (`IsoFooting.fill`, cached
+  beside the stand point). `SPRITE_H` then means the subject rather than the file, and both
+  facings of one archetype land on one height whatever their own paintings did.
+* **`FAMILY_H` sizes it by the family `Balance.iso_family()` already derives** from the
+  enemy's own stats: swarm 0.55, caster 1.00, brute 1.15. On a combat tile that is 0.56x,
+  1.02x and 1.17x the hero — knee-high, a person, bigger than you.
+
+The family table was already there and already load-bearing: the floor casts `swarm`,
+`brute` and `caster` so that "what kind of danger is that" is answerable at a distance
+(D85). It said it with the silhouette alone, because size said nothing. Now size says it
+too.
+
+**The hero, the furniture and the wanderers are deliberately left on the canvas rule.**
+Each was measured against the hero and tuned by hand in D288, so normalising them now would
+silently move six numbers that are already right. The creatures were the set that had never
+been measured.
+
+#### The boss was the same size as an elite
+
+`combat.TIER_SIZE` has drawn a boss at 1.34x a normal and an elite at 1.14x since the fight
+screen existed. The floor had both at 2.45 — one size — while Tier 8's own brief asks for
+"unmistakably the biggest of the three". They are 2.51 and 2.95 now, which is the fight
+screen's own ratio applied to the floor's 2.20.
+
+#### What the tool will not guess
+
+`iso_scale.gd` reports each creature's fill and what it USED to cost, and it does not print
+the family: that comes from `Balance.iso_family()`, which needs autoloads a `--script` run
+cannot have. Deriving it from the filename instead would be a restated table, which is the
+habit that has cost this project four bugs. It prints the three family heights parsed out
+of `iso_run.gd` and leaves the mapping where it lives.

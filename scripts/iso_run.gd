@@ -225,7 +225,11 @@ const PROP_WALL_DRAPE := 0.34
 ## is read by: 5670, 7176, 11934 px. Read the fill before changing a number here, or a
 ## constant that looks like a 10% nudge lands as a 40% one.
 const SPRITE_H := {
-	"combat": 2.20, "elite": 2.45, "boss": 2.45,
+	# The boss was the same number as the elite, so the floor drew the two at one size while
+	# the fight screen has always drawn a boss 1.34x a normal against an elite's 1.14x
+	# (`combat.TIER_SIZE`). The tier's own brief asks for "unmistakably the biggest of the
+	# three" and the floor was not delivering it. 2.20 x 1.14 and 2.20 x 1.34 (D306).
+	"combat": 2.20, "elite": 2.51, "boss": 2.95,
 	# A campfire is not a person. `rest` was 2.15, one notch under the hero's own 2.20, and
 	# it drew a fire 0.83x her height — she could have warmed her hands on the top of it.
 	# 1.15 is a knee-high fire, which is what a thing you sit down beside looks like.
@@ -241,6 +245,27 @@ const SPRITE_H := {
 	# fact that she is drawn last and so never occluded.
 	"hero": 2.20,
 }
+## What a creature's own SIZE is, as a multiple of its tier's height, by the family
+## `Balance.iso_family()` derives from its stats (D306).
+##
+## The floor already tells you what kind of danger you are looking at before you read a
+## word — a swarm is spiders, a brute is an armoured thing — and until now it told you that
+## with the silhouette alone, because every creature on a fight tile was drawn at the same
+## number. What the player actually saw was that number times the file's own fill, which
+## runs from 0.40 to 0.98 across the 70 paintings. So the size said nothing, and it said it
+## inconsistently: `plague_rat` measured 0.61x the hero facing her and 0.89x walking away,
+## because its two paintings fill their canvases differently. **The same rat, half again as
+## tall, for turning round.**
+##
+## Sizing by the SUBJECT rather than by the canvas fixes the pair for free — both facings
+## land on the same height whatever their fills are — and then these three numbers put the
+## size back in the reading: a swarm is knee-high, a caster is a person, a brute is bigger
+## than you.
+const FAMILY_H := {"swarm": 0.55, "caster": 1.00, "brute": 1.15}
+## What a creature with no family answer is drawn at. `Balance.ISO_FAMILY_DEFAULT` is
+## `brute`, and this matches it rather than restating the fallback as a number.
+const FAMILY_H_DEFAULT := 1.15
+
 ## Wanderer design count lives in `Balance.ISO_WANDERERS` — the manifest lists one
 ## painted file per design and cannot preload this script to read it (D122).
 const WANDER_DESIGNS := Balance.ISO_WANDERERS
@@ -253,6 +278,12 @@ var foe_missing := {}
 ## role -> where that sprite's feet are, as a signed fraction of its own width from the
 ## middle of the canvas. Measured from the art at load (`IsoFooting.offset`), never typed.
 var stand := {}
+## role -> how much of its canvas that art's subject fills (D306). Cached beside `stand`
+## and for the same reason: it is a per-file measurement that must not run per redraw.
+var fill := {}
+## role -> the size multiplier its family earns. Empty for anything that is not a creature,
+## which is how `_footed_rect` tells the two apart.
+var family_h := {}
 ## The last step taken, kept as a grid vector because FOUR directions have to come out
 ## of it and two booleans could not.
 ##
@@ -452,6 +483,13 @@ func _load_art() -> void:
 				# floor and rock are surfaces, not figures — they have no stand point
 				if r != "floor" and r != "rock":
 					stand[r] = IsoFooting.offset(tex)
+				# The family fallbacks are creatures too, and they are sized the same way
+				# the per-archetype paintings are (D306). `mon_<family>_<face>` carries its
+				# family in the role name, which is the only place it exists here.
+				if String(r).begins_with("mon_"):
+					fill[r] = IsoFooting.fill(tex)
+					family_h[r] = float(FAMILY_H.get(
+						String(r).split("_")[1], FAMILY_H_DEFAULT))
 				# The hero is the only art the floor mirrors, and the mirror is a TEXTURE
 				# rather than a flipped rect (D154). Built once here: her left-hand facings
 				# then draw through exactly the same code as her right-hand ones, with the
@@ -467,6 +505,9 @@ func _load_art() -> void:
 					if flip != null:
 						art[r + FLIP] = flip
 						stand[r + FLIP] = -float(stand.get(r, 0.0))
+						if fill.has(r):
+							fill[r + FLIP] = float(fill[r])
+							family_h[r + FLIP] = float(family_h.get(r, FAMILY_H_DEFAULT))
 	# EVERY terrain's surface, each under its own key, rather than the dungeon's one pair
 	# overwriting the generic one. A dungeon's floors no longer share a terrain (D177): the
 	# surface turns a floor before the architecture does, so the drawing asks the MODEL what
@@ -528,6 +569,10 @@ func _foe_role(enemy_id: String, face: String) -> String:
 		if tex != null:
 			art[role] = tex
 			stand[role] = IsoFooting.offset(tex)
+			# Sized by its SUBJECT and by the family its own stats put it in (D306).
+			fill[role] = IsoFooting.fill(tex)
+			family_h[role] = float(FAMILY_H.get(
+				Balance.iso_family(enemy_id), FAMILY_H_DEFAULT))
 			# ...and its mirror, on the same terms as every other figure. Built here rather
 			# than in `_load_art` for the same reason the texture is: a floor uses a handful
 			# of these and building 70 mirrors to draw six is work for nothing.
@@ -535,9 +580,15 @@ func _foe_role(enemy_id: String, face: String) -> String:
 			if flip != null:
 				art[role + FLIP] = flip
 				stand[role + FLIP] = -float(stand.get(role, 0.0))
+				fill[role + FLIP] = float(fill.get(role, 1.0))
+				family_h[role + FLIP] = float(family_h.get(role, FAMILY_H_DEFAULT))
 			return role
 	foe_missing[role] = true
 	return ""
+
+## The way out, in the top right (D302). Kept as a member for the same reason the combat screen
+## keeps its own: a screen that can seal its exit has to be able to reach the button.
+var menu_btn: Button
 
 func _build_ui() -> void:
 	# UI.screen gives the backdrop, the root margin and the content column, so this
@@ -583,6 +634,16 @@ func _build_ui() -> void:
 	risk_sb_cold = _risk_style(Color(0.14, 0.15, 0.21, 0.60), Color(0.42, 0.44, 0.52, 0.60))
 	top.add_child(risk_frame)
 	UI.hoverable(risk_frame, "AT RISK: found this run, but only kept if you beat the boss or use an Escape Rope.")
+
+	# ...and the way out, at the far right of the top row (D302). It was a full-width bar at the
+	# BOTTOM of the screen beside a second bar called "Cards", under the floor and under the move
+	# legend — the two least-pressed controls on the screen holding the widest band on it, at the
+	# end of the reading order, on the screen with more turns in it than any other. Every other
+	# screen in the game puts Menu in the top right; the crawl is the one that did not, and a
+	# player looking for the way out looked where the way out always is.
+	menu_btn = UI.exit_button(top, "Menu", func(): UI.goto(self, "res://scenes/PauseMenu.tscn"), 34.0)
+	menu_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
+	menu_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 
 	var stake := HBoxContainer.new()
 	stake.add_theme_constant_override("separation", UITheme.sep(14))
@@ -660,25 +721,15 @@ func _build_ui() -> void:
 	spacer_bot.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(spacer_bot)
 
-	# Collection and Menu SIDE BY SIDE, not stacked (D114). Two full-width bars cost
-	# 100px of a 720px frame between them, and captured at the shipped size rather than
-	# on a taller desktop, Menu was sliced in half by the bottom edge — the column had
-	# been overflowing for as long as the header wrapped. Neither button is pressed
-	# often enough on this screen to have earned the whole width, and nothing here is
-	# allowed to take the missing height off the floor viewport.
-	var foot := HBoxContainer.new()
-	foot.add_theme_constant_override("separation", UITheme.sep(10))
-	root.add_child(foot)
-
-	var coll := Button.new()
-	UITheme.style_button(coll)
-	coll.text = "Cards"   # one screen, one name (D133)
-	coll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	coll.pressed.connect(func(): get_tree().change_scene_to_file("res://scenes/Collection.tscn"))
-	foot.add_child(coll)
-	# same Callable on the button and on Escape, so the two cannot drift apart
-	var menu := UI.exit_button(foot, "Menu", func(): UI.goto(self, "res://scenes/PauseMenu.tscn"))
-	menu.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# The foot of this screen is EMPTY now (D302). It held two full-width bars — `Cards` and
+	# `Menu` — and D114 spent its whole entry getting them to share one row without slicing the
+	# second in half. The right answer was that neither belonged there.
+	#
+	# `Cards` is gone rather than moved. It opened the Collection MID-RUN, which is the screen
+	# for fusing between runs: nothing on it can be pressed while a dungeon is open, so it was a
+	# way out of the crawl dressed as a feature, on a screen whose whole subject is where you are
+	# standing. `Menu` is the way out, it is one press away in the corner every other screen keeps
+	# it in, and Escape runs the same Callable.
 
 ## The movement pad: four keys in a cross, in the bottom-left corner of the floor window,
 ## built once and never rebuilt (D168).
@@ -1894,10 +1945,23 @@ func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
 ## the geometry and the stand point in `IsoFooting`. Shared by the standing art and by the
 ## player, so the hero cannot end up standing on a subtly different spot than the monster
 ## next to her.
+## A CREATURE is sized by its subject and its family; everything else is sized the way it
+## always was, by the canvas (D306).
+##
+## The split is deliberate rather than tidy. The hero, the furniture and the wanderers were
+## each measured against the hero and tuned by hand (D288), so normalising them now would
+## silently move six numbers that are already right. The creatures were never measured, and
+## they are the set where the canvas rule does the damage: 70 paintings, fills from 0.40 to
+## 0.98, and two facings of one archetype disagreeing by up to 46%.
 func _footed_rect(tex: Texture2D, centre: Vector2, t: Vector2, key: String,
 		role: String, scale: float = 1.0) -> Rect2:
-	return IsoFooting.rect(tex, centre, t, t.y * float(SPRITE_H.get(key, 1.8)) * scale,
-		float(stand.get(role, 0.0)))
+	var h: float = t.y * float(SPRITE_H.get(key, 1.8)) * scale
+	if family_h.has(role):
+		# `SPRITE_H` names the canvas, so divide by the fill to make the number mean the
+		# SUBJECT. Both facings of one creature then land on one height whatever their own
+		# paintings did with the empty space above them.
+		h = h * float(family_h[role]) / maxf(0.05, float(fill.get(role, 1.0)))
+	return IsoFooting.rect(tex, centre, t, h, float(stand.get(role, 0.0)))
 
 ## The reverse of `_role_of`, for the glyph fallback only.
 func _enc_of(role: String) -> int:

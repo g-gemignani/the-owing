@@ -82,6 +82,54 @@ func _init() -> void:
 			drawn * float(img.get_width()) / float(img.get_height()), drawn,
 			subject, subject / hero])
 
+	# The 70 per-archetype creatures, and the column that used to decide their size.
+	#
+	# `iso_run` sizes a creature by its SUBJECT now, not by its canvas, so the fill below
+	# DIVIDES OUT and no longer reaches the screen (D306). It is still worth printing: it is
+	# the spread that used to be the size, from 0.40 to 0.98, and the two facings of one
+	# archetype disagreeing inside it is what the old rule turned into a monster that grew
+	# when it turned round.
+	#
+	# The "x hero if it still scaled by canvas" column is therefore a record of the defect
+	# rather than a reading of the game. What the floor draws now is
+	# `SPRITE_H[tier] x FAMILY_H[family]`, and this tool cannot name the family: it comes
+	# from `Balance.iso_family()`, which needs the autoloads a `--script` run does not have.
+	# Guessing it from the filename would be a restated table, which is the habit that has
+	# cost this project four bugs.
+	var foe_dir := DirAccess.open(ART + "foe/")
+	if foe_dir != null:
+		print("\niso/foe/ — fill no longer sets the size (D306); this is the spread it used to set")
+		print("file                      fill   x hero IF it still scaled by the canvas")
+		var rows: Array = []
+		for f in foe_dir.get_files():
+			var nm := String(f)
+			if not nm.ends_with(".png"):
+				continue
+			var img := Image.load_from_file(ProjectSettings.globalize_path(
+				ART + "foe/" + nm))
+			if img == null:
+				continue
+			img.convert(Image.FORMAT_RGBA8)
+			var b := _bbox(img)
+			var fl := float(b.size.y) / float(img.get_height())
+			var sub: float = float(sprite_h.get("combat", 0.0)) * TILE_H * fl
+			rows.append([nm.get_basename(), fl, sub, sub / hero])
+		rows.sort_custom(func(a, b): return float(a[3]) < float(b[3]))
+		for r in rows:
+			print("%-24s %3.0f%%   %5.2f" % [
+				String(r[0]), float(r[1]) * 100.0, float(r[3])])
+		var fam_re := RegEx.new()
+		fam_re.compile('"([a-z]+)"\\s*:\\s*([0-9]+\\.[0-9]+)')
+		var fam_start := src.find("const FAMILY_H := {")
+		if fam_start >= 0:
+			var fam_body := src.substr(fam_start, src.find("}", fam_start) - fam_start)
+			print("\nwhat the floor draws now, per family, on a COMBAT tile:")
+			for m in fam_re.search_all(fam_body):
+				var hh: float = float(sprite_h.get("combat", 0.0)) * TILE_H \
+					* float(m.get_string(2))
+				print("  %-8s %.2f x combat = %5.1f px = %.2f x hero" % [
+					m.get_string(1), float(m.get_string(2)), hh, hh / hero])
+
 	print("\nprops, sized by the tile's WIDTH rather than by a canvas")
 	var ring := _const(src, "PROP_WALL_RING")
 	var drape := _const(src, "PROP_WALL_DRAPE")

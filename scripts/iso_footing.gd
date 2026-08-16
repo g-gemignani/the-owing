@@ -114,6 +114,51 @@ static func offset(tex: Texture2D) -> float:
 	return 0.0
 
 
+## How much of its canvas a sprite's SUBJECT fills, top to bottom, as a fraction.
+##
+## The number nothing else could see. Every sprite file is 128x192 and bottom-anchored, so
+## a subject wider than that aspect hits the width limit first and leaves its headroom
+## empty — and `iso_run.SPRITE_H` scales the whole FILE, so what the player sees is that
+## number times this one. Measured across the 70 creature files it runs from 0.40 to 0.98,
+## which is the difference between a monster half the hero's height and one exactly her
+## height, from a single constant (D306).
+##
+## 1.0 for anything unreadable, which leaves the caller drawing what it drew before.
+static func fill(tex: Texture2D) -> float:
+	if tex == null:
+		return 1.0
+	var img := tex.get_image()
+	if img == null:
+		return 1.0
+	if img.is_compressed():
+		img.decompress()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	var w := img.get_width()
+	var h := img.get_height()
+	if w <= 0 or h <= 0:
+		return 1.0
+	# `get_data` for the same reason `offset` uses it: this runs once per role on the frame
+	# the screen opens, and a per-pixel call over 70 files is an order of magnitude more.
+	var data := img.get_data()
+	var top := -1
+	var bottom := -1
+	for y in h:
+		var row := y * w * 4
+		var any := false
+		for x in w:
+			if data[row + x * 4 + 3] >= STAND_SOLID:
+				any = true
+				break
+		if any:
+			if top < 0:
+				top = y
+			bottom = y
+	if top < 0 or bottom < top:
+		return 1.0
+	return clampf(float(bottom - top + 1) / float(h), 0.05, 1.0)
+
+
 ## Which screen diagonal each painted hero is LOOKING along, as a grid step.
 ##
 ## Four facings come from two paintings by mirroring (D131), and the rule for which of the
