@@ -148,6 +148,28 @@ static func length_ratio(tex: Texture2D) -> float:
 	return maxf(1.0, float(b.size.x) / float(b.size.y))
 
 
+## How much to scale one FRAME OF AN ANIMATION by so that it draws the same character, at
+## the same height, as the standing painting it is a frame of (D317).
+##
+## `fill` above is a per-file measurement and every other sprite on this floor wants exactly
+## that. A pose does not: the size is a property of the CHARACTER, so a frame whose subject
+## happens to fill less of its canvas — `hero_s_b` fills 90% where the other three fill 98% —
+## is not a smaller person, it is the same person painted smaller, and drawn by the canvas
+## rule she drops 8% shorter for a quarter of the cycle.
+##
+## The anchor has the same shape of problem and is NOT solved by a number: see `_pin_poses`
+## in `iso_run.gd`, which pins every pose to the standing painting's stand point. This is the
+## half of that rule with arithmetic in it, so it lives here where it can be asserted.
+##
+## 1.0 for anything unreadable, which draws the pose exactly as it was drawn before.
+static func pose_scale(base: Texture2D, pose: Texture2D) -> float:
+	var bf := fill(base)
+	var pf := fill(pose)
+	if bf <= 0.0 or pf <= 0.0:
+		return 1.0
+	return bf / pf
+
+
 ## The opaque box of a sprite's subject, in pixels. `Rect2i()` for anything unreadable.
 static func subject_box(tex: Texture2D) -> Rect2i:
 	if tex == null:
@@ -198,9 +220,37 @@ static func subject_box(tex: Texture2D) -> Rect2i:
 ## `hero_s`'s hood is turned to the viewer's LEFT, so she is painted walking down-left, and
 ## the back view is the same character turned 180° — up-right. Repaint her and this is the
 ## line to change; nothing else in the drawing code has an opinion about facing.
+##
+## ## One entry per FILE, because the stride poses do not agree with their own idle (D318)
+##
+## This used to hold two entries, one per PAIR, on the reasoning that a pair is one painting
+## seen twice. That is true of the two idles and false of everything else in the set: the six
+## stride poses were generated one at a time (D222), and a generator asked for "the same
+## character mid-stride" answers the pose and flips a coin on the hand. **Five of the eight
+## files are painted looking the opposite way from the idle they belong to.**
+##
+## With one entry per pair, one mirror decision was made from `face_step` and applied to
+## whichever frame was up, so a cycle walking down-left ran ↙, ↘, ↘, ↘ — she turned to face
+## the other way partway through a step and turned back. Reported as *"going south west,
+## sometimes the hero turns south east"*, which is exactly what it is.
+##
+## The measurement behind each line is `mirror_margin` below, and `tests/test_art.gd` runs it
+## over the whole set and fails when a file decisively disagrees with its entry here. So a
+## repaint that changes which way a file looks goes red instead of flickering on screen.
 const HERO_PAINTED := {
-	"hero_s": Vector2i(0, 1),    # ↙, toward the camera and to the left
-	"hero_n": Vector2i(0, -1),   # ↗, away and to the right — the same character, turned
+	# The two idles: one character, turned around, so they look at opposite sides.
+	"hero_s": Vector2i(0, 1),     # ↙, toward the camera and to the left
+	"hero_n": Vector2i(0, -1),    # ↗, away and to the right
+	# Her strides. Read off the art and confirmed by `mirror_margin`; the margin against the
+	# family's idle is quoted, positive meaning "painted the same way as that idle".
+	"hero_s_a": Vector2i(0, 1),   # ↙  agrees with hero_s   (+15.3)
+	"hero_s_p": Vector2i(1, 0),   # ↘  opposite             (-20.4)
+	# Near frontal, so the margin is small and either hand reads acceptably. It is entered
+	# opposite because that is the way the measurement and the hood both lean.
+	"hero_s_b": Vector2i(1, 0),   # ↘  opposite             (-1.0)
+	"hero_n_a": Vector2i(-1, 0),  # ↖  opposite             (-21.5)
+	"hero_n_p": Vector2i(-1, 0),  # ↖  opposite             (-18.8)
+	"hero_n_b": Vector2i(0, -1),  # ↗  agrees with hero_n   (+23.3)
 }
 
 
@@ -209,11 +259,90 @@ static func hero_role(step: Vector2i) -> String:
 	return "hero_s" if (step.x + step.y) > 0 else "hero_n"
 
 
-## Whether that painting has to be flipped to look along `step`. Each pair has exactly two
-## members and one of them is what was painted, so anything else is the mirror.
-static func hero_mirrored(step: Vector2i) -> bool:
-	var painted: Vector2i = HERO_PAINTED.get(hero_role(step), Vector2i(1, 0))
+## Whether the file being drawn has to be flipped to look along `step`.
+##
+## `role` is the file, not the family — pass the stride pose actually on screen, because the
+## poses do not all agree with their idle (see `HERO_PAINTED`). Defaults to the family's
+## idle, which is what a standing figure is drawing.
+##
+## Each diagonal pair has exactly two members and one of them is what was painted, so
+## anything else is the mirror.
+static func hero_mirrored(step: Vector2i, role: String = "") -> bool:
+	var key: String = role if role != "" else hero_role(step)
+	if not HERO_PAINTED.has(key):
+		key = hero_role(step)
+	var painted: Vector2i = HERO_PAINTED.get(key, Vector2i(1, 0))
 	return step != painted
+
+
+## Is `pose` painted looking the same way as `idle`, and by how much?
+##
+## Positive means it agrees with `idle` as painted; negative means it agrees with `idle`
+## MIRRORED, i.e. the pose looks at the other side of the screen. The magnitude is how
+## confident that is — near zero is a figure drawn near frontal, where the question has no
+## strong answer and either hand reads acceptably.
+##
+## The two images are the same character in the same palette at the same size, so the whole
+## comparison is "does she match herself, or her reflection". Restricted to the UPPER body:
+## the legs and the swing of the cloak are what a stride pose changes on purpose, and the
+## head and shoulders are what carries the facing. Resampled to a small square first, so a
+## pose that is a few pixels taller is not compared row against the wrong row.
+##
+## Lives here, not in `iso_run.gd`, for the reason at the top of this file: this is the part
+## that has to be ASSERTED, and `tests/test_art.gd` runs it over every hero file against
+## `HERO_PAINTED`.
+const MIRROR_TOP := 0.45     ## fraction of the subject's height that carries the facing
+const MIRROR_N := 64         ## square the two are resampled to before comparing
+## How big a margin has to be before it CONTRADICTS the table rather than merely leaning.
+## `hero_s_b` measures 1.0 and is genuinely near frontal; the six decisive files measure
+## 15 to 23, so anything past 8 is a file that plainly disagrees with what is written down.
+const MIRROR_SURE := 8.0
+
+
+static func mirror_margin(idle: Texture2D, pose: Texture2D) -> float:
+	var a := _upper(idle)
+	var b := _upper(pose)
+	if a == null or b == null:
+		return 0.0
+	var am := Image.create_from_data(a.get_width(), a.get_height(), false,
+		Image.FORMAT_RGBA8, a.get_data())
+	am.flip_x()
+	return _img_diff(b, am) - _img_diff(b, a)
+
+
+## A sprite's upper body, cropped to its own subject and resampled to a fixed square.
+static func _upper(tex: Texture2D) -> Image:
+	if tex == null:
+		return null
+	var box := subject_box(tex)
+	if box.size.x <= 0 or box.size.y <= 0:
+		return null
+	var img := tex.get_image()
+	if img.is_compressed():
+		img.decompress()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	box.size.y = maxi(1, int(float(box.size.y) * MIRROR_TOP))
+	var cut := img.get_region(box)
+	cut.resize(MIRROR_N, MIRROR_N, Image.INTERPOLATE_LANCZOS)
+	return cut
+
+
+## Mean absolute difference over the pixels either image has something in. Alpha counts as a
+## channel, so a difference in SHAPE reads as well as a difference in paint.
+static func _img_diff(a: Image, b: Image) -> float:
+	var tot := 0.0
+	var n := 0
+	for y in MIRROR_N:
+		for x in MIRROR_N:
+			var ca := a.get_pixel(x, y)
+			var cb := b.get_pixel(x, y)
+			if ca.a < 0.16 and cb.a < 0.16:
+				continue
+			tot += (absf(ca.r - cb.r) + absf(ca.g - cb.g) + absf(ca.b - cb.b)
+				+ absf(ca.a - cb.a)) * 255.0 / 4.0
+			n += 1
+	return tot / float(maxi(1, n))
 
 
 ## The same question for anything that is not the hero, asked in the terms the MODEL can

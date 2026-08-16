@@ -298,6 +298,8 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D313** | [The release published, and the run went red on the page about it](#d313--the-release-published-and-the-run-went-red-on-the-page-about-it) |
 | **D315** | [The key was reported every time, and paid only on the quiet turns](#d315--the-key-was-reported-every-time-and-paid-only-on-the-quiet-turns) |
 | **D316** | [One key, two locks, and nothing checking the addition](#d316--one-key-two-locks-and-nothing-checking-the-addition) |
+| **D317** | [Her walk was measured one frame at a time, so every frame moved her](#d317--her-walk-was-measured-one-frame-at-a-time-so-every-frame-moved-her) |
+| **D318** | [Five of the eight hero files are painted the wrong way round](#d318--five-of-the-eight-hero-files-are-painted-the-wrong-way-round) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -22016,3 +22018,133 @@ was named by path.
 a coincidence with a good record.** The test to write is not the one that re-checks the value —
 it is the one that fails when the SET the value was computed from changes. Counting the
 spenders is worth more than counting the keys.
+
+### D317 — Her walk was measured one frame at a time, so every frame moved her
+
+Reported: *"the hero sprite still moves weirdly in the iso dungeons when it walks."*
+
+**The gait itself was fine.** D222 built the cycle — contact, passing, contact, passing, phased
+across two steps so it does not repeat a pose at the join — and `tests/test_art.gd` walks the
+whole sequence and pins both ends of the lift arc. None of that was wrong. What was wrong is
+where each of those frames was *put*.
+
+**Every sprite on this floor is measured on its own, and inside an animation that is the wrong
+rule.** `IsoFooting.offset` reads the stand point off the art rather than off a table, which is
+the right call for 23 unrelated pictures and is what stops a cloak or a swung axe from deciding
+where a figure stands (D149, D154). The stride poses are not unrelated pictures. They are four
+paintings of one person, and the anchor and the size are properties of the PERSON — so
+measuring them per frame lets the pose move her.
+
+Both halves of that were on screen, measured in the engine at the size she is drawn:
+
+| | own anchor | drawn body height | body midpoint |
+|---|---|---|---|
+| `hero_s` standing | -0.031 | 125.6px | 402.7 |
+| `hero_s_a` | **-0.120** (the clamp) | 125.6px | **410.2** |
+| `hero_s_p` | +0.059 | 125.6px | **395.0** |
+| `hero_s_b` | +0.008 | **115.0px** | **399.3** |
+
+The contact band is the bottom 15% of the canvas and this hero wears a cloak that reaches the
+floor, so `offset` was measuring cloak rather than boots — `hero_s_a` measured past the clamp
+and was only inside `STAND_MAX` because the clamp caught it. **A 15px sideways jump on a 116px
+tile, twice per two steps, mirrored the other way on her other two facings** (`hero_n` swings
+16.3px). And `hero_s_b`'s subject fills 90% of its canvas where the other three fill 98%, so she
+also **dropped 10.6px shorter for a quarter of the cycle**. Two shudders at 7.7 frames a second,
+on the one figure the player is watching.
+
+**The fix is that a pose is drawn as the character, not as itself.** `iso_run._pin_poses()` runs
+after the load and overwrites each stride pose's anchor with the standing painting's, mirrors
+included; `IsoFooting.pose_scale()` returns the height correction that makes the pose's subject
+the standing painting's height, and `_footed_rect` multiplies by it. After that, all three frames
+of both facings draw at the standing painting's own midpoint and 125.6px — a 0.2px spread across
+the whole cycle, and no jump entering or leaving the walk either, because the frame she starts
+and ends on is the one the others are pinned to.
+
+**Measuring each frame better would not have fixed it.** A contact frame's feet are apart and a
+passing frame's are together, so their honest stand points are genuinely different points. The
+anchor has to come from one painting or the character teleports between her own poses. That is
+the sentence worth keeping: **a per-file measurement is right for a set of pictures and wrong for
+a sequence of them.**
+
+**What the test pins.** The old check walked the sequence of pose NAMES and said nothing about
+where those paintings put her, which is exactly the gap this fell through — the clamp made the
+worst frame look legal. It now also checks the files: same canvas as the standing painting,
+bottom-flush (padding under a pose lifts her off the floor and the pinning cannot see it), and a
+pose scale within a tenth of 1.0. That last one is the real threshold. Once the scale is applied
+the heights match by construction, so the number worth asserting is how big the correction had to
+be: `hero_s_b` needs 1.09, and a frame needing more than that is not the same character in
+another pose, it is another painting. Each frame's own anchor is printed beside the standing
+one, so the size of what is being corrected is in the log rather than in this entry only.
+
+**The art was re-rolled and NOT installed, which is the other half of the report.** With the
+geometry pinned, what is left is that `hero_s_a`, `_p` and `_b` are three separately generated
+paintings whose tunic reads tan in two of them and green in the third. Two sheets came back from
+Gemini against `hero_s.png` as the reference (`gemini-browser`; the API key has no image quota).
+The second matched the palette well and put three full-length figures on a clean key — and in
+both sheets **the two contact frames came back as the same stride**, left foot leading in each.
+Installing that would have traded a costume flicker the pinning already makes harmless for a walk
+that never changes feet, which is the defect D222 exists to have fixed. So the existing art
+stays. The open item is three frames of one character in one hand, with the leading boot
+alternating; the manifest already asks for exactly that in words, and words are not what the
+generator is failing on.
+
+### D318 — Five of the eight hero files are painted the wrong way round
+
+Reported: *"the movements of the hero are still wrong. When for example going south west,
+sometimes the hero turns south east."*
+
+**A different bug from D317, in the same screen.** D317 was about where each frame of the walk
+was PUT. This is about which way each frame LOOKS, and the word that gives it away is
+*sometimes*: a wrong direction table is wrong on every step, and this was wrong on some frames
+of a step and right on others.
+
+**`HERO_PAINTED` had one entry per PAIR, and the set is not pairs any more.** The table says
+which screen diagonal each painting was drawn looking along, and the mirror is decided by
+comparing the step against it (D154). Two entries were enough when there were two files: an idle
+seen from the front and the same character turned around. Then D222 added three stride poses per
+facing, generated one at a time — and **a generator asked for "the same character mid-stride"
+answers the pose and flips a coin on the hand.** Measured with `IsoFooting.mirror_margin`, which
+compares each pose against its own idle and against that idle mirrored:
+
+| file | margin vs its idle | painted |
+|---|---|---|
+| `hero_s_a` | **+15.3** | ↙, agrees with `hero_s` |
+| `hero_s_p` | **-20.4** | ↘, opposite |
+| `hero_s_b` | -1.0 | near frontal, entered as ↘ |
+| `hero_n_a` | **-21.5** | ↖, opposite |
+| `hero_n_p` | **-18.8** | ↖, opposite |
+| `hero_n_b` | **+23.3** | ↗, agrees with `hero_n` |
+
+One mirror decision was taken from `face_step` and applied to whichever frame was up, so walking
+down-left the cycle ran **↙, ↘, ↘, ↘** — she turned to face the other way partway through the
+step and turned back on the next. That is the report, exactly.
+
+**The fix is that the painted direction is a fact about a FILE, not about a pair.**
+`HERO_PAINTED` now has all eight entries, `hero_mirrored(step, role)` takes the file being drawn,
+and `_draw_you` asks it AFTER the pose swap rather than before. Rendered out over all four
+directions, every frame of every cycle now looks the way she is walking, and the down-left and
+down-right rows are each other's mirror.
+
+**Why a table and not a load-time measurement.** `mirror_margin` is good enough to *check* the
+table and not good enough to *be* it: `hero_s_b` measures 1.0, because it is drawn near frontal
+and the question genuinely has no strong answer there. A load-time classifier would be deciding
+that file by noise. A line read off the art, with a machine that fails when the art stops
+matching it, is the same shape as the `--cells=` argument and the original two-entry table — and
+it puts the fact that five files are painted backwards where someone can read it.
+
+**What the test does, and the proof that it works.** It draws each frame flipped exactly as
+`_draw_you` would flip it for that step, and measures the result against the idle drawn for the
+same step. **Measured on the pixels, not on the rule** — a table and a rule that agree with each
+other prove nothing about the paintings. Verified by putting the two-entry table back: six
+failures across all four directions, naming `hero_s_p`, `hero_n_a` and `hero_n_p`. `hero_s_b`
+stays quiet at -1.0, which is right — `MIRROR_SURE` is 8.0 and a near-frontal frame reads
+acceptably either way.
+
+The older check in the same file, that a file walking the way it was painted is never mirrored,
+was passing only because it also asked about the family. It asks about the file now, and it fails
+on the old table too.
+
+**The lesson is D34's, in a new place.** One entry stood for two things — "which painting" and
+"which way it looks" — and stayed correct exactly as long as those were the same question. Adding
+six files to the set separated them, and nothing complained, because the thing that would have
+complained was the entry itself.

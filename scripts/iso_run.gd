@@ -544,6 +544,7 @@ func _load_art() -> void:
 							fill[r + FLIP] = float(fill[r])
 							length_ratio[r + FLIP] = float(length_ratio.get(r, 1.0))
 							family_h[r + FLIP] = float(family_h.get(r, FAMILY_H_DEFAULT))
+	_pin_poses()
 	# EVERY terrain's surface, each under its own key, rather than the dungeon's one pair
 	# overwriting the generic one. A dungeon's floors no longer share a terrain (D177): the
 	# surface turns a floor before the architecture does, so the drawing asks the MODEL what
@@ -574,6 +575,43 @@ func _load_art() -> void:
 		var ltex := PixelArt.iso_landmark_art(String(kind))
 		if ltex != null:
 			art[LANDMARK + String(kind)] = ltex
+
+## Make each hero painting and its stride poses ONE character: one anchor, one height (D317).
+##
+## Every other sprite on this floor is measured on its own, and that is right for a set of
+## unrelated pictures — it is what stops a cloak or a swung axe from deciding where a figure
+## stands (see `IsoFooting`). Inside an ANIMATION it is the wrong rule, and it is wrong in a
+## way that cannot be tuned out: the anchor and the size are properties of the CHARACTER, and
+## measuring them per frame makes the frame's own pose move her.
+##
+## Both halves of that were on screen. The contact band is the bottom 15% of the canvas and
+## this hero wears a cloak that reaches the floor, so `offset` measured cloak, not boots: the
+## `hero_s` cycle anchored at -0.120 (the clamp), +0.059 and +0.008 of its own width, which is
+## a **15px sideways jump twice per two steps** on a 116px tile, mirrored the other way on her
+## other two facings. And `hero_s_b`'s subject fills 90% of its canvas where the rest fill 98%,
+## so she also **dropped 8% shorter** on one frame of four. Two shudders at 7.7 frames a
+## second, on the figure the player is watching.
+##
+## Note that a perfect measurement would not fix this. A contact frame's feet are apart and a
+## passing frame's are together, so their honest stand points are genuinely different points —
+## the anchor has to come from ONE painting or the character teleports between her own poses.
+## The standing painting is that one, because it is also the frame she starts and ends on.
+##
+## Runs after the whole load, mirrors included, so it can overwrite both copies of each pose.
+func _pin_poses() -> void:
+	for base in HERO_BASES:
+		if not art.has(base):
+			continue
+		var anchor: float = float(stand.get(base, 0.0))
+		for p in HERO_POSES:
+			var r: String = "%s_%s" % [base, p]
+			if not art.has(r):
+				continue
+			stand[r] = anchor
+			pose_scale[r] = IsoFooting.pose_scale(art[base], art[r])
+			if art.has(r + FLIP):
+				stand[r + FLIP] = -anchor
+				pose_scale[r + FLIP] = float(pose_scale[r])
 
 ## The sprite for ONE archetype, by id and facing — the creature itself rather than the
 ## family it belongs to. Returns the role key, or "" when that archetype has no painting
@@ -1993,7 +2031,11 @@ func _draw_standing(role: String, centre: Vector2, t: Vector2, alpha: float,
 ## 0.98, and two facings of one archetype disagreeing by up to 46%.
 func _footed_rect(tex: Texture2D, centre: Vector2, t: Vector2, key: String,
 		role: String, scale: float = 1.0) -> Rect2:
-	var h: float = t.y * float(SPRITE_H.get(key, 1.8)) * scale
+	# ...and a POSE is sized by the character it is a frame of, not by its own canvas
+	# (D317). Absent for everything that is not one frame of an animation, so this is 1.0
+	# for every sprite the floor draws except the hero mid-step.
+	var h: float = t.y * float(SPRITE_H.get(key, 1.8)) * scale \
+		* float(pose_scale.get(role, 1.0))
 	if family_h.has(role):
 		# `SPRITE_H` names the canvas, so divide by the fill to make the number mean the
 		# SUBJECT. Both facings of one creature then land on one height whatever their own
@@ -2037,7 +2079,7 @@ func _enc_of(role: String) -> int:
 ## (D155).
 func hero_art_name() -> String:
 	var role := IsoFooting.hero_role(face_step)
-	if IsoFooting.hero_mirrored(face_step) and art.has(role + FLIP):
+	if IsoFooting.hero_mirrored(face_step, role) and art.has(role + FLIP):
 		role += FLIP
 	return role if art.has(role) else "(no art: ring and pip)"
 
@@ -2063,7 +2105,10 @@ func _draw_you(centre: Vector2, t: Vector2) -> void:
 			# A checkout with the two contacts and no passing frame: hold the contact for the
 			# whole step, which is exactly what this did before D222.
 			role = "%s_%s" % [role, "a" if stride == 0 else "b"]
-	if IsoFooting.hero_mirrored(face_step) and art.has(role + FLIP):
+	# Asked about the FILE now on screen, not about the family it belongs to (D318). Five of
+	# the eight hero files are painted looking the opposite way from their own idle, so one
+	# answer for the pair turned her round partway through a step and back again.
+	if IsoFooting.hero_mirrored(face_step, role) and art.has(role + FLIP):
 		role += FLIP
 	var tex: Texture2D = art.get(role)
 	if tex != null:

@@ -1316,6 +1316,27 @@ These are failure modes that have actually bitten this project. Treat each as a 
   like between the keyframes, not how many keyframes there are** — and assert the sequence,
   since a check on any single frame passes on a slide.
 
+  **And the frames of one animation are ONE character, so they cannot be measured one at a
+  time (D317).** Reading a sprite's anchor and size off its own art is right for a set of
+  unrelated pictures and is what keeps a cloak from deciding where a figure stands (D149).
+  Inside a cycle it is wrong: the anchor and the size belong to the character, so a per-frame
+  measurement lets the pose move her. The hero's contact frame anchored on her floor-length
+  cloak rather than her boots and jumped 15px sideways on a 116px tile, and one frame drawn
+  90% as tall dropped her 10.6px shorter, twice per two steps. Measuring each frame *better*
+  does not fix it — feet apart and feet together are honestly different stand points. Pin the
+  whole cycle to the idle painting, which is also the frame it starts and ends on.
+
+  **They are also not all painted facing the same way, and a generator will not tell you
+  (D318).** Asked for "the same character mid-stride", it answers the pose and flips a coin on
+  the hand: five of the eight hero files look the opposite way from their own idle. The facing
+  table held one entry per PAIR, which was right while a pair was two files, so one mirror
+  decision got applied to every frame and she turned round partway through a step — *"going
+  south west, sometimes the hero turns south east"*. **A property of a FILE cannot be stored
+  per family**, and the moment a family grows from two files to eight, every such entry is
+  standing for two questions at once. Check a set like this by measuring each frame against
+  its own idle and against that idle MIRRORED — and measure the pixels that get drawn, since
+  a table and the rule that reads it will always agree with each other.
+
   **The one picture that decides it is the PAIR (D221).** On magenta a missing trident head
   looks like a trident drawn short and a severed arm looks like a sleeve ending in rags — the
   sprite is *plausible* without the part, which is the case a single picture cannot settle. So

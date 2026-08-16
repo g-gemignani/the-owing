@@ -1037,6 +1037,116 @@ func _init() -> void:
 			fails += 1
 			print("FAIL gait_frame is undefined at rest")
 
+	# --- and every frame of it is the SAME CHARACTER: one anchor, one height (D317) -----
+	#
+	# The check above walks the sequence of pose NAMES and says nothing about where those
+	# paintings put her, which is where the walk was actually broken: the poses were each
+	# measured on their own, so a floor-length cloak in the contact band moved her stand point
+	# 15px sideways between frames and one short-drawn frame took 8% off her height. The
+	# player saw a figure shuddering and changing size at 7.7 frames a second.
+	#
+	# So the invariant is the one `iso_run._pin_poses` implements: a pose is drawn at the
+	# standing painting's anchor, scaled so its subject is the standing painting's height. It
+	# is asserted on the FILES, because a pose set can be repainted at any time and the
+	# pinning is only as good as the frames being one character's — a pose drawn at half the
+	# size is still half the size after it is scaled to fit, it just has the wrong body inside
+	# a right-sized box.
+	#
+	# The rule is deliberately not "measure each frame better". Feet apart and feet together
+	# are genuinely different stand points, so any per-frame measurement moves her.
+	for base in ["hero_s", "hero_n"]:
+		var bpath: String = "res://assets/art/iso/%s.png" % base
+		if not ResourceLoader.exists(bpath):
+			continue
+		var btex := load(bpath) as Texture2D
+		if btex == null:
+			continue
+		var banchor: float = IsoFooting.offset(btex)
+		var bsub: float = IsoFooting.fill(btex) * float(btex.get_height())
+		for p in ["a", "p", "b"]:
+			var ppath: String = "res://assets/art/iso/%s_%s.png" % [base, p]
+			if not ResourceLoader.exists(ppath):
+				continue    # a checkout without the stride frames walks on the idle painting
+			var ptex := load(ppath) as Texture2D
+			if ptex == null:
+				fails += 1; print("FAIL stride pose %s_%s did not load" % [base, p]); continue
+			# Same canvas, or the anchor and the scale are being applied to a different frame
+			# of reference than the one they were measured in.
+			if ptex.get_width() != btex.get_width() or ptex.get_height() != btex.get_height():
+				fails += 1
+				print("FAIL stride pose %s_%s is %dx%d where %s is %dx%d" % [
+					base, p, ptex.get_width(), ptex.get_height(), base,
+					btex.get_width(), btex.get_height()])
+				continue
+			# The scale is a CORRECTION, not a resize. Once it is applied the drawn heights
+			# match by construction, so the number worth asserting is how big the correction
+			# had to be: a pose needing more than a tenth either way is not the same character
+			# in another pose, it is another painting, and scaling its box does not give it the
+			# build of the frame before it. `hero_s_b` was 1.09 of the idle and that already
+			# read as the hero shrinking on one frame of four.
+			var sc: float = IsoFooting.pose_scale(btex, ptex)
+			if sc < 0.90 or sc > 1.11:
+				fails += 1
+				print("FAIL stride pose %s_%s needs %.2fx to match the standing painting" % [
+					base, p, sc])
+			# Bottom-flush, because the rect is anchored by the CANVAS bottom: padding under a
+			# pose lifts the character off the ground for that frame, and the pinning above
+			# cannot see it — it corrects the subject's height, not where the subject sits in
+			# its own frame. The manifest asks the generator for this in words; this is what
+			# checks the file that came back.
+			var pbox: Rect2i = IsoFooting.subject_box(ptex)
+			if pbox.size.y > 0 and pbox.end.y < ptex.get_height():
+				fails += 1
+				print("FAIL stride pose %s_%s has %dpx of padding under her feet" % [
+					base, p, ptex.get_height() - pbox.end.y])
+			# What the pinning is worth, in the log rather than as a threshold: this is the
+			# distance the hero USED to jump when this frame came up, as a fraction of her own
+			# drawn width. Anything over a percent or two is a visible shudder at 7.7fps.
+			print("  (info: %s_%s own anchor %+.3f vs standing %+.3f, scale %.3f)" % [
+				base, p, IsoFooting.offset(ptex), banchor, sc])
+
+	# --- every frame of the cycle FACES THE WAY SHE IS WALKING (D318) ------------------
+	#
+	# The check above is about where she stands; this one is about which way she is turned,
+	# and it is the defect the player reported: *"going south west, sometimes the hero turns
+	# south east"*. The stride poses were generated one at a time and five of the eight hero
+	# files are painted looking the opposite way from the idle they belong to, so a single
+	# mirror decision per PAIR turned her round partway through a step and back.
+	#
+	# Measured on the pixels that would be DRAWN — each frame flipped exactly as `_draw_you`
+	# would flip it for that step — because the rule and the table agreeing with each other
+	# proves nothing about the art. `mirror_margin` is negative when a picture matches the
+	# reflection of the reference better than the reference, so a frame that decisively
+	# disagrees with the idle it is walking beside is the bug, whatever the table says.
+	for step in TraversalIso.DIRS:
+		var fam: String = IsoFooting.hero_role(step)
+		var fpath: String = "res://assets/art/iso/%s.png" % fam
+		if not ResourceLoader.exists(fpath):
+			continue
+		var ftex := load(fpath) as Texture2D
+		if ftex == null:
+			continue
+		# the idle as it lands on screen for this step, which is what the poses join
+		var idle_drawn: Texture2D = ftex
+		if IsoFooting.hero_mirrored(step, fam):
+			idle_drawn = IsoFooting.flipped(ftex)
+		for p in ["a", "p", "b"]:
+			var prole: String = "%s_%s" % [fam, p]
+			var ppath: String = "res://assets/art/iso/%s.png" % prole
+			if not ResourceLoader.exists(ppath):
+				continue
+			var pt := load(ppath) as Texture2D
+			if pt == null:
+				continue
+			var drawn: Texture2D = pt
+			if IsoFooting.hero_mirrored(step, prole):
+				drawn = IsoFooting.flipped(pt)
+			var turn: float = IsoFooting.mirror_margin(idle_drawn, drawn)
+			if turn < -IsoFooting.MIRROR_SURE:
+				fails += 1
+				print("FAIL walking %s, frame %s faces the other way (margin %.1f)" % [
+					step, prole, turn])
+
 	# --- the hero's mirror rule and the monsters' are ONE rule -------------------------
 	#
 	# The hero picks her mirror by comparing a step against the diagonal her file was painted
@@ -1133,9 +1243,18 @@ func _init() -> void:
 			fails += 1
 			print("FAIL %s is declared painted facing %s, which is not a direction" % [
 				hrole, as_painted])
-		if IsoFooting.hero_mirrored(as_painted):
+		# Asked about the FILE (D318). Without the role this defaults to the family's idle,
+		# and every stride pose painted the other way from its idle then reads as mirrored
+		# while walking the way it was painted — which is the bug, not the test.
+		if IsoFooting.hero_mirrored(as_painted, String(hrole)):
 			fails += 1
 			print("FAIL %s is mirrored when walking the way it was painted" % hrole)
+		# ...and it has to be on the right side of the camera for its own name. A `hero_s_*`
+		# painted ↗ would walk toward the viewer with her back turned, which no mirror fixes.
+		if ((as_painted.x + as_painted.y) > 0) != String(hrole).begins_with("hero_s"):
+			fails += 1
+			print("FAIL %s is painted along %s, the wrong side of the camera for its name" % [
+				hrole, as_painted])
 	print("  (info: hero facings %s)" % [draws.keys()])
 
 	# --- painted title art exists and is not filtered like a pixel sprite ---
