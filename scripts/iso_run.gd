@@ -229,7 +229,10 @@ const SPRITE_H := {
 	# A campfire is not a person. `rest` was 2.15, one notch under the hero's own 2.20, and
 	# it drew a fire 0.83x her height — she could have warmed her hands on the top of it.
 	# 1.15 is a knee-high fire, which is what a thing you sit down beside looks like.
-	"shop": 2.15, "rest": 1.15, "event": 2.15, "treasure": 2.05,
+	# The stall was re-rolled dark in D303 and the new painting fills only 71% of its
+	# canvas where the old striped one filled 81%, so the same 2.15 drew it at 0.71x the
+	# hero -- shorter than the person walking up to it. 3.00 puts it back at 0.98x.
+	"shop": 3.00, "rest": 1.15, "event": 2.15, "treasure": 2.05,
 	# A wanderer is a spider and the hero note below says she is taller than one. At 1.95 it
 	# measured 0.89x her, which is not taller in any way a player would notice.
 	"wander": 1.70,
