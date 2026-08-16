@@ -303,6 +303,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D319** | [One sentence, said three ways, and the last one to speak won](#d319--one-sentence-said-three-ways-and-the-last-one-to-speak-won) |
 | **D320** | [Creature size came off the stat block, and the skeleton came out knee-high](#d320--creature-size-came-off-the-stat-block-and-the-skeleton-came-out-knee-high) |
 | **D321** | [`git add` stages the FILE, not the change you wrote](#d321--git-add-stages-the-file-not-the-change-you-wrote) |
+| **D324** | [The walk cycle changed clothes, and a colour grade fixed half of it](#d324--the-walk-cycle-changed-clothes-and-a-colour-grade-fixed-half-of-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -22343,3 +22344,77 @@ is the only set the git history cannot show you.
 that reads it — `git add`, `grep`, a test run, a generated document — is answering a question
 about the union. When you need to know what YOUR change is, build a tree that contains only it
 and ask that.
+
+### D324 — The walk cycle changed clothes, and a colour grade fixed half of it
+
+The report: *"Can we do anything for the alternating colour of the clothes of the hero? Can we
+avoid regenerating it via gemini but just apply a script to make the colour uniform?"* —
+followed by the constraint that matters: *"with uniform I mean uniform across all the sprites.
+I am fine with the cloak being of a different colour than the clothes."*
+
+`tools/hero_palette.gd`, and the answer is yes. There was no regeneration.
+
+#### Two faults, and the measurement only found one of them
+
+Measured over the cloak — every pixel at 0.35 saturation or more — across the eight files:
+
+| file | hue | sat | value at p90 |
+|---|---|---|---|
+| hero_s | 60 | 0.58 | 0.745 |
+| hero_s_a | 63 | 0.60 | 0.773 |
+| **hero_s_p** | 54 | 0.59 | **0.663** |
+| hero_s_b | 59 | 0.59 | 0.753 |
+| hero_n | 53 | 0.69 | 0.714 |
+| hero_n_a | 54 | 0.68 | 0.753 |
+| **hero_n_p** | 45 | 0.65 | **0.671** |
+| hero_n_b | 52 | 0.68 | 0.761 |
+
+The passing frame is 11-12% underexposed in both facings. One frame in four, on the figure the
+player watches longest: she pulses darker twice per two steps.
+
+**The fault the player was actually reporting is not in that table at all.** The two passing
+frames wear a GREEN tunic and green trousers where every other frame paints warm tan — 1,664
+pixels, 19% of the figure. `ART_ASSETS.md` asks each pose for *"same character, same cloak,
+same colours, same height"*, and the generator answered the pose and changed the clothes. A
+hue-and-exposure table cannot see that, because the garment is a small, low-saturation part of
+an image whose statistics the cloak dominates.
+
+#### Three transforms, two of them thrown away after looking at the render
+
+**One target for all eight.** Every number in the report improved and the north set came out a
+flat pale yellow. The north set measures 0.09 more saturated than the south set, and that is
+not drift: the back of a cloak in full light IS more saturated than the front, which is mostly
+shaded inner folds.
+
+**Matching hue within a facing.** Worse than doing nothing. A file's mean cloak hue is dragged
+down by its shadowed folds, so `hero_n_p` reads 45 degrees against its siblings' 52-54 —
+rotating it +8 to agree overshoots the LIT surface, which was already gold, into yellow-green.
+The frame ended further from its siblings than it started, with the report saying it had
+converged.
+
+**Exposure only, within a facing, plus a targeted garment recolour.** Shipped.
+
+#### What shipped
+
+Exposure is multiplied to the median p90 of that facing's three AGREEING frames — the idle and
+the two contacts, with the outlier kept out of the target it is about to be corrected to.
+Multiplicative, so the darkest fold stays the darkest fold.
+
+The garment is a hue band with a saturation CEILING, rotated from 35-70 degrees to 18 and
+lifted by a third. **The ceiling is the whole of why it is safe**: the cloak lives in the same
+hue band and never falls below 0.35 saturation even in its deepest folds, so a ceiling of 0.30
+cannot reach it. That is what keeps a gold cloak over tan clothes instead of turning the figure
+brown, and it is what the report asked for — the cloak is *supposed* to be a different colour.
+
+The band is applied to all eight files rather than to the two that need it, and the pixel counts
+are the proof that it is a selection rather than a guess: 2,013 on `hero_s_p`, 171 on
+`hero_n_p`, and 0 or 1 on the other six. A rule that names its own exceptions is a rule that is
+wrong the day a ninth file arrives.
+
+#### The rule
+
+**A statistic over a whole image cannot see a small region that is the wrong colour, and it
+will confidently report that region as converged.** Two of the three transforms here were
+adopted on improving numbers and rejected on sight. Every one of them was rendered
+side by side with the original before it was believed — which is now written into the tool's own
+header as the condition for changing it.
