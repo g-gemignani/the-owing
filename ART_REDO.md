@@ -14,7 +14,7 @@ regenerated, so a set that has been re-rolled leaves the table on its own. The
 | set | files | mean luma | ink | over 0.80 |
 |---|---|---|---|---|
 | `enemies/`  ← **the bible** | 35 | 0.30 | 31.4% | 1.7% |
-| `iso/foe/` | 70 | 0.34 | 27.3% | 3.4% |
+| `iso/foe/` | 70 | 0.34 | 26.6% | 3.4% |
 | `powers/` | 30 | 0.35 | 25.2% | 2.7% |
 | `relics/` | 38 | 0.35 | 24.0% | 3.1% |
 
