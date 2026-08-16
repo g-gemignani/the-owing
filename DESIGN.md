@@ -22355,6 +22355,15 @@ that set is either a session still working or a decision that was implemented an
 recorded, and the two are indistinguishable from outside, which is the argument for writing the
 entry with the code rather than after it.
 
+**The generated "Cited but never written up" line is NOT that check**, and it looks enough like
+it to be retired in its favour. `tools/design_index.sh` greps `$DOC` — this file and nothing
+else — so it catches a number cited in the LOG'S OWN PROSE with no section of its own. D323
+did show up there, which is what makes the confusion easy, but only because other entries
+happened to mention it. Five `.gd` files had pointed at that number for hours before any of
+them did, and the line said nothing the whole time. Two checks, two sets, and the one that
+reads the code is the one nothing else does.
+
+
 
 
 #### The rule under all of it
