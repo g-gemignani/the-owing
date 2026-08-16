@@ -293,6 +293,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D308** | [An unmet relic answers by being dead, not by saying it has nothing to say](#d308--an-unmet-relic-answers-by-being-dead-not-by-saying-it-has-nothing-to-say) |
 | **D309** | [The four-legged ones were measured by their height, and one capture was a day old](#d309--the-four-legged-ones-were-measured-by-their-height-and-one-capture-was-a-day-old) |
 | **D310** | [A save you can play an archetype from, and it caught its own first bug](#d310--a-save-you-can-play-an-archetype-from-and-it-caught-its-own-first-bug) |
+| **D311** | [One constant was doing two jobs, and the rim kept the half it could not clean](#d311--one-constant-was-doing-two-jobs-and-the-rim-kept-the-half-it-could-not-clean) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21739,3 +21740,58 @@ profiles, which all mix in Hack and Cover:
 
 The Red Ledger is near the top of the achievable ratio range with nothing to block with, so D303's
 finding should be felt there in its purest form. The Closed Door is the control.
+
+---
+
+### D311 — One constant was doing two jobs, and the rim kept the half it could not clean
+
+*"Some iso sprites are spilling the background in game (eg the brute)."* They were. A
+magenta outline, on **116 of the 119** isometric sprites, roughly 400 pixels each.
+
+#### Where it was hiding
+
+The first two measurements missed it. A rim-luminance test found the rims DARKER than their
+interiors, which rules out a bright key bleeding — and a plain "leans magenta" count flagged
+the mycelial lord and the robed caster hardest, because those are violet subjects. Neither
+answer was the one to act on.
+
+What separates bleed from paint is **where it sits**: residue hugs the silhouette, paint
+does not. Counting only key-ish pixels within 4px of transparency found the band at once,
+and magnifying a shoulder of `mon_brute_s` over the floor's own colour showed it plainly.
+
+#### The number that was asked for two different things
+
+D294 built the rim rule and gave `RIM_TINT_GAP` = 0.14 two jobs at once:
+
+* the **yardstick** for `_is_paint`, where it must sit exactly where the mycelial lord's
+  violet stops, because that is what tells a violet subject from a bleeding one;
+* the **floor** for cleaning, where 0.14 turned out to be far too high.
+
+Measured on the shipped files, the surviving residue sits almost entirely below it:
+
+| | 0.08–0.14 | 0.14–0.22 |
+|---|---|---|
+| `mon_brute_s` | **379** | 12 |
+| `mon_caster_s` | **426** | 6 |
+| `cultist_s` | **380** | 0 |
+| `hexer_n` | **423** | 0 |
+
+So the two jobs are split. `RIM_TINT_GAP` keeps 0.14 as the yardstick, and
+`RIM_TINT_GAP_CLEAN` = 0.08 is what the rim is actually cleaned at.
+
+**It costs the violet subjects nothing, and that is measured rather than hoped.** A violet
+subject is refused whole by `PAINT_SHARE` before any cleaning runs — the guard reads 35-38%
+for the lord against 0.0-2.6% for every bleeding file, so the populations do not touch. And
+a violet subject that slipped past it would still be safe: `mon_caster_s` wears a purple
+robe and has **7** interior pixels in this band against 425 on its edge, because the robe's
+violet is lighter and greener than the key ever is. The robe is intact in the capture.
+
+#### Result
+
+**35,667 pixels detinted across 117 files, 2 refused** — the mycelial lord pair, by design.
+Sprites carrying an edge rim fall from 116 to 26, and those 26 hold under 25 pixels each.
+`mon_brute_s` goes from 379 to 19.
+
+The user's fallback was to re-roll the sprites on a green or magenta field. It was not
+needed: the paintings were fine and the cleaner was reaching for the wrong half of one
+constant.

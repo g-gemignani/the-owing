@@ -122,6 +122,30 @@ const TINT_BAND := 0.18
 ## has its mass above it. So 0.14 is not a tuned number, it is where the two populations
 ## stop overlapping — and the lord loses exactly zero pixels to this rule.
 const RIM_TINT_GAP := 0.14
+## The floor the rim is actually CLEANED at, which is lower than the one above (D311).
+##
+## `RIM_TINT_GAP` does two jobs in D294 and they do not want the same number. As the
+## yardstick for `_is_paint` it must sit where the mycelial lord's violet stops, because
+## that is the measurement that tells a violet subject from a bleeding one. As the floor
+## for cleaning it left a band behind: measured on the shipped files, the edge pixels that
+## still read as key sit almost entirely BELOW it —
+##
+##     edge key pixels by gap    0.08-0.14   0.14-0.22
+##     mon_brute_s                     379          12
+##     mon_caster_s                    426           6
+##     cultist_s                       380           0
+##     hexer_n                         423           0
+##
+## 116 of the 119 iso sprites carry such a band, ~400 pixels each, and on a dark floor it
+## reads as a purple outline around the figure.
+##
+## Dropping the CLEANING floor to 0.08 costs the lord nothing, because a violet subject is
+## refused whole by `PAINT_SHARE` before any of this runs — the guard measures 35-38% for
+## the lord against 0.0-2.6% for every bleeding file, so the two populations do not touch.
+## And it cannot drain a violet subject that slipped past the guard: `mon_caster_s` wears a
+## purple robe and has **7** interior pixels in this band against 425 on its edge, because
+## the robe's violet is lighter and greener than the key ever is.
+const RIM_TINT_GAP_CLEAN := 0.08
 ## Rings searched for clean paint to borrow, growing until something is found.
 const MAX_R := 6
 ## How many times to sweep. Each pass reaches one ring further into a thin feature.
@@ -256,7 +280,7 @@ static func _is_tint(c: Color, y: int, h: int, rim: bool) -> bool:
 	# the forge hound a pink tail at 0.455 / 0.302, both of them sitting in that hole. The
 	# strict pass runs first and takes what it can key; whatever it hands back on the rim has
 	# already failed to be paint.
-	if rim and gap > RIM_TINT_GAP:
+	if rim and gap > RIM_TINT_GAP_CLEAN:
 		return true
 	if gap > KEY_GAP:
 		return false          # the strict pass owns this one
