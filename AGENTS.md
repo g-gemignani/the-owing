@@ -1084,6 +1084,19 @@ moves.
 
 These are failure modes that have actually bitten this project. Treat each as a rule.
 
+- **`git add` stages the FILE, not the change you wrote (D321).** More than one agent works
+  this repository at a time, so a source file holds everybody's edits and `git add <path>`
+  commits the union of them. A key fix committed three lines of another session's
+  half-finished animation work, under a message about keys, and git reported nothing — this
+  is not a merge conflict, it is a quiet one. Read `git diff --cached` before every commit and
+  confirm you wrote every hunk. When two changes are interleaved in one file, rebuild the
+  other author's change on `HEAD` in a detached worktree, run the suite there, stage it with
+  `git hash-object -w` plus `git update-index --cacheinfo` so the working copy is untouched,
+  and commit it first with their name in the body. Append-only files are not safe either, only
+  quiet: two sessions never conflict in `DESIGN.md`, they take the same D-number instead, and
+  `grep` on `HEAD` calls a number free while another session's entry sits uncommitted beside
+  yours.
+
 - **A function that is called twice may not roll dice (D271).** The elite reward panel is
   drawn once when the fight ends and again after a relic is taken, because the relic row
   has to redraw as taken — and it rolled the three card rewards, so taking the relic dealt

@@ -302,6 +302,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D318** | [Five of the eight hero files are painted the wrong way round](#d318--five-of-the-eight-hero-files-are-painted-the-wrong-way-round) |
 | **D319** | [One sentence, said three ways, and the last one to speak won](#d319--one-sentence-said-three-ways-and-the-last-one-to-speak-won) |
 | **D320** | [Creature size came off the stat block, and the skeleton came out knee-high](#d320--creature-size-came-off-the-stat-block-and-the-skeleton-came-out-knee-high) |
+| **D321** | [`git add` stages the FILE, not the change you wrote](#d321--git-add-stages-the-file-not-the-change-you-wrote) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -22277,3 +22278,56 @@ at and the group it arrives in are properties of the ENCOUNTER; a skeleton is a 
 any of them. Deriving a visual fact from a mechanical one is cheap, always plausible, and
 wrong the first time a creature is mechanically unusual and visually ordinary — which is what
 an archetype that comes in threes is.
+
+### D321 — `git add` stages the FILE, not the change you wrote
+
+Two Claude sessions worked this repository at the same time for a day. Everything below is
+what that cost, and none of it was a merge conflict — git never once complained.
+
+**The measured case.** `0185be7` was a fix to how a key is paid for. It staged
+`scripts/iso_run.gd`, and that file also held three lines the other session had just written:
+the `HERO_BASES` and `HERO_POSES` constants and the `pose_scale` variable. So they were
+committed by a change that had nothing to do with them. It broke nothing — the code that USED
+them was still uncommitted, and the declarations compiled alone — but for several hours `main`
+held three declarations that nothing read, under a commit message about keys.
+
+It surfaced two days later in the worst place. The other session rebuilt its own work on top of
+that `main` to check it, and the rebuild would not compile: *"Constant HERO_BASES has the same
+name as a previously declared constant."* It was adding what was already there. **The author of
+a change could no longer tell which parts of it were still theirs.**
+
+**The rule.** `git add <path>` stages the CONTENT OF THAT FILE. In a shared working copy the
+file holds everybody's edits, so what you stage is the union and the commit message is a claim
+about your half of it. Read `git diff --cached` before every commit and confirm every hunk is
+one you wrote.
+
+**What to do when the two are interleaved in one file, which happens.** The sizing change
+(D320) and the hero-stride change (D317) both edited `_footed_rect`. Neither could be committed
+without the other, and the other session could not commit at all — its user had not asked it
+to. What worked:
+
+1. Reconstruct the OTHER session's change on top of `HEAD`, in a detached worktree, from its own
+   account of which hunks are its.
+2. Run the suite there. This is the step that makes the commit honest: it proves that tree
+   stands up, rather than that the shared working copy does.
+3. Stage those blobs with `git hash-object -w` and `git update-index --cacheinfo`, so the
+   working copy is never disturbed.
+4. Commit it first, saying in the first line of the body who wrote it.
+5. Commit your own on top.
+
+Both commits then compile and both are attributed. It cost about twenty minutes.
+
+**And append-only files are not safe either, they are just quiet.** `DESIGN.md` is only ever
+appended to, so two sessions never conflict in it — they take the same NUMBER instead. This
+happened again here: D318 was claimed by both sides on the same afternoon, and the tell was
+that the other session's entry was uncommitted, so `grep` on `HEAD` said the number was free.
+`tests/test_content.gd` catches the duplicate (D196), but only after both are committed.
+The three commits in this batch were staged through a HEAD-plus-my-entry copy of the file for
+the same reason as step 3 above, so no other session's uncommitted entry was ever swept.
+
+#### The rule under all of it
+
+**A working copy shared by two authors is not a record of what either of them did.** Every tool
+that reads it — `git add`, `grep`, a test run, a generated document — is answering a question
+about the union. When you need to know what YOUR change is, build a tree that contains only it
+and ask that.
