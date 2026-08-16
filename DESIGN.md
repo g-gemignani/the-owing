@@ -20604,6 +20604,13 @@ no greyed row and no reset time. Six stalls now, across two days and two caps. W
 this is, it is not the documented quota wall, and the only reliable response found so far
 is to stop and come back later.
 
+**Two more things eliminated on the retry.** A brand new tab fixes the COMPOSER — the text
+lands and the send goes through on the second click — and it does nothing for the stall,
+so those are two different faults that present as one. And **3.1 Pro stalls the same way as
+3.6 Flash**, at thirteen minutes, so it is not one model's image path either. Eight stalls.
+What is left on the list of suspects is the account itself and the second session sharing
+it.
+
 #### The art is in, after three attempts that failed three different ways
 
 **One: every subject was drawn sitting on a big stone block.** My own prompt put it there.
