@@ -2280,6 +2280,24 @@ static func card_slot(parent: Node, cid: String, owned: bool, slot_width: float,
 		inspect_card(row, card, null, note))
 	return row
 
+## How many copies of `id` are in the deck being played right now (D322).
+##
+## By id and not by object, because a run deck holds distinct `CardData` instances — the
+## same card taken twice is two resources — so `Array.count` on the card would answer 1 for
+## a deck holding three of them. `run_deck` is the whole deck, the twelve chosen at the door
+## plus whatever the run has added, which is the number the player means when they ask at a
+## shelf whether they already have one.
+##
+## 0 outside a run, which is what the deck-building screens want anyway: they show their own
+## count of what is in the deck under construction.
+static func deck_copies(id: String) -> int:
+	var n := 0
+	for c in GameState.run_deck:
+		if c != null and c.id == id:
+			n += 1
+	return n
+
+
 ## Where a card OFFERED to the player already stands in their collection: do they own
 ## it at all, how many copies, and what the next level would cost and buy (D174).
 ##
@@ -2295,7 +2313,10 @@ static func card_slot(parent: Node, cid: String, owned: bool, slot_width: float,
 ## goes into the card's own tooltip and its inspect overlay — the face, the hover and
 ## the held-up card cannot be allowed to disagree about what is in the collection.
 ##
-## Three numbers decide it, and the third is the one that is easy to get wrong:
+## Four numbers decide it, and the third is the one that is easy to get wrong:
+##   * `deck`  — copies in the deck being played RIGHT NOW (D322). The other three are
+##     all about the collection, which is the between-runs axis; this is the only one
+##     that answers "will taking this give me two of them in the fight after next".
 ##   * `count` — copies in the permanent collection.
 ##   * `risk`  — copies taken earlier in THIS run, which are not in the collection yet
 ##     and never will be if the boss wins (D20). Counted separately and named
@@ -2311,7 +2332,7 @@ static func card_slot(parent: Node, cid: String, owned: bool, slot_width: float,
 ## track, so the two disagree — and the screen that offers the level and the screen
 ## that sells it have to agree, whichever of them is right.
 static func collection_standing(card: CardData) -> Dictionary:
-	var out := {"line": "", "tip": "", "colour": Color(0.85, 0.80, 0.62)}
+	var out := {"line": "", "tip": "", "short": "", "colour": Color(0.85, 0.80, 0.62)}
 	if card == null or not MetaState.CATALOG.has(card.id):
 		return out
 	var id := card.id
@@ -2319,6 +2340,7 @@ static func collection_standing(card: CardData) -> Dictionary:
 	var count: int = int(MetaState.collection[id]["count"]) if owned else 0
 	var level: int = int(MetaState.collection[id]["level"]) if owned else 1
 	var risk: int = GameState.escrow_cards.count(id)
+	var deck: int = deck_copies(id)
 	# the collection's level, not the offer's: `level_up_text` reads the numbers off the
 	# card it is called on, and a catalogue resource is always the level-1 one
 	var probe := card.duplicate() as CardData
@@ -2334,17 +2356,26 @@ static func collection_standing(card: CardData) -> Dictionary:
 	var cap: int = maxi(level, mini(MetaState.max_level(id), probe.level_cap()))
 	var maxed: bool = level >= cap or gain == ""
 
-	# --- line one: what you hold ---
+	# --- line one: what is in the deck you are playing (D322) ---
+	#
+	# FIRST, above the collection, because it is the nearer question. At a shelf mid-run the
+	# player is asking "do I already have this" and means the deck in their hands; the
+	# collection is the answer to "is this new, and does it buy a level". The old note
+	# answered only the second, and the two are independent — a card can be your third copy
+	# this run and still be absent from a collection that death has not yet been paid into.
+	out["line"] = "In deck x%d\n" % deck if deck > 0 else "Not in your deck\n"
+
+	# --- line two: what you hold ---
 	var risk_note := ""
 	if risk > 0:
 		risk_note = " · %s taken this run" % Wording.count(risk, "copy", "copies")
 	if count > 0:
-		out["line"] = "Owned x%d — Lv%d of %d%s" % [count, level, cap, risk_note]
+		out["line"] += "Owned x%d — Lv%d of %d%s" % [count, level, cap, risk_note]
 	elif risk > 0:
-		out["line"] = "None owned yet%s" % risk_note
+		out["line"] += "None owned yet%s" % risk_note
 		out["colour"] = Color(1.0, 0.86, 0.45)
 	else:
-		out["line"] = "NEW — no copy in your collection"
+		out["line"] += "NEW — no copy in your collection"
 		out["colour"] = Color(1.0, 0.86, 0.45)
 
 	# --- line two: the next level ---
@@ -2370,8 +2401,29 @@ static func collection_standing(card: CardData) -> Dictionary:
 				else Wording.count(short, "copy", "copies"),
 			price, level + 1, gain, "  (this one)" if short == 1 else ""]
 
+	# --- the compact form, for a panel with nine cards on it (D322) ---
+	#
+	# The reward panel offers three bundles of three, at 62% card height, in a frame that
+	# already had to be reflowed to fit (D307). The two-line note above is right for the
+	# shop's three full-size stalls and would add nine two-line blocks there. So the same
+	# two facts, in one short line, and nothing else: no level, no price, no fusing. Those
+	# belong to the hover and to the shop, where there is room to read them.
+	if deck > 0 and count > 0:
+		out["short"] = "deck %d · own %d" % [deck, count]
+	elif deck > 0:
+		out["short"] = "deck %d · NEW" % deck
+	elif count > 0:
+		out["short"] = "deck 0 · own %d" % count
+	else:
+		out["short"] = "deck 0 · NEW"
+
 	# --- the hover: the rule behind the two lines ---
 	var lines: Array[String] = []
+	# The deck is stated here too, and first, for the same reason it is the first line
+	# above: the hover is the only one of the three that a phone can reach at all.
+	lines.append("Your deck holds %s of %s right now." % [
+		Wording.count(deck, "copy", "copies"), card.name] if deck > 0
+		else "%s is not in the deck you are playing." % card.name)
 	if count > 0:
 		# "every one of them" is the point, not filler: a level belongs to the card in the
 		# collection, not to a copy, so owning nine means nine at that level.

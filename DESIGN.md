@@ -303,12 +303,13 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D319** | [One sentence, said three ways, and the last one to speak won](#d319--one-sentence-said-three-ways-and-the-last-one-to-speak-won) |
 | **D320** | [Creature size came off the stat block, and the skeleton came out knee-high](#d320--creature-size-came-off-the-stat-block-and-the-skeleton-came-out-knee-high) |
 | **D321** | [`git add` stages the FILE, not the change you wrote](#d321--git-add-stages-the-file-not-the-change-you-wrote) |
+| **D322** | [The answer was written, rendered and never called](#d322--the-answer-was-written-rendered-and-never-called) |
 | **D324** | [The walk cycle changed clothes, and a colour grade fixed half of it](#d324--the-walk-cycle-changed-clothes-and-a-colour-grade-fixed-half-of-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
 
-**Cited but never written up:** D48 D93 D100 D110 D234 D304 D322 D323. Each is referenced by number
+**Cited but never written up:** D48 D93 D100 D110 D234 D304 D323. Each is referenced by number
 somewhere in this file and has no entry of its own. D110 is the documented
 case — D112 records it being left alone while a concurrent session held it.
 
@@ -22436,3 +22437,63 @@ will confidently report that region as converged.** Two of the three transforms 
 adopted on improving numbers and rejected on sight. Every one of them was rendered
 side by side with the original before it was believed — which is now written into the tool's own
 header as the condition for changing it.
+
+### D322 — The answer was written, rendered and never called
+
+Asked for: *"when in dungeons and visiting the store or choosing a card after a battle, I would
+like to know whether I have a card or not and in case how many I own."*
+
+**Most of this already existed.** `UI.collection_standing()` has answered "where does this card
+stand in your collection" since D174, and both screens call it. `UI.collection_line()` renders
+that answer as a label under the card it is about, sized and centred and coloured for exactly
+that job. It was written at the same time and **never called from anywhere.** Both screens took
+the `tip` and put it in a tooltip.
+
+So on a desktop the answer existed but had to be hunted for, one hover at a time, across three
+stalls or nine reward cards. **On a phone it could not be reached at all** — `UI.touch_ui()` is
+true there and there is no hover — which is the platform the pad and the tap-to-read rules
+(D168, D300) were built for. A feature that ships as a tooltip on a touch screen has not
+shipped.
+
+**The missing half was the deck.** The note answered the collection, which is the between-runs
+axis: how many copies you own, what the next level costs, whether this is a new entry. The
+question at a shelf mid-run is usually the other one — *do I already have one of these in the
+deck I am playing* — and nothing anywhere answered it. The two are independent, which is why
+one cannot stand in for the other: a card can be your third copy this run and absent from a
+collection death has not been paid into, and a card can sit at four copies in the collection
+and not be in this run at all. `UI.deck_copies()` counts by **id**, because a run deck holds
+distinct `CardData` instances and `Array.count` on the card answers 1 for a deck holding three.
+
+**Two shapes, because the two screens have different room.**
+
+| | shop | fight reward |
+|---|---|---|
+| cards on screen | 3, full size | 9, at 62% height, in a frame already reflowed to fit (D307) |
+| what it shows | three lines: deck, collection, next level | one line: `deck 2 · own 4` |
+
+The compact form drops the level, the price and the fusing entirely. Those belong to the hover
+and to the shop, where there is room to read them.
+
+**The alignment the note broke, and the shelf's own idiom that fixed it.** A stall is a column
+and every price sits on one band across the shelf — that is what the layout is for. The note is
+the one part whose height depends on its content, so a legendary quoting two stat changes wraps
+to twice the lines of a common and pushed its own Buy button **32px below** the other two.
+Fixed the way the salve's description already did it: `SIZE_EXPAND_FILL` on the note, so the
+slack is absorbed there and the price band lines up again. Verified by rendering the screen,
+not by reading the code — `tests/test_layout.gd` is static analysis and cannot see a button
+that has slid down a column.
+
+**The test broke, and it was right to.** Two assertions in `reward_note_test.gd` read the note
+by line NUMBER — `begins_with("NEW")` and `get_slice("\n", 1)` — so a third line at the top
+failed them both on a note that was correct. They ask for their line by what it says now
+(`_line_with`), and the section that was added builds a deck that DISAGREES with the collection
+in both directions, which is the only setup where the two numbers cannot pass by being swapped.
+Confirmed by making `deck_copies` return 0: three failures.
+
+#### The rule
+
+**A helper with no caller is not a feature, and the compiler will never say so.** `collection_line`
+was correct, documented, and dead for as long as it existed. What made it invisible is that the
+information *was* on the screen — in a tooltip — so the screen never looked unfinished to anyone
+holding a mouse. Ask which INPUT reaches a thing, not whether the thing is there: `grep` for a
+function's own name is the cheapest check in the project, and nobody ran it.

@@ -175,6 +175,19 @@ func _refresh() -> void:
 		# That is the same rule the reward panel now runs on, and it matters more here: a tap
 		# that finishes reading a card must not be the tap that spends the gold.
 		UI.card_button(col, card, Vector2(cw, ch), Callable(), "", null, note, true)
+		# ON the shelf, not only in the hover (D322). `collection_standing` has answered this
+		# since D174 and both screens put the answer in a tooltip, so a phone — which has no
+		# hover — could not reach it at all, and a desktop had to go looking for it on each of
+		# the three stalls in turn. `collection_line` was written for this and never called.
+		#
+		# EXPAND_FILL for the reason the salve's description carries it: the note is the one
+		# part of a stall whose height depends on its content — a legendary quoting two stat
+		# changes wraps to twice the lines a common does — so it is the part that absorbs the
+		# slack. Without this the longest note pushes its own price and Buy button below the
+		# other two, and the price band that the whole stall layout exists to line up stops
+		# lining up. Measured on a Crypt shelf: the legendary's button sat 32px low.
+		var note_label := UI.collection_line(col, UI.collection_standing(card))
+		note_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		var pl := UI.label(col, "%s  %s" % [
 			CardData.rarity_badge(card.rarity), "SOLD" if entry["sold"] else "%d g" % price])
 		pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

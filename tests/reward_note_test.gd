@@ -44,6 +44,7 @@ func _ready() -> void:
 	MetaState.new_save()
 
 	_the_note_states_the_four_cases()
+	_the_deck_count_is_the_deck_being_played()
 	_the_copy_count_is_the_one_fusion_wants()
 	_the_cap_is_the_cards_own()
 	_the_price_is_the_cards_own()
@@ -80,10 +81,18 @@ func _the_note_states_the_four_cases() -> void:
 	# unowned
 	MetaState.collection.erase(id)
 	var st: Dictionary = UI.collection_standing(card)
-	if not String(st["line"]).begins_with("NEW"):
+	# The COLLECTION's line, found by what it says rather than by where it sits. It was the
+	# first line until D322 put the run deck above it, and `begins_with` then failed on a note
+	# that was perfectly correct — the assertion was pinning the layout, not the claim.
+	if not _line_with(String(st["line"]), "NEW").begins_with("NEW"):
 		_fails += 1; print("FAIL an unowned card is not called new: %s" % st["line"])
 	if not String(st["tip"]).contains(card.name):
 		_fails += 1; print("FAIL the hover does not name the card")
+	# ...and the deck line is there, and says zero for a card no run is carrying (D322)
+	if not String(st["line"]).contains("Not in your deck"):
+		_fails += 1; print("FAIL the note does not say the deck holds none: %s" % st["line"])
+	if String(st["short"]) != "deck 0 · NEW":
+		_fails += 1; print("FAIL the compact form is wrong for an unowned card: %s" % st["short"])
 
 	# owned, short of the copies for the next level
 	MetaState.collection[id] = {"count": 1, "level": 1}
@@ -118,6 +127,64 @@ func _the_note_states_the_four_cases() -> void:
 		_fails += 1; print("FAIL an at-risk copy is counted as owned: %s" % st["line"])
 	GameState.escrow_cards = []
 
+## --- 1b. the deck count is the DECK, and it is not the collection (D322) -----
+##
+## The note answers two questions that look like one. "Do I already have this" at a shop
+## shelf means the deck in your hands; "is this new" means the collection. They move
+## independently — a card can be the third copy in a deck you built at the door and still
+## be absent from the collection, and a card can sit at four copies in the collection and
+## not be in this run at all.
+##
+## So the test builds a deck that DISAGREES with the collection in both directions, which
+## is the only setup where a mixed-up pair of numbers cannot pass by coincidence.
+func _the_deck_count_is_the_deck_being_played() -> void:
+	var ids: Array = MetaState.CATALOG.keys()
+	if ids.size() < 2:
+		print("  (info: fewer than two cards in the catalogue; nothing to check)")
+		return
+	var in_deck := String(ids[0])      # three in the deck, none in the collection
+	var in_coll := String(ids[1])      # four in the collection, none in the deck
+	MetaState.collection.erase(in_deck)
+	MetaState.collection[in_coll] = {"count": 4, "level": 1}
+	GameState.escrow_cards = []
+	var deck: Array[CardData] = []
+	for i in 3:
+		deck.append((load(MetaState.CATALOG[in_deck]) as CardData).duplicate() as CardData)
+	GameState.run_deck = deck
+
+	# counted by ID: a deck holds distinct resources, so three copies are three objects and
+	# `Array.count` on the card itself would answer 1
+	if UI.deck_copies(in_deck) != 3:
+		_fails += 1
+		print("FAIL the deck holds 3 copies and deck_copies says %d" % UI.deck_copies(in_deck))
+	if UI.deck_copies(in_coll) != 0:
+		_fails += 1
+		print("FAIL a card absent from the deck counts %d" % UI.deck_copies(in_coll))
+
+	# in the deck, never owned: the note has to say both, and not average them
+	var a: Dictionary = UI.collection_standing(load(MetaState.CATALOG[in_deck]) as CardData)
+	if not String(a["line"]).contains("In deck x3"):
+		_fails += 1; print("FAIL the note does not count the deck: %s" % a["line"])
+	if not String(a["line"]).contains("NEW"):
+		_fails += 1
+		print("FAIL a card in the deck but not the collection is not NEW: %s" % a["line"])
+	if String(a["short"]) != "deck 3 · NEW":
+		_fails += 1; print("FAIL compact form for deck-but-unowned: %s" % a["short"])
+
+	# owned, not in the deck: the mirror case, which is what catches the two being swapped
+	var b: Dictionary = UI.collection_standing(load(MetaState.CATALOG[in_coll]) as CardData)
+	if not String(b["line"]).contains("Not in your deck"):
+		_fails += 1; print("FAIL an owned card absent from the deck: %s" % b["line"])
+	if not String(b["line"]).contains("Owned x4"):
+		_fails += 1; print("FAIL the collection count is lost: %s" % b["line"])
+	if String(b["short"]) != "deck 0 · own 4":
+		_fails += 1; print("FAIL compact form for owned-but-not-carried: %s" % b["short"])
+
+	# and the hover says the deck too, because on a phone it is the only one that can be read
+	if not String(b["tip"]).contains("not in the deck"):
+		_fails += 1; print("FAIL the hover does not state the deck")
+	GameState.run_deck = []
+
 ## --- 2. the number of copies it asks for is the number fusion wants ---------
 ##
 ## Not "is the formula right" — the formula is what is under test. The note's own number
@@ -135,7 +202,11 @@ func _the_copy_count_is_the_one_fusion_wants() -> void:
 	MetaState.collection[id] = {"count": 1, "level": 1}
 
 	var line := String(UI.collection_standing(card)["line"])
-	var asked := _first_int(line.get_slice("\n", 1))
+	# The line that ASKS for copies, found by the arrow it asks with. This read `get_slice(1)`
+	# — the second line — until D322 added one above it, and the test then parsed the count out
+	# of a sentence about the collection. Same lesson as the `begins_with` above: a note is
+	# three lines and the assertion cares about one of them, so say which.
+	var asked := _first_int(_line_with(line, "→"))
 	if asked <= 0:
 		_fails += 1; print("FAIL the note asks for no copies at all: %s" % line); return
 
@@ -148,6 +219,17 @@ func _the_copy_count_is_the_one_fusion_wants() -> void:
 		_fails += 1
 		print("FAIL the %d copies the note asked for do not buy the level: %s" % [
 			asked, MetaState.fuse_blocked_reason(id)])
+
+## The one line of a multi-line note that contains `needle`, or "" if none does. Every
+## assertion that wants one claim out of the note goes through this rather than counting
+## lines: the note grew a line at the top in D322 and two index-based assertions broke on a
+## note that was correct.
+func _line_with(text: String, needle: String) -> String:
+	for l in text.split("\n"):
+		if String(l).contains(needle):
+			return String(l)
+	return ""
+
 
 func _first_int(s: String) -> int:
 	var digits := ""
@@ -261,11 +343,14 @@ func _the_reward_row_carries_one_note_per_card() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	# One note per offered card. It rides the card's TOOLTIP now rather than a label under it —
-	# the sets stack three faces to a column and a note line under each would be nine paragraphs
-	# on one panel — so this reads what the player would read by pointing at the card.
+	# One note per offered card, in BOTH places it is now said (D322). The full note rides the
+	# card's tooltip, because the sets stack three faces to a column and nine two-line
+	# paragraphs do not fit the panel. Under each face is the one-line `short` form, which is
+	# the half a phone can read at all — there is no hover on a touchscreen, so until D322 the
+	# whole thing was unreachable there.
 	var cards := 0
 	var notes := 0
+	var shorts := 0
 	var pressable := 0
 	for holder in _controls(inst.reward_box):
 		if not holder.has_meta("card_id"):
@@ -287,11 +372,21 @@ func _the_reward_row_carries_one_note_per_card() -> void:
 		# also bought the two beside it that you had not read yet.
 		if face.pressed.get_connections().size() > 0:
 			pressable += 1
+	# The visible one-liners, counted over the whole panel rather than per column: the label is
+	# a sibling of the face, not a child of it, so it is not reachable from the holder above.
+	for c in _controls(inst.reward_box):
+		var lb := c as Label
+		if lb != null and lb.text.begins_with("deck ") and lb.text.contains("·"):
+			shorts += 1
 	if cards == 0:
 		_fails += 1; print("FAIL the reward screen offered no cards at all")
 	elif notes != cards:
 		_fails += 1
 		print("FAIL %d cards offered but %d of them say where they stand" % [cards, notes])
+	if cards > 0 and shorts != cards:
+		_fails += 1
+		print("FAIL %d cards offered but %d carry a visible standing line (D322)" % [
+			cards, shorts])
 	if pressable > 0:
 		_fails += 1
 		print("FAIL %d of %d reward cards commit when pressed; only the Take button may" % [

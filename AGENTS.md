@@ -1103,6 +1103,18 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `grep -rhoE '\bD3[0-9]{2}\b' scripts/ tools/ tests/ --include=*.gd` is the other half. On
   this tree the code once spoke for three numbers the log had never heard of.
 
+- **A helper with no caller is not a feature, and nothing will tell you (D322).**
+  `UI.collection_line()` rendered "how many of this do you own" as a label under a card. It was
+  correct, documented, and never called from anywhere for as long as it existed; both screens
+  that wanted it took the same widget's tooltip text instead. Nothing looked unfinished,
+  because the information WAS on the screen — to anyone holding a mouse. **On a touch screen
+  there is no hover, so it was unreachable**, on the platform `UI.touch_ui()` exists to serve.
+  So ask which INPUT reaches a thing, not whether the thing is there; and `grep` for a
+  function's own name before assuming a feature ships, which is the cheapest check here and
+  nobody ran it. The companion trap: a screen can answer a question NEAR the one being asked
+  and read as complete. That note answered the collection for a player asking about the deck in
+  their hands, and the two move independently.
+
 - **A function that is called twice may not roll dice (D271).** The elite reward panel is
   drawn once when the fight ends and again after a relic is taken, because the relic row
   has to redraw as taken — and it rolled the three card rewards, so taking the relic dealt

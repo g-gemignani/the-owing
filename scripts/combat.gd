@@ -2326,8 +2326,19 @@ func _offer_rewards() -> void:
 		for c in cards:
 			# No press action, `tap_to_read` on: hover enlarges on a desktop and a tap enlarges on
 			# a phone, and neither commits to anything.
+			var stand: Dictionary = UI.collection_standing(c)
 			UI.card_button(col, c, Vector2(rw, ch), Callable(),
-				"", null, String(UI.collection_standing(c)["tip"]), true)
+				"", null, String(stand["tip"]), true)
+			# ...and the short form under each face (D322). The panel holds nine cards, so this is
+			# the one-line `short` rather than the shop's two-line note: how many are in the deck
+			# already, and whether the collection has ever seen one. A bundle that is three cards
+			# you hold two of each of is a very different offer from three you have never seen, and
+			# until now the panel said neither unless you hovered all nine.
+			var sl := UI.label(col, String(stand["short"]))
+			sl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			sl.add_theme_font_size_override("font_size", maxi(9, int(round(UITheme.font() * 0.78))))
+			sl.add_theme_color_override("font_color", stand.get("colour", Color(0.85, 0.80, 0.62)))
+			UI.hoverable(sl, String(stand["tip"]))
 		# The verdict is GONE (D300). It scored the set against the run deck and printed
 		# "STRONGER"/"WEAKER" over it, which is the game playing the decision on the player's
 		# behalf — a mean of card power is a fact about arithmetic, not about the run, and the
