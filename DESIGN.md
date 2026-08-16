@@ -297,6 +297,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D312** | [Powers were the other list of earned things, drawn as a table](#d312--powers-were-the-other-list-of-earned-things-drawn-as-a-table) |
 | **D313** | [The release published, and the run went red on the page about it](#d313--the-release-published-and-the-run-went-red-on-the-page-about-it) |
 | **D315** | [The key was reported every time, and paid only on the quiet turns](#d315--the-key-was-reported-every-time-and-paid-only-on-the-quiet-turns) |
+| **D316** | [One key, two locks, and nothing checking the addition](#d316--one-key-two-locks-and-nothing-checking-the-addition) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21954,3 +21955,64 @@ the autoloads a `--script` run does not have. So the crawl's half is asserted on
 the line that adds the key must appear before the first `if chosen.is_empty():` in `_on_pick`.
 Run against the unfixed file it goes red with that message, which is the only evidence worth
 having that a regression test tests the regression.
+
+### D316 — One key, two locks, and nothing checking the addition
+
+A follow-up to D315, and a different question: *"are we using keys only for chests? If we are
+using them for other things, I believe we are not spawning enough keys to unlock everything."*
+
+A key opens two things, built a milestone apart. A key-locked chest (D172) and a sealed door
+(D185). One currency, two demands, and the supply is a single addition in `_lay_floor`:
+
+    _place_keys(keyplan[depth] + _locked_mouths(), carved)
+
+So the question is a good one, and the answer is that the addition is right. Measured before
+anything was changed, over 1,650 floors across every dungeon:
+
+| | |
+|---|---|
+| floors laid | 1,650 |
+| floors holding a chest lock and a door at once | 284 |
+| most locks on one floor | 4 |
+| floors with fewer keys than locks | **0** |
+| keys the floor could not walk to | **0** |
+| chests reaching the lid without the tier the floor cast | **0** |
+
+Exactly one key per lock, every time, both kinds counted, every key on ground the entrance can
+reach. Nothing to fix in the count.
+
+#### What was wrong was that nothing said so
+
+The supply is right and it was right by nobody's continuing decision. There was no test on
+keys at all — `grep keys tests/` returned `Dictionary.keys()` and nothing else — so the
+arithmetic above held because the two people who wrote the two locks each remembered the other
+one. That is not a mechanism, and D315 is what it looks like when the memory fails.
+
+Three assertions now, in `tests/test_keys.gd`:
+
+**Keys placed are counted against what the floor STANDS UP, not against the plan.** Chests are
+read off `chest_of`, doors off the carved `pockets`, keys off `enc`. D172's first version
+compared a plan against a plan and was green while the floor disagreed with both.
+
+**A key must be on ground the entrance can walk to.** It is true today because `carved` is the
+pre-pocket walkable set, so a key cannot land inside a pocket — a one-line property, three
+functions away from the line that depends on it. A key behind the lock it opens is worse than
+no key: the floor looks solvable and is not.
+
+**The spenders are enumerated.** This is the one that answers the question as asked. The floor
+counts chest locks and doors because those are what spend a key TODAY; a third spender added
+anywhere in `scripts/` would draw on a supply nobody raised, and every floor would come up one
+short with no test red — which is precisely the failure the question was imagining. The suite
+now walks `scripts/` for `GameState.keys -= `, and fails on any file that is not one of the
+two, with the fix in the message: raise the count in `_lay_floor`, then add the file here.
+
+Both new assertions were run against a broken tree before being trusted: one key removed from
+the floor's count reported 142 of 198 floors short, and a third spender dropped into `scripts/`
+was named by path.
+
+#### The rule
+
+**A number that is correct because two authors happened to agree is not a correct number, it is
+a coincidence with a good record.** The test to write is not the one that re-checks the value —
+it is the one that fails when the SET the value was computed from changes. Counting the
+spenders is worth more than counting the keys.
