@@ -681,16 +681,23 @@ is left. The order below is **visible damage per image generated**, not file cou
 Roughly 110 images in all, which is five or six days of the free tier — so the ordering is
 the part of this section that matters most.
 
-**Done so far: the four wall materials (§8c, §8d — D281), the sixteen dressing props (§8a —
-D286) and the four landmark caps (§8a — D296).** What is left, in order: **the 30 power
-sigils (§8b)**, the 38 relic icons (§8e), two single files (§8f), and the six remaining
-dressing drawings (§8a).
+**Nearly all of it is done.** The four wall materials (§8c, §8d — D281), the sixteen
+dressing props (§8a — D286), the four landmark caps (§8a — D296), the 30 power sigils
+(§8b), the 38 relic icons (§8e) and `iso/shop.png` (§8f). Measured, from
+`tools/art_docs.sh`:
 
-The sigils moved to the front once the props landed, and the reason is arithmetic rather
-than taste. They are thirty files on a screen the player opens every run, they measure
-0.49 against the bible's 0.30 with 13.1% ink against 31.4%, and they are the only set left
-that is **not painted at all**. The six dressing drawings went to the back for the mirror
-of that reason: one drawing each, on one tile, seen when the floor happens to lay one out.
+| set | was | now | the bible |
+|---|---|---|---|
+| `powers/` | 0.49 luma, 13.1% ink | **0.35, 25.2%** | 0.30, 31.4% |
+| `relics/` | 0.58 luma, 4.9% ink | **0.35, 24.0%** | 0.30, 31.4% |
+
+**What is left is two items, and neither is a painting.** The rat's scale in
+`iso/wander_*` (§8f) needs its bounding box measured against its canvas before anything is
+re-drawn, and the six remaining dressing drawings (§8a) need filenames chosen and a loader
+wired before a brief means anything.
+
+The live numbers are in [ART_REDO.md](ART_REDO.md), which measures the installed files on
+every regeneration rather than repeating what was true the day it was written.
 
 **Read the numbers, not the adjectives.** Two measurements decide whether a set belongs
 to this game, and both come off `tools/` scripts rather than off an opinion:
