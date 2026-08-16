@@ -286,6 +286,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D299** | [A run is priced on what you brought, and the dungeon's gifts are free](#d299--a-run-is-priced-on-what-you-brought-and-the-dungeons-gifts-are-free) |
 | **D300** | [Seven play reports, and five of them were one screen not fitting its own frame](#d300--seven-play-reports-and-five-of-them-were-one-screen-not-fitting-its-own-frame) |
 | **D301** | [The boss cancelled the player's growth exactly, and the pillar had never been asked](#d301--the-boss-cancelled-the-players-growth-exactly-and-the-pillar-had-never-been-asked) |
+| **D302** | [A missed click is not a no-op, and a check that has lied once must not be trusted](#d302--a-missed-click-is-not-a-no-op-and-a-check-that-has-lied-once-must-not-be-trusted) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21225,3 +21226,69 @@ The driver picks its reward bundle by `Balance.bundle_vs_deck`, which scores pow
 knows nothing about survival — so a profile losing a quarter of its bar per fight will never buy
 the Fortress bundle sitting in front of it, where a player would. D124's shape again: a policy that
 cannot make the choice the game offers reports a confident nothing about it.
+
+---
+
+### D302 — A missed click is not a no-op, and a check that has lied once must not be trusted
+
+Two failures in the isometric art pass, one day apart, with the same shape: **an instrument
+was believed over the thing it was measuring.** Both are now written into the
+`gemini-browser` skill, which is where the next run will read them.
+
+#### The DOM said no image for nine generations that had finished
+
+Every generation was polled with one line:
+
+```js
+[...document.querySelectorAll('img')].filter(i => i.naturalWidth > 300).length
+```
+
+It returned `0` while the page held a finished 1024x687 blob, and `document.body.innerText`
+still ended in *"Creating your image"* — a whole DOM frozen at the moment the request was
+sent. Re-opening the same conversation URL rendered it instantly.
+
+That happened **nine times across two days**. Each was recorded as a stall in the service,
+and the response was to eliminate causes: the daily cap (a reset changed nothing), the model
+(3.1 Pro stalled identically), the tab, the chat, and finally the whole browser process.
+Every elimination was sound. **None of them was the fault, because the fault was the
+instrument.** The user said it worked by hand and guessed the images had been there all
+along. They were right, and the first re-opened conversation held a complete sheet that
+installed without a re-roll.
+
+**The rule: poll with a screenshot.** It forces a real capture and showed the picture every
+time the JS did not. JS may confirm what a screenshot shows, never the reverse.
+
+**And the reason it ran nine times rather than once:** the same trap had already fired three
+times earlier in the same session, JS reporting nothing while a screen grab showed the
+image, and each time it was written off as lazy loading. A check caught lying once does not
+get trusted again.
+
+#### A click that misses the composer types a few hundred keyboard shortcuts
+
+`computer.type` sends real keystrokes to whatever has focus. Gemini's page binds single
+letters to actions, so an 1,800-character prompt typed into an unfocused page is 1,800
+shortcuts. It opened **about 370 tabs**, took Chrome past the point where `tabs_close_mcp`
+could answer, and the only way out was to kill the browser.
+
+The cost did not stop there. Restarting Chrome clean **lost the extension's site permission
+for `gemini.google.com`**, which only the user can grant. And several hundred requests in a
+few seconds is what bot detection exists for: the next load redirected to
+`google.com/sorry/index` with a reCAPTCHA. Completing one is off-limits, so the art work
+stopped dead until the user clears it.
+
+The click had been computed as `r.x + 40` from a `getBoundingClientRect()` taken while a
+capture overlay was still covering the page, so the rect was stale.
+
+**Two rules, and the second is the one that would have prevented it:**
+
+* Click the **centre**, read fresh off the page, never an offset from an edge and never a
+  coordinate computed before the last thing that moved the layout.
+* **Assert focus, then type**: `document.activeElement.classList.contains('ql-editor')`.
+  The existing check ran AFTER the type, which is too late to stop anything. One extra
+  round trip against a browser full of junk tabs, a lost permission and a CAPTCHA.
+
+#### Where the art stands
+
+18 of 38 relics repainted, the set at 0.52 mean luminance and 12.1% ink against 0.58 and
+4.9% at the start. 20 relics, one sigil repair and `iso/shop.png` are blocked behind the
+CAPTCHA rather than behind any decision.
