@@ -121,7 +121,14 @@ const SHOTS := [
 	# Builds had no row at all until D166, having been reachable only as a section
 	# inside the glossary. An absent row looks exactly like a passing one (D123).
 	["Builds", "res://scenes/Builds.tscn", "meta+partial"],
-	["Relics", "res://scenes/Relics.tscn", ""],
+	# Photographed with SOME of it met (D308). The screen's whole job is the difference between a
+	# relic you have met and one you have not — met is a lit, pressable tile and unmet is a greyed
+	# dead one — so a fresh save is the one state in which that difference cannot be seen at all.
+	# The same blind spot D123 and D166 are about, on the screen most made of it.
+	["Relics", "res://scenes/Relics.tscn", "meta+relics"],
+	# ...and the fresh save too, because "nothing met yet" is a real state with its own line on it
+	# and a capture of it is how anyone notices the line has stopped being true.
+	["RelicsFresh", "res://scenes/Relics.tscn", ""],
 	["Packs", "res://scenes/Packs.tscn", "packs"],
 	# The same screen with a haul opened all at once, which is the state that overflowed it
 	# (D169): eight packs is 24 cards, six rows of them, and they used to grow past the
@@ -349,6 +356,21 @@ func _setup(need: String, dungeon: String = "") -> void:
 	var flags := need.split("+")
 	if flags.has("partial"):
 		_thin()
+	# Half the relics MET, taken off the catalogue in order rather than rolled: a capture that
+	# photographs a different set every run cannot be compared with the one before it.
+	if flags.has("relics"):
+		MetaState.relics_seen = []
+		var half: int = int(MetaState.RELIC_CATALOG.size() / 2)
+		var n := 0
+		for rid in MetaState.RELIC_CATALOG:
+			if n >= half:
+				break
+			MetaState.note_relic_seen(String(rid))
+			n += 1
+		# ...and deep enough that the rarer half is not sealed on top of being unmet, which
+		# would photograph two reasons for a dim tile as one.
+		for did2 in Balance.DUNGEONS:
+			MetaState.clear_counts[did2] = 4
 	# Out of a run, and therefore not through `enter_dungeon`. `in_run()` is
 	# `traversal != null`, so entering one here would photograph `collection.gd` in its
 	# LEDGER mode — a real screen, but not the one reached from the hub, and the one

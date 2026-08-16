@@ -1021,6 +1021,13 @@ moves.
   offers something to press, and every encounter can be left (D47). No fusion or death
   can strand the collection below a legal deck (D12).
 
+- **A control with nothing behind it is dead, not polite.** A press that answers "there is
+  nothing here" teaches the player to press again — the Relics screen had nineteen live tiles
+  with dead outcomes on a mid save (D308). An unmet relic is `disabled`, so the frame itself
+  says so before it is touched, and the dim goes on the picture and the name together. The
+  same rule sets what a screen may CLAIM: a resting line reading "press a relic to read what
+  it does" is an instruction to press something on a screen where nothing can be.
+
 - **A control that commits is the control that says so.** A card face is for reading. On
   a touchscreen a card needs one tap to be legible at all, so a face that also buys
   something turns the tap that finished reading into the tap that spent the reward — the

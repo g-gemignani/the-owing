@@ -158,7 +158,10 @@ func _ready() -> void:
 	# Built to its full height before anything is pressed, like every other reader in this game: a
 	# line that grew on the first press would shove the whole list down.
 	_reader = UI.fixed_line(col, UITheme.px(UI.RELIC_READER_H))
-	_reader.text = "Press a relic to read what it does."
+	# Honest on a fresh save, where nothing is pressable at all: an instruction to press something
+	# on a screen of dead tiles is the screen telling the player they have done it wrong.
+	_reader.text = "Press a relic you have met to read what it does." if found > 0 \
+		else "Meet a relic on a run and it lights up here."
 	_reader.add_theme_color_override("font_color", Color(0.92, 0.88, 0.74))
 
 	var list := UI.scroll(col)
@@ -210,14 +213,27 @@ func _ready() -> void:
 ## anywhere else in the game. Now it is the same tile the offers draw (`UI.relic_face`), and the
 ## effect goes in the one reader at the top of the screen.
 ##
-## **An unmet slot still withholds its effect.** That is the rule this screen was built on: the
-## name and the rarity are safe to print because there is nothing to plan against them, and the
-## effect is the only part left to be a discovery when the relic finally drops. Pressing one says
-## so, rather than saying nothing — a tile that does not answer reads as a tile that is broken.
+## **An unmet slot still withholds its effect, and it is DEAD** (D308). The name and the rarity are
+## safe to print because there is nothing to plan against them, and the effect is the only part
+## left to be a discovery when the relic finally drops — so there is nothing behind an unmet tile
+## for a press to reveal. A control that responds to a press by saying "there is nothing here" is a
+## control that teaches the player to press it again; a greyed-out one has already answered.
+##
+## Disabled rather than merely dimmed, which is the part that carries: `UITheme.style_button`
+## paints a disabled frame, so the tile reads as unavailable at a glance instead of reading as a
+## tile that happens to be a bit darker than the one beside it. The dim goes on the picture and the
+## name together (`UI.relic_face`), and the group header above still names the rarity and how far
+## off the seal is — which is what an unmet slot is FOR.
 func _slot(grid: Container, r: RelicData, owned: bool) -> void:
 	var b := UI.relic_face(grid, r, 0.0 if owned else UNFOUND_DIM)
-	var line := ("%s — %s" % [r.name, r.description]) if owned else \
-		"%s — not met yet. What it does is learned by holding it." % r.name
+	if not owned:
+		b.disabled = true
+		# Said on the hover and nowhere else. A disabled control has no press to explain itself
+		# with, and this is the one question a greyed tile raises that its own appearance does not
+		# answer: not "why can I not press it" but "what is it".
+		UI.hoverable(b, "%s — not met yet. What it does is learned by holding it." % r.name)
+		return
+	var line := "%s — %s" % [r.name, r.description]
 	UI.hoverable(b, line)
 	if not UI.touch_ui():
 		b.mouse_entered.connect(func() -> void: _reader.text = line)

@@ -290,6 +290,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D303** | [Two fixes for the four dead archetypes, both refuted, and the pair of numbers that names the real one](#d303--two-fixes-for-the-four-dead-archetypes-both-refuted-and-the-pair-of-numbers-that-names-the-real-one) |
 | **D306** | [A monster's size was set by how much canvas its painter used](#d306--a-monsters-size-was-set-by-how-much-canvas-its-painter-used) |
 | **D307** | [Five more play reports, and the one that had been eating chests](#d307--five-more-play-reports-and-the-one-that-had-been-eating-chests) |
+| **D308** | [An unmet relic answers by being dead, not by saying it has nothing to say](#d308--an-unmet-relic-answers-by-being-dead-not-by-saying-it-has-nothing-to-say) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21558,3 +21559,48 @@ the same rule the panel itself follows: fit-shaped rather than measured.
 
 The band's heading went into the reader's resting text on the way, which is 46px and reads better —
 a line explaining an offer belongs in the space that then explains each item of it.
+
+---
+
+### D308 — An unmet relic answers by being dead, not by saying it has nothing to say
+
+D307 turned the Relics screen into a wall of tiles and made every one of them pressable. An unmet
+relic answered the press with *"not met yet. What it does is learned by holding it."* — which is
+true, and is the wrong shape for the answer.
+
+**A control that responds to a press by saying "there is nothing here" teaches the player to press
+it again.** Nineteen of thirty-eight tiles on a mid save, each one a live control with a dead
+outcome, on a screen whose entire subject is the difference between the two states. An unmet slot
+withholds its effect on purpose — that is the rule this screen was built on (D116) — so there is
+nothing behind it for a press to reveal, and the tile should say so before it is pressed.
+
+Unmet tiles are `disabled` now. The half of that which carries is not the dimming: it is that
+`UITheme.style_button` paints a **disabled frame**, so the tile reads as unavailable at a glance
+instead of reading as one that happens to be slightly darker than its neighbour. The dim goes on
+the picture and the name together — the name carries an explicit rarity colour, which `modulate`
+alone leaves burning at full strength beside a faded icon, and it is *darkened* rather than greyed
+because rarity is the one part of an unmet relic that connects to a decision (D116) and has to
+survive being receded.
+
+The screen's own resting line stopped being true at the same time, and would have gone on being
+printed: *"Press a relic to read what it does"* on a fresh save is an instruction to press
+something on a screen where nothing can be pressed. It reads *"Meet a relic on a run and it lights
+up here"* until the first one is met.
+
+#### The capture that could not show it
+
+`tools/screenshots.gd` photographed this screen on a fresh save, where **every** tile is unmet — so
+the one difference the screen exists to draw was not in the picture, and neither the greying nor
+the deadness could be judged from it. That is the blind spot D123 and D166 are both about, on the
+screen most made of it: a want-list photographed with nothing wanted.
+
+There are two rows now. `Relics` has half the catalogue met, taken in catalogue order rather than
+rolled so two captures can be compared, and deep enough that the rarer half is not *sealed* on top
+of being unmet — two reasons for a dim tile photographed as one is a capture that answers nothing.
+`RelicsFresh` keeps the empty state, because "nothing met yet" is a real state with its own line on
+it and a capture is how anyone notices that line has stopped being true.
+
+Guarded in `tests/TooltipTest.tscn` with one relic met and the rest not, so both halves exist in
+one assertion: the unmet tiles must be `disabled` and exactly one must not be. Checking the colour
+would have been the wrong check — a dimmed tile that still takes a press is the defect. Mutation-
+checked: making the unmet tiles live turns it red on both counts.

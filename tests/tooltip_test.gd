@@ -48,6 +48,7 @@ func _ready() -> void:
 	# ...and the shop still has to show the card it is selling, by whichever means. Drawn as a
 	# real face now, so the check is that a face is there at all.
 	await _check_shop_draws_its_stock()
+	await _check_unmet_relics_are_dead()
 
 	# the collection specifically must explain each card, not just be hoverable
 	await _check_collection_explains()
@@ -127,6 +128,46 @@ func _check_shop_draws_its_stock() -> void:
 	if pressable > 0:
 		_fails += 1
 		print("FAIL %d shop card faces commit when pressed; only the price button may" % pressable)
+	inst.queue_free()
+	await get_tree().process_frame
+
+## An unmet relic is greyed out AND dead (D308).
+##
+## Two halves, and the second is the one that fails silently. A tile that is only DIMMED still
+## takes a press, and answering it with "there is nothing here" teaches the player to press it
+## again — so the check is `disabled`, not the colour. The met half is asserted beside it, or the
+## whole thing passes on a screen where nothing can be pressed at all.
+func _check_unmet_relics_are_dead() -> void:
+	# One met relic and the rest not, so both halves of the screen exist in one capture. Deep
+	# enough that the pool is not all sealed, which would leave nothing to meet.
+	MetaState.new_save()
+	for did in Balance.DUNGEONS:
+		MetaState.clear_counts[did] = 1
+	var met := String(MetaState.RELIC_CATALOG.keys()[0])
+	MetaState.note_relic_seen(met)
+
+	var scene := load("res://scenes/Relics.tscn") as PackedScene
+	if scene == null:
+		_fails += 1; print("FAIL cannot load the Relics screen"); return
+	var inst := scene.instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	var live := 0
+	var dead := 0
+	for c in _controls(inst):
+		var b := c as Button
+		if b == null or b.custom_minimum_size.x != UITheme.px(UI.RELIC_TILE_W):
+			continue
+		if b.disabled:
+			dead += 1
+		else:
+			live += 1
+	if dead == 0:
+		_fails += 1
+		print("FAIL every relic tile is pressable — an unmet one has nothing to show")
+	if live != 1:
+		_fails += 1
+		print("FAIL %d relic tiles are live against 1 relic met" % live)
 	inst.queue_free()
 	await get_tree().process_frame
 

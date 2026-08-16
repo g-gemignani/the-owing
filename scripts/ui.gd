@@ -665,7 +665,9 @@ const RELIC_LOST_DIM := 0.35
 ## that the thing you met on the reward panel is recognisable on the screen that records it.
 ##
 ## `dim` recedes the whole tile, which is how an unmet slot is drawn on the catalogue: by ink, so
-## met and unmet stay one decision rather than a badge repeated three dozen times.
+## met and unmet stay one decision rather than a badge repeated three dozen times. It recedes the
+## NAME as well as the picture — the label carries an explicit rarity colour, which `modulate`
+## alone leaves burning at full strength beside a faded icon.
 static func relic_face(parent: Node, rd: RelicData, dim: float = 0.0) -> Button:
 	var b := Button.new()
 	UITheme.style_button(b)
@@ -697,7 +699,11 @@ static func relic_face(parent: Node, rd: RelicData, dim: float = 0.0) -> Button:
 	nl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	nl.custom_minimum_size.y = UITheme.px(RELIC_NAME_H)
 	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	nl.add_theme_color_override("font_color", Icons.rarity_colour(rd.rarity))
+	# Darkened rather than greyed: rarity is the one part of an unmet relic that connects to a
+	# decision the player can make — a deeper, harder fight rolls rarer ones — so it is shown
+	# deliberately (D116) and must survive being dimmed.
+	var tint := Icons.rarity_colour(rd.rarity)
+	nl.add_theme_color_override("font_color", tint if dim <= 0.0 else tint.darkened(dim))
 
 	# The painting, when there is one. A relic with no file yet falls back to its name alone, which
 	# is the same one-file-at-a-time contract the relics screen runs on (D121) — a half-painted set
