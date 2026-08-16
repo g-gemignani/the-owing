@@ -415,6 +415,18 @@ moves.
   The first ten levels stay fully priced, so D36's opening promise holds. **Nothing is built: the
   entry is the decision and the arithmetic, and both constants have to be swept per cell first.**
 
+  **Built, and the share was wrong by a factor of two.** `PRICED_LEVEL_FULL` 10 and
+  `PRICED_LEVEL_SHARE` **0.50**, applied inside `power_ratio` and not in `deck_power`/`deck_cost`
+  — those two are what `card_vs_deck` divides by, and the reward verdict is a claim about
+  DELIVERED power. The 0.25 D291 wrote down was read as one `power_ratio` over another, and
+  `power_ratio` ends in `soften_ratio`, so every figure in that table came out flatter than the
+  strength a player gets: 0.25 hands a maxed deck **2.74x**, not the 1.51x predicted. **A ratio of
+  two numbers that have each been through a softening transform is not the ratio of the things
+  they came from.** At 0.50 it is 1.11x at Lv15 and **1.48x at Lv40**, the realistic top of the
+  grind. Measured: matched completion **36% → 40%**, cells at 100% **6 → 4**, and the gains land
+  on the fused profiles because they are the only ones above the cap (Late 6% → 41%, Deep 4% →
+  26%).
+
   **A guard found blind on the way, and not yet fixed (D291).** `test_upgrade.gd` pins
   `MAX_ACHIEVABLE_RATIO` against **ten copies of `hack`** — 23.14, comfortably under 31.7. Twenty
   maxed `cheap_shot` is an equally legal deck (`deck_valid` bounds the size and nothing bounds the
@@ -972,11 +984,25 @@ moves.
   taxes the fresh save that cannot afford to fuse at all.
 
 - **The player is never lied to and never stuck.** Telegraphs match what resolves.
-  Card faces show the *current* numbers, not the level-1 text (D50) — and a card being
-  OFFERED states where it already stands in the player's collection: copies held, the
-  level they are held at, and what the next one costs and buys (D174). Every screen
+  Card faces show the *current* numbers, not the level-1 text (D50) — including the
+  Vulnerable on the enemy the card is pointed at, which is the one status whose whole
+  purpose is to change the number about to be read, and which the face could not see
+  until D300. A card being OFFERED states where it already stands in the player's
+  collection: copies held, the level they are held at, and what the next one costs and
+  buys (D174). It does **not** state a verdict on the offer — scoring a set against the
+  deck and printing STRONGER or WEAKER is the game making the decision, and a mean of
+  card power is a fact about arithmetic rather than about the run (D300). Every screen
   offers something to press, and every encounter can be left (D47). No fusion or death
   can strand the collection below a legal deck (D12).
+
+- **A control that commits is the control that says so.** A card face is for reading. On
+  a touchscreen a card needs one tap to be legible at all, so a face that also buys
+  something turns the tap that finished reading into the tap that spent the reward — the
+  reward sets and the merchant's stock both worked that way until D300. The face reads;
+  a named button beside it takes, buys or skips. The same rule keeps a panel STILL while
+  it is being read: nothing rebuilds under a hand that has just pressed something, and a
+  line that fills on hover reserves its height before anything is pointed at
+  (`UI.fixed_line`).
 
 - **Expandable by design.** New cards, enemies, bosses and dungeons are data files
   plus a catalogue line, guarded so a half-added piece of content fails loudly rather
@@ -1723,7 +1749,7 @@ resources/   all content as .tres: cards, enemies, relics, powers, events, dunge
 scenes/      thin .tscn wrappers; screens build their UI in code
 assets/      pixel/ (CC0 Kenney), art/ (painted + generated, incl. the computed app icon),
              audio/ (all ours: 5 loops, 24 effects, one instrument in tools/audio_voices.py)
-tests/       44 suites + run.sh; export.sh and export_ready.sh need templates
+tests/       48 suites + run.sh; export.sh and export_ready.sh need templates
 tools/       diagnostics, not shipped: sim_balance.gd, playthrough.gd, debug_map.gd,
              screenshots.gd (renders every screen to PNG — drive it under
              `Xvfb -screen 0 1280x720x24`, NOT on the desktop, or a 16:10 monitor
@@ -1834,6 +1860,12 @@ REVIEW.md    a review of the game AS A GAME (2026-08-01) — playability, graphi
   `godot --headless --script tools/sim_balance.gd` (paste the numbers).
 - **Before committing content or code:** `tests/run.sh` must be green, including
   `test_compile`, `PlayableTest` and `test_content`.
+- **A green suite is only a claim that the checks RAN (D300).** A runtime script error aborts
+  the function it happens in, leaves the exit code at 0 and lets `_ready` print its PASS line,
+  so a whole section can stop running and the suite still reports green — `RewardNoteTest` did
+  it for the life of a deleted function. `run.sh` reads stderr now and fails on a
+  `SCRIPT ERROR`; a suite that provokes them on purpose prints `TEST EXPECTS ERRORS` and says
+  in a comment why. Two do, and both `load()` scripts that name autoloads.
 - **Green on the working tree is not green on the commit (D272).** The working tree is the
   union of everybody's unfinished work; CI runs `HEAD`. When another session is on the same
   checkout — which is normal here — verify the thing you actually pushed:
@@ -1873,7 +1905,7 @@ REVIEW.md    a review of the game AS A GAME (2026-08-01) — playability, graphi
   merge nobody needs. This rule is scoped to THIS repository — it says nothing about
   any other, where the default still applies.
 - **Push only from a green suite.** The rule above removes the branch, not the check.
-  `tests/run.sh` at 46 passed is the gate, and it matters more once the work goes
+  `tests/run.sh` at 48 passed is the gate, and it matters more once the work goes
   straight to `main`: there is no branch to hold a red commit while it is fixed. A
   commit that shipped with `test_content` red is already in this history, recorded
   rather than amended so it stays findable.

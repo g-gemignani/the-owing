@@ -132,6 +132,97 @@ func _init() -> void:
 		if _hp_lost_per_fight(deepest, r) <= _hp_lost_per_fight(1, r):
 			fails += 1; print("FAIL depth is not the difficulty axis at ratio %.1f" % r)
 
+	# --- the dungeon answers only part of your fusing (D291) ---
+	#
+	# The shape, not one point on it. A grind that pays nothing until a threshold and then
+	# everything is the fault this replaces, so what gets asserted is that it pays SMOOTHLY and
+	# that it stops paying without limit.
+	for lv in [1, 5, Balance.PRICED_LEVEL_FULL]:
+		if Balance.priced_level(lv) != lv:
+			fails += 1
+			print("FAIL Lv%d is discounted: the first %d levels must be priced in full, or a new player is scaled for growth they have not had (D36)" % [
+				lv, Balance.PRICED_LEVEL_FULL])
+	var last := 0
+	for lv in range(1, 101):
+		var pl := Balance.priced_level(lv)
+		if pl < last:
+			fails += 1
+			print("FAIL priced_level went backwards at Lv%d: %d after %d" % [lv, pl, last])
+			break
+		if pl > lv:
+			fails += 1
+			print("FAIL Lv%d is priced ABOVE itself, at %d" % [lv, pl])
+			break
+		# Two levels of slack at the boundary, not none: the discount is `round((lv - cap) * share)`
+		# and at a half share the first level above the cap rounds to nothing. That is the integer
+		# arithmetic doing what it must, not the rule failing — the claim is that the discount
+		# ARRIVES, and it has to be asserted somewhere it can.
+		if lv >= Balance.PRICED_LEVEL_FULL + 2 and pl >= lv:
+			fails += 1
+			print("FAIL Lv%d is priced at %d — nothing above the cap is discounted" % [lv, pl])
+			break
+		last = pl
+
+	# What the player actually gets: delivered power per energy over priced power per energy.
+	var free_at := func(lv: int) -> float:
+		var d: Array[CardData] = []
+		for i in 14:
+			var fc := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
+			fc.level = mini(lv, fc.level_cap())
+			d.append(fc)
+		var pd := Balance.priced_deck(d)
+		return (Balance.deck_power(d) / Balance.deck_cost(d)) \
+			/ maxf(0.001, Balance.deck_power(pd) / Balance.deck_cost(pd))
+	if abs(free_at.call(Balance.PRICED_LEVEL_FULL) - 1.0) > 0.001:
+		fails += 1
+		print("FAIL a deck at the cap is already getting free strength: %.2fx" % free_at.call(Balance.PRICED_LEVEL_FULL))
+	if free_at.call(40) <= 1.05:
+		fails += 1
+		print("FAIL fusing to Lv40 buys %.2fx — the grind still pays nothing, which is what D291 exists to fix" % free_at.call(40))
+	# ...and BOUNDED. D230's yardstick: eight free relics moved escalation 1.09x to 1.18x, so free
+	# strength on the whole deck belongs nearer 1.5x than 3x. A share of 0 would fail here, which
+	# is the flat cap D291 measured and rejected for rising without limit.
+	if free_at.call(100) > 2.5:
+		fails += 1
+		print("FAIL a maxed deck fights as if %.2fx stronger than it is priced — that is a difficulty change wearing a grind reward's clothes" % free_at.call(100))
+
+	# Pricing the POWER at the capped level and the cost at the real one would raise the ratio
+	# rather than lower it, because `deck_cost` is the divisor. Both halves, or neither.
+	var fused: Array[CardData] = []
+	for i in 14:
+		var fu := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
+		fu.level = 40
+		fused.append(fu)
+	var priced_view := Balance.priced_deck(fused)
+	if Balance.deck_cost(priced_view) < Balance.deck_cost(fused) - 0.001:
+		fails += 1
+		print("FAIL the priced view is CHEAPER to play than the real deck — only the power was capped")
+	# ...and that `power_ratio` divides by the priced view rather than the real one. Asserted as
+	# SOURCE, which is what this file already does for the simulator, because the behavioural
+	# version cannot be written: `power_ratio` prices whatever deck it is handed, so there is no
+	# way to hand it an un-capped one to compare against, and a threshold between the right answer
+	# and the wrong one would be a number nobody could defend.
+	#
+	# It is worth the source assertion because the mutation is INVISIBLE on most cards. Only a
+	# rule-only card buys its energy cost down with level (`CardData._cost_budget`), so on a deck
+	# of Hack — which is what the behavioural checks above use — capping the power and not the
+	# cost changes nothing at all and every one of them passes.
+	var balsrc := FileAccess.open("res://scripts/balance.gd", FileAccess.READ)
+	if balsrc == null:
+		fails += 1; print("FAIL balance.gd is missing")
+	else:
+		var bal := balsrc.get_as_text()
+		balsrc.close()
+		if bal.find("deck_power(priced) / deck_cost(priced)") == -1:
+			fails += 1
+			print("FAIL power_ratio does not divide by the PRICED cost — levelling buys a rule-only card's energy down, so pricing one half raises the ratio instead of lowering it (D291)")
+	# and the view must not have mutated the deck it was taken from
+	for fu in fused:
+		if fu.level != 40:
+			fails += 1
+			print("FAIL priced_deck mutated the cards it was given")
+			break
+
 	# --- a run is priced on what you BROUGHT, not on what it gave you (D299) ---
 	#
 	# Behavioural rather than a source grep, because the rule lives in one line of

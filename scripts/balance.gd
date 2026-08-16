@@ -1093,10 +1093,63 @@ static func soften_ratio(r: float) -> float:
 
 ## Deck power per energy, relative to the starter deck.
 ## `relics` is an Array[RelicData] the player currently holds (may be empty).
+## How much of a card's fused level the dungeon answers (D291).
+##
+## The ratchet priced every level, so fusing raised both sides of the equation and could not move
+## a wall: measured, a twelve-card deck at d4 prices 8.56 at Lv15 and 13.19 at Lv40, both under
+## that dungeon's ceiling of 20.90 — so 289 copies and 48,076 gold bought the same fight. The
+## payoff arrived only where the ratio crossed the ceiling, which for a real deck never happens
+## below d5. **Nothing, nothing, nothing, then the dungeon collapses in one run** is the worst
+## shape a grind can have.
+##
+## The first ten levels are priced in full, so D36's opening promise holds and a new player is
+## never scaled for growth they have not had. A quarter of everything above is priced, so every
+## fuse past the cap pays a little, at once, in every dungeon — and the payment is BOUNDED. A flat
+## cap with no share was measured and rejected for the same reason the grind was: it pays nothing
+## until the cap and then rises without limit, reaching 2.11x at Lv40 and 2.88x at Lv100, which is
+## a difficulty change wearing a grind reward's clothes. At a quarter it settles near 1.5x forever.
+##
+## The yardstick is D230: eight free relics moved escalation from 1.09x to 1.18x. 1.5x on the whole
+## deck is already more than every relic in the game handed over at once, so the ceiling on this
+## knob belongs near 1.5 and not near 3.
+##
+## **The share is 0.50 and D291 wrote down 0.25, which was measured through the wrong lens.** That
+## entry read the multiplier as one `power_ratio` over another, and `power_ratio` ends in
+## `soften_ratio` — a compressing transform — so every figure in its table came out flatter than
+## the strength the player actually gets. Read as the honest quantity, delivered power per energy
+## over priced power per energy, 0.25 hands a maxed deck **2.74x** where the entry predicted 1.51x.
+## Swept at the cap and the share together, 10/0.50 lands 1.11x at Lv15, 1.35x at Lv25, **1.48x at
+## Lv40** — the realistic top of the grind at 289 copies and 48,076 gold — and 1.75x at Lv100.
+##
+## **A ratio of two numbers that have each been through a softening transform is not the ratio of
+## the things they came from.** `tests/test_balance.gd` measures it raw and fails above 2.5x.
+const PRICED_LEVEL_FULL := 10
+const PRICED_LEVEL_SHARE := 0.50
+
+static func priced_level(level: int) -> int:
+	if level <= PRICED_LEVEL_FULL:
+		return maxi(1, level)
+	return PRICED_LEVEL_FULL + int(round(float(level - PRICED_LEVEL_FULL) * PRICED_LEVEL_SHARE))
+
+## The deck as the ratchet sees it. Applied HERE and not inside `deck_power` / `deck_cost`,
+## because those two are also what `card_vs_deck` divides by — and the reward screen's verdict is
+## a claim about DELIVERED power, not priced power. Capping there would have told the player a
+## card was stronger than their deck because their deck was being under-counted.
+static func priced_deck(deck: Array) -> Array:
+	var out: Array = []
+	for c in deck:
+		out.append(c.priced_twin())
+	return out
+
 static func power_ratio(deck: Array, relics: Array = [], equipped_power = null) -> float:
 	if deck.is_empty():
 		return 1.0
-	var per_energy := deck_power(deck) / deck_cost(deck)
+	# BOTH halves through the priced view, never one. Levelling buys the energy cost of a
+	# rule-only card down (`CardData._cost_budget`), so pricing the power at the capped level and
+	# the cost at the real one would RAISE the ratio rather than lower it — `deck_cost` is the
+	# divisor.
+	var priced := priced_deck(deck)
+	var per_energy := deck_power(priced) / deck_cost(priced)
 	var r := per_energy / BASELINE_CARD_POWER
 	r += relic_power(relics) / RELIC_POWER_PER_RATIO
 	r += power_ratio_bonus(equipped_power, per_energy)
@@ -3874,10 +3927,15 @@ static func _loose_bundle(pool: Array, tier: int, difficulty: int, size: int) ->
 
 ## The reward screen's verdict on a whole bundle, in the same bands `card_verdict` uses.
 ##
-## The SAME thresholds and not a second pair, for the reason `card_verdict` has one owner: the
-## driver skips on the screen's lower band (`sim_balance.CARD_SKIP_BELOW`), so a bundle band
-## invented here would let the tool and the screen disagree about what "worse than what you hold"
-## means — and D276 measured that exact gap costing 0.20x of `cap`.
+## **Nothing draws this any more (D300).** The reward panel printed it under each set, and printing
+## it is the game making the decision on the player's behalf: a mean of card power is a fact about
+## arithmetic, and the whole premise of D297 is that a named *direction* beats an average. The
+## cards say what they do and the dilution line says what taking them costs.
+##
+## Kept, because the thresholds are the seam the tool and the screen shared — the driver skips on
+## the lower band (`sim_balance.CARD_SKIP_BELOW`), and D276 measured a 0.20x `cap` cost the last
+## time those two disagreed about what "worse than what you hold" means. `bundle_vs_deck` under it
+## is what the simulator scores with and is very much alive.
 static func bundle_verdict(faces: Array, deck: Array) -> String:
 	var r := bundle_vs_deck(faces, deck)
 	if r >= 1.25:

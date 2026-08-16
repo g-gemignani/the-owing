@@ -284,6 +284,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D297** | [The reward becomes a direction, and a level-1 face nearly hid it](#d297--the-reward-becomes-a-direction-and-a-level-1-face-nearly-hid-it) |
 | **D298** | [The table looked like a collapse, and three of the four alarms were the instrument](#d298--the-table-looked-like-a-collapse-and-three-of-the-four-alarms-were-the-instrument) |
 | **D299** | [A run is priced on what you brought, and the dungeon's gifts are free](#d299--a-run-is-priced-on-what-you-brought-and-the-dungeons-gifts-are-free) |
+| **D300** | [Seven play reports, and five of them were one screen not fitting its own frame](#d300--seven-play-reports-and-five-of-them-were-one-screen-not-fitting-its-own-frame) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -20116,6 +20117,65 @@ that today it is not.
 
 ---
 
+#### Built, and the share was wrong by a factor of two
+
+`PRICED_LEVEL_FULL` 10 and `PRICED_LEVEL_SHARE` **0.50**, applied in `power_ratio` — not in
+`deck_power` / `deck_cost`, because those two are also what `card_vs_deck` divides by and the
+reward screen's verdict is a claim about DELIVERED power. Capping there would have told the player
+a card was stronger than their deck because their deck was being under-counted.
+
+**The 0.25 in the table above was measured through the wrong lens.** That table read the free
+multiplier as one `power_ratio` over another, and `power_ratio` ends in `soften_ratio` — a
+compressing transform — so every figure in it came out flatter than the strength a player actually
+gets. Read as the honest quantity, delivered power per energy over priced power per energy, 0.25
+hands a maxed deck **2.74x** where the entry predicted 1.51x.
+
+**A ratio of two numbers that have each been through a softening transform is not the ratio of the
+things they came from.** Swept over the cap and the share together:
+
+| cap / share | Lv15 | Lv25 | Lv40 | Lv100 |
+|---|---|---|---|---|
+| 10 / 0.25 | 1.25x | 1.63x | 2.00x | **2.74x** |
+| 10 / 0.35 | 1.18x | 1.55x | 1.70x | 2.28x |
+| **10 / 0.50** | **1.11x** | **1.35x** | **1.48x** | **1.75x** |
+
+0.50 lands 1.48x at Lv40 — the realistic top of the grind at 289 copies and 48,076 gold — which is
+the figure this entry asked for before it mis-measured its own knob.
+
+#### What it bought
+
+| | before | after |
+|---|---|---|
+| matched-progression completion | 36% | **40%** |
+| mean over all cells | 25% | **29%** |
+| cells at 0% | 19 | 18 |
+| cells at 100% | 6 | **4** |
+
+**Both ends of D231's constraint moved the right way**, which is rare enough to say out loud: four
+fewer runs decided before they started at the top, one fewer at the bottom.
+
+And it lands where it was aimed. The profiles that gain are the fused ones, because they are the
+only ones with levels above the cap: **Late (Lv40) 6% → 41%, Deep (Lv40) 4% → 26%**, Draw 13% →
+28%, Exhaust 11% → 17%. The Lv15 profiles barely move, which is correct — at Lv15 the cap hands
+over 1.11x.
+
+#### The guard, and the mutation that needed a source assertion
+
+`tests/test_balance.gd` asserts the shape rather than a point: the first ten levels priced in full
+(D36's opening promise), `priced_level` monotone and never above itself, the free multiplier equal
+to 1.00x at the cap, above 1.05x at Lv40, and **below 2.5x at Lv100** — that last is the bound, and
+a share of 0 fails it at 7.13x, which is the flat cap this entry rejected on paper now rejected by
+a test.
+
+Four mutations, and the fourth is the interesting one. Pricing the POWER at the capped level and
+the cost at the real one **passed every behavioural check**, because only a rule-only card buys its
+energy cost down with level (`CardData._cost_budget`) and the checks all use Hack. On a Hack deck
+that mutation is a no-op. It is caught by a source assertion now, which this file already uses for
+the simulator, and the two levels of slack at the boundary are the integer arithmetic doing what it
+must: at a half share the first level above the cap rounds to no discount at all.
+
+---
+
 ### D292 — The way back down is on the screen the loss is read on
 
 Losing cost five screens. The overworld, the region, the door, the deck builder and the power
@@ -20888,3 +20948,144 @@ Skip button moved five pixels and a relic assertion failed, in a file where noth
 had changed. It hands the state back now. **A check that mutates shared state has to restore it**,
 and a suite that runs its checks in one live autoload will find that out through the least related
 assertion it owns.
+
+---
+
+### D300 — Seven play reports, and five of them were one screen not fitting its own frame
+
+Seven complaints came back from a phone. Two were rules bugs; five were the reward panel, the
+merchant and the relic offer each answering a question in a shape that worked on a desktop and
+did not survive a smaller frame or a finger.
+
+| # | report | what it was |
+|---|---|---|
+| 1 | "battle rewards should be centred so text on Android is not hidden" | a fixed anchor band, measured once against one frame |
+| 1b | "choosing a relic should not move the buttons around" | the panel freed every child and built itself again |
+| 2 | "already taken relics should not be found again" | a save-timing gap, not a rolling bug |
+| 3 | "the reward screen should not tell whether a set is better or worse" | it printed a verdict |
+| 4 | "I do not like that you can press twice on any set card to pick it" | every card face committed the whole set |
+| 5 | "make the store more like Slay the Spire" | the stall was a table |
+| 6 | "Vulnerable and Weak are not propagated to the cards" | the face carried the attacker's half only |
+| 7 | "relics should show their icon, with the text on hover" | the relic was a button wearing its rules text |
+
+#### The panel was measured, and measuring was the bug
+
+`reward_box` was a VBox pinned at `anchor_top 0.14` to `anchor_bottom 0.86`, and the comment above
+those numbers was a paragraph of arithmetic: 246px of card, a 3-line note, the dilution line and
+Skip is 399px, against the 518 the band allows. Every number in it is true at 1280x720.
+
+A Control is never smaller than its content, so a column too tall for its band does not clip — it
+grows out of its own rectangle and paints over whatever is under it. That is a bug that cannot be
+seen on the frame it was measured on, and it lands on a phone, where the frame is a different
+shape and the safe area takes a bite out of the bottom.
+
+The band is gone. The panel is the whole frame minus the standard padding, the column is CENTRED
+in it, and it sits in a `UI.scroll` — so content that still does not fit is reachable by dragging
+rather than lost off an edge. **Centring is what makes it fit-shaped rather than measured**: a
+shorter panel sits in the middle instead of hanging off the top, and adding a line to it does not
+re-open the arithmetic. `tests/RewardNoteTest.tscn` still asserts the column fits without
+scrolling, because needing to scroll a reward pick is a panel that does not fit — it just no
+longer asserts it against a hand-measured band.
+
+The veil under it is the other half of "text is hidden". The panel is words over a lit painting,
+and the painting wins at phone contrast. Measured on the capture: at 0.82 the room, the HP bar and
+the "Encounter cleared" line all read through it, so the panel's own headline looked like a
+duplicate of the one behind it. 0.93.
+
+#### Rebuilding a panel to change one row of it moves everything under that row
+
+Taking a relic called `_offer_rewards()` again after freeing every child. The relic row vanished
+and the three sets and the Skip button jumped up by its height — under a hand that had just
+pressed something, on a screen where the next press spends the reward. It is also the mechanism
+D271 was: a function called twice that rolls dice deals a second hand.
+
+Nothing is rebuilt now. The taken relic keeps its tile, the other two dim in place, and the band
+keeps its size. `_offer_rewards` is called once.
+
+The same shape appears one hover earlier, and is the reason the icons could replace the text
+buttons at all. Pointing at a relic fills a description line under the row — and a `Label` reports
+its wrapped text as its minimum height, so filling it would push the sets down the moment the
+cursor arrived. `UI.fixed_line` reserves the height in a clipping box, so the label's own minimum
+cannot reach the layout. Three lines: the longest reader string the catalogue can produce is
+`barrow_wall`'s at ~140 characters, which wraps to two, and the third is the margin the relic
+written tomorrow gets for free. Two lines at 44px was tried and moved Skip by 5px.
+
+#### "I already took that relic" was never a roll
+
+`MetaState.relic_offer` excludes `GameState.run_relics`, every drop site passes it, and a probe
+that took all 38 relics in one run drew no duplicate. The pool was never the problem.
+
+**The run only holds what it managed to write down.** `Combat._on_relic_picked` did not save at
+all — the run was flushed when the reward RESOLVED, a set taken or Skip pressed — and the chest's
+pick only marked the run dirty, which is written up to `FLUSH_SECONDS` later. Lose the app in
+between, which on Android is an ordinary way for an app to end, and the relic is gone from
+`run_relics` and the pool is free to deal it again. All three drop sites flush now, and
+`RewardNoteTest` reads the run file back off disk rather than trusting the in-memory array.
+
+#### The verdict, and the two taps
+
+The reward printed `STRONGER`/`WEAKER` under each set, off the mean of `Balance.bundle_vs_deck`.
+That is the game playing the decision for the player, and a mean is a fact about arithmetic rather
+than about the run — the whole premise of D297 is that a *direction* beats an average. It is gone.
+The cards say what they do and the dilution line says what taking them costs.
+
+Every card in a set was a `UI.card_button` bound to taking the whole set. On a touchscreen
+`card_button` needs two taps — one to enlarge a card enough to read it, one to commit — so the tap
+that finished reading a card also bought the two beside it that had not been read. The faces are
+read-only now (`tap_to_read`, which installs the reveal half of the dance and not the commit half)
+and one `Take these 2` button per set does the buying. The same rule went into the shop, where it
+matters more: a tap that finishes reading a card must not be the tap that spends the gold.
+
+#### The stall was a table, and the table was measured too
+
+Every constant in `shop.gd` was honest — `ROW_LABEL_W := 600.0` measured against the longest
+string 100 cards can produce, `ACTION_W := 250.0` against `Remove  (deck at minimum)` — and the
+result was a spreadsheet. The card you were spending gold on was a 28px thumbnail beside a
+sentence cut off mid-word, on the one screen in the game where a purchase cannot be undone.
+
+The merchant lays the cards out face up at reward size with the price under each, and the two
+services are tiles of the same height on the same shelf, because they compete with the cards for
+the same gold and thinning is often the better buy. `tests/TooltipTest.tscn` used to require this
+screen to offer the card preview from both a picture and a text cell (D205b); it is not a card
+list any more, so it now requires the opposite thing — that the stock is drawn as real faces and
+that none of those faces buys anything when pressed.
+
+#### The one rules bug: Vulnerable was the half the face could not see
+
+`CombatEngine.card_damage` is the attacker's side — Strength, Weak, the percent relics. The
+defender's Vulnerable lived inside `Combatant.take_damage`. So a card read 8 on its face, the
+enemy wore Vulnerable, and 12 landed. D50 says a card must not lie about itself, and this was the
+one status whose entire purpose is to change the number the player is about to read — which makes
+it the number they most needed to watch change, and the one they could not.
+
+`card_face_damage` applies the current target's multiplier and is what the three faces in `ui.gd`
+read. Block is deliberately not subtracted: Vulnerable multiplies the swing and belongs to the
+swing, where Block is a pool the swing runs into and is already drawn on the enemy's plate.
+
+It is a **second function** rather than a fold into `card_damage`, and that is the load-bearing
+part. Both simulators compose the two themselves — `foe.predicted_damage(eng.card_damage(c))` —
+so folding it in would have applied Vulnerable twice everywhere the AI weighs a card, silently,
+in the tool that decides what "balanced" means. `test_mechanics.gd` asserts the face against what
+actually comes off the health bar, and asserts that `card_damage` did NOT pick the multiplier up.
+
+#### The harness let two of these hide, so the harness changed too
+
+Both defects above were found by hand, and both had been invisible to a green suite.
+
+`tests/run.sh` calls a suite passed when the exit code is 0 and stdout carries `TEST: PASS`. A
+**runtime** script error satisfies both. It aborts the function it happens in, leaves the exit code
+alone, and lets `_ready` go on to print the PASS line — so a whole section of a suite stops running
+and the suite reports green. `RewardNoteTest` called `_roll_rewards`, deleted at D297, and had been
+printing PASS with its largest section dead ever since; the refactor here moved a constant onto
+`UI` and it did the same thing again within the hour.
+
+It was invisible because a script error goes to **stderr**, and `run_one` discarded stderr with
+`2>/dev/null`. It now captures it, and a suite that produced a `SCRIPT ERROR` fails with the error
+and its backtrace as the diagnosis.
+
+Two suites provoke script errors on purpose — `test_compile` and `test_layout` both `load()`
+scripts that name autoloads, which do not exist in a `--script` run — so a suite declares the
+exemption itself by printing `TEST EXPECTS ERRORS`. The knowledge lives in the suite that has the
+reason, not in a list in the runner that would go stale. Measured before writing the rule: those
+two are the only ones of the 48 that make a sound. Mutation-checked — a nonexistent method call
+inserted into `RewardNoteTest` turns it red, and naming the missing function.

@@ -28,6 +28,33 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 ## lets the dungeon's gifts be free. See D238 for the same move on relics and the pillar it
 ## rewrote.
 var found_in_run: bool = false
+
+## This card as the RATCHET prices it: at `Balance.priced_level(level)` (D291).
+##
+## Returns `self` when nothing is discounted, so the common case — every card at or under the
+## cap — allocates nothing and reuses the `power_value` cache already on this instance.
+##
+## Cached on the level it was built for, because `power_ratio` runs once per fight and the
+## simulator runs it hundreds of thousands of times. `duplicate()` here is the same trick
+## `level_up_text` has used since D50 to ask a card what it would be at another level.
+var _priced_twin: CardData = null
+var _priced_twin_for: int = -1
+
+func priced_twin() -> CardData:
+	var pl := Balance.priced_level(level)
+	if pl >= level:
+		return self
+	if _priced_twin != null and _priced_twin_for == level:
+		return _priced_twin
+	var t := duplicate() as CardData
+	t.level = pl
+	# Belt and braces against recursion: the twin is never asked for its own twin today, and a
+	# twin that answered with a further discount would compound the cap every time it was read.
+	t._priced_twin = t
+	t._priced_twin_for = pl
+	_priced_twin = t
+	_priced_twin_for = level
+	return t
 @export var damage: int = 0
 @export var block: int = 0
 @export var draw: int = 0
