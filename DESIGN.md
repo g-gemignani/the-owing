@@ -308,7 +308,7 @@ Entries are not in numeric order in the file below; this is the way in.
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
 
-**Cited but never written up:** D48 D93 D100 D110 D234 D304. Each is referenced by number
+**Cited but never written up:** D48 D93 D100 D110 D234 D304 D322 D323. Each is referenced by number
 somewhere in this file and has no entry of its own. D110 is the documented
 case — D112 records it being left alone while a concurrent session held it.
 
@@ -22336,6 +22336,24 @@ advantage for once: it holds both sessions' entries, so the file itself knows.
 
 The second line is the one to run. It lists every number claimed and not yet committed, which
 is the only set the git history cannot show you.
+
+**And that is still not enough, because a number lives in TWO places and either can be first.**
+A session writes `(D323)` into five `.gd` files while it works and writes the DESIGN.md entry
+last, so for as long as the work takes, the log says the number is free and the code says it is
+taken. Measured on this tree: the code spoke for D322, D323 and D325 while the log held D320,
+D321, D322 and D324. Both checks above read the log, so both would have handed out D323 twice.
+
+Check both sides, and take a number that is in neither:
+
+    grep -rhoE '\bD3[0-9]{2}\b' scripts/ tools/ tests/ --include=*.gd | sort -u
+    grep -oE '^### D3[0-9]{2}' DESIGN.md | sed 's/^### //' | sort -u
+
+The difference between them is also worth reading on its own — it is the set of numbers the
+code points at and nobody has written up. `comm -23` over the two lists prints it. A number in
+that set is either a session still working or a decision that was implemented and never
+recorded, and the two are indistinguishable from outside, which is the argument for writing the
+entry with the code rather than after it.
+
 
 
 #### The rule under all of it

@@ -1097,7 +1097,11 @@ These are failure modes that have actually bitten this project. Treat each as a 
   `grep` on `HEAD` calls a number free while another session's entry sits uncommitted beside
   yours. Claim a D-number off the WORKING COPY, never off `HEAD` —
   `git diff DESIGN.md | grep '^+### D'` is the only thing that lists what has been claimed
-  today and not yet committed.
+  today and not yet committed. And check the CODE as well as the log, because a number lives in
+  two places and either can be first: a session writes `(D323)` into its `.gd` files while it
+  works and writes the entry last, so the log calls the number free the whole time.
+  `grep -rhoE '\bD3[0-9]{2}\b' scripts/ tools/ tests/ --include=*.gd` is the other half. On
+  this tree the code once spoke for three numbers the log had never heard of.
 
 - **A function that is called twice may not roll dice (D271).** The elite reward panel is
   drawn once when the fight ends and again after a relic is taken, because the relic row
