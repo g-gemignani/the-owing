@@ -383,6 +383,7 @@ func _taking_a_relic_moves_nothing() -> void:
 		return
 
 	var skip: Button = null
+	var take: Button = null
 	var tiles: Array[Button] = []
 	for c in _controls(inst.reward_box):
 		var b := c as Button
@@ -390,26 +391,77 @@ func _taking_a_relic_moves_nothing() -> void:
 			continue
 		if b.text.begins_with("Skip"):
 			skip = b
+		elif b.text in [UI.RELIC_TAKE_IDLE, UI.RELIC_TAKE_READY, UI.RELIC_TAKE_DONE]:
+			take = b
 		elif b.custom_minimum_size.x == UITheme.px(UI.RELIC_TILE_W):
 			tiles.append(b)
 	if skip == null:
 		_fails += 1; print("FAIL no Skip button on an elite's reward panel"); return
+	if take == null:
+		_fails += 1; print("FAIL no take button on an elite's relic offer"); return
 	if tiles.size() != inst.relic_offer.size():
 		_fails += 1
 		print("FAIL %d relics offered but %d tiles drawn" % [inst.relic_offer.size(), tiles.size()])
 		return
 
+	# The ELITE panel is the tallest this screen ever gets — the sets, the dilution line and Skip,
+	# with the relic band and its take button on top — so it is the one that has to be measured.
+	# The panel scrolls (D300), so overflow is reachable rather than lost; needing to scroll a
+	# reward pick is still a panel that does not fit, and this is where that shows up first.
+	var need := 0.0
+	for child in inst.reward_box.get_children():
+		var c := child as Control
+		if c != null:
+			need += maxf(c.get_combined_minimum_size().y, c.size.y)
+	need += float(inst.reward_box.get_theme_constant("separation")) \
+		* maxf(0.0, float(inst.reward_box.get_child_count() - 1))
+	var allowed: float = (inst.reward_box.get_parent() as Control).size.y
+	if need > allowed:
+		_fails += 1
+		print("FAIL an elite's reward panel needs %.0fpx and the frame allows %.0f" % [need, allowed])
+
+	# --- D307: a tile SELECTS, and only the button spends the offer -------------
+	#
+	# Reported off a phone: tap the first relic, tap the second, tap the first again and it was
+	# TAKEN — no second reading, no way back. The two-tap gesture remembered "this one has been
+	# read" for ever, per tile, so returning to a tile you had read counted as the commit tap.
+	#
+	# Walked here exactly as it was reported, because the bug needs three presses to appear and
+	# any check that presses once would have passed on the broken build.
+	if not take.disabled:
+		_fails += 1; print("FAIL the take button is live before anything is picked")
 	var before: Vector2 = skip.global_position
 	tiles[0].emit_signal("pressed")
+	await get_tree().process_frame
+	if take.disabled:
+		_fails += 1; print("FAIL picking a relic left the take button dead")
+	if not GameState.run_relics.is_empty():
+		_fails += 1; print("FAIL pressing a relic tile took it outright")
+	tiles[tiles.size() - 1].emit_signal("pressed")
+	await get_tree().process_frame
+	tiles[0].emit_signal("pressed")
+	await get_tree().process_frame
+	if not GameState.run_relics.is_empty():
+		_fails += 1
+		print("FAIL going back to a relic already read took it (%s)" % str(GameState.run_relics))
+	for t in tiles:
+		if t.disabled:
+			_fails += 1
+			print("FAIL a relic tile went dead without the offer being spent")
+			break
+
+	# ...and the button does spend it.
+	take.emit_signal("pressed")
 	await get_tree().process_frame
 	await get_tree().process_frame
 	if skip.global_position != before:
 		_fails += 1
 		print("FAIL taking a relic moved Skip from %s to %s" % [before, skip.global_position])
-	# ...and the relic is actually taken, or the check above passes on a dead button.
 	if GameState.run_relics.size() != 1:
 		_fails += 1
-		print("FAIL pressing a relic tile took %d relics" % GameState.run_relics.size())
+		print("FAIL the take button took %d relics" % GameState.run_relics.size())
+	if not take.disabled:
+		_fails += 1; print("FAIL the take button is still live after the offer was spent")
 	for t in tiles:
 		if not t.disabled:
 			_fails += 1

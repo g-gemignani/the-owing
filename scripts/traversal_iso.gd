@@ -3017,6 +3017,21 @@ func select(i: int) -> Dictionary:
 		return _catch(caught)
 	return {}
 
+## Step off an encounter WITHOUT resolving it: the tile keeps whatever is standing on it and
+## nothing is counted (D307).
+##
+## One caller, and it is the whole reason this exists: a key-locked chest you reached without a
+## key. `clear_pending` blanks the cell and erases `chest_of`, so walking up to a locked chest
+## DESTROYED it — while its key was still lying on the same floor, because `_place_keys` puts one
+## down for every lock and a probe over 1,320 floors found not one short. The key was never
+## missing. The chest was gone before the player could bring the key to it.
+##
+## Counted as nothing, on purpose: `cleared` does not move, `TALLY_CHESTS` does not tick, and the
+## floor's quota is untouched, because none of those are true yet. The chest is still there.
+func leave_pending() -> void:
+	_invalidate()
+	pending = {}
+
 func clear_pending() -> void:
 	_invalidate()
 	if pending.is_empty():

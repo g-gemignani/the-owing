@@ -15,6 +15,10 @@ extends Control
 
 var body: VBoxContainer
 
+## Was this a key lock the player could not open? Then the chest is LEFT where it is (D307) —
+## nothing is paid, nothing is rolled, nothing is counted, and the tile still holds it.
+var kept := false
+
 func _ready() -> void:
 	# the treasure plate is not installed yet; the event room is the nearest lit
 	# space and beats rendering the whole screen on black
@@ -47,10 +51,6 @@ func _open() -> void:
 	title.add_theme_color_override("font_color", Icons.pack_tier_colour(tier))
 	body.add_child(title)
 
-	var gold := Balance.TREASURE_GOLD_MIN + randi() % maxi(1, Balance.TREASURE_GOLD_MAX - Balance.TREASURE_GOLD_MIN + 1)
-	gold += int(round(gold * MetaState.relic_bonus("gold_percent") / 100.0))
-	GameState.earn_gold(gold)
-
 	# What it wants, before what happened — the order the player experiences it in,
 	# and the reason a failed vault is a disappointment rather than a trick.
 	var opened := true
@@ -61,10 +61,18 @@ func _open() -> void:
 				UI.label(body, "Locked. You have a key, and spend it.")
 			else:
 				opened = false
-				# Says where a key comes from, because this screen is where the player
-				# finds out they needed one and the answer is a place, not a chance:
-				# keys lie on the floors of the dungeon (D167).
-				UI.label(body, "Locked, and you have no key. It stays shut. Keys lie on the dungeon's own floors — off the path, where nothing else is.")
+				# ...and the chest STAYS (D307). It used to be consumed here: the tile went
+				# bare, `chest_of` was erased, and a chest the player could not open was a
+				# chest nobody would ever open — while its key lay on the same floor, because
+				# `_place_keys` puts one down per lock and a probe over 1,320 floors found not
+				# one short. Reported as "the key is missing on the floor". The key was there;
+				# the chest was not, by the time the key was.
+				#
+				# This is the one lock where "not yet" is a true answer. A vault reads the run
+				# and gives its verdict, and coming back does not change who you are — a key is
+				# a thing lying on this floor that you can go and get.
+				kept = true
+				UI.label(body, "Locked, and you have no key. It stays shut — and it stays HERE. Keys lie on this floor, off the path, where nothing else is. Come back with one.")
 		Balance.CHEST_LOCK_VAULT:
 			var cond: String = Balance.VAULTS[randi() % Balance.VAULTS.size()]
 			var demand := UI.label(body, "A vault: it %s." % Balance.vault_text(cond, build_id))
@@ -74,8 +82,16 @@ func _open() -> void:
 		_:
 			UI.label(body, "Unlocked. The lid lifts at a touch.")
 
-	var haul := UI.label(body, "You take %d gold." % gold)
-	haul.add_theme_font_size_override("font_size", UITheme.title_font())
+	# The gold is taken when the chest is TAKEN. Paying it on a visit that leaves the chest
+	# standing would make a locked chest a tile you walk onto for gold, over and over — the
+	# farming loop that leaving it in place would otherwise open.
+	if not kept:
+		var gold := Balance.TREASURE_GOLD_MIN \
+			+ randi() % maxi(1, Balance.TREASURE_GOLD_MAX - Balance.TREASURE_GOLD_MIN + 1)
+		gold += int(round(gold * MetaState.relic_bonus("gold_percent") / 100.0))
+		GameState.earn_gold(gold)
+		var haul := UI.label(body, "You take %d gold." % gold)
+		haul.add_theme_font_size_override("font_size", UITheme.title_font())
 
 	if opened:
 		var n := Balance.chest_packs(tier)
@@ -107,13 +123,13 @@ func _open() -> void:
 			GameState.run_relics)
 		if not offer.is_empty():
 			UI.spacer(body)
-			var rh := UI.label(body, "And something older, under the packs. Take one.")
-			rh.add_theme_color_override("font_color", Color(1.0, 0.84, 0.40))
 			_relic_row(offer)
 	else:
 		UI.label(body, "Whatever was inside stays inside.")
 
-	if randi() % 100 < Balance.TREASURE_ROPE_CHANCE:
+	# ...and neither is the rope, for the same reason: a roll on a visit that resolves nothing
+	# is a roll the player can repeat.
+	if not kept and randi() % 100 < Balance.TREASURE_ROPE_CHANCE:
 		MetaState.add_item("escape_rope")
 		UI.label(body, "   An Escape Rope, tucked beside it. A way out, if you want one.")
 
@@ -134,8 +150,11 @@ func _open() -> void:
 ## reward panel offers relics the same way and two copies of that row would not stay equal. This
 ## screen owns only what taking one does here.
 func _relic_row(offer: Array) -> void:
+	# The heading rides the reader's resting text (D307) rather than sitting on a label above it.
+	# One line saying what the offer is, in the space that then says what each relic does.
 	UI.relic_offer_row(body, offer, UITheme.px(UI.BUTTON_WIDTH * 1.6), _take_relic,
-		" It is yours until this run ends.")
+		" It is yours until this run ends.",
+		"And something older, under the packs. Take one.")
 
 func _take_relic(rid: String, reader: Label) -> void:
 	GameState.earn_relic(rid)
@@ -170,6 +189,11 @@ func _vault_met(cond: String, build_id: String) -> bool:
 			return float(GameState.hp) >= Balance.VAULT_HP_FRAC * float(GameState.max_hp)
 
 func _finish() -> void:
-	GameState.clear_node(GameState.pending)
+	# A chest that stayed shut for want of a key is stepped OFF, not cleared (D307): the tile keeps
+	# it, the floor's quota is untouched, and the player can come back once the key is in hand.
+	if kept:
+		GameState.leave_node(GameState.pending)
+	else:
+		GameState.clear_node(GameState.pending)
 	GameState.autosave()
 	get_tree().change_scene_to_file(GameState.run_scene())

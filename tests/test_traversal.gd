@@ -1825,6 +1825,63 @@ func _init() -> void:
 				did, first, int(bar)])
 		print("  (info: %-16s %d dodges, %d HP total = %.0f%% of a %d HP bar, first %d)" % [
 			did, dodgeable, total, 100.0 * float(total) / bar, int(bar), first])
+	# --- a lock you cannot open does not eat the chest (D307) ------------------
+	#
+	# Reported as "there is a locked chest and the key is missing on the floor". The key was
+	# never missing: `_place_keys` puts one down per lock, and a probe over 1,320 generated
+	# floors found not one short. The CHEST was missing, by the time the key was in hand —
+	# walking up to a key-locked chest with no key ran `clear_pending`, which blanks the cell
+	# and erases `chest_of`, so reaching it before the key destroyed it.
+	#
+	# Asserted on the model, not the screen: `leave_pending` is the seam, and what has to be
+	# true is that the tile still holds a chest of the same tier and that nothing was counted.
+	var lk := TraversalIso.new()
+	lk.generate(Balance.dungeon(Balance.DUNGEONS[0]))
+	var chest_cell := -1
+	for f in lk.floors:
+		lk._build_floor(f)
+		for i in lk.enc.size():
+			if int(lk.enc[i]) == TraversalIso.Enc.TREASURE and lk.chest_of.has(i):
+				chest_cell = i
+				break
+		if chest_cell >= 0:
+			break
+	if chest_cell < 0:
+		fails += 1; print("FAIL no dungeon floor holds a chest to walk onto")
+	else:
+		var tier_was := String(lk.chest_of[chest_cell])
+		var cleared_was: int = lk.cleared
+		var chests_was: int = int(lk.run_tally.get(Balance.TALLY_CHESTS, 0))
+		lk.pending = {"type": TraversalIso.Enc.TREASURE, "cell": chest_cell, "chest": tier_was}
+		lk.leave_pending()
+		if int(lk.enc[chest_cell]) != TraversalIso.Enc.TREASURE:
+			fails += 1
+			print("FAIL stepping off a locked chest blanked its tile — the key can never reach it")
+		if String(lk.chest_of.get(chest_cell, "")) != tier_was:
+			fails += 1
+			print("FAIL stepping off a locked chest forgot its tier (%s -> %s)" % [
+				tier_was, String(lk.chest_of.get(chest_cell, ""))])
+		if not lk.pending.is_empty():
+			fails += 1; print("FAIL leave_pending left the encounter pending")
+		# Counted as nothing, because nothing happened. A chest that is still standing must not
+		# advance the floor's quota, or `progress()` reads past what the player has done — and
+		# an errand paid for opening chests must not settle on one that stayed shut.
+		if lk.cleared != cleared_was:
+			fails += 1
+			print("FAIL a chest left standing counted toward the floor (%d -> %d)" % [
+				cleared_was, lk.cleared])
+		if int(lk.run_tally.get(Balance.TALLY_CHESTS, 0)) != chests_was:
+			fails += 1
+			print("FAIL a chest left standing ticked the chest tally")
+		# ...and clearing it properly still does all of that, or the branch above is the only
+		# one that works.
+		lk.pending = {"type": TraversalIso.Enc.TREASURE, "cell": chest_cell, "chest": tier_was}
+		lk.clear_pending()
+		if int(lk.enc[chest_cell]) == TraversalIso.Enc.TREASURE:
+			fails += 1; print("FAIL an OPENED chest stayed on its tile")
+		if lk.cleared == cleared_was:
+			fails += 1; print("FAIL an opened chest did not count toward the floor")
+
 	# --- keys lie on the floor, and walking onto one takes it (D167) -----------
 	#
 	# Three separate things, and every one of them fails silently. A key that is never

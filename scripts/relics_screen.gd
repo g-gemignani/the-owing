@@ -35,19 +35,15 @@ extends Control
 ## a fixed place is a thing the player can learn.
 ##
 ## The bracketed tag comes from `CardData.rarity_badge`, the one owner of that
-## convention (D115), and is printed ONCE per group instead of on every row —
-## the group header IS the rarity, so a badge per row would be the screen's old
-## say-it-three-times habit at a smaller scale. Colour carries it on the rows.
-const COLUMNS := 3
-
-## Column floor, in unscaled px. Three columns is what fills 1280 with entries this
-## short; one column of one-line rows leaves half the frame empty, which is
-## the defect being fixed. Measured against the widest string the relic table can
-## actually produce rather than picked (the D95 rule): the longest effect line,
-## Reliquary Heart's "Below 50% HP, gain 3 Strength. Once per combat.", renders 380px
-## at 16px font, so at this floor every slot holds a single line — and
-## a longer one added later wraps inside its cell instead of shoving the grid wider.
-const SLOT_WIDTH := 380.0
+## convention (D115), and is printed ONCE per group instead of on every tile —
+## the group header IS the rarity, so a badge per tile would be the screen's old
+## say-it-three-times habit at a smaller scale. Colour carries it on the names.
+##
+## `COLUMNS := 3` and `SLOT_WIDTH := 380.0` are GONE (D307). Both were measured against a slot
+## that was a row of text — the widest effect line the relic table can produce, at the shipped
+## font — and the slot is a 132px picture tile now, laid out by an `HFlowContainer` that fits as
+## many across as the frame holds. A measured column count is the right answer for a column of
+## sentences and the wrong one for a wall of icons.
 
 ## A group header's line height, in unscaled px, against a 16px font — the slack is
 ## the gap above it, which is where a group gets its air. Traded against the row
@@ -78,17 +74,14 @@ const HEAD_LEADING := 30.0
 ## two states, not an absolute floor.
 const UNFOUND_DIM := 0.32
 
-## How big a relic icon draws in its row, in unscaled px. Sized against the ROW, not
-## against the 128px the file ships at: an HBox is as tall as its tallest child, so the
-## icon sets the grid's pitch the moment it exceeds the name line, and the rows plus
-## five headers have to clear 720px with no scrollbar — what HEAD_LEADING above is
-## tuned for. Both measurements were taken at thirty relics and at ten rows per column.
-##
-## Measured, not picked, by rendering the screen and reading the scrollbar column:
-## 34 and 26 both scroll (the Legendary group falls off the bottom), 22 does not. So
-## 22 is the ceiling, and the art is authored at 128 so it stays sharp at the 2x and
-## 3x the canvas scales to on a larger display (D121).
-const ICON := 22.0
+## `ICON := 22.0` is GONE with the row it sized (D307). A relic is drawn at `UI.RELIC_TILE_W` by
+## `UI.RELIC_TILE_H` now, the same size the elite's offer and the chest's draw it, which is the whole
+## point of the change: one relic, one picture, wherever it appears.
+
+
+## The one line that says what a relic does, shared by every tile on the screen.
+var _reader: Label
+
 
 
 func _ready() -> void:
@@ -157,6 +150,17 @@ func _ready() -> void:
 	# slot that fills in grows an effect line, so a well-stocked save runs past that
 	# and has to scroll, the same way the collection does. `scrollbar_track`/`scrollbar_grabber` are
 	# installed now, so this is the painted scrollbar rather than Godot's default.
+	# ONE reader for the whole screen, above the scroll rather than inside it, so it stays in front
+	# of the player while the list moves under it. It is where a relic's effect is said now — the
+	# effect used to be a second line inside every met slot, which is thirty-eight paragraphs on
+	# one screen and the reason the list could only ever be a column of text.
+	#
+	# Built to its full height before anything is pressed, like every other reader in this game: a
+	# line that grew on the first press would shove the whole list down.
+	_reader = UI.fixed_line(col, UITheme.px(UI.RELIC_READER_H))
+	_reader.text = "Press a relic to read what it does."
+	_reader.add_theme_color_override("font_color", Color(0.92, 0.88, 0.74))
+
 	var list := UI.scroll(col)
 	for rarity in CardData.Rarity.size():
 		if not groups.has(rarity):
@@ -184,72 +188,39 @@ func _ready() -> void:
 		# groups read as one list.
 		head.custom_minimum_size.y = UITheme.px(HEAD_LEADING)
 		head.vertical_alignment = VERTICAL_ALIGNMENT_BOTTOM
-		var grid := GridContainer.new()
-		grid.columns = COLUMNS
+		# A FLOW of tiles, not a grid of text rows (D307). The relic is the picture now, the same
+		# picture the elite's offer and the chest's put in front of the player — so what you met on
+		# a reward panel is recognisable on the screen that records it. Flowing rather than a fixed
+		# column count because the tile is a fixed 132px and the frame is not: eight fit across a
+		# desktop and three across a phone, and neither number belongs in this file.
+		var grid := HFlowContainer.new()
 		grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		grid.add_theme_constant_override("h_separation", UITheme.sep(12))
-		grid.add_theme_constant_override("v_separation", UITheme.sep(4))
+		grid.add_theme_constant_override("h_separation", UITheme.sep(8))
+		grid.add_theme_constant_override("v_separation", UITheme.sep(8))
 		list.add_child(grid)
 		for e in entries:
 			_slot(grid, e["relic"], bool(e["owned"]))
 
 	UI.exit_button(col, "Back", func(): UI.goto(self, "res://scenes/Overworld.tscn"))
 
-## One slot: the name always, what it does only once it is yours.
+## One slot: the relic's face, and the press that says what it does.
 ##
-## The two states differ in ink AND in structure — a found slot grows a second line
-## — so the list reads as filled-in versus empty at a glance, without a "locked"
-## badge repeated two dozen times.
-func _slot(grid: GridContainer, r: RelicData, owned: bool) -> void:
-	# The icon goes in a row BESIDE the text, which is the shape this screen was
-	# written for — "when the thirty paintings land they go in the cell beside the
-	# name and nothing else here has to move" (D116). A relic with no art yet adds
-	# no icon and no gap, so a half-painted set is a list with pictures appearing in
-	# it rather than a list of holes: the same one-file-at-a-time contract the UI kit
-	# runs on. Without this the icons were installed, correct, and unreachable — no
-	# code in `scripts/` read `assets/art/relics/` at all (D121).
-	var row := HBoxContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.custom_minimum_size.x = UITheme.px(SLOT_WIDTH)
-	row.add_theme_constant_override("separation", UITheme.sep(8))
-	grid.add_child(row)
-
-	var art := PixelArt.relic_art(r.id)
-	if art != null:
-		var pic := TextureRect.new()
-		pic.texture = art
-		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		pic.custom_minimum_size = Vector2.ONE * UITheme.px(ICON)
-		pic.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		# An unheld relic's icon recedes the same way its name does — by ink, so the
-		# two states of a slot stay one decision rather than two. `modulate` is the
-		# right tool HERE and not on the label: this is a picture, not text over a
-		# backdrop, so there is nothing behind it for translucency to read against.
-		if not owned:
-			pic.modulate = Color(1, 1, 1, 1.0 - UNFOUND_DIM)
-		row.add_child(pic)
-
-	var cell := VBoxContainer.new()
-	cell.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	row.add_child(cell)
-
-	var name_label := Label.new()
-	name_label.text = r.name
-	# `clip_text` is what makes the column floor real: a Label reports its own text
-	# as its minimum width and grows straight past a `custom_minimum_size`, which is
-	# how the Packs screen ended up with three buttons at three x positions (D95).
-	# No relic name is long enough to be clipped today; the guard is for the one that
-	# is added tomorrow.
-	name_label.clip_text = true
-	var tint := Icons.rarity_colour(r.rarity)
-	name_label.add_theme_color_override("font_color",
-		tint if owned else tint.darkened(UNFOUND_DIM))
-	cell.add_child(name_label)
-
-	if owned:
-		# The authored description, not a paraphrase. Relics have no levels, so
-		# unlike a card face (D50) this text cannot go stale — and restating what
-		# the .tres says would be a second copy of it that could.
-		UI.label(cell, r.description)
+## It was a row — icon, name, and for a met relic the effect spelled out underneath. That made the
+## screen a column of paragraphs three across, and it made a relic look like nothing it looks like
+## anywhere else in the game. Now it is the same tile the offers draw (`UI.relic_face`), and the
+## effect goes in the one reader at the top of the screen.
+##
+## **An unmet slot still withholds its effect.** That is the rule this screen was built on: the
+## name and the rarity are safe to print because there is nothing to plan against them, and the
+## effect is the only part left to be a discovery when the relic finally drops. Pressing one says
+## so, rather than saying nothing — a tile that does not answer reads as a tile that is broken.
+func _slot(grid: Container, r: RelicData, owned: bool) -> void:
+	var b := UI.relic_face(grid, r, 0.0 if owned else UNFOUND_DIM)
+	var line := ("%s — %s" % [r.name, r.description]) if owned else \
+		"%s — not met yet. What it does is learned by holding it." % r.name
+	UI.hoverable(b, line)
+	if not UI.touch_ui():
+		b.mouse_entered.connect(func() -> void: _reader.text = line)
+	b.pressed.connect(func() -> void:
+		_reader.text = line
+		Audio.play("ui_select"))

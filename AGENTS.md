@@ -1025,10 +1025,22 @@ moves.
   a touchscreen a card needs one tap to be legible at all, so a face that also buys
   something turns the tap that finished reading into the tap that spent the reward — the
   reward sets and the merchant's stock both worked that way until D300. The face reads;
-  a named button beside it takes, buys or skips. The same rule keeps a panel STILL while
-  it is being read: nothing rebuilds under a hand that has just pressed something, and a
-  line that fills on hover reserves its height before anything is pointed at
-  (`UI.fixed_line`).
+  a named button beside it takes, buys or skips. **A tile SELECTS and a button TAKES, and
+  a press that selects is idempotent** (D307): the two-tap dance is safe only while "have
+  I read this" is a fact about the last thing tapped, and the relic offer kept it per tile
+  for ever — tap one relic, tap another, come back, and it was taken. A choice the player
+  cannot re-read is a choice they did not make. The same rule keeps a panel STILL while it
+  is being read: nothing rebuilds under a hand that has just pressed something, and a line
+  that fills on hover reserves its height before anything is pointed at (`UI.fixed_line`).
+
+- **A thing you cannot resolve yet is not a thing you have resolved.** Walking onto a
+  key-locked chest with no key ran the normal resolution path, so the tile went bare and
+  the chest was destroyed — while its key lay on the same floor, which a probe over 1,320
+  generated floors showed is always true (D307). It reads as "the key is missing" and it is
+  the chest that is missing. `TraversalIso.leave_pending` steps off without resolving:
+  nothing paid, nothing rolled, nothing counted, the tile untouched. Anything that pays out
+  on a visit that resolves nothing is a tile the player can farm, which is why the chest's
+  gold moved to the visit that opens it.
 
 - **Expandable by design.** New cards, enemies, bosses and dungeons are data files
   plus a catalogue line, guarded so a half-added piece of content fails loudly rather

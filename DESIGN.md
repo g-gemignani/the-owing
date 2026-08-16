@@ -289,6 +289,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D302** | [A missed click is not a no-op, and a check that has lied once must not be trusted](#d302--a-missed-click-is-not-a-no-op-and-a-check-that-has-lied-once-must-not-be-trusted) |
 | **D303** | [Two fixes for the four dead archetypes, both refuted, and the pair of numbers that names the real one](#d303--two-fixes-for-the-four-dead-archetypes-both-refuted-and-the-pair-of-numbers-that-names-the-real-one) |
 | **D306** | [A monster's size was set by how much canvas its painter used](#d306--a-monsters-size-was-set-by-how-much-canvas-its-painter-used) |
+| **D307** | [Five more play reports, and the one that had been eating chests](#d307--five-more-play-reports-and-the-one-that-had-been-eating-chests) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21450,3 +21451,110 @@ the family: that comes from `Balance.iso_family()`, which needs autoloads a `--s
 cannot have. Deriving it from the filename instead would be a restated table, which is the
 habit that has cost this project four bugs. It prints the three family heights parsed out
 of `iso_run.gd` and leaves the mapping where it lives.
+
+---
+
+### D307 — Five more play reports, and the one that had been eating chests
+
+Five reports off the same phone, a day after D300. Four are the same class D300 was — a control
+that commits when it should read, a screen that is a list when it should be a picture — and the
+fifth had been silently destroying content since chests grew locks.
+
+| # | report | what it was |
+|---|---|---|
+| 1 | "click one relic, then another, then back to the first and it CHOOSES it" | a per-tile "already read" flag that never cleared |
+| 2 | "the camp cannot show how an upgrade will affect the card" | the picker committed on the first press |
+| 3 | "show relics on the Relics screen the way we show them when choosing" | three surfaces, three drawings of one object |
+| 4 | "a locked chest with no key on the floor" | the chest was consumed by the visit |
+| 5 | "the Cards and Menu buttons at the bottom of the crawl do not make sense" | two full-width bars, in the last place anyone looks |
+
+#### The two-tap gesture is wrong for a row of three
+
+D300 gave the relic offer the two-tap dance `card_button` teaches: first tap reads, second tap on
+the same tile commits. That is safe only while "have I read this one" is a fact about the LAST
+thing tapped — and `card_button` keeps it that way, in one static (`_previewed`) that another card
+takes over. The relic tile kept it **per tile, for ever**. Tap the first, tap the second, come back
+to the first, and it was taken: no second reading, no way back, on a decision that sets a rule for
+the rest of the run and does not come round again.
+
+The fix is not a better flag. **A tile selects and a button takes.** Every press of a tile does the
+same thing however many times you do it — reads it, selects it — and one named control spends the
+offer. There is no gesture to learn and no state that can be stale, and desktop and touch behave
+identically, which is the other half: a rule that only holds on one input is a rule two people
+describe differently.
+
+The same shape answers report 2. `UI.card_picker` committed on the first press, which is right for
+"leave which card behind" — the card in front of you IS the question — and wrong for the camp's
+Temper, where the question is what the card BECOMES and the grid shows what it is now. It takes a
+`preview` callable now: a press selects, one line says what committing would do, and a named button
+spends it. The line is `level_up_text`, the card's own account of its next level and the same
+sentence the Collection quotes when it sells that level, so the camp and the collection cannot
+describe one level two ways. Only temperable cards are offered, because a card at its cap is a
+press that does nothing.
+
+#### One relic, one picture
+
+Relics appeared on three screens and were drawn three ways: two rows of icons, and a catalogue of
+names with the effect spelled out beside each. `UI.relic_face` is the one drawing now, so the thing
+you met on a reward panel is recognisable on the screen that records it — and the Relics screen
+stops being a column of paragraphs. Its effect text moved into one reader at the top, which is what
+lets thirty-eight relics be a wall of pictures instead of three columns of prose. `COLUMNS`,
+`SLOT_WIDTH` and `ICON` went with the rows they sized; an `HFlowContainer` fits as many across as
+the frame holds, which is eight on a desktop and three on a phone, and neither number belongs in a
+source file.
+
+The tile's contents are INSET from its rect. A carved frame draws its border inside that rect, so a
+column pinned flush put the second line of "Chipped Whetstone" on top of the border — invisible
+until a two-word relic was drawn, which the two offer rows had never happened to show.
+
+#### The chest was eating itself, and the key was never missing
+
+Report 4 read as a generation bug: a floor with a locked chest and no key on it. It was measured
+first, because a placement fault is cheap to find and expensive to guess at — a probe over **1,320
+generated floors** counted 1,359 key locks and 1,359 keys laid down. **Not one floor short.**
+
+The key was always there. The CHEST was not, by the time the key was in hand. Walking onto a
+key-locked chest with no key ran the normal resolution path: `clear_pending` blanks the cell and
+erases `chest_of`, so reaching the chest before the key **destroyed** it. The player then found the
+key, and there was nothing left to open.
+
+`leave_pending` is the seam: step off an encounter without resolving it. The tile keeps its chest
+and its tier, `cleared` does not move, `TALLY_CHESTS` does not tick, and the floor's quota is
+untouched — because none of that is true yet.
+
+**And leaving it standing opens a farming loop, which is why the gold moved.** The chest paid its
+gold before the lock was even tested. A chest that stays on the floor and pays gold every time you
+walk onto it is a tile you farm, so the gold and the rope roll now happen only on the visit that
+actually takes the chest. Nothing is paid for failing to open one.
+
+This is the one lock where "not yet" is a true answer, and only this one. A vault reads the run and
+gives its verdict; coming back does not change who you are. A key is a thing lying on this floor
+that you can go and get, so the chest waits.
+
+#### The crawl's foot was two buttons nobody pressed
+
+D114 spent a whole entry getting `Cards` and `Menu` to share one row at the bottom of the crawl
+without slicing the second in half. The right answer was that neither belonged there: the two
+least-pressed controls on the screen held its widest band, at the end of the reading order, on the
+screen with more turns in it than any other.
+
+`Cards` is gone rather than moved — it opened the Collection mid-run, which is the screen for
+fusing BETWEEN runs, so nothing on it could be pressed and it was a way out of the crawl dressed as
+a feature. `Menu` is in the top right, where every other screen in this game keeps it, and Escape
+runs the same Callable. The floor viewport gets the height back.
+
+#### The elite's panel stopped fitting, and the fix was width
+
+Adding the take button pushed an elite's reward panel to **816px of a 688px frame**. D300 gave that
+panel a scroll, so nothing was lost — but a reward pick you have to scroll is a panel that does not
+fit, however reachable the bottom is.
+
+Shrinking the cards was the obvious answer and the wrong one: the faces were already squashed to
+0.62 of their height. The panel was tall and narrow inside a frame that is wide, so the relic band
+and the three card sets share one `HFlowContainer` — side by side while the frame is wide enough,
+wrapped the moment it is not. The row is as tall as the taller of the two (391px) instead of their
+sum. That is the whole 128px and 143 more, it needs no number tuned for one screen size, and it is
+the same rule the panel itself follows: fit-shaped rather than measured.
+
+The band's heading went into the reader's resting text on the way, which is 46px and reads better —
+a line explaining an offer belongs in the space that then explains each item of it.

@@ -803,3 +803,11 @@ func resume_scene() -> String:
 func clear_node(_node: Dictionary) -> void:
 	if traversal != null:
 		traversal.clear_pending()
+
+## Walk away from an encounter that did NOT resolve, leaving it standing (D307). See
+## `TraversalIso.leave_pending` — the chest screen is the only caller, for a lock it could not open.
+func leave_node(_node: Dictionary) -> void:
+	if traversal != null and traversal.has_method("leave_pending"):
+		traversal.leave_pending()
+	elif traversal != null:
+		traversal.clear_pending()

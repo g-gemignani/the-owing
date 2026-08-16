@@ -2266,17 +2266,33 @@ func _offer_rewards() -> void:
 	head.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	head.custom_minimum_size.x = _reward_width()
 
-	# The relic offer goes FIRST, above the cards. It is the bigger decision — a relic changes a
-	# rule for the rest of the run and a card changes the deck by one — and the panel should read
-	# in that order (D234).
+	# The relic offer and the card sets share ONE flow row (D307). Stacked, an elite's panel needs
+	# 816px of a 688px frame — the relic band is 263 of it — so the panel scrolled, and a reward
+	# pick you have to scroll is a panel that does not fit however reachable the bottom is.
+	#
+	# `HFlowContainer` and not a hand-written split: it lays the two beside each other while the
+	# frame is wide enough and wraps them the moment it is not. That is the same rule the panel
+	# itself follows — fit-shaped rather than measured — and it is what makes one layout right on a
+	# 16:9 desktop and on a phone held upright. Side by side the row is as tall as the taller of
+	# the two (391px) instead of their sum, which is the whole 128px and 143 more.
+	#
+	# The relic offer is FIRST in the flow, so it is left of the cards when they sit together and
+	# above them when they wrap. It is the bigger decision — a relic changes a rule for the rest of
+	# the run and a card changes the deck by one — and the panel reads in that order either way
+	# (D234).
+	var offers := HFlowContainer.new()
+	offers.add_theme_constant_override("h_separation", UITheme.sep(20))
+	offers.add_theme_constant_override("v_separation", UITheme.sep())
+	offers.alignment = FlowContainer.ALIGNMENT_CENTER
+	offers.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reward_box.add_child(offers)
 	if not relic_offer.is_empty():
-		_build_relic_band()
-		UI.spacer(reward_box)
+		_build_relic_band(offers)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", UITheme.sep())
 	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	reward_box.add_child(row)
+	offers.add_child(row)
 	var rbase := UITheme.reward_card_size()
 	var rw := Icons.fit_card_width(3, rbase.x,
 		get_viewport_rect().size.x - UITheme.px(40), float(UITheme.sep()))
@@ -2357,18 +2373,22 @@ func _reward_width() -> float:
 ## The control itself is `UI.relic_offer_row`, because a chest offers relics the same way and two
 ## copies of a row this fiddly would not stay equal. This function owns only what is the ELITE's:
 ## the sentence above it, and what taking one does to the run.
-func _build_relic_band() -> void:
+func _build_relic_band(parent: Node) -> void:
 	var band := VBoxContainer.new()
 	band.add_theme_constant_override("separation", UITheme.sep(4))
 	band.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	reward_box.add_child(band)
+	band.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	parent.add_child(band)
+	# As wide as its own row of tiles and no wider. The band stands BESIDE the three card sets now
+	# (D307), so a prose width picked for the whole panel would make the column too wide for the
+	# two to share a line and the flow would wrap them for nothing.
+	UI.relic_offer_row(band, relic_offer, _relic_band_width(), _on_relic_picked, "",
+		"The elite was carrying three. Take one — it is yours until this run ends.")
 
-	var rl := UI.label(band, "The elite was carrying three. Take one — it is yours until this run ends.")
-	rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	rl.custom_minimum_size.x = _reward_width()
-	UI.hoverable(rl, "Relics are found, never owned. They leave with the run, win or lose.")
-
-	UI.relic_offer_row(band, relic_offer, _reward_width(), _on_relic_picked)
+## The relic band's width: its own tiles, side by side, and the gaps between them.
+func _relic_band_width() -> float:
+	var n := maxi(1, relic_offer.size())
+	return UITheme.px(UI.RELIC_TILE_W) * float(n) + float(UITheme.sep()) * float(n - 1)
 
 ## One of the three taken. The other two are put out where they stand by `UI.relic_offer_row`.
 ##

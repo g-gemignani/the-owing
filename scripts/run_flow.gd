@@ -107,11 +107,33 @@ static func _rest_choice(view: Node, node: Dictionary, on_resolved: Callable) ->
 	# a run accumulates, and Sharpen is the only in-run thinning the game has.
 	if GameState.can_temper_run_card():
 		UI.button(col, "Temper  —  raise one card a level, for this run", func():
-			UI.card_picker(host, GameState.run_deck, "Put which card to the stone?",
+			# With a PREVIEW (D307). The grid shows what each card is NOW and the whole question
+			# here is what it BECOMES, so committing on the first press asked the player to choose
+			# between six numbers none of which were on screen. Reported as "it is not possible to
+			# see how the upgrade will affect the card".
+			#
+			# `level_up_text` is the card's own account of its next level, and it is the same
+			# sentence the collection quotes when it sells that level for copies and gold — so the
+			# camp and the Collection screen cannot describe one level two ways.
+			# Only the cards a temper can actually raise. `temper_run_card` refuses one already at
+			# its cap, so offering it would be a press that does nothing — and the player would be
+			# reading the grid for which of them are eligible instead of which one they want.
+			var stone: Array = GameState.run_deck.filter(
+				func(c: CardData) -> bool: return c.level < c.level_cap())
+			UI.card_picker(host, stone, "Put which card to the stone?",
 				func(card):
 					GameState.temper_run_card(card)
 					veil.queue_free()
-					_finish_rest(node, on_resolved)))
+					_finish_rest(node, on_resolved),
+				func(card: CardData) -> String:
+					if card.level >= card.level_cap():
+						return "%s is at Lv%d, its cap — the stone has nothing left to give it." % [
+							card.name, card.level]
+					var gain: String = card.level_up_text(card.level + 1)
+					return "%s  Lv%d → Lv%d:  %s" % [
+						card.name, card.level, card.level + 1,
+						gain if gain != "" else "no number on it changes"],
+				"Temper it"))
 	else:
 		UI.button(col, "Temper  —  every card is already at its cap")
 

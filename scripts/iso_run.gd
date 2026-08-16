@@ -586,7 +586,7 @@ func _foe_role(enemy_id: String, face: String) -> String:
 	foe_missing[role] = true
 	return ""
 
-## The way out, in the top right (D302). Kept as a member for the same reason the combat screen
+## The way out, in the top right (D307). Kept as a member for the same reason the combat screen
 ## keeps its own: a screen that can seal its exit has to be able to reach the button.
 var menu_btn: Button
 
@@ -635,7 +635,7 @@ func _build_ui() -> void:
 	top.add_child(risk_frame)
 	UI.hoverable(risk_frame, "AT RISK: found this run, but only kept if you beat the boss or use an Escape Rope.")
 
-	# ...and the way out, at the far right of the top row (D302). It was a full-width bar at the
+	# ...and the way out, at the far right of the top row (D307). It was a full-width bar at the
 	# BOTTOM of the screen beside a second bar called "Cards", under the floor and under the move
 	# legend — the two least-pressed controls on the screen holding the widest band on it, at the
 	# end of the reading order, on the screen with more turns in it than any other. Every other
@@ -721,7 +721,7 @@ func _build_ui() -> void:
 	spacer_bot.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	root.add_child(spacer_bot)
 
-	# The foot of this screen is EMPTY now (D302). It held two full-width bars — `Cards` and
+	# The foot of this screen is EMPTY now (D307). It held two full-width bars — `Cards` and
 	# `Menu` — and D114 spent its whole entry getting them to share one row without slicing the
 	# second in half. The right answer was that neither belonged there.
 	#

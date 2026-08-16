@@ -532,19 +532,25 @@ static func fixed_line(parent: Node, height: float) -> Label:
 	box.add_child(l)
 	return l
 
-## The four measurements of a relic tile, unscaled (D300).
+## The measurements of a relic tile, unscaled (D300).
 const RELIC_TILE_W := 132.0
 const RELIC_TILE_H := 116.0
-const RELIC_ICON := 56.0
+## The gap between the tile's rect and its contents. A carved frame draws its border inside the
+## rect, so without this a two-line name sits on top of the border (D307).
+const RELIC_TILE_PAD := 7.0
+## Two lines at the shipped body size, reserved for the name whatever the name is. The longest in
+## the catalogue is "Chipped Whetstone", which wraps to two at this tile width; a one-word relic
+## simply centres in the same band, so every tile in a row has its picture at the same height.
+const RELIC_NAME_H := 38.0
 ## The height the description line RESERVES before anything has been pointed at, which is the whole
 ## reason the line can be there at all — see `fixed_line`.
 ##
-## Three lines at the shipped body size. The longest reader string the catalogue can produce is
-## `barrow_wall`'s — a name, an 84-character description and the met-or-not clause, about 140
-## characters — which wraps to two at the reward panel's prose width; the third is the margin a
-## longer relic written tomorrow gets for free. A reserve of two, at 44px, was measured on screen:
-## it moved the Skip button by 5px.
-const RELIC_READER_H := 62.0
+## Four lines at the shipped body size, measured against the band's own width rather than the
+## panel's. The longest reader string the catalogue can produce is `barrow_wall`'s — a name, an
+## 84-character description and the met-or-not clause, about 140 characters — and the band is a
+## column three tiles wide now (D307), so the same text wraps further than it did across 760px.
+## A reserve of two, at 44px, was measured on screen: it moved the Skip button by 5px.
+const RELIC_READER_H := 84.0
 
 ## An offer of relics as ICONS with one reader line under them, and the press that takes one (D300).
 ##
@@ -562,46 +568,136 @@ const RELIC_READER_H := 62.0
 ## in place, so every control below the row is exactly where the player aimed at it. Rebuilding the
 ## panel to remove the row is what moved the buttons around.
 ##
-## On a touchscreen the first tap fills the reader and a second tap on the SAME tile commits — the
-## gesture `card_button` already teaches for a card. On a desktop hovering fills it and one click
-## commits, unchanged. A relic is a rule for the rest of the run, so a finger that cannot hover has
-## to be able to find out what it is buying before it buys it.
+## **A tile SELECTS and a button TAKES (D307).** Nothing a tile does can spend the offer.
+##
+## It shipped as the two-tap dance `card_button` teaches — first tap reads, second tap on the same
+## tile commits — and that gesture is wrong for a row of three. The tap that commits is only safe
+## while "have I read this one" is a fact about the LAST thing tapped, and a tile remembered it for
+## ever: tap the first, tap the second, come back to the first and it was taken without ever
+## showing its text a second time. Reported off a phone, and it is the worst class of bug this
+## screen can have, because a relic is a rule for the rest of the run and the offer does not
+## come back.
+##
+## So there is no gesture to learn and no state to remember. Every press of a tile does one thing —
+## reads it and selects it, as many times as you like — and one named button below spends the offer.
+## Desktop and touch behave identically, which is the other half of the fix: a rule that only holds
+## on one input is a rule two people describe differently.
+##
+## The button is built DISABLED and stays in place, so nothing under it moves when a selection
+## happens, and it carries a fixed minimum width so swapping its label cannot make it jump either.
 ##
 ## `on_take` is called with the relic id. The caller owns everything that happens then — earning it,
 ## writing the save, what the log says — because those three differ between the two screens and the
 ## drawing does not. `tail` is the caller's extra clause on the reader and the hover.
 static func relic_offer_row(parent: Node, offer: Array, reader_width: float,
-		on_take: Callable, tail: String = "") -> HBoxContainer:
+		on_take: Callable, tail: String = "", intro: String = "") -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", UITheme.sep())
 	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	parent.add_child(row)
 
+	# The reader RESTS on the caller's intro sentence and is overwritten by whichever relic is
+	# pointed at. That sentence used to be a label of its own above the row, which is 46px of a
+	# panel that had 128 too few — and a line explaining an offer belongs in the space that
+	# explains the offer, not stacked on top of it.
 	var reader := fixed_line(parent, UITheme.px(RELIC_READER_H))
+	reader.text = intro
 	reader.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	(reader.get_parent() as Control).custom_minimum_size.x = reader_width
 	reader.add_theme_color_override("font_color", Color(0.92, 0.88, 0.74))
+
+	var take := Button.new()
+	UITheme.style_button(take)
+	take.disabled = true
+	take.text = RELIC_TAKE_IDLE
+	take.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	# As wide as the row of tiles it belongs to, so the two labels below cannot resize it and it
+	# reads as the row's own control rather than as a button that happens to be under it.
+	take.custom_minimum_size.x = UITheme.px(RELIC_TILE_W) * float(maxi(1, offer.size())) \
+		+ float(UITheme.sep()) * float(maxi(0, offer.size() - 1))
+	parent.add_child(take)
+	hoverable(take, "Pick one above to read it. This takes the one you picked, and the other two are gone.")
+
+	# The selection, shared by every tile's handler and the button's. A Dictionary because it is
+	# passed by reference into the closures, which is what lets a tile write what the button reads.
+	var chosen := {"id": "", "tile": null}
 
 	var tiles: Array[Button] = []
 	for rid in offer:
 		var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
 		if rd == null:
 			continue
-		tiles.append(_relic_tile(row, rd, reader, tiles, on_take, tail))
+		tiles.append(_relic_tile(row, rd, reader, tiles, take, chosen, tail))
+
+	take.pressed.connect(func() -> void:
+		var picked := String(chosen["id"])
+		if picked == "":
+			return
+		var kept: Button = chosen["tile"]
+		for t in tiles:
+			t.disabled = true
+			if t != kept:
+				t.modulate = Color(1, 1, 1, RELIC_LOST_DIM)
+		take.disabled = true
+		take.text = RELIC_TAKE_DONE
+		if on_take.is_valid():
+			on_take.call(picked, reader))
 	return row
 
-static func _relic_tile(row: HBoxContainer, rd: RelicData, reader: Label,
-		siblings: Array[Button], on_take: Callable, tail: String) -> Button:
+## What the take button says with nothing picked, with something picked, and once it is spent.
+## Three fixed strings rather than the relic's name, so the control never has to be re-measured —
+## and the disabled one states its own refusal, which is the rule every other refusing button on
+## this project follows (D71).
+const RELIC_TAKE_IDLE := "Pick one above first"
+const RELIC_TAKE_READY := "Take this one"
+const RELIC_TAKE_DONE := "Taken"
+## How far an unpicked tile recedes while another is selected, and how far the two you did not
+## take recede once the offer is spent. Two numbers, because they say different things: the first
+## is reversible and the second is final.
+const RELIC_UNPICKED_DIM := 0.55
+const RELIC_LOST_DIM := 0.35
+
+## The picture-and-name tile a relic is drawn as, wherever one is drawn (D307).
+##
+## Three surfaces show relics — the elite's offer, a chest's, and the Relics screen — and until
+## this they were three different drawings of the same object: two rows of icons and one list of
+## names with the effect spelled out beside it. A relic should look like a relic everywhere, so
+## that the thing you met on the reward panel is recognisable on the screen that records it.
+##
+## `dim` recedes the whole tile, which is how an unmet slot is drawn on the catalogue: by ink, so
+## met and unmet stay one decision rather than a badge repeated three dozen times.
+static func relic_face(parent: Node, rd: RelicData, dim: float = 0.0) -> Button:
 	var b := Button.new()
 	UITheme.style_button(b)
 	b.custom_minimum_size = Vector2(UITheme.px(RELIC_TILE_W), UITheme.px(RELIC_TILE_H))
-	row.add_child(b)
+	if dim > 0.0:
+		b.modulate = Color(1, 1, 1, 1.0 - dim)
+	parent.add_child(b)
 
+	# INSET from the button's own rect, not anchored flush to it. A carved frame draws its border
+	# inside that rect, so a column pinned to the full rect puts the bottom of a two-line name ON
+	# the border — which is what "Chipped Whetstone" and "Surgeon's Thread" did in the capture, and
+	# what a one-word relic never showed.
 	var col := VBoxContainer.new()
 	col.set_anchors_preset(Control.PRESET_FULL_RECT)
+	col.offset_left = UITheme.px(RELIC_TILE_PAD)
+	col.offset_top = UITheme.px(RELIC_TILE_PAD)
+	col.offset_right = -UITheme.px(RELIC_TILE_PAD)
+	col.offset_bottom = -UITheme.px(RELIC_TILE_PAD)
 	col.add_theme_constant_override("separation", UITheme.sep(2))
 	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	b.add_child(col)
+
+	# The name is laid down FIRST, so it takes its two lines and the picture gets whatever is
+	# left. The other order gives the picture its 56px floor and lets the name overflow, which is
+	# the same bug one step further along: the tile is a fixed height and the name is the part
+	# that must not be cut.
+	var nl := label(col, rd.name)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	nl.custom_minimum_size.y = UITheme.px(RELIC_NAME_H)
+	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nl.add_theme_color_override("font_color", Icons.rarity_colour(rd.rarity))
 
 	# The painting, when there is one. A relic with no file yet falls back to its name alone, which
 	# is the same one-file-at-a-time contract the relics screen runs on (D121) — a half-painted set
@@ -612,15 +708,15 @@ static func _relic_tile(row: HBoxContainer, rd: RelicData, reader: Label,
 		pic.texture = art
 		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		pic.custom_minimum_size.y = UITheme.px(RELIC_ICON)
 		pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
 		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		col.add_child(pic)
+		col.move_child(pic, 0)
+	return b
 
-	var nl := label(col, rd.name)
-	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	nl.add_theme_color_override("font_color", Icons.rarity_colour(rd.rarity))
+static func _relic_tile(row: HBoxContainer, rd: RelicData, reader: Label,
+		siblings: Array[Button], take: Button, chosen: Dictionary, tail: String) -> Button:
+	var b := relic_face(row, rd)
 
 	# Met or not is the interesting half of a relic you are being offered, and the collection screen
 	# is two menus away from this decision (D205b). It rides the reader line as well as the hover,
@@ -632,19 +728,17 @@ static func _relic_tile(row: HBoxContainer, rd: RelicData, reader: Label,
 	hoverable(b, "%s\n%s\n%s%s" % [rd.name, rd.description, met, tail])
 	if not touch_ui():
 		b.mouse_entered.connect(say)
+	# Idempotent, on purpose: pressing a tile reads it and selects it, and pressing it again does
+	# exactly the same thing. There is no "second press" to get wrong, which is the whole of D307.
 	b.pressed.connect(func() -> void:
-		if touch_ui() and not b.has_meta("read"):
-			b.set_meta("read", true)
-			say.call()
-			Audio.play("ui_select")
-			return
 		say.call()
+		chosen["id"] = rd.id
+		chosen["tile"] = b
 		for t in siblings:
-			t.disabled = true
-			if t != b:
-				t.modulate = Color(1, 1, 1, 0.35)
-		if on_take.is_valid():
-			on_take.call(rd.id, reader))
+			t.modulate = Color(1, 1, 1, 1.0 if t == b else RELIC_UNPICKED_DIM)
+		take.disabled = false
+		take.text = RELIC_TAKE_READY
+		Audio.play("ui_select"))
 	return b
 
 ## How wide a button is when it is in a column and nothing narrows it (D116).
@@ -1035,8 +1129,21 @@ static func card_filter_bar(parent: Node, on_change: Callable,
 ##
 ## An overlay rather than a screen, so it works identically from a shop, a rest and
 ## any traversal view without one of them having to know how to route back.
+## `preview` turns the picker from one press into two, and is what makes a choice the player can
+## READ before they make it (D307).
+##
+## Without it a card in this grid IS the commit: press it and the thing happens. That is right for
+## "leave which card behind", where the card in front of you is the whole question — and wrong for
+## the camp's Temper, where the question is what the card BECOMES and the grid shows what it is
+## now. Reported as "it is not possible to see how the upgrade will affect the card".
+##
+## Given a `preview`, a press SELECTS: the picked card lights up, `preview.call(card)` returns one
+## line saying what committing would do to it, and a named button below spends the choice. The line
+## sits in a `fixed_line`, so filling it cannot move the button under the hand that is reaching for
+## it — the same rule the relic offer runs on, and for the same reason.
 static func card_picker(host: Control, deck: Array, title: String,
-		on_pick: Callable) -> Control:
+		on_pick: Callable, preview: Callable = Callable(),
+		confirm_text: String = "Do it") -> Control:
 	var veil := ColorRect.new()
 	veil.color = Color(0, 0, 0, 0.82)
 	veil.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1067,10 +1174,42 @@ static func card_picker(host: Control, deck: Array, title: String,
 	scroll.add_child(grid)
 
 	var size := UITheme.card_size() * 0.8
-	for c in deck:
-		card_button(grid, c, size, func(): 
+	if not preview.is_valid():
+		for c in deck:
+			card_button(grid, c, size, func():
+				veil.queue_free()
+				on_pick.call(c))
+	else:
+		var line := fixed_line(col, UITheme.px(PICKER_READER_H))
+		line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		line.add_theme_color_override("font_color", Color(0.72, 0.90, 0.70))
+		var go := Button.new()
+		UITheme.style_button(go)
+		go.disabled = true
+		go.text = PICKER_IDLE
+		go.custom_minimum_size = Vector2(UITheme.px(BUTTON_WIDTH), UITheme.px(40))
+		go.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		col.add_child(go)
+		var chosen := {"card": null}
+		var faces: Array[Button] = []
+		for c in deck:
+			var face := card_button(grid, c, size, Callable(), "", null, "", true)
+			faces.append(face)
+			# Idempotent, like the relic tiles: pressing a card reads it and selects it, and
+			# pressing it again does the same thing. Nothing here can commit but the button.
+			face.pressed.connect(func() -> void:
+				chosen["card"] = c
+				line.text = String(preview.call(c))
+				for f in faces:
+					(f.get_parent() as Control).modulate = Color(
+						1, 1, 1, 1.0 if f == face else PICKER_UNPICKED_DIM)
+				go.disabled = false
+				go.text = confirm_text)
+		go.pressed.connect(func() -> void:
+			if chosen["card"] == null:
+				return
 			veil.queue_free()
-			on_pick.call(c))
+			on_pick.call(chosen["card"]))
 
 	var cancel := Button.new()
 	cancel.text = "Never mind"
@@ -1084,6 +1223,16 @@ static func card_picker(host: Control, deck: Array, title: String,
 		veil.queue_free())
 	col.add_child(cancel)
 	return veil
+
+## The picker's preview line: three lines at the shipped body size, which is what the wordiest
+## `level_up_text` in the catalogue wraps to at the picker's width. Reserved before anything is
+## picked, so filling it cannot move the confirm button.
+const PICKER_READER_H := 62.0
+## What the confirm button says before a card is picked. It states its own refusal, the way every
+## other refusing button here does (D71).
+const PICKER_IDLE := "Pick a card above first"
+## How far the cards you did not pick recede while one is selected.
+const PICKER_UNPICKED_DIM := 0.5
 
 ## The narrowest name strip that is still a name strip — D117.
 ##
