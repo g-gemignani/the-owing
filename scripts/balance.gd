@@ -3938,7 +3938,7 @@ static func _loose_bundle(pool: Array, tier: int, difficulty: int, size: int) ->
 
 ## The reward screen's verdict on a whole bundle, in the same bands `card_verdict` uses.
 ##
-## **Nothing draws this any more (D301).** The reward panel printed it under each set, and printing
+## **Nothing draws this any more (D300).** The reward panel printed it under each set, and printing
 ## it is the game making the decision on the player's behalf: a mean of card power is a fact about
 ## arithmetic, and the whole premise of D297 is that a named *direction* beats an average. The
 ## cards say what they do and the dilution line says what taking them costs.

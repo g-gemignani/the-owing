@@ -153,6 +153,10 @@ func _on_choice(i: int) -> void:
 		if not offer.is_empty():
 			var rid := String(offer[0])
 			GameState.earn_relic(rid)
+			# Written NOW, for the reason the other two drop sites are (D300): a relic the run
+			# holds is a relic the pool will not offer again, and the run only holds what it
+			# managed to write down before the app was killed.
+			GameState.flush_save()
 			var r := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
 			lines.append("Took %s — yours until this run ends." % (r.name if r != null else rid))
 		else:

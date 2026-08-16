@@ -396,6 +396,40 @@ func _init() -> void:
 	if eV.card_damage(press) != undebuffed + press.damage_per_debuff * 3:
 		fails += 1; print("FAIL pressure does not count the stacks")
 
+	# --- the face carries the target's Vulnerable (D300) -----------------------
+	#
+	# D50 says a card must not lie about itself, and Vulnerable was the one status the face could
+	# not see: `card_damage` is the attacker's half — Strength, Weak, the percent relics — and the
+	# defender's half lived inside `Combatant.take_damage`. So a card read 8, the enemy wore
+	# Vulnerable, and it dealt 12. Vulnerable is also the REASON to play the card that applies it,
+	# which made this the one number a player most needed to watch change and could not.
+	var eVF := _fight(cond)
+	var hit := _card("hack")
+	var flat: int = eVF.card_face_damage(hit)
+	if flat != eVF.card_damage(hit):
+		fails += 1
+		print("FAIL an undebuffed face reads %d and the swing is %d" % [flat, eVF.card_damage(hit)])
+	eVF.enemies[0].vulnerable = 2
+	var want_face := int(round(float(eVF.card_damage(hit)) * Combatant.VULNERABLE_MULT))
+	if eVF.card_face_damage(hit) != want_face:
+		fails += 1
+		print("FAIL the face reads %d against a Vulnerable target and %d lands" % [
+			eVF.card_face_damage(hit), want_face])
+	# ...and it is what ACTUALLY lands, which is the whole point. Block off, so the only thing
+	# between the swing and the health bar is the multiplier being tested.
+	eVF.enemies[0].block = 0
+	var before_hp: int = eVF.enemies[0].hp
+	var face_says: int = eVF.card_face_damage(hit)
+	eVF.enemies[0].take_damage(eVF.card_damage(hit))
+	if before_hp - eVF.enemies[0].hp != face_says:
+		fails += 1
+		print("FAIL the face promised %d and %d came off" % [
+			face_says, before_hp - eVF.enemies[0].hp])
+	# The attacker's half must not be double-counted: `card_damage` stays the pre-Vulnerable
+	# number, because the simulators compose it themselves with `predicted_damage`.
+	if eVF.card_damage(hit) == eVF.card_face_damage(hit):
+		fails += 1; print("FAIL card_damage picked up the target's Vulnerable")
+
 	# payoff: the exhaust tally, and the projection that keeps Cull's face honest
 	var eX := _fight(cond)
 	var burn := _card("cull")

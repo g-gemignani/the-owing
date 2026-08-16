@@ -21,6 +21,17 @@ const SCENES := [
 	"res://scenes/Shop.tscn",
 ]
 
+## The screens that list cards as ROWS, and so owe the player both ways into the full card
+## (D205b). The shop is not one of them any more (D300): it lays its stock out as painted faces at
+## reward size, so the whole card is already on the shelf and there is no thumbnail or clipped
+## sentence to click through to. Removing it from this list is not dropping the guarantee — the
+## guarantee was "you can see the card you are buying", and the shop now answers it by drawing the
+## card rather than by promising one behind a 28px picture.
+const LIST_SCENES := [
+	"res://scenes/Collection.tscn",
+	"res://scenes/DeckBuilder.tscn",
+]
+
 var _fails := 0
 
 func _ready() -> void:
@@ -32,7 +43,11 @@ func _ready() -> void:
 
 	for path in SCENES:
 		await _check(path)
+	for path in LIST_SCENES:
 		await _check_preview_reachable(path)
+	# ...and the shop still has to show the card it is selling, by whichever means. Drawn as a
+	# real face now, so the check is that a face is there at all.
+	await _check_shop_draws_its_stock()
 
 	# the collection specifically must explain each card, not just be hoverable
 	await _check_collection_explains()
@@ -75,6 +90,45 @@ func _check(path: String) -> void:
 ## the tooltip text, not a node name or a class: `inspect_thumb` and `inspect_text` both
 ## promise the player the same thing in words, and that promise is the feature.
 const PREVIEW_PROMISE := "click to see the whole card"
+
+## The shop's own half of D205b, after the stall stopped being a table (D300).
+##
+## The rule has not moved: the one list where a card costs gold and cannot be given back must show
+## the player the card. It is answered differently now — the face IS the row — so the check is that
+## every item on the shelf carries a real painted card and that none of those faces buys anything
+## when pressed. The second half is the reason the first is safe: a card you can read by tapping is
+## only an improvement if the tap cannot spend your gold.
+func _check_shop_draws_its_stock() -> void:
+	var scene := load("res://scenes/Shop.tscn") as PackedScene
+	if scene == null:
+		return
+	var inst := scene.instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	var faces := 0
+	var pressable := 0
+	for c in _controls(inst):
+		if not c.has_meta("card_id"):
+			continue
+		faces += 1
+		for kid in c.get_children():
+			var b := kid as Button
+			if b != null and b.pressed.get_connections().size() > 0:
+				pressable += 1
+	# Guarded, because "0 faces for 0 cards" is the shape this check would pass on for ever if the
+	# merchant ever stopped rolling stock in a test save.
+	if faces == 0:
+		_fails += 1
+		print("FAIL the shop drew no card faces at all")
+	elif faces != GameState.shop_stock.size():
+		_fails += 1
+		print("FAIL the shop stocks %d cards and draws %d faces" % [
+			GameState.shop_stock.size(), faces])
+	if pressable > 0:
+		_fails += 1
+		print("FAIL %d shop card faces commit when pressed; only the price button may" % pressable)
+	inst.queue_free()
+	await get_tree().process_frame
 
 func _check_preview_reachable(path: String) -> void:
 	var scene := load(path) as PackedScene

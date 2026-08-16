@@ -282,7 +282,7 @@ func _the_reward_row_carries_one_note_per_card() -> void:
 		if face.tooltip_text.contains("You own") \
 				or face.tooltip_text.contains("is not in your collection"):
 			notes += 1
-		# D298: a card on this panel is for READING. Every one of them used to take the whole
+		# D300: a card on this panel is for READING. Every one of them used to take the whole
 		# set when pressed, which on a phone meant the second tap that finished reading a card
 		# also bought the two beside it that you had not read yet.
 		if face.pressed.get_connections().size() > 0:
@@ -315,7 +315,7 @@ func _the_reward_row_carries_one_note_per_card() -> void:
 		_fails += 1; print("FAIL %d Skip buttons on the reward panel" % skips)
 
 	# ...and the whole column has to fit the frame it is centred in. The panel is a scroll now
-	# (D298), so overflow is reachable rather than lost off the bottom edge — but needing to
+	# (D300), so overflow is reachable rather than lost off the bottom edge — but needing to
 	# scroll a reward pick is still a panel that does not fit, and this is the check that says
 	# so. Measured against the SCROLL's rect, which is the frame minus the screen padding.
 	#
@@ -336,7 +336,7 @@ func _the_reward_row_carries_one_note_per_card() -> void:
 	inst.queue_free()
 	await get_tree().process_frame
 
-## --- 6. the relic band holds still when a relic is taken (D298) -------------
+## --- 6. the relic band holds still when a relic is taken (D300) -------------
 ##
 ## Reported as "choosing a relic moves the buttons around". Taking one used to free every child of
 ## the panel and build it again without the relic row, so the three sets and the Skip button jumped
@@ -390,7 +390,7 @@ func _taking_a_relic_moves_nothing() -> void:
 			continue
 		if b.text.begins_with("Skip"):
 			skip = b
-		elif b.custom_minimum_size.x == UITheme.px(inst.RELIC_TILE_W):
+		elif b.custom_minimum_size.x == UITheme.px(UI.RELIC_TILE_W):
 			tiles.append(b)
 	if skip == null:
 		_fails += 1; print("FAIL no Skip button on an elite's reward panel"); return
@@ -416,7 +416,7 @@ func _taking_a_relic_moves_nothing() -> void:
 			print("FAIL a relic tile is still live after one was taken")
 			break
 
-	# ...and it is ON DISK, now (D298). This is the "I already took that relic and it was offered
+	# ...and it is ON DISK, now (D300). This is the "I already took that relic and it was offered
 	# again" report, and it was never a rolling bug: `relic_offer` excludes `GameState.run_relics`,
 	# and the run only holds what it managed to write down. The pick used to be saved when the
 	# reward RESOLVED — a set taken or Skip pressed — so a phone that lost the app in between came

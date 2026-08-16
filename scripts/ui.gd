@@ -506,6 +506,147 @@ static func label(parent: Node, text: String, wrap: bool = true) -> Label:
 	parent.add_child(l)
 	return l
 
+## A wrapped label inside a box of FIXED height, for a line whose text changes while the screen is
+## being read (D300).
+##
+## The relic offers use it: pointing at a relic fills a line under the row with what that relic
+## does. A plain `Label` reports its wrapped text as its minimum height, so filling it pushes
+## everything below it down — which is the same complaint ("the buttons move around") that taking a
+## relic used to cause by rebuilding the panel, arriving one hover earlier.
+##
+## The box clips and the label is anchored inside it, so the label's own minimum cannot reach the
+## layout at all. Reserve enough height for the longest text the caller can put in it; text past
+## that is cut rather than allowed to move the screen.
+static func fixed_line(parent: Node, height: float) -> Label:
+	var box := Control.new()
+	box.custom_minimum_size.y = height
+	box.clip_contents = true
+	box.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(box)
+	var l := Label.new()
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	l.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	l.set_anchors_preset(Control.PRESET_FULL_RECT)
+	l.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	box.add_child(l)
+	return l
+
+## The four measurements of a relic tile, unscaled (D300).
+const RELIC_TILE_W := 132.0
+const RELIC_TILE_H := 116.0
+const RELIC_ICON := 56.0
+## The height the description line RESERVES before anything has been pointed at, which is the whole
+## reason the line can be there at all — see `fixed_line`.
+##
+## Three lines at the shipped body size. The longest reader string the catalogue can produce is
+## `barrow_wall`'s — a name, an 84-character description and the met-or-not clause, about 140
+## characters — which wraps to two at the reward panel's prose width; the third is the margin a
+## longer relic written tomorrow gets for free. A reserve of two, at 44px, was measured on screen:
+## it moved the Skip button by 5px.
+const RELIC_READER_H := 62.0
+
+## An offer of relics as ICONS with one reader line under them, and the press that takes one (D300).
+##
+## Two screens offer relics — the elite's reward panel and a chest — and both drew three BUTTONS,
+## each carrying the relic's whole rules text as its label. Three paragraphs side by side is the
+## widest and least readable control this game has had, and the paintings, one per relic and keyed
+## by id since D121, were on neither screen. So the picture is the tile, and the words go in one
+## line below that changes as you move across them.
+##
+## **The reader is built to its full height before anything is pointed at.** That is the whole
+## reason a hover line can be here: a label that grew when you pointed at something would push the
+## reward sets, or the chest's Continue, down the moment the cursor arrived.
+##
+## **Nothing is rebuilt when a relic is taken.** The taken tile stays where it is and the others dim
+## in place, so every control below the row is exactly where the player aimed at it. Rebuilding the
+## panel to remove the row is what moved the buttons around.
+##
+## On a touchscreen the first tap fills the reader and a second tap on the SAME tile commits — the
+## gesture `card_button` already teaches for a card. On a desktop hovering fills it and one click
+## commits, unchanged. A relic is a rule for the rest of the run, so a finger that cannot hover has
+## to be able to find out what it is buying before it buys it.
+##
+## `on_take` is called with the relic id. The caller owns everything that happens then — earning it,
+## writing the save, what the log says — because those three differ between the two screens and the
+## drawing does not. `tail` is the caller's extra clause on the reader and the hover.
+static func relic_offer_row(parent: Node, offer: Array, reader_width: float,
+		on_take: Callable, tail: String = "") -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", UITheme.sep())
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	parent.add_child(row)
+
+	var reader := fixed_line(parent, UITheme.px(RELIC_READER_H))
+	reader.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	(reader.get_parent() as Control).custom_minimum_size.x = reader_width
+	reader.add_theme_color_override("font_color", Color(0.92, 0.88, 0.74))
+
+	var tiles: Array[Button] = []
+	for rid in offer:
+		var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
+		if rd == null:
+			continue
+		tiles.append(_relic_tile(row, rd, reader, tiles, on_take, tail))
+	return row
+
+static func _relic_tile(row: HBoxContainer, rd: RelicData, reader: Label,
+		siblings: Array[Button], on_take: Callable, tail: String) -> Button:
+	var b := Button.new()
+	UITheme.style_button(b)
+	b.custom_minimum_size = Vector2(UITheme.px(RELIC_TILE_W), UITheme.px(RELIC_TILE_H))
+	row.add_child(b)
+
+	var col := VBoxContainer.new()
+	col.set_anchors_preset(Control.PRESET_FULL_RECT)
+	col.add_theme_constant_override("separation", UITheme.sep(2))
+	col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	b.add_child(col)
+
+	# The painting, when there is one. A relic with no file yet falls back to its name alone, which
+	# is the same one-file-at-a-time contract the relics screen runs on (D121) — a half-painted set
+	# is a row with pictures appearing in it, never a row of holes.
+	var art := PixelArt.relic_art(rd.id)
+	if art != null:
+		var pic := TextureRect.new()
+		pic.texture = art
+		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		pic.custom_minimum_size.y = UITheme.px(RELIC_ICON)
+		pic.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		col.add_child(pic)
+
+	var nl := label(col, rd.name)
+	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	nl.add_theme_color_override("font_color", Icons.rarity_colour(rd.rarity))
+
+	# Met or not is the interesting half of a relic you are being offered, and the collection screen
+	# is two menus away from this decision (D205b). It rides the reader line as well as the hover,
+	# because a hover is the one thing on this row a phone cannot show.
+	var met := "You have met this one before." if MetaState.seen_relic(rd.id) \
+		else "You have never seen this one."
+	var say := func() -> void:
+		reader.text = "%s — %s  (%s%s)" % [rd.name, rd.description, met, tail]
+	hoverable(b, "%s\n%s\n%s%s" % [rd.name, rd.description, met, tail])
+	if not touch_ui():
+		b.mouse_entered.connect(say)
+	b.pressed.connect(func() -> void:
+		if touch_ui() and not b.has_meta("read"):
+			b.set_meta("read", true)
+			say.call()
+			Audio.play("ui_select")
+			return
+		say.call()
+		for t in siblings:
+			t.disabled = true
+			if t != b:
+				t.modulate = Color(1, 1, 1, 0.35)
+		if on_take.is_valid():
+			on_take.call(rd.id, reader))
+	return b
+
 ## How wide a button is when it is in a column and nothing narrows it (D116).
 ##
 ## Read it the way `UITheme.button_height` is read: a designed size, not a ceiling.
@@ -1042,9 +1183,18 @@ static func animate_level_glow(node: CanvasItem, band: String) -> void:
 ## how many copies are in the collection — and it rides the same route `card_slot`
 ## gives its own: appended to the hover and handed to the inspect overlay, so a card
 ## held up at full size still says what the screen underneath it said (D174).
+## `tap_to_read` is for a card that is on screen to be READ and never pressed — a set on the
+## reward panel (D300). With no press action a touchscreen would otherwise do nothing at all with
+## it: a finger has no hover, so hover-to-enlarge never fires and the card is a thumbnail with
+## unreadable rules text on it. This installs the reveal half of the two-tap dance and not the
+## commit half — tap to open it, tap again to put it back, and nothing is ever bought.
+##
+## Opt-in rather than the default, because the default is what D220b fixed: on the collection grid
+## the taps belong to `CardGrid`, and a reveal handler installed there left every tapped card stuck
+## at 1.45 under an overlay with no mouse-exit coming to undo it.
 static func card_button(parent: Node, card: CardData, size: Vector2,
 		on_press: Callable, label: String = "", live: CombatEngine = null,
-		note: String = "") -> Button:
+		note: String = "", tap_to_read: bool = false) -> Button:
 	# A plain Control, NOT a Container. PanelContainer overrides its children's
 	# anchors and takes its own size from their minimum sizes — and a Button's
 	# minimum size grows with its wrapped description, so every card ended up a
@@ -1199,8 +1349,10 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	b.flat = true
 	b.set_anchors_preset(Control.PRESET_FULL_RECT)
 	# both surfaces read the same two numbers, so the face and the hover cannot
-	# disagree about what the card is about to do
-	var live_dmg: int = live.card_damage(card) if live != null else -1
+	# disagree about what the card is about to do.
+	# `card_face_damage` and not `card_damage`: the face has to carry the Vulnerable on the
+	# enemy it is pointed at, or the card that applied Vulnerable never shows what it bought.
+	var live_dmg: int = live.card_face_damage(card) if live != null else -1
 	var live_blk: int = live.card_block(card) if live != null else -1
 	var tail := "\n\n%s" % note if note != "" else ""
 	# What the FIGHT says about this card, which its own data cannot (D216). Two things,
@@ -1441,7 +1593,7 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# card to animate at all), so a buff landing mid-turn has to be able to change
 	# what the cards already on screen claim to do.
 	holder.set_meta("relabel", func(live2: CombatEngine) -> void:
-		var d2: int = live2.card_damage(card) if live2 != null else -1
+		var d2: int = live2.card_face_damage(card) if live2 != null else -1
 		var b2: int = live2.card_block(card) if live2 != null else -1
 		desc.text = card.effect_text(d2, b2)
 		# ...and the refusal is re-read with them. Energy is spent and health is lost
@@ -1506,7 +1658,20 @@ static func card_button(parent: Node, card: CardData, size: Vector2,
 	# card enlarged under an overlay and stuck that way, because nothing on a touchscreen
 	# ever sends the mouse-exit that would put it back. The desktop branch has always had
 	# this test; the touch branch never did.
-	if touch_ui() and on_press.is_valid():
+	if touch_ui() and not on_press.is_valid() and tap_to_read:
+		# Read-only on a phone: one tap opens the card, the next closes it. Routed through
+		# `_previewed` like the two-tap branch below, so opening a second card puts the first one
+		# back and the screen never ends up with two enlarged cards on it.
+		holder.set_meta("preview", open_card)
+		b.pressed.connect(func():
+			if _previewed != b:
+				_close_preview()
+				_previewed = b
+				open_card.call(true)
+				Audio.play("ui_select")
+				return
+			_close_preview())
+	elif touch_ui() and on_press.is_valid():
 		# TOUCH: a finger has no hover, so reading a card and committing to it must
 		# be two separate taps. Otherwise the only way to find out what a card does
 		# is to play it, which is exactly backwards — and the hover-to-enlarge that
@@ -1695,7 +1860,7 @@ static func inspect_card(anchor: Node, card: CardData, live: CombatEngine = null
 	# Everything the face cannot fit: rarity, cost, level, and the per-rule prose
 	# that the card's own text compresses into a phrase.
 	var side := _card_label(veil, Icons.card_tooltip(card,
-		live.card_damage(card) if live != null else -1,
+		live.card_face_damage(card) if live != null else -1,
 		live.card_block(card) if live != null else -1), Color(0.86, 0.84, 0.80))
 	side.clip_text = false
 	side.vertical_alignment = VERTICAL_ALIGNMENT_TOP

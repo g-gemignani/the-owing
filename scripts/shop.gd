@@ -9,39 +9,37 @@ const CARD_DIR := "res://resources/cards/"
 const DEFAULT_STOCK := ["hack", "cover", "stave_in", "shoulder", "clear_mind",
 	"put_the_fear", "work_up", "light_on_it", "set_stone"]
 
-## The merchant's stall is a GRID, and every row is built through the four helpers
-## below so that it stays one.
-##
-## It was not one. The three `Buy` buttons lined up with each other and the other two
-## services each sat somewhere else — three x positions down a column of four
-## controls — for the two reasons `packs_screen.gd` writes up at its own `Open`
-## column, and this is the same fix rather than a second one. First, a `Label`
-## reports its TEXT as its minimum width, so `custom_minimum_size.x` is not a floor
-## until `clip_text` makes it one: the thinning line is ~100 characters and grew
-## straight past its 520 to push `Remove` 300px right of the `Buy`s. Second, the card
-## rows lead with two icons and the service rows led with nothing, so even the two
-## honest floors started from different places; the services carry an empty gutter of
-## exactly the icons' width now, instead of a second number restating it.
-##
-## `ROW_LABEL_W` is measured against the longest string the content tables can
-## actually produce, not picked: 74 characters (`In and Out  [Common]  Deal 4 damage.
-## +4 from card 2. Gain 3 Block. Draw 1.`) across all 100 cards, which is ~570px at
-## the shipped font, and levelling only widens the numerals. The two service lines are
-## written to fit under it — the thinning line lost "for the rest of this run" to the
-## tooltip that already said it, which is what made room for the two numbers that are
-## the actual decision. `ACTION_W` is measured the same way, against
-## `Remove  (deck at minimum)` and `Remove  340g  (short 210)` at ~236px with the
-## carved frame's padding; like every width in this game it is a minimum, so a longer
-## label still grows rather than clipping.
-const ART_SIDE := 28.0
-const SYM_SIDE := 32.0
-const ROW_SEP := 10
-const ROW_LABEL_W := 600.0
-const ACTION_W := 250.0
+# The stall is a STALL: the goods are laid out as the things they are, and the price is under
+# each one (D300).
+#
+# It used to be a table — one row per item, a 28px thumbnail, a 32px effect symbol, 600px of
+# `clip_text` description and a `Buy 40 g` button in a column at the right. Everything about that
+# was measured and correct and none of it was a shop. The card you were spending on was a
+# thumbnail the width of a fingernail beside a sentence cut off mid-word, which is the one place
+# in this game where a card is bought with gold and the purchase cannot be undone. On a phone the
+# 600px column had nowhere to go at all.
+#
+# So the merchant lays the cards out at reward size, face up, priced. What the player compares is
+# the cards, the way they compare them at every other decision in the run — the same
+# `UI.card_button` the reward panel and the deck builder draw, so a card looks like itself
+# everywhere and hover, right-click-to-inspect and the touch reveal all come with it.
+#
+# The two SERVICES — healing and thinning — are tiles of the same height beside the cards rather
+# than rows under them. They compete with the cards for the same gold, so they belong on the same
+# shelf; a service in a list below reads as an afterthought, and thinning the deck is often the
+# better buy.
+
+## How many tiles the shelf is sized to hold across: the merchant's cards, plus the salve and the
+## thinning. Derived from `Balance.SHOP_CARD_OFFERS` rather than restated, so raising the stock
+## narrows the faces instead of running the row off the edge.
+const SERVICE_TILES := 2
+## A service tile's width, unscaled: narrower than a card, because it carries a line of prose and
+## a price rather than a picture, and two of them share the shelf with the cards.
+const SERVICE_W := 210.0
 
 var status_label: Label
 var msg_label: Label
-var stock_box: VBoxContainer
+var stock_box: HBoxContainer
 
 func _ready() -> void:
 	if GameState.shop_stock.is_empty():
@@ -71,50 +69,61 @@ func _build_ui() -> void:
 	msg_label = Label.new()
 	root.add_child(msg_label)
 
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(scroll)
-	stock_box = VBoxContainer.new()
-	stock_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	stock_box.add_theme_constant_override("separation", UITheme.sep(6))
-	scroll.add_child(stock_box)
+	# The shelf scrolls, and it scrolls SIDEWAYS as well: a phone held upright cannot fit three
+	# card faces and two service tiles across, and a stall you cannot reach the end of is a stall
+	# with goods you never knew were for sale. `UI.scroll` brings `DragScroll` with it, which is
+	# the only thing that pans a row of buttons under a finger (D225).
+	var shelf := UI.scroll(root)
+	shelf.alignment = BoxContainer.ALIGNMENT_CENTER
+	shelf.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	stock_box = HBoxContainer.new()
+	stock_box.add_theme_constant_override("separation", UITheme.sep(12))
+	stock_box.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	shelf.add_child(stock_box)
 
 	UI.exit_button(root, "Leave", _on_leave, 40.0)
 
-# --- the stall grid (see the constants above) ---------------------------------
+# --- the stall (see the constants above) --------------------------------------
 
-func _stall_row(parent: Node) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", UITheme.sep(ROW_SEP))
-	parent.add_child(row)
-	return row
+## One thing on the shelf: whatever is on offer, and under it the one control that buys it.
+##
+## Every item is this shape — a card, the salve, the thinning — so the prices line up along one
+## band across the stall and "what does this cost" is answered by looking down rather than by
+## reading a row across to a button column.
+func _stall(width: float) -> VBoxContainer:
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", UITheme.sep(6))
+	col.custom_minimum_size.x = width
+	# FILL, so every column is as tall as the tallest — which is a card column. That is what lets
+	# a service tile put an expanding label above its button and land the button on the same band
+	# as the three `Buy`s. With SHRINK_BEGIN the services hugged the top and their buttons sat
+	# level with the card ART instead, which reads as two shelves rather than one.
+	col.size_flags_vertical = Control.SIZE_FILL
+	stock_box.add_child(col)
+	return col
 
-## The two icon cells a card row leads with, as one empty box, so a service row's
-## text starts where a card's does. Derived from the icon sizes rather than stated
-## as a third number that would have to be corrected twice.
-func _gutter(row: HBoxContainer) -> void:
-	var pad := Control.new()
-	pad.custom_minimum_size.x = UITheme.px(ART_SIDE) + UITheme.sep(ROW_SEP) \
-		+ UITheme.px(SYM_SIDE)
-	pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(pad)
-
-## The description cell. `clip_text` is what makes the width a width (D95).
-func _line(row: HBoxContainer, text: String, colour: Color = Color(1, 1, 1)) -> Label:
-	var l := Label.new()
-	l.text = text
-	l.clip_text = true
-	l.custom_minimum_size.x = UITheme.px(ROW_LABEL_W)
-	l.add_theme_color_override("font_color", colour)
-	row.add_child(l)
-	return l
-
-## The action cell: one width for every row, so the column is a column.
-func _action(row: HBoxContainer) -> Button:
+## The buy control, and the two ways it can refuse.
+##
+## A greyed button showing a bare price does not say WHY, and the merchant is unaffordable on most
+## first visits (D71) — so the one screen that has to explain itself explained nothing. The
+## shortfall is on the button, in the same shape `combat.gd:_refresh_power()` states its own.
+func _price_button(col: VBoxContainer, price: int, on_press: Callable,
+		sold: bool = false) -> Button:
 	var b := Button.new()
 	UITheme.style_button(b)
-	b.custom_minimum_size.x = UITheme.px(ACTION_W)
-	row.add_child(b)
+	b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(b)
+	if sold:
+		b.text = "SOLD"
+		b.disabled = true
+		return b
+	if GameState.available_gold() < price:
+		b.text = "%d g  (short %d)" % [price, price - GameState.available_gold()]
+		b.disabled = true
+		UI.hoverable(b, "Costs %d gold. You have %d." % [price, GameState.available_gold()])
+		return b
+	b.text = "Buy  %d g" % price
+	b.pressed.connect(on_press)
 	return b
 
 ## Roll distinct cards for sale. Stored as ids so it survives scene reloads.
@@ -138,106 +147,96 @@ func _refresh() -> void:
 	for c in stock_box.get_children():
 		c.queue_free()
 
-	# --- cards ---
+	# --- the cards, face up ---
+	#
+	# Sized off the frame the way the reward panel sizes its own offers, so a narrow screen gets
+	# smaller faces rather than a row running off the edge.
+	var base := UITheme.reward_card_size()
+	var cw := Icons.fit_card_width(Balance.SHOP_CARD_OFFERS + SERVICE_TILES, base.x,
+		get_viewport_rect().size.x - UITheme.px(60), float(UITheme.sep(12)))
+	var ch := base.y * (cw / base.x)
 	for i in GameState.shop_stock.size():
 		var entry: Dictionary = GameState.shop_stock[i]
 		var card := load(MetaState.CATALOG[entry["id"]]) as CardData
 		if card == null:
 			continue
 		var price: int = Balance.card_price(card.rarity, GameState.dungeon)
-		var row := _stall_row(stock_box)
-
-		# The illustration is the way into the full card, exactly as it is in the
-		# collection and the deck builder — `UI.inspect_thumb` rather than the plain
-		# TextureRect that used to sit here (D205b). This was the one screen that listed
-		# cards and could not show you one, which is the worst place for that to be true:
-		# it is the only list where the decision costs gold and is not reversible, and the
-		# row's 600px of clipped text is all the player had to spend it on.
-		#
-		# The note is the price, because that is this screen's own question. The
-		# collection's note is copies and levels; the shop's is what this costs and
-		# whether you can afford it, so the answer is on the card being weighed.
-		var note := "Costs %d gold. You have %d." % [price, GameState.available_gold()]
+		var col := _stall(cw)
+		# The note is the PRICE and where the card stands in the collection. The shop's own
+		# question is "what does this cost and can I pay for it"; the collection's is "do I
+		# already have one" — and on the one screen where a card is bought with gold, both of
+		# them are the decision. `UI.card_button` puts the note on the hover and carries it into
+		# the inspect overlay, so a card held up at full size still says what the shelf said.
+		var note := "Costs %d gold. You have %d.\n\n%s" % [
+			price, GameState.available_gold(), String(UI.collection_standing(card)["tip"])]
 		if entry["sold"]:
-			note = "Already bought this visit."
-		UI.inspect_thumb(row, card, UITheme.px(ART_SIDE), note)
-		var pic := TextureRect.new()
-		pic.texture = Icons.tex(Icons.for_card(card))
-		pic.custom_minimum_size = Vector2(UITheme.px(SYM_SIDE), UITheme.px(SYM_SIDE))
-		pic.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		pic.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		pic.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(pic)
-		# ...and so is the text (D205b). This cell is `clip_text` at 600px, so on the
-		# wordiest cards it is the row that says least and the one most worth clicking.
-		UI.inspect_text(_line(row, "%s  %s  %s" % [
-			card.name, CardData.rarity_badge(card.rarity), card.effect_text()],
-			Icons.rarity_colour(card.rarity)), card, note)
-		UI.hoverable(row, Icons.card_tooltip(card))
+			note = "Already bought this visit.\n\n" + String(UI.collection_standing(card)["tip"])
+		# No press action on the face (D300). The face is for reading; the price button buys.
+		# That is the same rule the reward panel now runs on, and it matters more here: a tap
+		# that finishes reading a card must not be the tap that spends the gold.
+		UI.card_button(col, card, Vector2(cw, ch), Callable(), "", null, note, true)
+		var pl := UI.label(col, "%s  %s" % [
+			CardData.rarity_badge(card.rarity), "SOLD" if entry["sold"] else "%d g" % price])
+		pl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		pl.add_theme_color_override("font_color", Icons.rarity_colour(card.rarity))
+		_price_button(col, price, _on_buy_card.bind(i, price), bool(entry["sold"]))
 
-		var buy := _action(row)
-		if entry["sold"]:
-			buy.text = "SOLD"
-			buy.disabled = true
-		elif GameState.available_gold() < price:
-			# A greyed button showing a bare price does not say WHY, and the merchant
-			# was unaffordable on most first visits (D71) — so the one screen that had
-			# to explain itself was the one that explained nothing. Same shape as
-			# `combat.gd:_refresh_power()`, which states the shortfall.
-			buy.text = "%d g  (short %d)" % [price, price - GameState.available_gold()]
-			buy.disabled = true
-			UI.hoverable(buy, "Costs %d gold. You have %d." % [
-				price, GameState.available_gold()])
-		else:
-			buy.text = "Buy  %d g" % price
-			buy.pressed.connect(_on_buy_card.bind(i, price))
+	_add_heal_service(cw)
+	_add_removal_service()
 
-	# --- healing ---
+## The salve, as a tile on the same shelf as the cards.
+func _add_heal_service(card_w: float) -> void:
 	var heal := Balance.heal_amount(GameState.max_hp)
-	var hprice := Balance.heal_price(GameState.max_hp, GameState.dungeon)
-	var hrow := _stall_row(stock_box)
-	_gutter(hrow)
-	_line(hrow, "Healing salve — restore %d HP" % heal)
-	var hbtn := _action(hrow)
+	var price := Balance.heal_price(GameState.max_hp, GameState.dungeon)
+	var col := _stall(minf(UITheme.px(SERVICE_W), card_w))
+	var t := UI.label(col, "Healing salve")
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_color_override("font_color", Color(0.95, 0.87, 0.62))
+	var l := UI.label(col, "Restores %d HP. You are on %d of %d." % [
+		heal, GameState.hp, GameState.max_hp])
+	l.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	UI.hoverable(col, "Healing is bought with the same gold as a card. HP you do not spend on the next fight is HP you keep for the boss.")
 	if GameState.hp >= GameState.max_hp:
-		hbtn.text = "Already full"
-		hbtn.disabled = true
-	elif GameState.available_gold() < hprice:
-		hbtn.text = "%d g  (short %d)" % [hprice, hprice - GameState.available_gold()]
-		hbtn.disabled = true
-		UI.hoverable(hbtn, "Costs %d gold. You have %d." % [
-			hprice, GameState.available_gold()])
-	else:
-		hbtn.text = "Buy  %d g" % hprice
-		hbtn.pressed.connect(_on_buy_heal.bind(hprice, heal))
-
-	_add_removal_service(stock_box)
+		var full := Button.new()
+		UITheme.style_button(full)
+		full.text = "Already full"
+		full.disabled = true
+		full.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		col.add_child(full)
+		return
+	_price_button(col, price, _on_buy_heal.bind(price, heal))
 
 ## Thinning is the other direction of deck building, and it belongs next to the
 ## things it competes with for the same gold.
-func _add_removal_service(root: Node) -> void:
+func _add_removal_service() -> void:
 	var price := Balance.removal_price(GameState.run_removals, GameState.dungeon)
-	var row := _stall_row(root)
-	_gutter(row)
-	# "for the rest of this run" came out and "this run only" went in: the line was
-	# the one string on the screen long enough to break the action column, and the
-	# tooltip below already says the same thing at length. The two numbers stay,
-	# because they are the whole decision — what a removal is WORTH is how much more
-	# often everything else comes up (D70's rule, applied to a price in cards).
-	_line(row, "Thin your deck, this run only — %d cards, one seen every %.1f turns" % [
+	var col := _stall(UITheme.px(SERVICE_W))
+	var t := UI.label(col, "Thin your deck")
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	t.add_theme_color_override("font_color", Color(0.95, 0.87, 0.62))
+	# The two numbers are the whole decision — what a removal is WORTH is how much more often
+	# everything else comes up (D70's rule, applied to a price in cards).
+	var l := UI.label(col, "This run only. %d cards, one seen every %.1f turns." % [
 		GameState.run_deck.size(), Balance.draw_interval(GameState.run_deck.size())])
-	UI.hoverable(row, "Removing a card makes the rest come up more often. It does not touch your collection — this run only.")
-	var btn := _action(row)
-	btn.text = "Remove  (%dg)" % price
-	btn.disabled = GameState.available_gold() < price or not GameState.can_remove_from_run_deck()
+	l.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	UI.hoverable(col, "Removing a card makes the rest come up more often. It does not touch your collection — this run only.")
+
+	var btn := Button.new()
+	UITheme.style_button(btn)
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	col.add_child(btn)
 	# Two different reasons this can be refused, and they were both silent.
 	if not GameState.can_remove_from_run_deck():
-		btn.text = "Remove  (deck at minimum)"
+		btn.text = "Deck at minimum"
+		btn.disabled = true
 		UI.hoverable(btn, "A run deck may not go below %d cards." % Balance.MIN_DECK_SIZE)
-	elif GameState.available_gold() < price:
-		btn.text = "Remove  %dg  (short %d)" % [price, price - GameState.available_gold()]
-		UI.hoverable(btn, "Costs %d gold. You have %d." % [
-			price, GameState.available_gold()])
+		return
+	if GameState.available_gold() < price:
+		btn.text = "%d g  (short %d)" % [price, price - GameState.available_gold()]
+		btn.disabled = true
+		UI.hoverable(btn, "Costs %d gold. You have %d." % [price, GameState.available_gold()])
+		return
+	btn.text = "Remove  %d g" % price
 	btn.pressed.connect(_on_remove.bind(price))
 
 func _on_remove(price: int) -> void:

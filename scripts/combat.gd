@@ -74,7 +74,14 @@ var fx_layer: Control
 ## happened on the first hit of the fight instead.
 var fx_ramp: Array = []
 var hurt_veil: ColorRect
+## The full-frame host the reward panel sits on: veil, padding, scroll. Shown and hidden as
+## one thing, so `reward_box` can stay the plain column every builder below writes into.
+var reward_layer: Control
 var reward_box: VBoxContainer
+## The "Encounter cleared. +N gold..." line, said at the TOP of the reward panel rather than
+## left on `status_label` behind the veil. It is the sentence that explains the panel, and the
+## panel covers the place it used to be printed.
+var reward_headline: String = ""
 ## The three relics an elite is offering, if any (D234/D238). Held on the node rather than passed,
 ## because the reward panel is built in one place and read in another.
 var relic_offer: Array = []
@@ -454,22 +461,54 @@ func _build_ui() -> void:
 	hand_box.offset_top = -(UITheme.card_size().y * HAND_PEEK + UITheme.px(FAN_ARC))
 	hand_box.offset_bottom = 0.0
 
-	reward_box = VBoxContainer.new()
+	# --- the reward panel: a centred column on a veil (D300) ------------------
+	#
+	# It used to be a top-packed VBox pinned inside a fixed anchor band (0.12-0.88 across,
+	# 0.14-0.86 down), and every number in that band was measured against ONE frame. A
+	# Control is never smaller than its content, so a panel too tall for its band does not
+	# clip — it grows straight out of the rectangle and paints over the vitals. On a phone,
+	# where the frame is a different shape and the safe area takes a bite out of it, that is
+	# how the bottom of the panel ends up off the screen with the Skip button on it.
+	#
+	# So: no band. The panel is the whole frame, inside the padding every other screen uses,
+	# and the column is CENTRED in what is left. Centring is what makes it fit-shaped rather
+	# than measured — a shorter panel sits in the middle instead of hanging off the top, and
+	# nothing has to be re-measured when a line is added to it.
+	#
+	# The scroll under it is the guarantee, not the plan: content that still does not fit is
+	# reachable by dragging instead of unreachable off the bottom edge. `UI.scroll` brings
+	# `DragScroll` with it, which is the only thing that scrolls a list of buttons on a
+	# touchscreen (D225).
+	#
+	# The veil is the other half of "text on a phone is hidden". The panel is words over a
+	# painted battle scene, and the scene wins at phone contrast. It also stops a stray tap
+	# reaching the hand underneath while a reward is open.
+	reward_layer = Control.new()
+	reward_layer.set_anchors_preset(Control.PRESET_FULL_RECT)
+	reward_layer.visible = false
+	add_child(reward_layer)
+	var reward_veil := ColorRect.new()
+	# 0.93 and not less. At 0.82 the capture shows the room, the HP bar and the "Encounter
+	# cleared" line still legible through it, so the panel's own headline reads as a duplicate of
+	# something behind it and the words compete with a lit painting for contrast — which is the
+	# report this veil is here to answer. The room is still faintly there, which is the point:
+	# the fight is over, not gone.
+	reward_veil.color = Color(0.02, 0.02, 0.03, 0.93)
+	reward_veil.set_anchors_preset(Control.PRESET_FULL_RECT)
+	reward_veil.mouse_filter = Control.MOUSE_FILTER_STOP
+	reward_layer.add_child(reward_veil)
+	var reward_pad := MarginContainer.new()
+	reward_pad.set_anchors_preset(Control.PRESET_FULL_RECT)
+	UITheme.pad(reward_pad)
+	reward_layer.add_child(reward_pad)
+	reward_box = UI.scroll(reward_pad)
 	reward_box.add_theme_constant_override("separation", UITheme.sep())
-	reward_box.visible = false
-	add_child(reward_box)
-	reward_box.anchor_left = 0.12
-	reward_box.anchor_right = 0.88
-	# 0.14, up from 0.30, and the number is a measurement rather than taste. The panel is
-	# top-packed and its contents grew by a line of collection note under each card (D174):
-	# 246px of card + a 3-line note + the dilution line + Skip is 399px, against the 403 the
-	# old anchors allowed — so the Skip landed on the HP bar and on the "Encounter cleared"
-	# line at the bottom left, both of which the capture shows and neither of which the box
-	# could clip, because a Control's size is never less than its content and the panel
-	# simply grew out of its own rectangle. From 0.14 the same 399px has 518 to sit in and
-	# ends 13px clear of the vitals; `tests/RewardNoteTest.tscn` fails if it stops fitting.
-	reward_box.anchor_top = 0.14
-	reward_box.anchor_bottom = 0.86
+	# Both flags are load-bearing for the centring. A VBox only centres its children inside
+	# space it HAS, and inside a ScrollContainer a column is exactly as tall as its content
+	# unless it is told to fill — so without this the alignment does nothing and the panel is
+	# top-packed again, silently.
+	reward_box.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	reward_box.alignment = BoxContainer.ALIGNMENT_CENTER
 
 	# Feedback lives above the layout and outside it: a floating number must not
 	# resize a container, and nothing here may ever eat a click meant for a card.
@@ -2188,8 +2227,14 @@ func _win() -> void:
 	# the dungeon floor now and nowhere else (D167).
 
 	var healed := "  Healed %d." % relic_heal if relic_heal > 0 else ""
-	status_label.text = "Encounter cleared. +%d gold (%d at risk).%s%s Choose a reward:" % [
+	reward_headline = "Encounter cleared. +%d gold (%d at risk).%s%s" % [
 		g, GameState.escrow_gold, healed, relic_line]
+	# ...and the bar under the panel goes QUIET. It used to carry this same sentence, which was
+	# the only place it was said — the panel says it now, and the capture at 0.93 shows the old
+	# copy still legible through the veil, so the screen read the line twice in two places. What
+	# the bar carries the rest of the time is Block and the incoming hit, and neither of those is
+	# a true thing to say about a fight that is over.
+	status_label.text = ""
 	for c in reward_box.get_children():
 		c.queue_free()
 
@@ -2201,55 +2246,45 @@ func _win() -> void:
 		else maxi(1, GameState.dungeon - 2))
 	_offer_rewards()
 
-## Build the reward panel: the relic offer if there is one, then the three cards, then the skip.
-##
-## Extracted from `_win()` so that taking a relic can rebuild it (D234).
+## Build the reward panel: the headline, the relic offer if there is one, then the sets, then Skip.
 ##
 ## **It DRAWS, and it decides nothing.** Everything on the panel is chosen in `_win()` and read
 ## from a member here. The extraction was documented as changing nothing about the panel, and it
 ## did change one thing: `_roll_rewards(3)` came with it, so the second call dealt three new cards
 ## (D271). A function that is called twice may not roll dice.
+##
+## It is called ONCE now (D300). Taking a relic used to free every child and call this again, which
+## is why D271 was possible at all — and, on the screen, why the whole panel jumped upward the
+## instant a relic was taken, moving Skip and the three sets under the cursor that had just pressed
+## something. Nothing is rebuilt any more: the relic band settles in place and keeps its height.
 func _offer_rewards() -> void:
+	# The line that explains the panel, ON the panel. It is set on `status_label` too, and the
+	# veil covers `status_label` — a sentence naming the gold at risk and the relic on the floor
+	# is the first thing to read here, not the thing hidden behind the thing it introduces.
+	var head := UI.label(reward_box, reward_headline)
+	head.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	head.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	head.custom_minimum_size.x = _reward_width()
+
 	# The relic offer goes FIRST, above the cards. It is the bigger decision — a relic changes a
 	# rule for the rest of the run and a card changes the deck by one — and the panel should read
 	# in that order (D234).
 	if not relic_offer.is_empty():
-		var rl := Label.new()
-		rl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		rl.text = "The elite was carrying three. Take one — it is yours until this run ends."
-		reward_box.add_child(rl)
-		UI.hoverable(rl, "Relics are found, never owned. They leave with the run, win or lose.")
-		var rrow := HBoxContainer.new()
-		rrow.add_theme_constant_override("separation", UITheme.sep())
-		reward_box.add_child(rrow)
-		for rid in relic_offer:
-			var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
-			if rd == null:
-				continue
-			var b := Button.new()
-			UITheme.style_button(b)
-			b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			b.custom_minimum_size.x = UITheme.px(200)
-			b.text = "%s\n%s" % [rd.name, rd.description]
-			# Said on the button, because a relic the player has never met is the interesting case
-			# and the collection screen is two menus away from this decision (D205b).
-			UI.hoverable(b, ("You have met this one before." if MetaState.seen_relic(rid)
-				else "You have never seen this one."))
-			b.pressed.connect(_on_relic_picked.bind(String(rid)))
-			rrow.add_child(b)
+		_build_relic_band()
 		UI.spacer(reward_box)
 
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", UITheme.sep())
+	row.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	reward_box.add_child(row)
 	var rbase := UITheme.reward_card_size()
 	var rw := Icons.fit_card_width(3, rbase.x,
 		get_viewport_rect().size.x - UITheme.px(40), float(UITheme.sep()))
-	# Each offer is a COLUMN: the card, and under it where that card already stands in
-	# the collection (D174). The run cost of taking one was priced below the row and the
-	# permanent side was not stated anywhere — so "is this a card I have never owned" and
-	# "is this the last copy before a level" were questions the player had to leave the
-	# fight to answer, which in practice meant not answering them.
+	# Each offer is a COLUMN: the cards, and under them the one button that takes them (D300).
+	# Every card used to be pressable and every press took the whole set, so on a phone — where
+	# a card needs one tap to be readable at all — the second tap that finished reading a card
+	# also bought two more you had not read yet. The faces are for reading now, and the set is
+	# taken by the control that says so.
 	for bundle in bundle_offer:
 		var col := VBoxContainer.new()
 		col.add_theme_constant_override("separation", UITheme.sep(4))
@@ -2273,50 +2308,86 @@ func _offer_rewards() -> void:
 		# card used to.
 		var ch := rbase.y * 0.62
 		for c in cards:
-			UI.card_button(col, c, Vector2(rw, ch), _on_bundle_picked.bind(bundle),
-				"", null, String(UI.collection_standing(c)["tip"]))
-		# One verdict for the WHOLE bundle, off `Balance.bundle_vs_deck` — the mean, because the
-		# bundle is taken whole and scoring it by its best card would hide the filler.
-		var verdict := Balance.bundle_verdict(cards, GameState.run_deck)
-		if verdict != "":
-			var vl := UI.label(col, verdict)
-			vl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			vl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			vl.add_theme_color_override("font_color",
-				Color(0.90, 0.55, 0.45) if verdict.begins_with("WEAKER") else Color(0.62, 0.86, 0.58))
+			# No press action, `tap_to_read` on: hover enlarges on a desktop and a tap enlarges on
+			# a phone, and neither commits to anything.
+			UI.card_button(col, c, Vector2(rw, ch), Callable(),
+				"", null, String(UI.collection_standing(c)["tip"]), true)
+		# The verdict is GONE (D300). It scored the set against the run deck and printed
+		# "STRONGER"/"WEAKER" over it, which is the game playing the decision on the player's
+		# behalf — a mean of card power is a fact about arithmetic, not about the run, and the
+		# whole point of a named set is that direction beats average. The cards say what they do
+		# and the dilution line below says what taking them costs; the choice is the player's.
+		var take_btn := Button.new()
+		UITheme.style_button(take_btn)
+		take_btn.text = "Take these %d" % cards.size()
+		take_btn.pressed.connect(_on_bundle_picked.bind(bundle))
+		col.add_child(take_btn)
 	# What taking one COSTS. Dilution is real — a bigger deck draws each card less
 	# often — but it was invisible, so "take one of three" was an automatic click
 	# rather than a decision. Skipping is a legitimate play and should read as one.
 	var now: int = GameState.run_deck.size()
 	var take: int = Balance.REWARD_BUNDLE_CARDS
-	var cost := Label.new()
-	cost.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	var cost := UI.label(reward_box,
+		"Taking one makes your deck %d cards: you would see any given card every %.1f turns instead of %.1f." % [
+			now + take, Balance.draw_interval(now + take), Balance.draw_interval(now)])
+	cost.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	cost.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	cost.custom_minimum_size.x = _reward_width()
 	cost.add_theme_color_override("font_color", Color(0.85, 0.80, 0.62))
-	cost.text = "Taking one makes your deck %d cards: you would see any given card every %.1f turns instead of %.1f." % [
-		now + take, Balance.draw_interval(now + take), Balance.draw_interval(now)]
-	reward_box.add_child(cost)
 	UI.hoverable(cost, "Every card you add makes the rest come up less often. Shops and rests can thin the deck back down.")
 
 	var skip := Button.new()
 	UITheme.style_button(skip)
+	skip.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	skip.text = "Skip  —  keep the deck at %d" % now
 	skip.pressed.connect(_on_bundle_picked.bind({}))
 	reward_box.add_child(skip)
-	reward_box.visible = true
+	reward_layer.visible = true
 
-## One of the three taken. The other two are gone — an offer you can come back to is not a decision.
+## How wide a line of prose on this panel may run.
 ##
-## The row is rebuilt rather than only disabled, because the panel still has the card reward under
-## it and a dead row of buttons above live ones reads as a bug.
-func _on_relic_picked(rid: String) -> void:
+## Capped rather than left to fill the frame: the panel is centred now, and a sentence stretched
+## across a 16:9 desktop is one the eye loses the start of. Three reward columns wide is the panel's
+## own natural measure, so the prose matches what is under it instead of picking a second one.
+func _reward_width() -> float:
+	return minf(get_viewport_rect().size.x - UITheme.px(40), UITheme.px(760))
+
+## The elite's relic offer: the heading, the icons and the reader line under them.
+##
+## The control itself is `UI.relic_offer_row`, because a chest offers relics the same way and two
+## copies of a row this fiddly would not stay equal. This function owns only what is the ELITE's:
+## the sentence above it, and what taking one does to the run.
+func _build_relic_band() -> void:
+	var band := VBoxContainer.new()
+	band.add_theme_constant_override("separation", UITheme.sep(4))
+	band.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	reward_box.add_child(band)
+
+	var rl := UI.label(band, "The elite was carrying three. Take one — it is yours until this run ends.")
+	rl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rl.custom_minimum_size.x = _reward_width()
+	UI.hoverable(rl, "Relics are found, never owned. They leave with the run, win or lose.")
+
+	UI.relic_offer_row(band, relic_offer, _reward_width(), _on_relic_picked)
+
+## One of the three taken. The other two are put out where they stand by `UI.relic_offer_row`.
+##
+## Nothing is freed and nothing is rebuilt (D300). The band keeps its size, so the three sets and
+## the Skip button below do not move under the hand that just pressed something — which is what
+## rebuilding the whole panel here used to do.
+func _on_relic_picked(rid: String, _reader: Label) -> void:
 	GameState.earn_relic(rid)
+	# Written NOW, not at the end of the reward (D300). It was only flushed once a set or Skip
+	# resolved, so a run killed between the two — which on Android is an ordinary way for an app
+	# to end — came back with the relic missing from `run_relics` and the pool free to offer it
+	# again. That is the "I already took this one" report, and it is a save-timing bug rather than
+	# a rolling one: `relic_offer` excludes what the run holds, and the run only holds what it
+	# managed to write down.
+	GameState.flush_save()
 	var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
 	Audio.play("treasure")
 	_log("Took %s. It is yours until this run ends." % (rd.name if rd != null else rid))
 	relic_offer = []
-	for c in reward_box.get_children():
-		c.queue_free()
-	_offer_rewards()
 
 ## One offered card, at the level the COLLECTION already holds it at (D297).
 ##

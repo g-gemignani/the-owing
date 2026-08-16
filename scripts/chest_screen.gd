@@ -130,31 +130,22 @@ func _open() -> void:
 
 ## The three on offer, and the one press that resolves them.
 ##
-## Rebuilt on a pick rather than disabled, for the reason the combat reward panel is: a dead row of
-## buttons above a live Continue reads as a bug.
+## `UI.relic_offer_row` draws it — icons with a reader line under them (D300) — because the elite's
+## reward panel offers relics the same way and two copies of that row would not stay equal. This
+## screen owns only what taking one does here.
 func _relic_row(offer: Array) -> void:
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", UITheme.sep())
-	body.add_child(row)
-	for rid in offer:
-		var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
-		if rd == null:
-			continue
-		var b := Button.new()
-		UITheme.style_button(b)
-		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		b.custom_minimum_size.x = UITheme.px(190)
-		b.text = "%s\n%s" % [rd.name, rd.description]
-		UI.hoverable(b, ("You have met this one before." if MetaState.seen_relic(String(rid))
-			else "You have never seen this one.") + " It is yours until this run ends.")
-		b.pressed.connect(func():
-			GameState.earn_relic(String(rid))
-			Audio.play("treasure")
-			for c in row.get_children():
-				(c as Button).disabled = true
-			(row.get_parent() as VBoxContainer).move_child(row, row.get_index())
-			UI.label(body, "   You take %s." % rd.name))
-		row.add_child(b)
+	UI.relic_offer_row(body, offer, UITheme.px(UI.BUTTON_WIDTH * 1.6), _take_relic,
+		" It is yours until this run ends.")
+
+func _take_relic(rid: String, reader: Label) -> void:
+	GameState.earn_relic(rid)
+	# Written NOW (D300). `_finish` only marks the run dirty, and a dirty run is written up to
+	# `FLUSH_SECONDS` later — so a chest relic taken by a player who then lost the app came back
+	# missing, and the pool was free to offer the same relic again.
+	GameState.flush_save()
+	Audio.play("treasure")
+	var rd := load(String(MetaState.RELIC_CATALOG[rid])) as RelicData
+	reader.text = "   You take %s." % (rd.name if rd != null else rid)
 
 ## Does the run satisfy this vault? Every check reads state the player can see on
 ## the screen they came from, which is what makes the condition a decision rather
