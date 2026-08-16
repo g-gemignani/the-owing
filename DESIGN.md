@@ -282,6 +282,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D295** | [A boss bends a rule of the card game, and three of the first seven were cliffs](#d295--a-boss-bends-a-rule-of-the-card-game-and-three-of-the-first-seven-were-cliffs) |
 | **D296** | [The landmarks had a table of names all along, one screen below the one D282 read](#d296--the-landmarks-had-a-table-of-names-all-along-one-screen-below-the-one-d282-read) |
 | **D297** | [The reward becomes a direction, and a level-1 face nearly hid it](#d297--the-reward-becomes-a-direction-and-a-level-1-face-nearly-hid-it) |
+| **D298** | [The table looked like a collapse, and three of the four alarms were the instrument](#d298--the-table-looked-like-a-collapse-and-three-of-the-four-alarms-were-the-instrument) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -20729,3 +20730,81 @@ builds, so the fallback loose bundle is load-bearing rather than defensive.
 
 The other is why the capture was taken at all. Nothing in 48 suites can see that three columns of
 card faces fit a 1280 frame, or that the bundle's NAME is what the eye lands on first.
+
+---
+
+### D298 — The table looked like a collapse, and three of the four alarms were the instrument
+
+D297's plan said to remake D280's archetype table before spending anything else, because it is
+what the whole plan steers by and it was three changes stale. Remade over every dungeon the
+profiles visit, at 300 trials, and against two baselines checked out into worktrees: `4d3b59d`
+(before the other session's D290) and `0336b5f` (after it, before any code from this one).
+
+**Nothing had regressed.** It took four measurements to establish that, and three of them were
+alarms raised by the tool rather than by the game.
+
+| | before D290 | before this session's code | now |
+|---|---|---|---|
+| matched-progression completion | 33% | 33% | 33% |
+| mean over ALL cells | 16% | 17% | 16% |
+| cells at 0% | 31 | 30 | 36 |
+
+#### The first alarm: 38% against 16%, and they are different statistics
+
+D285 records completion at **38%**. The remade table read **16%** and that looks like the game
+falling out from under the plan.
+
+The tool prints no summary figure, so both numbers were computed by whoever wrote the entry. 16%
+is the mean over all 51 cells — and most cells are *deliberately* mismatched, because every
+profile is measured against two or three dungeons including ones far outside its range. A Lv15
+deck at the Maw is a cell that should read zero.
+
+Meaned the way the target band means it — each profile at its own dungeon — it is **33%**, and it
+is 33% at all three points. Against D285's 38% that is five points of drift across everything both
+sessions have landed since, which is inside what this file already says about the noise floor.
+
+**A percentage with no stated denominator is not a measurement**, and two entries quoting the same
+word for different denominators is how a plan gets rewritten around a phantom.
+
+#### The second alarm: nineteen boss cells "fell to 0%", and it was D295's own fix
+
+Read cell by cell against the pre-session baseline, the boss column looked catastrophic: the Draw
+build at the Foundry 100% → 0%, Maxed commons 100% → 0%, Mid 99% → 0%, nineteen cells in all, and
+the fights getting *shorter* as they went.
+
+That column is `_measure`, and D295 fixed it mid-session to pass the dungeon's boss. **Before the
+fix it fought a trash archetype wearing boss multipliers.** So the comparison is not before-and-
+after a change to the game; it is a Bone Picker at boss budget against the actual Forge-Warden.
+The nineteen cells did not fall. They were never being measured.
+
+The RUN column has passed `dd.boss` all along, and it is flat at 33%. **When two columns of one
+report disagree about a collapse, check which of them changed subject.**
+
+#### The third: the deck cap, cleared by measuring it
+
+`MAX_DECK_SIZE` 20 → 14 (D297) never reaches the simulator, so its whole effect there was that
+seventeen of nineteen profiles were trimmed to fit. Suspect number one for a 22-point drop.
+
+Put the original decks back into today's tool and re-ran: **16% against 15%, the same 36 dead
+cells, +0.3 points**. The cap costs nothing measurable. Ruled out by an experiment rather than by
+an argument, which is the only way a confound gets ruled out.
+
+#### What IS true, and it is not new
+
+**Eight of nineteen profiles complete 0% of their runs at every dungeon they are measured at** —
+Poison, AoE, Combo, Vampire, Draw, and all three of Late, Endgame and Deep. Identical in the
+pre-session baseline. D280 called this "six of ten under a third" and D285 corrected it to "a wide
+spread with two outliers"; over the complete table it is worse than either, and it is the oldest
+open item in the project.
+
+That is what D297's item 4 is aimed at, and this is the number to move.
+
+#### The shape that showed up four times in two sessions
+
+D295 found the boss column blind. D297 found `bundle_vs_deck` scoring level-1 faces. D295's
+coverage gap hid a cliff. And this entry spent four runs proving three alarms were instruments.
+
+**Every one looked exactly like a working feature or a broken game, and none of them could be told
+apart from the real thing without a second measurement.** The rule this file already carries —
+sweep the knob to an absurd value, count how often a rule fires — is cheap next to the four
+reports it would have saved.

@@ -412,6 +412,24 @@ moves.
   exploit — D280's archetype fault at its limit — and the lesson is the older one: **a guard that
   names its subject guards nothing new.** D89's art list in a fourth costume.
 
+- **State the denominator, or the percentage is not a measurement (D298).** D285 records
+  completion at 38% and a remade table read 16%, which looked like the plan's floor falling out.
+  They are different statistics: 16% is the mean over all 51 cells, and most cells are
+  deliberately mismatched — a Lv15 deck at the Maw should read zero. Meaned the way the target
+  band means it, each profile at its own dungeon, it is **33%, and 33% at all three points
+  checked** (before D290, before this session's code, now). The tool prints no summary figure, so
+  every such number in this file was computed by hand and none of them say over what.
+
+  **And when two columns of one report disagree about a collapse, check which one changed
+  subject.** Nineteen boss cells read 100% → 0% across the same session — because D295 fixed
+  `_measure` to pass the dungeon's boss, and before that fix the column had been fighting a trash
+  archetype wearing boss multipliers. The cells did not fall; they had never been measured. The
+  RUN column, which has always fought the named boss, did not move.
+
+  **Eight of nineteen profiles complete 0% of their runs at every dungeon they are measured at** —
+  Poison, AoE, Combo, Vampire, Draw, Late, Endgame, Deep — and that is identical in the
+  pre-session baseline. It is the oldest open item in the project and the number to move.
+
 - **Completion percentage is a constraint, not the goal (D231).** The tool has printed
   `Target: RUN completion ~40-60%` since D54 and every difficulty entry since has been an
   argument about moving cells into that band. Under the goal this project is now aimed at —
