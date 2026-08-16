@@ -285,7 +285,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D298** | [The table looked like a collapse, and three of the four alarms were the instrument](#d298--the-table-looked-like-a-collapse-and-three-of-the-four-alarms-were-the-instrument) |
 | **D299** | [A run is priced on what you brought, and the dungeon's gifts are free](#d299--a-run-is-priced-on-what-you-brought-and-the-dungeons-gifts-are-free) |
 | **D300** | [Seven play reports, and five of them were one screen not fitting its own frame](#d300--seven-play-reports-and-five-of-them-were-one-screen-not-fitting-its-own-frame) |
-| **D300** | [The boss cancelled the player's growth exactly, and the pillar had never been asked](#d300--the-boss-cancelled-the-players-growth-exactly-and-the-pillar-had-never-been-asked) |
+| **D301** | [The boss cancelled the player's growth exactly, and the pillar had never been asked](#d301--the-boss-cancelled-the-players-growth-exactly-and-the-pillar-had-never-been-asked) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21093,7 +21093,7 @@ inserted into `RewardNoteTest` turns it red, and naming the missing function.
 
 ---
 
-### D300 — The boss cancelled the player's growth exactly, and the pillar had never been asked
+### D301 — The boss cancelled the player's growth exactly, and the pillar had never been asked
 
 Four archetypes completed **0% of their runs at every dungeon they were measured at** — Poison,
 AoE, Combo and Vampire. D298 named that as the oldest open item in the project. The cause was one

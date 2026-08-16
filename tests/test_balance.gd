@@ -132,7 +132,7 @@ func _init() -> void:
 		if _hp_lost_per_fight(deepest, r) <= _hp_lost_per_fight(1, r):
 			fails += 1; print("FAIL depth is not the difficulty axis at ratio %.1f" % r)
 
-	# --- and power must pay at the BOSS too, which is where it did not (D300) ---
+	# --- and power must pay at the BOSS too, which is where it did not (D301) ---
 	#
 	# The pillar is *"HP lost per fight must fall as you get stronger, at any fixed depth"*, and
 	# `_hp_lost_per_fight` below has always asked it of `Tier.NORMAL`. The boss is the fight that
@@ -162,7 +162,7 @@ func _init() -> void:
 				var allow := 1.10 if r > Balance.HIGH_POWER_FLOOR else 1.0
 				if t_hi / t_lo >= allow:
 					fails += 1
-					print("FAIL at d%d a %s takes %.0f%% LONGER to kill at ratio %.0f than at ratio 2 — getting stronger buys nothing at this tier (D300)" % [
+					print("FAIL at d%d a %s takes %.0f%% LONGER to kill at ratio %.0f than at ratio 2 — getting stronger buys nothing at this tier (D301)" % [
 						d, Balance.TIER_NAME[tier], (t_hi / t_lo - 1.0) * 100.0, r])
 					break
 

@@ -468,7 +468,7 @@ moves.
   never outgrow the Maw. Progression should *feel* like progression — HP lost per
   fight must fall as you get stronger, at any fixed depth.
 
-  **And that pillar had only ever been asked of ONE tier, which is where it inverted (D300).**
+  **And that pillar had only ever been asked of ONE tier, which is where it inverted (D301).**
   `tier_hp_power_k(BOSS)` was 1.00 — "the boss answers fully" — and answering fully means scaling
   boss HP 1:1 with the player's output, cancelling their growth exactly. Measured at a fixed
   depth: turns-to-kill FLAT at 38.8 from ratio 2 to 14 while turns-to-die fell 4.4 to 2.1. **A
@@ -997,18 +997,18 @@ moves.
   Card faces show the *current* numbers, not the level-1 text (D50) — including the
   Vulnerable on the enemy the card is pointed at, which is the one status whose whole
   purpose is to change the number about to be read, and which the face could not see
-  until D300. A card being OFFERED states where it already stands in the player's
+  until D301. A card being OFFERED states where it already stands in the player's
   collection: copies held, the level they are held at, and what the next one costs and
   buys (D174). It does **not** state a verdict on the offer — scoring a set against the
   deck and printing STRONGER or WEAKER is the game making the decision, and a mean of
-  card power is a fact about arithmetic rather than about the run (D300). Every screen
+  card power is a fact about arithmetic rather than about the run (D301). Every screen
   offers something to press, and every encounter can be left (D47). No fusion or death
   can strand the collection below a legal deck (D12).
 
 - **A control that commits is the control that says so.** A card face is for reading. On
   a touchscreen a card needs one tap to be legible at all, so a face that also buys
   something turns the tap that finished reading into the tap that spent the reward — the
-  reward sets and the merchant's stock both worked that way until D300. The face reads;
+  reward sets and the merchant's stock both worked that way until D301. The face reads;
   a named button beside it takes, buys or skips. The same rule keeps a panel STILL while
   it is being read: nothing rebuilds under a hand that has just pressed something, and a
   line that fills on hover reserves its height before anything is pointed at
@@ -1870,7 +1870,7 @@ REVIEW.md    a review of the game AS A GAME (2026-08-01) — playability, graphi
   `godot --headless --script tools/sim_balance.gd` (paste the numbers).
 - **Before committing content or code:** `tests/run.sh` must be green, including
   `test_compile`, `PlayableTest` and `test_content`.
-- **A green suite is only a claim that the checks RAN (D300).** A runtime script error aborts
+- **A green suite is only a claim that the checks RAN (D301).** A runtime script error aborts
   the function it happens in, leaves the exit code at 0 and lets `_ready` print its PASS line,
   so a whole section can stop running and the suite still reports green — `RewardNoteTest` did
   it for the life of a deleted function. `run.sh` reads stderr now and fails on a

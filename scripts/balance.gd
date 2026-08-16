@@ -3633,7 +3633,7 @@ static func enemy_max_hp(dungeon: int, tier: int, ratio: float, progress: float 
 ## Elites keep the old number, which puts them where they already were.
 ##
 ## **The boss was 1.00 — "answers fully" — and that inverted the pillar at the one fight that
-## decides a run (D300).** Scaling boss HP 1:1 with the player's output cancels the player's growth
+## decides a run (D301).** Scaling boss HP 1:1 with the player's output cancels the player's growth
 ## exactly: measured at a fixed depth, turns-to-kill was FLAT at 38.8 from ratio 2 to ratio 14
 ## while turns-to-die fell 4.4 to 2.1. A stronger deck killed no faster and died twice as fast, so
 ## every glass-cannon build lost 100% of its boss fights after winning 100% of its normals — which
@@ -3938,7 +3938,7 @@ static func _loose_bundle(pool: Array, tier: int, difficulty: int, size: int) ->
 
 ## The reward screen's verdict on a whole bundle, in the same bands `card_verdict` uses.
 ##
-## **Nothing draws this any more (D300).** The reward panel printed it under each set, and printing
+## **Nothing draws this any more (D301).** The reward panel printed it under each set, and printing
 ## it is the game making the decision on the player's behalf: a mean of card power is a fact about
 ## arithmetic, and the whole premise of D297 is that a named *direction* beats an average. The
 ## cards say what they do and the dilution line says what taking them costs.
