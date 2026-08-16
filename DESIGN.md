@@ -287,6 +287,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D300** | [Seven play reports, and five of them were one screen not fitting its own frame](#d300--seven-play-reports-and-five-of-them-were-one-screen-not-fitting-its-own-frame) |
 | **D301** | [The boss cancelled the player's growth exactly, and the pillar had never been asked](#d301--the-boss-cancelled-the-players-growth-exactly-and-the-pillar-had-never-been-asked) |
 | **D302** | [A missed click is not a no-op, and a check that has lied once must not be trusted](#d302--a-missed-click-is-not-a-no-op-and-a-check-that-has-lied-once-must-not-be-trusted) |
+| **D303** | [Two fixes for the four dead archetypes, both refuted, and the pair of numbers that names the real one](#d303--two-fixes-for-the-four-dead-archetypes-both-refuted-and-the-pair-of-numbers-that-names-the-real-one) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21292,3 +21293,92 @@ capture overlay was still covering the page, so the rect was stale.
 18 of 38 relics repainted, the set at 0.52 mean luminance and 12.1% ink against 0.58 and
 4.9% at the start. 20 relics, one sigil repair and `iso/shop.png` are blocked behind the
 CAPTCHA rather than behind any decision.
+
+---
+
+### D303 — Two fixes for the four dead archetypes, both refuted, and the pair of numbers that names the real one
+
+D301 left four archetypes completing 0-6% of their runs — Poison, AoE, Combo and Vampire — and
+named a suspect: the simulator's driver picks its reward bundle by `Balance.bundle_vs_deck`, which
+scores power per energy and knows nothing about survival. A profile spending 23% of its bar per
+fight would never buy the Fortress bundle in front of it.
+
+The suspicion was correct and it was not the cause. **Both fixes built here are reverted.**
+
+#### The first: a survival term in the driver
+
+Scored a bundle as `value * (1 + DEFENCE_HUNGER * need * guard)`, where `need` is how far below full
+health the run is and `guard` is the share of the bundle's worth that is Block. Off at full health
+by construction, so its firing rate is readable.
+
+It fired on **1% of 11,954 offers.** The reason is not the term — instrumenting it showed the
+driver is genuinely hurt when it chooses (mean `need` **0.264**) — it is that **a defensive bundle
+was on the table in one offer in five.**
+
+#### The second: the third bundle drawn flat
+
+That supply figure is D297's affinity weighting doing exactly what it was built to do. Bundles are
+weighted by how much of a build the deck already holds, *"the snowball on purpose"* — and the decks
+that most needed steering were being offered more of what was killing them.
+
+So the last of the three bundles ignored affinity. It is also a better decision on paper: three
+bundles all suiting the deck you have is one direction wearing three buttons.
+
+Measured over the full table, it is **slightly worse**: matched completion 52% → 51%, cells at 0%
+12 → 14, Exhaust −9 and Maxed commons −9. The four did not move. Reverted.
+
+#### What settled it: sweeping the knob to absurd
+
+`DEFENCE_HUNGER` at **100** — the driver forced to take every defensive bundle it is ever shown.
+Poison, AoE, Combo and Vampire still complete **0%**. One unrelated Sunken Vault cell went to 75%,
+so the knob was connected; it simply cannot reach these four.
+
+**The driver is not why they die**, and one run of an absurd value said so where two plausible
+builds and a day of reasoning did not.
+
+#### The pair of numbers that does name it
+
+Every profile's defensive share (`Balance.deck_lean`) against its ratio and its completion:
+
+| profile | defence | ratio | run |
+|---|---|---|---|
+| Barricade | 34% | 6.31 | **100%** |
+| Relic | 23% | 5.81 | **100%** |
+| Status | 12% | 4.43 | **95%** |
+| Thorns | 24% | 7.93 | 83% |
+| Maxed commons | 36% | 14.00 | 69% |
+| Exhaust | 7% | 12.56 | 40% |
+| AoE | 12% | 12.56 | **1%** |
+| Poison | 7% | 7.22 | **1%** |
+| Vampire | 6% | 9.08 | **2%** |
+| Combo | 4% | 14.08 | **6%** |
+
+Neither column explains it alone. **Maxed commons** carries the second-highest ratio in the game
+and clears 69%, because 36% of it is Block. **Status** carries almost no defence and clears 95%,
+because its ratio is 4.43 and the enemies it meets hit softly.
+
+The clean pair is **Status against AoE: the same 12% defensive share, ratio 4.43 against 12.56,
+completion 95% against 1%.**
+
+So: **`power_ratio` raises enemy DAMAGE against a deck's total power, and only the deck's
+DEFENSIVE share can answer that damage.** A deck that grows on offence is charged on the axis it
+did not grow, and the charge is collected every turn of every fight.
+
+That is D285's sentence — *block is one number wearing two jobs* — reached from the other side. It
+is also why D301's fix helped: halving how hard boss HP answers the player let offence-heavy decks
+end fights before the bill came due, which is relief rather than repair.
+
+#### What the repair would be, and why it is not in this entry
+
+Enemy HP should keep scaling against total power — that is the ratchet and it works. Enemy DAMAGE
+should scale against something that knows the split, so an all-offence deck meets enemies with more
+HP and not more damage.
+
+The hazard is obvious and has to be designed against: a damage term that falls when you drop Block
+pays every deck to drop Block. The honest shape is probably to scale damage against the deck's
+defensive capacity rather than to discount it for the lack — a deck with no Block meets the same
+hit and simply has nothing to put in front of it.
+
+It is a change to the divisor of every difficulty number in the game, so it gets its own entry, its
+own sweep and its own worktree baseline. **Two refuted hypotheses in one day is the argument for
+measuring this one before building it, not after.**

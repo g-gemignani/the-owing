@@ -451,7 +451,23 @@ moves.
 
   **Eight of nineteen profiles complete 0% of their runs at every dungeon they are measured at** —
   Poison, AoE, Combo, Vampire, Draw, Late, Endgame, Deep — and that is identical in the
-  pre-session baseline. It is the oldest open item in the project and the number to move.
+  pre-session baseline. It is the oldest open item in the project and the number to move. D299 and
+  D301 took it to four; D303 says what the last four are.
+
+  **It takes TWO columns to see it, and neither works alone (D303).** Defensive share against
+  ratio: Maxed commons carries the second-highest ratio in the game and clears 69%, because 36% of
+  it is Block; Status carries almost no defence and clears 95%, because its ratio is 4.43. The
+  clean pair is **Status against AoE — the same 12% defensive share, ratio 4.43 against 12.56,
+  completion 95% against 1%.** So `power_ratio` raises enemy DAMAGE against a deck's total power
+  while only its DEFENSIVE share can answer that damage: **a deck that grows on offence is charged
+  on the axis it did not grow**, every turn of every fight. D285's *block is one number wearing two
+  jobs*, reached from the other side.
+
+  Two repairs were built for this and both were refuted by measurement — a survival term in the
+  driver (fired on 1% of 11,954 offers) and an offer that ignores affinity (matched completion 52%
+  → 51%). What settled it was sweeping the driver's defence weight to an absurd 100: forced to take
+  every guard bundle it is ever shown, all four still complete 0%. **One run of an absurd value
+  said what two plausible builds could not.**
 
 - **Completion percentage is a constraint, not the goal (D231).** The tool has printed
   `Target: RUN completion ~40-60%` since D54 and every difficulty entry since has been an
