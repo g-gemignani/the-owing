@@ -20612,6 +20612,13 @@ so those are two different faults that present as one. And **3.1 Pro stalls the 
 What is left on the list of suspects is the account itself and the second session sharing
 it.
 
+**A full Chrome restart does not clear it either.** Chrome had exited between attempts, so
+the ninth try ran on a freshly started browser, a fresh profile session, a fresh tab and a
+fresh chat, back on 3.6 Flash: fourteen minutes, no image. Five variables eliminated now —
+the daily cap, the model, the tab, the chat and the browser process. Nothing on the client
+side is left to change, which is itself the finding: **when this starts, stop. It is not
+worth a tenth attempt.**
+
 #### The art is in, after three attempts that failed three different ways
 
 **One: every subject was drawn sitting on a big stone block.** My own prompt put it there.
