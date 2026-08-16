@@ -125,11 +125,36 @@ static func offset(tex: Texture2D) -> float:
 ##
 ## 1.0 for anything unreadable, which leaves the caller drawing what it drew before.
 static func fill(tex: Texture2D) -> float:
-	if tex == null:
+	var b := subject_box(tex)
+	if b.size.y <= 0:
 		return 1.0
 	var img := tex.get_image()
-	if img == null:
+	return clampf(float(b.size.y) / float(maxi(1, img.get_height())), 0.05, 1.0)
+
+
+## How much LONGER than tall a sprite's subject is: its box width over its box height.
+##
+## The number that says a creature is on four legs. Every one of the 70 creature paintings
+## fills its canvas WIDTH, so this ratio is purely a statement about the subject's own
+## proportion — 1.63 for a rat swarm, 1.17 for a hound, 0.73 for a robed figure. Sizing a
+## long creature by its HEIGHT is what made a hound the height of a standing brute and
+## therefore, at its own proportion, wider than the hero is tall (D309).
+##
+## 1.0 for anything unreadable or already taller than wide, which leaves it sized by height.
+static func length_ratio(tex: Texture2D) -> float:
+	var b := subject_box(tex)
+	if b.size.x <= 0 or b.size.y <= 0:
 		return 1.0
+	return maxf(1.0, float(b.size.x) / float(b.size.y))
+
+
+## The opaque box of a sprite's subject, in pixels. `Rect2i()` for anything unreadable.
+static func subject_box(tex: Texture2D) -> Rect2i:
+	if tex == null:
+		return Rect2i()
+	var img := tex.get_image()
+	if img == null:
+		return Rect2i()
 	if img.is_compressed():
 		img.decompress()
 	if img.get_format() != Image.FORMAT_RGBA8:
@@ -137,26 +162,25 @@ static func fill(tex: Texture2D) -> float:
 	var w := img.get_width()
 	var h := img.get_height()
 	if w <= 0 or h <= 0:
-		return 1.0
+		return Rect2i()
 	# `get_data` for the same reason `offset` uses it: this runs once per role on the frame
 	# the screen opens, and a per-pixel call over 70 files is an order of magnitude more.
 	var data := img.get_data()
-	var top := -1
-	var bottom := -1
+	var x0 := w
+	var y0 := h
+	var x1 := -1
+	var y1 := -1
 	for y in h:
 		var row := y * w * 4
-		var any := false
 		for x in w:
 			if data[row + x * 4 + 3] >= STAND_SOLID:
-				any = true
-				break
-		if any:
-			if top < 0:
-				top = y
-			bottom = y
-	if top < 0 or bottom < top:
-		return 1.0
-	return clampf(float(bottom - top + 1) / float(h), 0.05, 1.0)
+				x0 = mini(x0, x)
+				y0 = mini(y0, y)
+				x1 = maxi(x1, x)
+				y1 = maxi(y1, y)
+	if x1 < 0:
+		return Rect2i()
+	return Rect2i(x0, y0, x1 - x0 + 1, y1 - y0 + 1)
 
 
 ## Which screen diagonal each painted hero is LOOKING along, as a grid step.

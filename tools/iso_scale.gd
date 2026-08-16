@@ -118,6 +118,27 @@ func _init() -> void:
 		for r in rows:
 			print("%-24s %3.0f%%   %5.2f" % [
 				String(r[0]), float(r[1]) * 100.0, float(r[3])])
+		# The three family sprites, put through the REAL formula. `mon_<family>_<face>`
+		# carries its family in the role name and `iso_run` reads it from there too, so this
+		# is the same parse rather than a second table.
+		print("\nthe family sprites, as the floor actually draws them now:")
+		var cap := _const(src, "BEAST_H_MAX")
+		for fam_name in ["swarm", "caster", "brute"]:
+			var mimg := _load("mon_%s_s" % fam_name)
+			if mimg == null:
+				continue
+			var mb := _bbox(mimg)
+			var mfill := float(mb.size.y) / float(mimg.get_height())
+			var mlong: float = maxf(1.0, float(mb.size.x) / float(mb.size.y))
+			var mfam := _family_h(src, fam_name)
+			if mlong > 1.0:
+				mfam = minf(mfam, cap)
+			var mh: float = float(sprite_h.get("combat", 0.0)) * TILE_H * mfam \
+				/ maxf(0.05, mfill) / mlong
+			var msub: float = mh * mfill
+			print("  %-7s longer-than-tall %.2f   subject %3.0f tall x %3.0f long   %.2f x hero tall" % [
+				fam_name, mlong, msub, msub * mlong, msub / hero])
+
 		var fam_re := RegEx.new()
 		fam_re.compile('"([a-z]+)"\\s*:\\s*([0-9]+\\.[0-9]+)')
 		var fam_start := src.find("const FAMILY_H := {")
@@ -184,6 +205,18 @@ func _sprite_table(src: String) -> Dictionary:
 	for m in re.search_all(body):
 		out[m.get_string(1)] = float(m.get_string(2))
 	return out
+
+
+## One family's height out of `FAMILY_H`, parsed rather than restated.
+func _family_h(src: String, fam: String) -> float:
+	var start := src.find("const FAMILY_H := {")
+	if start < 0:
+		return 1.0
+	var body := src.substr(start, src.find("}", start) - start)
+	var re := RegEx.new()
+	re.compile('"%s"\\s*:\\s*([0-9]+\\.[0-9]+)' % fam)
+	var m := re.search(body)
+	return float(m.get_string(1)) if m != null else 1.0
 
 
 func _const(src: String, name: String) -> float:

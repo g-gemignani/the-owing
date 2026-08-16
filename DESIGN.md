@@ -291,6 +291,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D306** | [A monster's size was set by how much canvas its painter used](#d306--a-monsters-size-was-set-by-how-much-canvas-its-painter-used) |
 | **D307** | [Five more play reports, and the one that had been eating chests](#d307--five-more-play-reports-and-the-one-that-had-been-eating-chests) |
 | **D308** | [An unmet relic answers by being dead, not by saying it has nothing to say](#d308--an-unmet-relic-answers-by-being-dead-not-by-saying-it-has-nothing-to-say) |
+| **D309** | [The four-legged ones were measured by their height, and one capture was a day old](#d309--the-four-legged-ones-were-measured-by-their-height-and-one-capture-was-a-day-old) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21604,3 +21605,73 @@ Guarded in `tests/TooltipTest.tscn` with one relic met and the rest not, so both
 one assertion: the unmet tiles must be `disabled` and exactly one must not be. Checking the colour
 would have been the wrong check — a dimmed tile that still takes a press is the defect. Mutation-
 checked: making the unmet tiles live turns it red on both counts.
+
+---
+
+### D309 — The four-legged ones were measured by their height, and one capture was a day old
+
+*"The little man on four legs looks too big."* It is `mon_swarm_s`, the swarm family
+sprite: a hunched quadruped. It drew at **0.56x the hero** and now draws at **0.33x**.
+
+#### A body on the horizontal cannot be sized by its height
+
+D306 sized creatures by their subject rather than their canvas, which fixed the facing
+pairs, and it kept one wrong assumption: that the number in `FAMILY_H` is a HEIGHT. For
+anything upright that is fine. For a body on four legs it is not, and the art says which is
+which — every creature painting fills its canvas WIDTH, so a subject wider than it is tall
+is a creature on the horizontal:
+
+| | longer than tall |
+|---|---|
+| `rat_swarm_s` | 1.63 |
+| `abyss_horror_s` | 1.32 |
+| `tomb_guard_s` | 1.23 |
+| `ember_hound_s`, `forge_hound_s` | 1.17 |
+| `mon_swarm_s` | 1.18 |
+| a robed figure | 0.73 |
+
+`IsoFooting.length_ratio` reads it, and `_footed_rect` divides by it, so the family number
+sizes the creature's LONGEST axis. A hound is then as long as the number says rather than
+as tall.
+
+#### And the family number itself was a size for something that stands
+
+`Balance.iso_family()` answers *how dangerous, and in what shape*, from the enemy's own
+stats — and a hound comes back `brute` because it hits hard and often. That is the right
+answer to the question it asks and the wrong size to hang on it. So a four-legged body is
+capped at `BEAST_H_MAX` 0.65 along its length, which puts a hound's shoulder at 0.56x the
+hero.
+
+The numbers are argued from a person, not chosen by eye. The hero reads as roughly 1.7m: a
+robed figure is her height (1.00), an armoured brute a head taller (1.15), a hound's
+shoulder about half her (0.65 along a body 1.17x long), and vermin come up to her knee
+(swarm 0.38 along a body 1.18x long = **0.33x her height**).
+
+#### Three rounds were judged against a screenshot from the day before
+
+`IsoArtCheck.png` was the one capture that showed creatures beside the hero. Another
+session removed it from `tools/screenshots.gd`, and **the file stayed on disk**. It was
+timestamped 22:28 the previous evening while the rest of the directory was minutes old, and
+it was read three times as if it were current — through two real code changes that could
+not possibly have moved it.
+
+The tell was there and ignored: the picture was pixel-identical after every change. **A
+capture that does not move when the code does is not evidence that the code did nothing.**
+`~/.local/share/Deckcrawl/shots/` keeps files no longer in `SHOTS` forever, so `ls -la` on
+the directory is part of reading a capture, not an optional extra.
+
+That is the second time in two days an artefact was trusted without checking it was live
+(D302 was the frozen DOM). The verification is the same one sentence: **check the thing you
+are reading was produced by the thing you just changed.**
+
+#### What can and cannot be seen now
+
+No live capture shows a creature next to the hero, so this was verified by measurement
+rather than by eye. `tools/iso_scale.gd` puts the three family sprites through the real
+formula and prints what the floor draws:
+
+```
+swarm   longer-than-tall 1.18   subject  41 tall x  48 long   0.33 x hero
+caster  longer-than-tall 1.00   subject 128 tall x 128 long   1.02 x hero
+brute   longer-than-tall 1.00   subject 147 tall x 147 long   1.17 x hero
+```
