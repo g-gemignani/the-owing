@@ -207,7 +207,27 @@ func setup(deck: Array[CardData], hp: int, max_hp: int, p_dungeon: int, p_tier: 
 	# raise enemy scaling too — otherwise they are free strength. `p_untaxed` is the
 	# exception and is the whole point of it: priced against `p_relics` alone, and read
 	# BEFORE `_spawn_enemies` below, which is what actually scales to it.
-	ratio = Balance.power_ratio(deck, p_relics, power)
+	# Priced on the deck the player BROUGHT, never on what the dungeon handed them (D299).
+	#
+	# D238 made this move for relics and rewrote the pillar around it: *persistent power lives in
+	# the deck and is priced; found power is free and temporary.* A card won from a fight was on
+	# the wrong side of that sentence — it is found, it leaves with the run through the escrow,
+	# and it was raising the number the enemies scale against. The reward screen said so out loud,
+	# printing "WEAKER than what you hold" on a third of its offers, and D276 measured the driver
+	# refusing them; a reward the player is right to refuse is not a reward.
+	#
+	# Read off the CARDS rather than taken as a second argument, because `earn_card` is the one
+	# writer and every caller already passes the whole run deck. A parameter would have been a
+	# third thing to keep in step across the game, the tool and seven test suites.
+	#
+	# The fallback matters: a deck of nothing but found cards cannot happen (`MIN_DECK_SIZE` is
+	# brought), but an empty priced set would divide by the `maxf(1.0, ...)` floor in `deck_cost`
+	# and price a full deck as one card.
+	var brought: Array = []
+	for c in deck:
+		if not c.found_in_run:
+			brought.append(c)
+	ratio = Balance.power_ratio(brought if not brought.is_empty() else deck, p_relics, power)
 
 	player = Combatant.new()
 	player.name = "Hero"
@@ -1007,6 +1027,31 @@ func _living_enemies() -> int:
 func card_damage(card: CardData) -> int:
 	return _outgoing(card_base_damage(card))
 
+## What one swing of this card LANDS on the enemy it is pointed at, right now.
+##
+## `card_damage` is the attacker's half — Strength, Weak, the percent relics. The defender's half
+## is Vulnerable, and it lived only inside `Combatant.take_damage`: so a card read 8 on its face,
+## the enemy wore Vulnerable, and it dealt 12. That is D50's rule broken by the one status whose
+## entire purpose is to change the number the player is about to read — and Vulnerable is the
+## reason to play a card, so the card that pays for it could never show what it bought.
+##
+## Block is deliberately NOT subtracted. Vulnerable multiplies the swing and is a property of the
+## swing; Block is a pool the swing runs into and is already drawn on the enemy's own plate. Quoting
+## damage-after-Block on the face would make the same card read differently against two enemies with
+## the same health, which is the opposite of what a face is for.
+##
+## Separate from `card_damage` rather than folded into it because the simulators compose the two
+## themselves — `foe.predicted_damage(eng.card_damage(c))` — and folding it in would apply
+## Vulnerable twice everywhere the AI weighs a card.
+func card_face_damage(card: CardData) -> int:
+	var d := card_damage(card)
+	if d <= 0:
+		return d
+	var foe := current_target()
+	if foe == null or foe.vulnerable <= 0:
+		return d
+	return int(round(float(d) * Combatant.VULNERABLE_MULT))
+
 func card_block(card: CardData) -> int:
 	if card.eff_block() <= 0 and card_block_bonus(card) <= 0:
 		return 0
@@ -1386,7 +1431,8 @@ func _enemy_debuff() -> String:
 static func _cards_to_state(cards: Array) -> Array:
 	var out: Array = []
 	for c in cards:
-		out.append({"id": c.id, "level": c.level, "growth": c.growth})
+		out.append({"id": c.id, "level": c.level, "growth": c.growth,
+			"found": c.found_in_run})
 	return out
 
 static func _cards_from_state(arr: Array, catalog: Dictionary) -> Array[CardData]:
@@ -1398,6 +1444,10 @@ static func _cards_from_state(arr: Array, catalog: Dictionary) -> Array[CardData
 		var c := (load(catalog[id]) as CardData).duplicate()
 		c.level = int(e.get("level", 1))
 		c.growth = int(e.get("growth", 0))
+		# Absent on a save written before D299, and `false` is the right answer there: those runs
+		# were priced on the whole deck, so restoring them as all-brought keeps them playing the
+		# game they were saved in rather than getting a discount at the reload.
+		c.found_in_run = bool(e.get("found", false))
 		out.append(c)
 	return out
 

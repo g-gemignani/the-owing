@@ -139,6 +139,11 @@ func earn_card(id: String) -> void:
 	var c := (load(meta.CATALOG[id]) as CardData).duplicate()
 	# joins at the level the collection already has for that card
 	c.level = int(meta.collection[id]["level"]) if meta.collection.has(id) else 1
+	# FOUND, and this is the only function in the game that adds a card to a live run — the
+	# fight reward, the shop and the event screen all come through here (D299). One writer is
+	# what makes "the run is priced on what you brought" a rule rather than a list of places
+	# that remember to say so.
+	c.found_in_run = true
 	run_deck.append(c)
 
 ## Thin one card out of the run deck. Run-scoped only: the collection is never

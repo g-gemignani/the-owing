@@ -15,6 +15,19 @@ enum Rarity { COMMON, UNCOMMON, RARE, EPIC, LEGENDARY }
 @export var rarity: Rarity = Rarity.COMMON
 ## Duplicate-fusion hook: level scales the numbers below.
 @export var level: int = 1
+
+## Was this copy FOUND during a run, rather than brought into it (D299)?
+##
+## Run-scoped and deliberately NOT `@export`: it is a fact about one copy in one dungeon, not
+## about the card, so it must never reach a `.tres` or the collection. `Resource.duplicate()`
+## copies stored properties only, which is what keeps a found copy from infecting the catalogue
+## instance it was duplicated from — every path that makes a run card sets this itself
+## (`GameState.earn_card`, and the run save through `CombatEngine._cards_to_state`).
+##
+## What reads it is `CombatEngine.setup`, which prices the run against the cards you BROUGHT and
+## lets the dungeon's gifts be free. See D238 for the same move on relics and the pillar it
+## rewrote.
+var found_in_run: bool = false
 @export var damage: int = 0
 @export var block: int = 0
 @export var draw: int = 0

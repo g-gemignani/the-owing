@@ -132,6 +132,64 @@ func _init() -> void:
 		if _hp_lost_per_fight(deepest, r) <= _hp_lost_per_fight(1, r):
 			fails += 1; print("FAIL depth is not the difficulty axis at ratio %.1f" % r)
 
+	# --- a run is priced on what you BROUGHT, not on what it gave you (D299) ---
+	#
+	# Behavioural rather than a source grep, because the rule lives in one line of
+	# `CombatEngine.setup` and the failure is silent: pricing the whole deck again produces a
+	# harder game that looks exactly like a tuning change.
+	var brought: Array[CardData] = []
+	for i in 12:
+		var hb := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
+		hb.level = 10
+		brought.append(hb)
+	var e_base := CombatEngine.new()
+	e_base.setup(brought, 100, 100, 3, Balance.Tier.NORMAL)
+	var base_ratio := e_base.ratio
+
+	# Six strong cards FOUND must not move the number the enemies scale against...
+	var grown: Array[CardData] = brought.duplicate()
+	for i in 6:
+		var hf := (load(CARD_DIR + "heavy_swing.tres") as CardData).duplicate()
+		hf.level = 40
+		hf.found_in_run = true
+		grown.append(hf)
+	var e_found := CombatEngine.new()
+	e_found.setup(grown, 100, 100, 3, Balance.Tier.NORMAL)
+	if abs(e_found.ratio - base_ratio) > 0.001:
+		fails += 1
+		print("FAIL a found card moved the priced ratio: %.3f -> %.3f (D299)" % [
+			base_ratio, e_found.ratio])
+
+	# ...and the same six BROUGHT must, or the ratchet has been switched off rather than aimed.
+	for c in grown:
+		c.found_in_run = false
+	var e_owned := CombatEngine.new()
+	e_owned.setup(grown, 100, 100, 3, Balance.Tier.NORMAL)
+	if e_owned.ratio <= base_ratio + 0.001:
+		fails += 1
+		print("FAIL bringing six strong cards did not raise the priced ratio — the ratchet is off, not aimed")
+
+	# A deck of nothing but found cards cannot happen, but an empty priced set would divide by
+	# `deck_cost`'s floor and price a whole deck as one card.
+	var all_found: Array[CardData] = []
+	for i in 12:
+		var ha := (load(CARD_DIR + "hack.tres") as CardData).duplicate()
+		ha.level = 10
+		ha.found_in_run = true
+		all_found.append(ha)
+	var e_all := CombatEngine.new()
+	e_all.setup(all_found, 100, 100, 3, Balance.Tier.NORMAL)
+	if abs(e_all.ratio - base_ratio) > 0.001:
+		fails += 1
+		print("FAIL an all-found deck priced at %.3f rather than falling back to %.3f" % [
+			e_all.ratio, base_ratio])
+
+	# The marker has to survive the run save, or quitting and resuming re-prices the rewards.
+	var state := CombatEngine._cards_to_state(all_found)
+	if state.is_empty() or not bool(state[0].get("found", false)):
+		fails += 1
+		print("FAIL the run save does not record which cards were found (D299)")
+
 	# --- the simulator must model the player the game actually gives you --------
 	#
 	# Three of these were silently false, and together they made the tool report a

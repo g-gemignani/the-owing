@@ -350,6 +350,17 @@ moves.
   binds the deck, the equipped power and every run removal — and binds them exactly as hard as
   it did. What it no longer reaches is a relic, because a relic is no longer something you own.
 
+  **And since D299 it no longer reaches a card the run gave you either**, which was the other
+  thing on the wrong side of that sentence: a won card is found, it leaves through the escrow, and
+  it was raising the number the enemies scale against. The game already said so — the reward
+  screen prints *"WEAKER than what you hold"* and D276 measured the driver refusing those offers.
+  **A reward the player is right to refuse is not a reward.** `CombatEngine.setup` prices the deck
+  you walked in with; `earn_card` marks what the dungeon hands over and is the one writer, so the
+  fight reward, the shop and the event screen are all covered by one line. Measured over the full
+  table: **cells at 0% completion 36 → 19, profiles that clear nothing anywhere 8 → 4 of 19**,
+  against three new cells at 100%. `cap` barely moves, and that is the shape — this is not more
+  deck growth, it is the same growth surviving to be used.
+
   **So every relic COUNT the player sees is `relics_seen` — what the character has met — and
   never `MetaState.relics`, which nothing has written to since (D247).** That array is empty on
   any save started after the change and `.size()` on it is a plausible-looking zero, so five

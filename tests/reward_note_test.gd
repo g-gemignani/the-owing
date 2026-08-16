@@ -48,6 +48,8 @@ func _ready() -> void:
 	_the_cap_is_the_cards_own()
 	_the_price_is_the_cards_own()
 	await _the_reward_row_carries_one_note_per_card()
+	_a_taken_card_is_marked_found()
+	await _taking_a_relic_moves_nothing()
 
 	MetaState.writes_disabled = true
 	_purge()
@@ -238,48 +240,88 @@ func _the_reward_row_carries_one_note_per_card() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 
-	for card in inst._roll_rewards(3):
-		var want: int = int(MetaState.collection[card.id]["level"]) \
-			if MetaState.collection.has(card.id) else 1
-		if card.level != want:
-			_fails += 1
-			print("FAIL %s is offered at Lv%d but joins at Lv%d" % [card.id, card.level, want])
+	# Every face the panel is about to draw, at the level the collection holds it at. Off
+	# `_reward_face`, which is what the panel itself calls — `_roll_rewards` was the old
+	# single-card roll and has not existed since the reward became a set (D297), so this loop
+	# called a missing function, the script error ended the whole section, and the suite went on
+	# printing PASS. A test that aborts silently is worse than no test.
+	for bundle in Balance.reward_bundles(GameState.dungeon_id, GameState.run_deck,
+			Balance.Tier.NORMAL, GameState.dungeon):
+		for cid in bundle.get("cards", []):
+			var card: CardData = inst._reward_face(String(cid))
+			if card == null:
+				continue
+			var want: int = int(MetaState.collection[card.id]["level"]) \
+				if MetaState.collection.has(card.id) else 1
+			if card.level != want:
+				_fails += 1
+				print("FAIL %s is offered at Lv%d but joins at Lv%d" % [card.id, card.level, want])
 
 	inst._win()
 	await get_tree().process_frame
+	await get_tree().process_frame
+
+	# One note per offered card. It rides the card's TOOLTIP now rather than a label under it —
+	# the sets stack three faces to a column and a note line under each would be nine paragraphs
+	# on one panel — so this reads what the player would read by pointing at the card.
 	var cards := 0
 	var notes := 0
+	var pressable := 0
 	for holder in _controls(inst.reward_box):
-		if holder.has_meta("card_id"):
-			cards += 1
-		var l := holder as Label
-		if l != null and (l.text.contains("Owned x") or l.text.begins_with("NEW")):
+		if not holder.has_meta("card_id"):
+			continue
+		cards += 1
+		var face: Button = null
+		for c in holder.get_children():
+			if c is Button:
+				face = c as Button
+		if face == null:
+			continue
+		# The two openings `collection_standing`'s hover can have, and between them they cover
+		# every card: one you hold copies of, and one you do not.
+		if face.tooltip_text.contains("You own") \
+				or face.tooltip_text.contains("is not in your collection"):
 			notes += 1
+		# D298: a card on this panel is for READING. Every one of them used to take the whole
+		# set when pressed, which on a phone meant the second tap that finished reading a card
+		# also bought the two beside it that you had not read yet.
+		if face.pressed.get_connections().size() > 0:
+			pressable += 1
 	if cards == 0:
 		_fails += 1; print("FAIL the reward screen offered no cards at all")
 	elif notes != cards:
 		_fails += 1
 		print("FAIL %d cards offered but %d of them say where they stand" % [cards, notes])
+	if pressable > 0:
+		_fails += 1
+		print("FAIL %d of %d reward cards commit when pressed; only the Take button may" % [
+			pressable, cards])
 
-	# ...and the note has to fit in the box the reward screen was given. `reward_box` is an
-	# anchored VBox with no scroll, so anything the column cannot hold pushes the Skip
-	# button out of the panel and towards the bottom edge of the screen.
+	# One Take per set, and one Skip. The set is taken by the control that says so.
+	var takes := 0
+	var skips := 0
+	for c in _controls(inst.reward_box):
+		var b := c as Button
+		if b == null:
+			continue
+		if b.text.begins_with("Take these"):
+			takes += 1
+		elif b.text.begins_with("Skip"):
+			skips += 1
+	if takes != inst.bundle_offer.size():
+		_fails += 1
+		print("FAIL %d sets offered but %d Take buttons" % [inst.bundle_offer.size(), takes])
+	if skips != 1:
+		_fails += 1; print("FAIL %d Skip buttons on the reward panel" % skips)
+
+	# ...and the whole column has to fit the frame it is centred in. The panel is a scroll now
+	# (D298), so overflow is reachable rather than lost off the bottom edge — but needing to
+	# scroll a reward pick is still a panel that does not fit, and this is the check that says
+	# so. Measured against the SCROLL's rect, which is the frame minus the screen padding.
 	#
-	# Against the ANCHOR rect, not `reward_box.size`: a Control's size is never less than its
-	# content, so the box quietly GROWS past its anchors instead of clipping — which is why
-	# this check read green against `size.y` while the panel was 59px taller than its own
-	# rectangle. What overflow costs is not a clipped button but a panel that stops being
-	# one: the Skip lands below the frame, in the strip the hand vacated.
-	#
-	# MEASURED at 1280x720 (viewport height is fixed at 720 by `aspect="expand"`, so this is
-	# the number that matters): 246px of card + a 3-line note + the dilution line + Skip =
-	# 399px. The old anchors allowed 403 — four pixels — and the capture showed the Skip
-	# button sitting on the HP bar and on the "Encounter cleared" line, because the note had
-	# taken 60 of them. `reward_box` starts at 0.14 now and allows 518.
-	#
-	# The note is 3 lines because `level_up_text` names one changed number in 3,251 of the
-	# 3,758 level steps in the catalogue and two in 506; `in_and_out` at Lv50 is the only step
-	# in the game that names three, and that one wraps to a fourth line.
+	# It used to be measured against an anchor band, and the band was the bug: a Control is never
+	# smaller than its content, so a column too tall grew straight out of its own rectangle
+	# instead of clipping, and the Skip button landed on the HP bar.
 	var need := 0.0
 	for child in inst.reward_box.get_children():
 		var c := child as Control
@@ -287,13 +329,119 @@ func _the_reward_row_carries_one_note_per_card() -> void:
 			need += maxf(c.get_combined_minimum_size().y, c.size.y)
 	need += float(inst.reward_box.get_theme_constant("separation")) \
 		* maxf(0.0, float(inst.reward_box.get_child_count() - 1))
-	var allowed: float = (inst.reward_box.anchor_bottom - inst.reward_box.anchor_top) \
-		* inst.reward_box.get_parent_area_size().y
+	var allowed: float = (inst.reward_box.get_parent() as Control).size.y
 	if need > allowed:
 		_fails += 1
-		print("FAIL the reward column needs %.0fpx and its anchors allow %.0f" % [need, allowed])
+		print("FAIL the reward column needs %.0fpx and the frame allows %.0f" % [need, allowed])
 	inst.queue_free()
 	await get_tree().process_frame
+
+## --- 6. the relic band holds still when a relic is taken (D298) -------------
+##
+## Reported as "choosing a relic moves the buttons around". Taking one used to free every child of
+## the panel and build it again without the relic row, so the three sets and the Skip button jumped
+## up by the height of the row — under a hand that had just pressed something, on a screen where
+## the next press spends the reward.
+##
+## Measured on the Skip button's own position, before and after, because that is the control the
+## complaint is about and a check on "does the code rebuild" would pass the day somebody rebuilds
+## it a different way.
+func _taking_a_relic_moves_nothing() -> void:
+	MetaState.new_save()
+	# Deep enough that the relic pool is not empty at zero clears (D223): the gate opens commons
+	# straight away, which is all this needs, but a save with nothing to offer would make the
+	# whole check vacuous rather than red.
+	for did in Balance.DUNGEONS:
+		MetaState.clear_counts[did] = 1
+	GameState.reset_run_progress()
+	GameState.select_dungeon("crypt")
+	for id in GameState.card_pool():
+		if MetaState.CATALOG.has(id):
+			MetaState.collection[id] = {"count": 2, "level": 1}
+	var deck: Array[CardData] = []
+	for id in MetaState.collection:
+		var e: Dictionary = MetaState.collection[id]
+		for i in int(e["count"]):
+			deck.append((load(MetaState.CATALOG[id]) as CardData).duplicate())
+	GameState.enter_dungeon(deck)
+	GameState.hp = GameState.max_hp
+	GameState.pending = {"type": GameState.NodeType.ELITE}
+	GameState.combat_state = {}
+
+	var inst = (load("res://scenes/Combat.tscn") as PackedScene).instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	await get_tree().process_frame
+	inst._win()
+	await get_tree().process_frame
+	await get_tree().process_frame
+
+	if inst.relic_offer.is_empty():
+		print("  (info: this elite offered no relic; the band check has nothing to stand on)")
+		inst.queue_free()
+		await get_tree().process_frame
+		return
+
+	var skip: Button = null
+	var tiles: Array[Button] = []
+	for c in _controls(inst.reward_box):
+		var b := c as Button
+		if b == null:
+			continue
+		if b.text.begins_with("Skip"):
+			skip = b
+		elif b.custom_minimum_size.x == UITheme.px(inst.RELIC_TILE_W):
+			tiles.append(b)
+	if skip == null:
+		_fails += 1; print("FAIL no Skip button on an elite's reward panel"); return
+	if tiles.size() != inst.relic_offer.size():
+		_fails += 1
+		print("FAIL %d relics offered but %d tiles drawn" % [inst.relic_offer.size(), tiles.size()])
+		return
+
+	var before: Vector2 = skip.global_position
+	tiles[0].emit_signal("pressed")
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if skip.global_position != before:
+		_fails += 1
+		print("FAIL taking a relic moved Skip from %s to %s" % [before, skip.global_position])
+	# ...and the relic is actually taken, or the check above passes on a dead button.
+	if GameState.run_relics.size() != 1:
+		_fails += 1
+		print("FAIL pressing a relic tile took %d relics" % GameState.run_relics.size())
+	for t in tiles:
+		if not t.disabled:
+			_fails += 1
+			print("FAIL a relic tile is still live after one was taken")
+			break
+
+	# ...and it is ON DISK, now (D298). This is the "I already took that relic and it was offered
+	# again" report, and it was never a rolling bug: `relic_offer` excludes `GameState.run_relics`,
+	# and the run only holds what it managed to write down. The pick used to be saved when the
+	# reward RESOLVED — a set taken or Skip pressed — so a phone that lost the app in between came
+	# back with the relic gone from the run and the pool free to deal it again.
+	var took: String = String(GameState.run_relics[0]) if not GameState.run_relics.is_empty() else ""
+	if took != "" and not _saved_run_relics().has(took):
+		_fails += 1
+		print("FAIL %s was taken but the written run holds %s" % [took, _saved_run_relics()])
+	inst.queue_free()
+	await get_tree().process_frame
+
+## What the run file on disk says this run is carrying. Read back rather than trusted, because the
+## whole point of the check above is the gap between the two.
+func _saved_run_relics() -> Array:
+	if not FileAccess.file_exists(MetaState.run_file()):
+		return []
+	var f := FileAccess.open(MetaState.run_file(), FileAccess.READ)
+	if f == null:
+		return []
+	var blob = JSON.parse_string(f.get_as_text())
+	f.close()
+	if not (blob is Dictionary):
+		return []
+	var run = blob.get("run", {})
+	return run.get("run_relics", []) if run is Dictionary else []
 
 func _controls(n: Node) -> Array[Control]:
 	var out: Array[Control] = []
@@ -317,3 +465,39 @@ func _purge() -> void:
 	d.list_dir_end()
 	for name in doomed:
 		DirAccess.remove_absolute("user://%s" % name)
+
+## A card the run is GIVEN must be marked found, or the ratchet prices it (D299).
+##
+## Here rather than in `test_balance.gd`, which owns the pricing rule itself: that suite runs
+## headless and `GameState.earn_card` reaches MetaState through `/root`, so a `--script` test
+## watches it return early and assert nothing. The rule has two halves — the engine must not
+## price a found card, and the game must actually mark one — and only a tree can see the second.
+func _a_taken_card_is_marked_found() -> void:
+	var id: String = MetaState.CATALOG.keys()[0]
+	var before: int = GameState.run_deck.size()
+	GameState.earn_card(id)
+	if GameState.run_deck.size() != before + 1:
+		_fails += 1
+		print("FAIL earn_card did not add a card")
+		return
+	var got: CardData = GameState.run_deck[before]
+	if not got.found_in_run:
+		_fails += 1
+		print("FAIL a card the run was given is not marked found — the ratchet will price it (D299)")
+	# ...and the deck it was added to must still hold cards that are NOT marked, or the
+	# assertion above would pass on a build that marked everything and priced nothing.
+	var brought := 0
+	for c in GameState.run_deck:
+		if not c.found_in_run:
+			brought += 1
+	if brought == 0:
+		_fails += 1
+		print("FAIL every card in the run deck reads as found — nothing is left to price")
+	# Put the run back exactly as it was. `earn_card` writes to the LIVE autoload, and the
+	# layout checks further down this file measure a panel whose height depends on the deck
+	# size — the dilution line quotes it. Leaving the card in moved the Skip button five
+	# pixels and failed an assertion about relics, which is a fault in this test rather than
+	# in the screen. **A check that mutates shared state has to hand it back.**
+	GameState.run_deck.remove_at(before)
+	if not GameState.escrow_cards.is_empty():
+		GameState.escrow_cards.remove_at(GameState.escrow_cards.size() - 1)

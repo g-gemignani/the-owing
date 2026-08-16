@@ -811,6 +811,10 @@ func _measure_run(dungeon_id: String, deck: Array[CardData], relics: Array = [],
 						var won := _choose_bundle(dungeon_id, reward_level, run_deck)
 						_tick("rewards", t_rw)
 						for wc in won:
+							# Found, so the ratio does not scale to it (D299). The tool has to
+							# mark this itself: it never calls `GameState.earn_card`, which is
+							# where the game does it.
+							wc.found_in_run = true
 							run_deck.append(wc)
 						tv.clear_pending()
 		fights_total += fights

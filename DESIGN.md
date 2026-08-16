@@ -283,6 +283,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D296** | [The landmarks had a table of names all along, one screen below the one D282 read](#d296--the-landmarks-had-a-table-of-names-all-along-one-screen-below-the-one-d282-read) |
 | **D297** | [The reward becomes a direction, and a level-1 face nearly hid it](#d297--the-reward-becomes-a-direction-and-a-level-1-face-nearly-hid-it) |
 | **D298** | [The table looked like a collapse, and three of the four alarms were the instrument](#d298--the-table-looked-like-a-collapse-and-three-of-the-four-alarms-were-the-instrument) |
+| **D299** | [A run is priced on what you brought, and the dungeon's gifts are free](#d299--a-run-is-priced-on-what-you-brought-and-the-dungeons-gifts-are-free) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -20815,3 +20816,75 @@ coverage gap hid a cliff. And this entry spent four runs proving three alarms we
 apart from the real thing without a second measurement.** The rule this file already carries —
 sweep the knob to an absurd value, count how often a rule fires — is cheap next to the four
 reports it would have saved.
+
+---
+
+### D299 — A run is priced on what you brought, and the dungeon's gifts are free
+
+D238 rewrote the pillar around a sentence: **persistent power lives in the deck and is priced;
+found power is free and temporary.** Relics moved to the free side. A card won from a fight stayed
+on the priced side, and it does not belong there — it is found, it leaves with the run through the
+escrow, and until now it raised the number the enemies scale against.
+
+The game already said so out loud. The reward screen prints *"WEAKER than what you hold — taking
+it thins your draw"*, and D276 measured the driver refusing those offers. **A reward the player is
+right to refuse is not a reward.**
+
+`CombatEngine.setup` now prices the cards you walked in with. `earn_card` marks what the run gives
+you, and it is the one writer — the fight reward, the shop and the event screen all come through
+it, which is what makes this a rule rather than a list of places that remember to say so.
+
+#### What it bought, over the full table
+
+| | before | after |
+|---|---|---|
+| cells at 0% completion | **36** | **19** |
+| profiles that clear nothing anywhere | 8 of 19 | **4 of 19** |
+| cells at 100% | 3 | 6 |
+| matched-progression completion | 33% | **36%** |
+| `cap` median | 1.73x | 1.83x |
+
+**Seventeen dead cells for three new walkovers**, and four archetypes that could not finish a run
+anywhere now can: Draw 0% → 13%, Deep 0% → 4%, Late 0% → 6%, Endgame 0% → 1%. D298 named that
+count as the oldest open item in the project and the number to move; this is the first thing that
+has moved it.
+
+`cap` barely shifts, and that is the shape to notice. **This is not more deck growth, it is the
+same growth surviving to be used** — which is exactly what a table of decks winning every normal
+fight and losing every boss was asking for.
+
+Both ends of D231's constraint move, and the trade is stated rather than hidden: three cells at
+100% is three runs decided before they started, bought for seventeen that were decided the other
+way.
+
+#### Why it is read off the cards
+
+`found_in_run` is a plain `var` on `CardData`, not an `@export`. It is a fact about one copy in
+one dungeon, so it must never reach a `.tres` or the collection — and `Resource.duplicate()`
+copies stored properties only, which is what stops a found copy infecting the catalogue instance
+it came from. The run save carries it explicitly (`_cards_to_state`), and a save written before
+this reads `false`: those runs were priced on the whole deck, so restoring them as all-brought
+keeps them playing the game they were saved in rather than handing out a discount at the reload.
+
+No caller signature moved. A parameter would have been a third thing to keep in step across the
+game, the tool and the suites — and D297 had just finished paying for two copies of a rule.
+
+#### The guards, and the one that broke a neighbour
+
+`tests/test_balance.gd` asserts the pricing behaviourally, in both directions: six strong cards
+FOUND must not move the ratio, and the same six BROUGHT must. The second half is what separates
+"aimed the ratchet" from "switched it off", and without it the first passes on a build that prices
+nothing at all. An all-found deck must fall back rather than divide by `deck_cost`'s floor. The
+save must record the marker. Mutation-checked: pricing the whole deck again fails, dropping the
+marker from the save fails.
+
+The game marking the card lives in `tests/RewardNoteTest.tscn`, because `earn_card` reaches
+MetaState through `/root` and a headless suite watches it return early.
+
+**And that check broke a neighbour, which is worth the paragraph.** It calls the live
+`earn_card`, so the run deck grew by one — and the layout assertions further down the same file
+measure a panel whose height depends on the deck size, because the dilution line quotes it. The
+Skip button moved five pixels and a relic assertion failed, in a file where nothing about relics
+had changed. It hands the state back now. **A check that mutates shared state has to restore it**,
+and a suite that runs its checks in one live autoload will find that out through the least related
+assertion it owns.
