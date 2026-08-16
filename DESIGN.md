@@ -20597,6 +20597,13 @@ That is not proof, and it is the first hypothesis worth testing when it happens 
 model picker showed every row selectable with no reset time, so it is not the daily cap,
 and one account driven by two browsers at once is the one new variable.
 
+**It survived the daily reset, which rules the cap out further.** The next morning, on a
+fresh cap, two more sheets stalled the same way — one for thirteen minutes and one for
+thirty-five — and the model picker still listed 3.5 Flash-Lite, 3.6 Flash and 3.1 Pro with
+no greyed row and no reset time. Six stalls now, across two days and two caps. Whatever
+this is, it is not the documented quota wall, and the only reliable response found so far
+is to stop and come back later.
+
 #### The art is in, after three attempts that failed three different ways
 
 **One: every subject was drawn sitting on a big stone block.** My own prompt put it there.
