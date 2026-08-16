@@ -123,8 +123,8 @@ func _init() -> void:
 	var span := float(Balance.ISO_GRID * 2)
 	var plate_w := span * tile_w * 0.5
 	var plate_h := span * tile_h * 0.5 + tile_h
-	# the header, the two text lines and the row of move buttons live in the same
-	# column, so the floor cannot have the whole window
+	# the header, the two text lines and the act row live in the same column, so the
+	# floor cannot have the whole window
 	var chrome := 260.0 * scale
 	if view_w > window.x:
 		fails += 1
@@ -133,6 +133,16 @@ func _init() -> void:
 		fails += 1
 		print("FAIL the isometric view is %.0fpx tall with only %.0fpx of room" % [
 			view_h, window.y - chrome])
+	# VIEW_W/VIEW_H are the floor's MINIMUM since D325: it expands into whatever the
+	# column has left, which on this window is 1248x506 rather than the 1040x400 above.
+	# Checking the minimum is still the right check — the floor can only be bigger — but
+	# only while the expanding is actually asked for. Pin it, or a `SHRINK_CENTER` put
+	# back by hand would silently return the screen to the smaller of the two sizes and
+	# every number here would go on passing.
+	var floor_build := _func_body("res://scripts/iso_run.gd", "func _build_ui")
+	if floor_build.find("floor_view.size_flags_vertical = Control.SIZE_EXPAND_FILL") == -1:
+		fails += 1
+		print("FAIL the iso floor does not expand — it is pinned to its own minimum and the column's spare height goes to nothing")
 	if plate_w <= view_w or plate_h <= view_h:
 		fails += 1
 		print("FAIL the iso plate (%.0fx%.0f) fits inside its own view (%.0fx%.0f) — the camera does nothing and the floor has no hidden ground" % [

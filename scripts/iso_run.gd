@@ -25,20 +25,27 @@
 ## burying the card game (D14, D79). A continuous world would have nothing to count,
 ## and "every dungeon costs the same" would stop being measurable.
 ##
-## The camera is load-bearing, not a nicety (D77). A 12x12 plate is 1392x754
-## unscaled and the window is 1280x720 with a header and a button row in the same
-## column, so the whole floor CANNOT be shown at once — which is the point, because
-## a floor you can see all of is a floor with nothing left to discover.
+## The camera is load-bearing, not a nicety (D77). A 12x12 plate is 1392x754 unscaled
+## and the window is 1280x720 with a header and two text lines in the same column, so
+## the whole floor CANNOT be shown at once — which is the point, because a floor you can
+## see all of is a floor with nothing left to discover. That still holds now the floor
+## takes every pixel the column can spare (D325): the widest it can be here is 1248 of
+## 1392 and the tallest 506 of 754.
 extends Control
 
 ## Tile footprint, in unscaled pixels. Twice as wide as it is tall, which is the
 ## flat 2:1 projection every isometric tileset ships in.
 const TILE_W := 116.0
 const TILE_H := 58.0
-## The window onto the floor. This is what has to fit the screen, not the plate —
-## tests/test_layout.gd checks this against the window AND checks that the plate
-## is bigger than it, so nobody shrinks ISO_GRID back to where the camera is dead
-## code without a test saying so.
+## The SMALLEST window onto the floor, not the size of it (D325). The floor fills
+## whatever the column has left after the header, the two text lines and the act row,
+## which on a 1280x720 frame is 1248x506 at rest and 1248x460 with an offer standing.
+##
+## This is still what has to fit the screen, not the plate — tests/test_layout.gd checks
+## it against the window AND checks that the plate is bigger than it, so nobody shrinks
+## ISO_GRID back to where the camera is dead code without a test saying so. A minimum is
+## the right thing to check: the floor can only ever be bigger than this, so a plate that
+## clears it clears every size the column can hand out.
 const VIEW_W := 1040.0
 const VIEW_H := 400.0
 ## How high a rock block stands, as a fraction of the tile height. Rock used to be a
@@ -658,7 +665,7 @@ func _foe_role(enemy_id: String, face: String) -> String:
 	foe_missing[role] = true
 	return ""
 
-## The way out, in the top right (D309). Kept as a member for the same reason the combat screen
+## The way out, in the top right (D307). Kept as a member for the same reason the combat screen
 ## keeps its own: a screen that can seal its exit has to be able to reach the button.
 var menu_btn: Button
 
@@ -707,7 +714,7 @@ func _build_ui() -> void:
 	top.add_child(risk_frame)
 	UI.hoverable(risk_frame, "AT RISK: found this run, but only kept if you beat the boss or use an Escape Rope.")
 
-	# ...and the way out, at the far right of the top row (D309). It was a full-width bar at the
+	# ...and the way out, at the far right of the top row (D307). It was a full-width bar at the
 	# BOTTOM of the screen beside a second bar called "Cards", under the floor and under the move
 	# legend — the two least-pressed controls on the screen holding the widest band on it, at the
 	# end of the reading order, on the screen with more turns in it than any other. Every other
@@ -744,13 +751,21 @@ func _build_ui() -> void:
 	hint_label.add_theme_color_override("font_color", Color(0.78, 0.80, 0.88))
 	root.add_child(hint_label)
 
-	# The floor asks for the exact size its grid needs. A drawn Control has no
-	# content to measure, so without this it would report a minimum of zero and the
-	# spacers either side would crush it flat — the dice board's bug, which took a
-	# screenshot to find (D57).
+	# The floor asks for a floor and then takes everything left over (D325).
+	#
+	# The minimum is what a drawn Control cannot work out for itself: it has no content to
+	# measure, so without one it reports zero and the column crushes it flat — the dice
+	# board's bug, which took a screenshot to find (D57). The EXPAND is what spends the
+	# height D307 freed when the two bars came off the foot, and the FILL the width the
+	# old centring left as margin either side.
+	#
+	# Grown rather than re-measured on purpose. A bigger number here would have to be
+	# retuned by hand every time a line above it wraps or a control joins the column;
+	# expanding takes whatever those leave and needs no number at all.
 	floor_view = Control.new()
-	floor_view.custom_minimum_size = _view_size()
-	floor_view.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	floor_view.custom_minimum_size = _view_min()
+	floor_view.size_flags_horizontal = Control.SIZE_FILL
+	floor_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	# the plate is larger than this window on purpose, so the overhang is cut off
 	# rather than painted over the header and the buttons
 	floor_view.clip_contents = true
@@ -762,6 +777,10 @@ func _build_ui() -> void:
 	floor_view.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
 	floor_view.draw.connect(_draw_floor)
 	floor_view.gui_input.connect(_on_floor_input)
+	# The window is the Control now, so a Control that changes size has moved the camera.
+	# A resize does not redraw a CanvasItem on its own, and without this the first frame
+	# after the column re-sorts is drawn with the previous frame's centre.
+	floor_view.resized.connect(floor_view.queue_redraw)
 	root.add_child(floor_view)
 
 	_build_pad()
@@ -789,11 +808,7 @@ func _build_ui() -> void:
 	acts_box.add_theme_constant_override("separation", UITheme.sep(10))
 	root.add_child(acts_box)
 
-	var spacer_bot := Control.new()
-	spacer_bot.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	root.add_child(spacer_bot)
-
-	# The foot of this screen is EMPTY now (D309). It held two full-width bars — `Cards` and
+	# The foot of this screen is EMPTY now (D307). It held two full-width bars — `Cards` and
 	# `Menu` — and D114 spent its whole entry getting them to share one row without slicing the
 	# second in half. The right answer was that neither belonged there.
 	#
@@ -802,6 +817,10 @@ func _build_ui() -> void:
 	# way out of the crawl dressed as a feature, on a screen whose whole subject is where you are
 	# standing. `Menu` is the way out, it is one press away in the corner every other screen keeps
 	# it in, and Escape runs the same Callable.
+	#
+	# It stayed empty for one commit, held open by a spacer, and that spacer was the whole of
+	# what D325 removed: the room the two bars gave back was being spent on nothing. The floor
+	# expands into it instead.
 
 ## The movement pad: four keys in a cross, in the bottom-left corner of the floor window,
 ## built once and never rebuilt (D168).
@@ -898,9 +917,24 @@ func _plate_size() -> Vector2:
 	var g := _grid()
 	return Vector2(float(g.x + g.y) * t.x * 0.5, float(g.x + g.y) * t.y * 0.5 + t.y)
 
-## The window onto it.
-func _view_size() -> Vector2:
+## The SMALLEST window the floor will accept, which is the only size it can state for
+## itself. Everything above this comes from the column, so this is what the layout test
+## measures and what the header comment's "cannot be shown at once" is argued against.
+func _view_min() -> Vector2:
 	return Vector2(UITheme.px(VIEW_W), UITheme.px(VIEW_H))
+
+## The window onto the plate, as it actually is this frame (D325).
+##
+## Read off the Control rather than computed, because the Control is what the column
+## sized: the camera, the cull rectangle and the click-to-cell conversion all have to
+## agree with the rectangle being drawn into, and only one of them can be the authority.
+## Falls back to the minimum for the frames before the container has sorted its children,
+## where `size` is still zero and a zero-wide window draws nothing at all.
+func _view_size() -> Vector2:
+	var floor_min := _view_min()
+	if floor_view == null:
+		return floor_min
+	return Vector2(maxf(floor_view.size.x, floor_min.x), maxf(floor_view.size.y, floor_min.y))
 
 func _grid() -> Vector2i:
 	var tv := GameState.traversal as TraversalIso
@@ -2409,7 +2443,7 @@ func _refresh() -> void:
 		return
 
 	if floor_view != null:
-		floor_view.custom_minimum_size = _view_size()
+		floor_view.custom_minimum_size = _view_min()
 		# also set here, not only in the draw, so a click that arrives before the
 		# first redraw is converted with a camera that exists
 		cam = _camera_for(_eye_plate(tv))

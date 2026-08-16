@@ -306,6 +306,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D321** | [`git add` stages the FILE, not the change you wrote](#d321--git-add-stages-the-file-not-the-change-you-wrote) |
 | **D322** | [The answer was written, rendered and never called](#d322--the-answer-was-written-rendered-and-never-called) |
 | **D324** | [The walk cycle changed clothes, and a colour grade fixed half of it](#d324--the-walk-cycle-changed-clothes-and-a-colour-grade-fixed-half-of-it) |
+| **D325** | [The foot was cleared for the floor, and the floor never took it](#d325--the-foot-was-cleared-for-the-floor-and-the-floor-never-took-it) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -22559,3 +22560,81 @@ will confidently report that region as converged.** Two of the three transforms 
 adopted on improving numbers and rejected on sight. Every one of them was rendered
 side by side with the original before it was believed — which is now written into the tool's own
 header as the condition for changing it.
+
+---
+
+### D325 — The foot was cleared for the floor, and the floor never took it
+
+D307 took two full-width bars off the bottom of the crawl. `Cards` went, `Menu` moved to the top
+right, and the entry ends with the sentence *"The floor viewport gets the height back."*
+
+It did not. The bars came out and a `Control` with `SIZE_EXPAND_FILL` went in behind them, so the
+column still spent that band — on nothing. The floor stayed at the 1040x400 window it was given
+when it shared the screen with two button rows, centred, with 104px of margin down each side.
+Measured on a 1280x720 frame: 96px of empty column under the floor at rest, and 208px of empty
+column beside it.
+
+#### A minimum, not a size
+
+The obvious repair is a bigger pair of numbers. That is the repair that comes back: `VIEW_W` and
+`VIEW_H` are read by the camera, by the cull rectangle and by click-to-cell, and any number
+written here is correct for one window, one font and one arrangement of the column above it. The
+log line and the hint line both wrap. The act row is 46px when a hunter offers a break-away and
+0 the rest of the time.
+
+So the floor asks for a minimum and takes the rest:
+
+    floor_view.custom_minimum_size = _view_min()
+    floor_view.size_flags_horizontal = Control.SIZE_FILL
+    floor_view.size_flags_vertical = Control.SIZE_EXPAND_FILL
+
+`VIEW_W` and `VIEW_H` are unchanged and now mean the smallest window the floor accepts. The
+spacer is gone, because the expanding floor is the spacer.
+
+| | before | at rest | with an offer standing |
+|---|---|---|---|
+| floor window | 1040x400 | 1248x506 | 1248x460 |
+| ground on screen | 416,000px² | 631,488px² | 574,080px² |
+
+That is 52% more floor at rest, and 38% more on the turn a hunter is asking for HP.
+
+#### One rectangle, one authority
+
+`_view_size()` used to compute the window from the two constants, and everything that had to
+agree with it read the same function. It reads `floor_view.size` now. The Control is what the
+column sized, so the Control is the only thing that knows the answer — a second calculation of
+it is a second answer waiting to disagree.
+
+Two consequences, both real:
+
+- It falls back to the minimum while `size` is still zero. A container sorts its children after
+  the frame in which they are added, and a window 0px wide culls every tile.
+- `resized` is connected to `queue_redraw`. A `CanvasItem` does not redraw when it changes size,
+  and the camera is derived from the size, so without this the first frame after any re-sort is
+  drawn around the previous frame's centre.
+
+#### What the test now pins
+
+`tests/test_layout.gd` measured `VIEW_W`/`VIEW_H` against the window and against the plate, and
+both checks still hold — a minimum is the right thing to check here, because the floor can only
+ever be bigger than it and a plate that clears the minimum clears every size the column can hand
+out. What those checks cannot see is whether the expanding is still asked for. Put
+`SHRINK_CENTER` back by hand and every number in that block goes on passing while the screen
+quietly returns to 1040x400.
+
+So the test reads the flag out of `_build_ui`. Mutation-checked: changing `SIZE_EXPAND_FILL` to
+`SIZE_FILL` turns it red.
+
+#### The camera survives it, which was the thing to check
+
+The header of `iso_run.gd` argues that the plate cannot be shown at once, and that this is the
+point — a floor you can see all of has nothing left to discover. A 12x12 plate is 1392x754. The
+widest the floor can be in this column is 1248 and the tallest is 506, so the argument holds with
+144px and 248px to spare. It would not hold at 16x9, which is the direction to watch.
+
+#### Three references pointed at the wrong entry
+
+`iso_run.gd` cited D309 three times for the change D307 made. D309 is about creature size. The
+code comments were written in a session that expected the next free number and got a different
+one — the same collision D321 documents, one level down: the number in the comment was checked
+against nothing.
