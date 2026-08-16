@@ -292,6 +292,12 @@ const BEAST_H_MAX := 0.65
 ## painted file per design and cannot preload this script to read it (D122).
 const WANDER_DESIGNS := Balance.ISO_WANDERERS
 
+## The two hero paintings, and the stride poses each one has (D222). Named once here
+## because three places need the same list: the load, the pass that makes those poses one
+## character (`_pin_poses`), and `tests/test_art.gd`.
+const HERO_BASES := ["hero_s", "hero_n"]
+const HERO_POSES := ["a", "b", "p"]
+
 var art := {}          ## role -> Texture2D, or absent
 ## Per-archetype roles already looked up and NOT found, so `_foe_role` asks the filesystem
 ## once per archetype instead of once per redraw. A plain absence from `art` cannot say
@@ -308,6 +314,10 @@ var fill := {}
 var family_h := {}
 ## role -> how much longer than tall that creature is, 1.0 for anything upright (D309).
 var length_ratio := {}
+## role -> what to multiply a POSE FRAME's height by so that it draws the same character at
+## the same size as the standing painting it is a frame of (D316). 1.0, i.e. absent, for
+## everything that is not one frame of an animation.
+var pose_scale := {}
 ## The last step taken, kept as a grid vector because FOUR directions have to come out
 ## of it and two booleans could not.
 ##
@@ -2626,6 +2636,17 @@ func _on_pick(i: int) -> void:
 			return
 		GameState.keys -= 1
 	var chosen := tv.select(i)
+	# The key is PAID HERE, before this step turns into whatever else it turns into (D315).
+	# The model reports the pickup and owns no run resources (D13) — and this line used to sit
+	# in the "the step resolved nothing" branch below, with the sentence that announces it. So
+	# a key picked up on a step that ALSO started a fight was taken off the floor and never
+	# added: `enc[pos]` went bare inside the model, `chosen` came back holding an ambush, and
+	# every path from there returns before the payment. The floor moves on the turn you bend
+	# down (D197), so that is not a corner case — it is what happens when you walk off the path
+	# for a key with a wanderer behind you, which is the only way keys are ever collected.
+	# The SENTENCE stays below, because it is only readable on a turn nothing else took.
+	if tv.picked_key:
+		GameState.keys += 1
 	if tv.shrine_paid != "":
 		# The stone takes HP now and pays gold when you leave (D188). Both reported by the
 		# model and paid here, exactly as the errand's gold and the toll's price are (D13).
@@ -2692,11 +2713,10 @@ func _on_pick(i: int) -> void:
 		# that RunFlow never has to learn a node type that is not an encounter — so this
 		# is the only place they can be reported to the player at all.
 		#
-		# The key is also PAID here. The model is pure logic and owns no run resources
-		# (D13), so it reports the pickup on itself and this is the one line that adds it,
-		# exactly as an ambush's HP price is reported there and charged here.
+		# The key was already PAID, up where `select` returned (D315). Only the report is
+		# here: it is the one place a pickup can be said out loud, and it can only be said
+		# on a turn that has the screen to itself.
 		if tv.picked_key:
-			GameState.keys += 1
 			Audio.play("treasure")
 			log_label.text = "A key, down here where nothing else is. You take it."
 		elif tv.errand_read:

@@ -296,6 +296,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D311** | [One constant was doing two jobs, and the rim kept the half it could not clean](#d311--one-constant-was-doing-two-jobs-and-the-rim-kept-the-half-it-could-not-clean) |
 | **D312** | [Powers were the other list of earned things, drawn as a table](#d312--powers-were-the-other-list-of-earned-things-drawn-as-a-table) |
 | **D313** | [The release published, and the run went red on the page about it](#d313--the-release-published-and-the-run-went-red-on-the-page-about-it) |
+| **D315** | [The key was reported every time, and paid only on the quiet turns](#d315--the-key-was-reported-every-time-and-paid-only-on-the-quiet-turns) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21890,3 +21891,66 @@ as somebody remembered a setting invisible from the repository. **A workflow tha
 the platform it runs on should be corrected in the file, where the next reader can see it.** The
 same reasoning D262 applies to generated documents — a claim nothing checks is a claim that is
 true on the day it is written.
+
+### D315 — The key was reported every time, and paid only on the quiet turns
+
+The report, from v0.2.0: *"even if I have found and taken a key on the floor, it tells me
+that I cannot open chests."*
+
+Every site read correctly on its own, which is why this took reading the control flow rather
+than reading the code. `TraversalIso` sets `picked_key` when you step onto a key tile and
+blanks the tile. `IsoRun` adds one to `GameState.keys`. The locked door spends one and
+refuses when there are none. The chest screen spends one and leaves the chest standing when
+there are none (D307). `keys` is written into the run save and read back out of it. Six
+places, all right.
+
+The defect was WHERE the payment sat. `_on_pick` paid the key inside `if chosen.is_empty():`
+— the branch for a step that resolved into nothing — because that is also where the sentence
+announcing the pickup is written, and the two were placed together on the grounds that they
+are one event. They are not one event. The sentence belongs to a turn that has the screen to
+itself. The key belongs to the step.
+
+A step is not over when the foot lands. The model picks the key up, and then the floor takes
+its turn (D197): every hunter moves, and one that reaches you comes back as an ambush. So
+`chosen` holds a fight, and every path out of `_on_pick` from that point returns before the
+payment — as does the slip branch above it. The tile is bare, because the model blanked it
+the moment the foot landed. The key is nowhere.
+
+**And this is the common case, not the corner case.** `_place_keys` puts a key in the ground
+the encounters left over — the far corner of a chamber nothing else is in — so that fetching
+one costs turns, which is the floor's only currency. Turns are exactly what the wanderers
+spend too. The one place a key is ever collected is the place you are furthest off the route
+with the floor closed behind you, which is the place a hunter is most likely to reach you.
+The player watched the key leave the floor and it was never anywhere else.
+
+The fix is three lines moved: `GameState.keys += 1` now runs where `select()` returns, before
+the step becomes anything. The sentence stays below, where it can only be read.
+
+#### The rule
+
+**A resource reported by one object and paid by another is only paid on the paths that reach
+the payment.** D13 splits the two on purpose — a traversal owns no run resources, so it
+reports and the caller pays — and the split is right; it is what lets the model be simulated
+1,320 floors at a time. What breaks it is putting the payment beside the NARRATION of the
+event rather than beside the event. Narration is conditional by nature: it is written only
+when there is room to say it. A payment never is.
+
+Every other reported price in `_on_pick` is paid on the line that reads it — the slip's HP,
+the door's key, the shrine's HP, the toll's HP — and each is paid before the branching starts.
+The key was the one that was paid at the bottom, and it was the only one whose report and
+payment were adjacent in the source.
+
+#### What was tested, and what it cost to have nothing testing it
+
+Nothing anywhere covered the key currency. `grep keys tests/` returned matches on
+`Dictionary.keys()` and nothing else — for a resource with a placement rule, a save field, two
+spenders and a pickup path. The suite was green through the whole of 0.2.0.
+
+`tests/test_keys.gd` now stages the collision rather than waiting for it: a real generated
+floor, a real key on it, and one hunter placed beside the key tile, then the step onto the key.
+It asserts the pickup reports, the tile goes bare, and the return value is the ambush. That
+proves the collision is reachable; it cannot prove the crawl pays, because `iso_run.gd` needs
+the autoloads a `--script` run does not have. So the crawl's half is asserted on its source:
+the line that adds the key must appear before the first `if chosen.is_empty():` in `_on_pick`.
+Run against the unfixed file it goes red with that message, which is the only evidence worth
+having that a regression test tests the regression.
