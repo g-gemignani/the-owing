@@ -49,6 +49,7 @@ func _ready() -> void:
 	# real face now, so the check is that a face is there at all.
 	await _check_shop_draws_its_stock()
 	await _check_unmet_relics_are_dead()
+	await _check_locked_powers_are_dead()
 
 	# the collection specifically must explain each card, not just be hoverable
 	await _check_collection_explains()
@@ -168,6 +169,63 @@ func _check_unmet_relics_are_dead() -> void:
 	if live != 1:
 		_fails += 1
 		print("FAIL %d relic tiles are live against 1 relic met" % live)
+	inst.queue_free()
+	await get_tree().process_frame
+
+## A locked power is greyed and dead, and only the one button levels anything (D312).
+##
+## The same pair the Relics screen is checked on, for the same reason: gold does not buy a power,
+## the place that holds it does, so a locked tile has nothing behind a press. And a tile must not
+## be able to SPEND — the level button is the only control on the screen that acts, which is D307's
+## rule applied to the second screen that grew a wall of tiles.
+func _check_locked_powers_are_dead() -> void:
+	MetaState.new_save()
+	MetaState.gold = 5000
+	var held := String(Balance.POWERS[0])
+	MetaState.powers = {held: 1}
+
+	var scene := load("res://scenes/Powers.tscn") as PackedScene
+	if scene == null:
+		_fails += 1; print("FAIL cannot load the Powers screen"); return
+	var inst := scene.instantiate()
+	add_child(inst)
+	await get_tree().process_frame
+	var live := 0
+	var dead := 0
+	for c in _controls(inst):
+		var b := c as Button
+		if b == null or b.custom_minimum_size.x != UITheme.px(UI.RELIC_TILE_W):
+			continue
+		if b.disabled:
+			dead += 1
+		else:
+			live += 1
+	if dead == 0:
+		_fails += 1
+		print("FAIL every power tile is pressable — a locked one has nothing to show")
+	if live != 1:
+		_fails += 1
+		print("FAIL %d power tiles are live against 1 power held" % live)
+
+	# Pressing the held tile reads it and arms the button, and takes no gold doing it.
+	var gold_was: int = MetaState.gold
+	for c in _controls(inst):
+		var b := c as Button
+		if b != null and not b.disabled \
+				and b.custom_minimum_size.x == UITheme.px(UI.RELIC_TILE_W):
+			b.emit_signal("pressed")
+			break
+	await get_tree().process_frame
+	if MetaState.gold != gold_was:
+		_fails += 1; print("FAIL pressing a power tile spent gold")
+	if inst.picked != held:
+		_fails += 1; print("FAIL pressing a power tile did not select it")
+	if inst.up_btn.disabled:
+		_fails += 1; print("FAIL the level button is dead with a levellable power picked")
+	# ...and the line says what the level BUYS, which is the whole of the report.
+	if not inst.reader.text.contains("would buy"):
+		_fails += 1
+		print("FAIL the reader does not say what the next level buys: %s" % inst.reader.text)
 	inst.queue_free()
 	await get_tree().process_frame
 

@@ -669,6 +669,20 @@ const RELIC_LOST_DIM := 0.35
 ## NAME as well as the picture — the label carries an explicit rarity colour, which `modulate`
 ## alone leaves burning at full strength beside a faded icon.
 static func relic_face(parent: Node, rd: RelicData, dim: float = 0.0) -> Button:
+	return sigil_face(parent, PixelArt.relic_art(rd.id), rd.name,
+		Icons.rarity_colour(rd.rarity), dim)
+
+## A picture-and-name tile: the one control a RELIC and a POWER are both drawn as (D312).
+##
+## Split out of `relic_face` when the Powers screen became a wall of sigils. The two screens list
+## the same kind of thing — something you have earned and cannot lose, one painted icon each, kept
+## on the `reliquary` backdrop they already share (D123) — and they were a grid of tiles and a
+## column of text rows. One builder, so a screen cannot drift from its twin by being edited alone.
+##
+## `dim` recedes the whole tile AND the name. The label carries an explicit colour, which
+## `modulate` alone leaves burning at full strength beside a faded icon.
+static func sigil_face(parent: Node, art: Texture2D, label_text: String,
+		tint: Color, dim: float = 0.0) -> Button:
 	var b := Button.new()
 	UITheme.style_button(b)
 	b.custom_minimum_size = Vector2(UITheme.px(RELIC_TILE_W), UITheme.px(RELIC_TILE_H))
@@ -694,21 +708,19 @@ static func relic_face(parent: Node, rd: RelicData, dim: float = 0.0) -> Button:
 	# left. The other order gives the picture its 56px floor and lets the name overflow, which is
 	# the same bug one step further along: the tile is a fixed height and the name is the part
 	# that must not be cut.
-	var nl := label(col, rd.name)
+	var nl := label(col, label_text)
 	nl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	nl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	nl.custom_minimum_size.y = UITheme.px(RELIC_NAME_H)
 	nl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# Darkened rather than greyed: rarity is the one part of an unmet relic that connects to a
-	# decision the player can make — a deeper, harder fight rolls rarer ones — so it is shown
-	# deliberately (D116) and must survive being dimmed.
-	var tint := Icons.rarity_colour(rd.rarity)
+	# Darkened rather than greyed: rarity is the one part of a thing you have not got yet that
+	# connects to a decision the player can make — a deeper, harder fight rolls rarer ones — so it
+	# is shown deliberately (D116) and must survive being dimmed.
 	nl.add_theme_color_override("font_color", tint if dim <= 0.0 else tint.darkened(dim))
 
-	# The painting, when there is one. A relic with no file yet falls back to its name alone, which
+	# The painting, when there is one. A slot with no file yet falls back to its name alone, which
 	# is the same one-file-at-a-time contract the relics screen runs on (D121) — a half-painted set
-	# is a row with pictures appearing in it, never a row of holes.
-	var art := PixelArt.relic_art(rd.id)
+	# is a wall with pictures appearing in it, never a wall of holes.
 	if art != null:
 		var pic := TextureRect.new()
 		pic.texture = art

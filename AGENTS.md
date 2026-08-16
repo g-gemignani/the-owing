@@ -1021,6 +1021,13 @@ moves.
   offers something to press, and every encounter can be left (D47). No fusion or death
   can strand the collection below a legal deck (D12).
 
+- **The two lists of earned things are one screen twice.** Relics and Powers hold the same
+  kind of thing — earned, unlosable, one painted icon each — so they share a backdrop
+  (D123), a tile (`UI.sigil_face`), a greyed-and-dead state for what you have not got, and
+  one reader line for what a press says (D308, D312). Levelling a power quotes
+  `level_up_text`, the same sentence the camp and the Collection quote for a card, because
+  `PowerData extends CardData` and there is one implementation to quote.
+
 - **A control with nothing behind it is dead, not polite.** A press that answers "there is
   nothing here" teaches the player to press again — the Relics screen had nineteen live tiles
   with dead outcomes on a mid save (D308). An unmet relic is `disabled`, so the frame itself

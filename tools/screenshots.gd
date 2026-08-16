@@ -135,7 +135,10 @@ const SHOTS := [
 	# bottom of the window taking the Back button with them. A capture of three packs
 	# unopened cannot show that, and did not.
 	["PacksOpened", "res://scenes/Packs.tscn", "packs+haul", "opened"],
-	["Powers", "res://scenes/Powers.tscn", ""],
+	# With SOME held, for the reason the Relics row is captured that way (D308/D312): this screen
+	# draws held and locked powers differently, and a save that holds none photographs a wall of
+	# dead tiles with the difference nowhere in the picture.
+	["Powers", "res://scenes/Powers.tscn", "meta+powers"],
 	["Glossary", "res://scenes/Glossary.tscn", ""],
 	# Settings was missing from this table until D123 went looking for it. Nothing was
 	# wrong with the screen — it simply had never been photographed, so "check the
@@ -358,6 +361,18 @@ func _setup(need: String, dungeon: String = "") -> void:
 		_thin()
 	# Half the relics MET, taken off the catalogue in order rather than rolled: a capture that
 	# photographs a different set every run cannot be compared with the one before it.
+	# Half the powers HELD, taken off the catalogue in order for the same reason the relics are:
+	# a capture that photographs a different set every run cannot be compared with the one before.
+	if flags.has("powers"):
+		MetaState.powers = {}
+		var owned: int = int(Balance.POWERS.size() / 2)
+		var k := 0
+		for pid in Balance.POWERS:
+			if k >= owned:
+				break
+			MetaState.powers[String(pid)] = 1 + (k % 3)
+			k += 1
+		MetaState.gold = 4000
 	if flags.has("relics"):
 		MetaState.relics_seen = []
 		var half: int = int(MetaState.RELIC_CATALOG.size() / 2)

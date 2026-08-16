@@ -33,6 +33,13 @@ extends Control
 var info_label: Label
 var rule_label: Label
 var list_box: VBoxContainer
+## The one line that says what the selected power does and what its next level buys (D312).
+var reader: Label
+## The only control on this screen that spends anything. Disabled until a power is picked, and it
+## states its own refusal when the pick cannot be levelled.
+var up_btn: Button
+## Which power the reader and the button are about. "" until one is pressed.
+var picked: String = ""
 
 ## How far a sealed row recedes. By INK and never by `modulate`, the same rule and the same
 ## number as the relics screen: a translucent label reads against the backdrop rather than
@@ -55,8 +62,27 @@ func _build_ui() -> void:
 	rule_label = Label.new()
 	rule_label.add_theme_color_override("font_color", Color(0.95, 0.78, 0.45))
 	root.add_child(rule_label)
+	# The reader and the one button that acts on it, ABOVE the list and outside the scroll, so
+	# they stay in front of the player while the wall of sigils moves under them (D312). Built to
+	# full height before anything is pressed, like every other reader in this game: a line that
+	# grew on the first press would shove the list down.
+	reader = UI.fixed_line(root, UITheme.px(UI.RELIC_READER_H))
+	reader.add_theme_color_override("font_color", Color(0.92, 0.88, 0.74))
+	up_btn = Button.new()
+	UITheme.style_button(up_btn)
+	up_btn.disabled = true
+	up_btn.text = PICK_FIRST
+	up_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	up_btn.custom_minimum_size.x = UITheme.px(UI.BUTTON_WIDTH)
+	up_btn.pressed.connect(func(): _on_upgrade(picked))
+	root.add_child(up_btn)
+
 	list_box = UI.scroll(root)
 	UI.exit_button(root, "Back", func(): UI.goto(self, _back_to()))
+
+## What the level button says with nothing picked. It states its own refusal, the way every other
+## refusing button in this game does (D71).
+const PICK_FIRST := "Pick a power above first"
 
 ## Back to wherever this was opened from: the deck builder mid-setup, else the map
 ## if a run is live, else the overworld.
@@ -106,6 +132,15 @@ func _refresh() -> void:
 	for c in list_box.get_children():
 		c.queue_free()
 
+	# The resting line, honest about what can be pressed. A screen with nothing in the deal has no
+	# power to read, and telling the player to press one would be telling them to press a wall of
+	# dead tiles.
+	if picked == "":
+		reader.text = "Press a power you hold to read it and level it." if in_deal > 0 \
+			else "Beat a dungeon and the power it holds appears here."
+		up_btn.disabled = true
+		up_btn.text = PICK_FIRST
+
 	for rarity in CardData.Rarity.size():
 		if not groups.has(rarity):
 			continue
@@ -122,43 +157,53 @@ func _refresh() -> void:
 		head.add_theme_color_override("font_color", Icons.rarity_colour(rarity)
 			if held > 0 else Icons.rarity_colour(rarity).darkened(SEALED_DIM))
 
+		# A FLOW of tiles, the shape the Relics screen wears (D312). Thirty powers as rows of
+		# icon-plus-sentence-plus-button is a column of paragraphs; the sigils are painted, one per
+		# power since D259, and they were a 32px thumbnail at the left margin of a text row.
+		var grid := HFlowContainer.new()
+		grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		grid.add_theme_constant_override("h_separation", UITheme.sep(8))
+		grid.add_theme_constant_override("v_separation", UITheme.sep(8))
+		list_box.add_child(grid)
 		for e in entries:
-			_row(String(e["id"]), bool(e["owned"]))
+			_tile(grid, String(e["id"]), bool(e["owned"]))
 
-func _row(pid: String, owned: bool) -> void:
-		var p := Balance.power(pid)
-		if p == null:
-			return
-		var level: int = int(MetaState.powers.get(pid, 1))
-		p = p.duplicate()
-		p.level = level
+## One power as a tile: its sigil, its name, and the press that selects it (D312).
+##
+## Selecting and never spending, which is the rule this project arrived at the hard way (D307): a
+## tile SELECTS and a button ACTS. Pressing a tile is idempotent — it reads the power into the line
+## above and points the level button at it, as many times as you like — so there is no second press
+## that means something different and nothing here can spend gold by being tapped twice.
+##
+## A LOCKED power is greyed and dead, exactly as an unmet relic is (D308). There is nothing behind
+## it: gold does not buy a power, the place that holds it hands it over, and the hover names that
+## place. A control that answers a press with "there is nothing here" teaches the player to press
+## it again.
+func _tile(grid: Container, pid: String, owned: bool) -> void:
+	var p := Balance.power(pid)
+	if p == null:
+		return
+	var level: int = int(MetaState.powers.get(pid, 1))
+	p = p.duplicate()
+	p.level = level
 
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", UITheme.sep(10))
-		list_box.add_child(row)
+	# The painted sigil when one is installed, the procedural glyph when it is not — the same
+	# one-file-at-a-time contract the relics screen runs on (D121, D122).
+	var painted := PixelArt.power_art(pid)
+	var b := UI.sigil_face(grid, painted if painted != null else Icons.tex(Icons.for_card(p)),
+		p.name, Icons.rarity_colour(p.rarity), 0.0 if owned else SEALED_DIM)
+	UI.hoverable(b, _row_tip(pid, owned))
+	if not owned:
+		b.disabled = true
+		return
 
-		var art := TextureRect.new()
-		# The painted sigil when one is installed, the procedural glyph when it is not.
-		# The slot was already here at 32px and already sized, so a painted set changes
-		# nothing about this row's layout — which is the whole reason the sigils were
-		# asked for as a set rather than as ten separate pictures. Falling BACK to
-		# `Icons` rather than replacing it keeps a half-painted set working, the same
-		# one-file-at-a-time contract the relics screen runs on (D121, D122).
-		var painted := PixelArt.power_art(pid)
-		art.texture = painted if painted != null else Icons.tex(Icons.for_card(p))
-		art.custom_minimum_size = Vector2(UITheme.px(32), UITheme.px(32))
-		art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		art.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		row.add_child(art)
-
-		# How far up its track this power has come, over the sigil rather than beside it
-		# (D132). Only over a painted sigil — the procedural glyph is a flat shape with no
-		# room inside it for light to read as anything but smudging. A child of the art
-		# rather than a sibling in the row, so it lands on the sigil's rect and not in a
-		# column of its own.
-		var fx := PixelArt.level_overlay("power", level, p.level_capped()) if painted != null else null
-		if fx != null:
+	# How far up its track this power has come, over the sigil rather than beside it (D132). Only
+	# over a painted sigil: the procedural glyph is a flat shape with no room inside it for light
+	# to read as anything but smudging.
+	var fx := PixelArt.level_overlay("power", level, p.level_capped()) if painted != null else null
+	if fx != null:
+		var art := _art_of(b)
+		if art != null:
 			var glow := TextureRect.new()
 			glow.texture = fx
 			glow.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -172,77 +217,82 @@ func _row(pid: String, owned: bool) -> void:
 			art.add_child(glow)
 			UI.animate_level_glow(glow, PixelArt.level_band(level, p.level_capped()))
 
-		var lbl := Label.new()
-		# EXPAND_FILL, not a fixed width. At 520px the longest row — Running Total's
-		# "Deal 1 damage. +2 per earlier card." — overflowed its own minimum and pushed its Buy
-		# button a hundred pixels right of every other one, so the button column was straight for
-		# nine rows and bent for the tenth. Measured off the capture rather than guessed (D95):
-		# letting the label eat the slack puts every button on the same right edge whatever the
-		# effect text says, and a longer effect written later cannot bend it again.
-		lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		lbl.custom_minimum_size.x = UITheme.px(520)
-		# A sealed row recedes by ink, which is what says "not yet" without a badge repeating
-		# the group header above it. `darkened` keeps the rarity hue, so a dim row still says
-		# which tier it belongs to (D96).
-		lbl.add_theme_color_override("font_color", Icons.rarity_colour(p.rarity)
-			if owned else Icons.rarity_colour(p.rarity).darkened(SEALED_DIM))
-		var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
-		# TWO states (D290). D289 needed four because ownership and a clears gate were separate
-		# questions and the top-up branch made a third answer out of the pair. One rule, one word.
-		var state := "in the deal" if owned else "locked"
-		lbl.text = "%s  [%s]  %s   Lv%d/%d   (%s)" % [
-			p.name, cost, p.effect_text(), level, p.level_capped(), state]
-		row.add_child(lbl)
-		UI.hoverable(row, _row_tip(pid, owned))
+	b.pressed.connect(func() -> void:
+		picked = pid
+		_say(pid)
+		Audio.play("ui_select"))
 
-		if not owned:
-			# The Buy button stood here and is GONE (D290). Gold does not buy a power: the place
-			# that holds it does, and the row says WHICH place. That is what the old button could
-			# never say — "needs 3 more clears" names a number, and a number is not somewhere you
-			# can go. `Balance.dungeon_for_power` is the one owner of that mapping.
-			var from := Balance.dungeon_for_power(pid)
-			var dd := Balance.dungeon(from)
-			var gate := Button.new()
-			UITheme.style_button(gate)
-			gate.text = "clear %s" % (dd.name if dd != null else from)
-			gate.disabled = true
-			row.add_child(gate)
-			return
+## The sigil inside a tile, so the level glow can be parented onto its rect rather than laid over
+## the whole button. Found rather than passed back, because `UI.sigil_face` returns the one thing
+## every caller needs and a second return value for one caller is a worse seam than a search of
+## two children.
+func _art_of(b: Button) -> TextureRect:
+	for c in b.get_children():
+		for k in c.get_children():
+			if k is TextureRect:
+				return k as TextureRect
+	return null
 
-		if p.at_max():
-			var maxed := Button.new()
-			UITheme.style_button(maxed)
-			maxed.text = "max level"
-			maxed.disabled = true
-			row.add_child(maxed)
-		else:
-			var up := Button.new()
-			UITheme.style_button(up)
-			up.text = "Level up  (%dg)" % MetaState.power_upgrade_price(pid)
-			up.disabled = not MetaState.can_upgrade_power(pid)
-			up.pressed.connect(_on_upgrade.bind(pid))
-			row.add_child(up)
+## Read the picked power into the line, and point the level button at it.
+##
+## The button says what the level BUYS, which is the mechanism the camp's Temper uses on a card
+## (D307) and the same sentence the collection quotes when it sells a card level. A power that
+## levels for gold and never says what the gold changes was selling a number.
+func _say(pid: String) -> void:
+	var p := Balance.power(pid)
+	if p == null:
+		return
+	var level: int = int(MetaState.powers.get(pid, 1))
+	p = p.duplicate()
+	p.level = level
+	var cost := "free" if p.eff_cost() == 0 else "%dE" % p.eff_cost()
+	var gain: String = p.level_up_text(level + 1)
+	var tail := ""
+	if p.at_max():
+		tail = "  Lv%d is its cap." % level
+	elif gain != "":
+		tail = "  Lv%d would buy: %s" % [level + 1, gain]
+	reader.text = "%s  [%s]  %s   Lv%d/%d.%s" % [
+		p.name, cost, p.effect_text(), level, p.level_capped(), tail]
 
-		# The Equip button stood here and is GONE (D289). It called `MetaState.equip_power`, which
-		# no longer decides anything a player can see: the run's power comes from the three the
-		# door deals (D245/D253). A button reading "Equipped" beside one row, on a screen whose
-		# question is which power you take in, answered that question wrongly and louder than
-		# anything else on the screen. `equip_power` and `equipped_power` stay in `MetaState` —
-		# `set_run_power("")` falls through to them and the tools and suites rely on it — but the
-		# fallback is not a decision, so it does not get a control.
+	# Three refusals, each of which was silent behind a greyed button, and each of which is a
+	# different thing for the player to do next.
+	if p.at_max():
+		up_btn.disabled = true
+		up_btn.text = "%s is at its cap" % p.name
+		return
+	var price: int = MetaState.power_upgrade_price(pid)
+	if not MetaState.can_upgrade_power(pid):
+		up_btn.disabled = true
+		up_btn.text = "Level up  %dg  (short %d)" % [price, maxi(0, price - MetaState.gold)]
+		return
+	up_btn.disabled = false
+	up_btn.text = "Level up %s  (%dg)" % [p.name, price]
 
 func _row_tip(pid: String, owned: bool) -> String:
 	if owned:
 		return "In the deal. The door can offer you this one, and it leans toward the deck you built."
-	var dd := Balance.dungeon(Balance.dungeon_for_power(pid))
+	# Guarded on the ID before the load, not on the result after it. `dungeon_for_power` answers ""
+	# for a power no dungeon grants, and `Balance.dungeon("")` then tries to load
+	# `res://resources/dungeons/.tres` — an engine error printed on every hover, under a tooltip
+	# that handled the null perfectly well. A null check after a bad load is a check that runs too
+	# late to stop the noise.
+	var from := Balance.dungeon_for_power(pid)
+	var dd := Balance.dungeon(from) if from != "" else null
 	if dd == null:
-		return "Locked."
+		return "Locked. No dungeon grants this one yet."
 	return ("Held by %s. Beat that place once and it is yours for good — there is nothing to buy "
 		+ "and no gold to save up.") % dd.name
 
 func _on_upgrade(pid: String) -> void:
+	if pid == "":
+		return
 	if MetaState.upgrade_power(pid):
 		Audio.play("fuse")
 		_refresh()
+		# The selection SURVIVES the rebuild, and the line re-reads at the new level: levelling a
+		# power is the one action on this screen a player repeats, and dropping the pick would make
+		# them find the same sigil again between every press.
+		_say(pid)
 	else:
 		Audio.play("ui_denied")

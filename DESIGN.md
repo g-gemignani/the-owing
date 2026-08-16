@@ -294,6 +294,7 @@ Entries are not in numeric order in the file below; this is the way in.
 | **D309** | [The four-legged ones were measured by their height, and one capture was a day old](#d309--the-four-legged-ones-were-measured-by-their-height-and-one-capture-was-a-day-old) |
 | **D310** | [A save you can play an archetype from, and it caught its own first bug](#d310--a-save-you-can-play-an-archetype-from-and-it-caught-its-own-first-bug) |
 | **D311** | [One constant was doing two jobs, and the rim kept the half it could not clean](#d311--one-constant-was-doing-two-jobs-and-the-rim-kept-the-half-it-could-not-clean) |
+| **D312** | [Powers were the other list of earned things, drawn as a table](#d312--powers-were-the-other-list-of-earned-things-drawn-as-a-table) |
 
 **D1–D34 are not in that table.** They were settled before the log grew
 sections and live as bullets under [§4 Design decisions](#4-design-decisions).
@@ -21795,3 +21796,59 @@ Sprites carrying an edge rim fall from 116 to 26, and those 26 hold under 25 pix
 The user's fallback was to re-roll the sprites on a green or magenta field. It was not
 needed: the paintings were fine and the cleaner was reaching for the wrong half of one
 constant.
+
+---
+
+### D312 — Powers were the other list of earned things, drawn as a table
+
+The Relics screen became a wall of picture tiles at D307 and learned to grey out what it does not
+hold at D308. Powers is the same screen — the other list of things you have earned and cannot
+lose, one painted sigil each since D259, on the `reliquary` backdrop the two already shared for
+that reason (D123) — and it was still thirty rows of icon, sentence, level and button.
+
+Same shape now, and the sigil is 132px instead of 32. `UI.sigil_face` is the one builder both
+screens call, so a screen cannot drift from its twin by being edited alone; `relic_face` is a
+three-line wrapper over it that supplies the relic's art and rarity colour.
+
+A locked power is greyed and `disabled`, exactly as an unmet relic is, and for a stronger reason:
+gold does not buy a power. The place that holds it hands it over (D290), so there is nothing
+behind a press at all — the hover names the dungeon, which is somewhere the player can go.
+
+#### Levelling is the mechanism the camp already uses on a card
+
+The rows each carried their own `Level up (240g)` button. Thirty buttons is thirty ways to spend
+gold on a screen where the question is which ONE to spend it on, and none of them said what the
+gold changed — the price was on the button and the improvement was nowhere.
+
+One button now, above the wall, pointed at whatever tile is selected. **A tile SELECTS and a button
+ACTS** (D307), and pressing a tile is idempotent, so there is no second press that means something
+different and nothing on the wall can spend gold by being tapped twice. The line above it reads
+the power and says what the next level buys, off `level_up_text` — the same sentence the camp's
+Temper quotes for a card (D307) and the same one the Collection quotes when it sells a card level,
+because `PowerData extends CardData` and there is one implementation to quote.
+
+The three refusals are on the button in words rather than behind a grey rectangle: at its cap,
+short by N gold, or nothing picked yet. The selection survives a level-up and the line re-reads at
+the new level — levelling is the one action here a player repeats, and dropping the pick would
+make them find the same sigil again between every press.
+
+#### Two things the capture found
+
+`_row_tip` called `Balance.dungeon(Balance.dungeon_for_power(pid))`, and that function answers `""`
+for a power no dungeon grants — so `Balance.dungeon("")` tried to load
+`res://resources/dungeons/.tres` and printed an engine error on every hover, under a tooltip whose
+null check handled the case perfectly well. **A null check after a bad load runs too late to stop
+the noise.** Guarded on the id before the load.
+
+And the harness photographed this screen with a save holding nothing, which is the D123/D166 blind
+spot the Relics row had just been fixed for: the one difference the screen draws was not in the
+picture. It captures with half the set held, taken in catalogue order so two captures compare.
+
+#### A flake, measured rather than assumed
+
+A release verification run came back red on `test_traversal` — *"ISO: did not terminate in 400
+steps"* — which is exactly what a chest left standing on its tile (D307) could cause if a walker
+oscillated onto it. Fifteen runs of that suite at the same commit passed fifteen times, so it is an
+intermittent failure of the greedy walker and not a regression. **It is left recorded rather than
+fixed**: a suite that gates a release must not fail one run in sixteen, and the next person to see
+it should find this paragraph instead of re-deriving it.
