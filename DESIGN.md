@@ -20676,10 +20676,41 @@ it.
 
 **A full Chrome restart does not clear it either.** Chrome had exited between attempts, so
 the ninth try ran on a freshly started browser, a fresh profile session, a fresh tab and a
-fresh chat, back on 3.6 Flash: fourteen minutes, no image. Five variables eliminated now —
-the daily cap, the model, the tab, the chat and the browser process. Nothing on the client
-side is left to change, which is itself the finding: **when this starts, stop. It is not
-worth a tenth attempt.**
+fresh chat, back on 3.6 Flash: fourteen minutes, no image. Five variables eliminated —
+the daily cap, the model, the tab, the chat and the browser process.
+
+#### There was no stall. The images were there and the DOM was stale
+
+The user said it worked for them by hand, and guessed the generations had worked for me
+too and I had failed to read the result. **They were right.** Re-opening the conversation
+that had "stalled" for fourteen minutes showed the finished sheet, all six subjects
+correct, and it installed without a re-roll.
+
+Every one of those nine stalls was diagnosed with the same JavaScript:
+
+```js
+[...document.querySelectorAll('img')].filter(i => i.naturalWidth > 300).length
+```
+
+It returned 0 while the page held a 1024x687 blob, and `document.body.innerText` still
+ended in *"Creating your image"* — a whole DOM frozen at the moment the request was sent.
+Navigating back to the same URL rendered it instantly.
+
+**A screenshot is the only honest readout.** It happened three separate times earlier in
+the same session — the JS said no image and the screen grab showed one — and each time it
+was written off as a lazy-loading quirk instead of being taken as the measurement it was.
+That is the whole failure: **a check that reads a page the browser has not painted is not
+a check, and this one had already been caught lying and was still trusted.**
+
+The rule for the next run: **poll by screenshot.** JS may confirm what a screenshot
+shows, never the reverse. And a poll that reports "still generating" for more than a few
+minutes is a claim about the page, not about the service — re-navigate to the conversation
+URL before believing it.
+
+**What it cost.** Nine "stalls", roughly two hours of waiting, three DESIGN entries
+eliminating variables that were never the cause, and a decision to hand the work back to
+the user. The daily cap, the model, the tab, the chat and the browser were all cleared
+correctly. Not one of them was the fault, because the fault was in the instrument.
 
 #### The art is in, after three attempts that failed three different ways
 
