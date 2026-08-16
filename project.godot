@@ -31,7 +31,7 @@ config/icon="res://assets/art/icon/icon_384.png"
 ;
 ; This key is read through `ProjectSettings`, so it travels in the PCK with no export filter
 ; to remember and no file that could be left out.
-config/version="0.1.0-dev"
+config/version="0.2.0-dev"
 
 ; The save directory is DECOUPLED from the game's name, which is the whole point of
 ; these two lines (D127). Godot derives `user://` from `config/name`, so renaming the
